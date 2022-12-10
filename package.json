@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node -r esbuild-register src/app.ts",
     "dev": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
-    "serve": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start"
+    "serve": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
+		"build": "tsc"
   },
   "author": "",
   "license": "ISC",
