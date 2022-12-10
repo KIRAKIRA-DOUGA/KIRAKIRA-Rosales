@@ -1,6 +1,8 @@
 {
 	"compilerOptions": {
+		"target": "ES5",
     "esModuleInterop": true,
+		"outDir": "./dist",
     "allowSyntheticDefaultImports": true,
     // ... rest
   },
