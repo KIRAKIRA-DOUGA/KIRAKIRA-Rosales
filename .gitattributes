@@ -1,2 +1,148 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+# * text eol=lf
+
+# These settings are for any web project
+
+# Handle line endings automatically for files detected as text
+# and leave all files detected as binary untouched.
+# * text=auto
+# NOTE - originally I had the above line un-commented.  it caused me a lot of grief related to line endings because I was dealing with WordPress plugins and the website changing line endings out if a user modified a plugin through the web interface.  commenting this line out seems to have alleviated the git chaos where simply switching to a branch caused it to believe 500 files were modified.
+
+#
+# The above will handle all files NOT found below
+#
+
+#
+## These files are text and should be normalized (Convert crlf => lf)
+#
+
+# source code
+*.php text eol=lf
+*.css text eol=lf linguist-vendored
+*.sass text eol=lf
+*.scss text eol=lf
+*.less text eol=lf
+*.styl text eol=lf
+*.stylus text eol=lf
+*.pcss text eol=lf
+*.sss text eol=lf
+*.js text eol=lf linguist-vendored
+*.coffee text eol=lf
+*.json text eol=lf linguist-vendored
+*.htm text eol=lf linguist-vendored
+*.html text eol=lf linguist-vendored
+*.xml text eol=lf linguist-vendored
+*.svg text eol=lf linguist-vendored
+*.txt text eol=lf
+*.ini text eol=lf
+*.inc text eol=lf
+*.pl text eol=lf
+*.rb text eol=lf
+*.py text eol=lf
+*.scm text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.bat text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.jsx text eol=lf linguist-vendored
+*.vue text eol=lf
+
+# templates
+*.ejs text eol=lf
+*.hbt text eol=lf
+*.jade text eol=lf
+*.haml text eol=lf
+*.hbs text eol=lf
+*.dot text eol=lf
+*.tmpl text eol=lf
+*.phtml text eol=lf
+
+# server config
+.htaccess text eol=lf
+
+# git config
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.gitconfig text eol=lf
+
+# code analysis config
+.jshintrc text eol=lf
+.jscsrc text eol=lf
+.jshintignore text eol=lf
+.csslintrc text eol=lf
+
+# misc config
+*.yaml text eol=lf
+*.yml text eol=lf
+.editorconfig text eol=lf
+.code-snippets text eol=lf
+
+# build config
+*.npmignore text eol=lf
+*.bowerrc text eol=lf
+
+# Heroku
+Procfile text eol=lf
+.slugignore text eol=lf
+
+# Documentation
+*.md text eol=lf
+LICENSE text eol=lf
+AUTHORS text eol=lf
+
+#
+## These files are binary and should be left untouched
+#
+
+# (binary is a macro for -text -diff)
+
+# images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.jpe binary
+*.jfif binary
+*.pjpeg binary
+*.pjp binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.tif binary
+*.tiff binary
+*.bmp binary
+*.avif binary
+
+# media
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.flv binary
+*.fla binary
+*.swf binary
+*.wmv binary
+*.wav binary
+*.wma binary
+*.m4a binary
+*.aac binary
+*.ogg binary
+*.ape binary
+*.flac binary
+*.webm binary
+
+# zips
+*.gz binary
+*.zip binary
+*.7z binary
+*.rar binary
+
+# fonts
+*.ttf binary
+*.eot binary
+*.woff binary
+*.woff2 binary
+*.pyc binary
+*.otf binary
+
+# other
+*.pdf binary
