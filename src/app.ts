@@ -1,7 +1,7 @@
 // import Koa from "koa";
 import route from "./route/router";
+import Koa from 'koa'
 
-const Koa = require('koa');
 const app = new Koa();
 
 app.use(route.routes()); // 使用 koa-router

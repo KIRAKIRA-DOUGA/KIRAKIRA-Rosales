@@ -1,6 +1,6 @@
 import helloWorld from '../controller/HelloWorld';
+import Router from 'koa-router';
 
-const Router = require('koa-router');
 const route = new Router();
 
 // router-begin
