@@ -7,7 +7,7 @@
     "start": "node -r esbuild-register src/app.ts",
     "dev": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
     "serve": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
-		"build": "tsc"
+    "build": "tsc"
   },
   "author": "",
   "license": "ISC",
@@ -20,6 +20,6 @@
   },
   "dependencies": {
     "koa": "^2.14.1",
-    "koa-route": "^3.2.0"
+    "koa-router": "^12.0.0"
   }
 }
