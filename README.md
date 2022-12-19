@@ -1,5 +1,5 @@
 # KIRAKIRA-Rosales
- KIRAKIRA-Rosales, The RESTful Back-end API Created by koa.
+KIRAKIRA-Rosales, The RESTful Back-end API Created by koa.
 
 <br/>
 

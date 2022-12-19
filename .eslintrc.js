@@ -57,7 +57,7 @@ module.exports = {
 		'use-isnan': 'error',
 		'valid-typeof': 'error',
 		'curly': ['error', 'multi'],
-		'dot-notation': ['error', { 'allowKeywords': false }],
+		'dot-notation': ['error'],
 		'guard-for-in': 'error',
 		'no-extra-label': 'error',
 		'require-await': 'error',
@@ -68,7 +68,7 @@ module.exports = {
 		'no-whitespace-before-property': 'error',
 		'object-curly-spacing': ['error', 'always'],
 		'padded-blocks': ['error', 'never'],
-		'quote-props': ['error', 'as-needed', { 'keywords': true }],
+		'quote-props': ['error', 'as-needed'],
 		'semi-spacing': 'off',
 		'semi-style': ['error', 'last'],
 		'space-before-function-paren': ['error', { 'anonymous': 'always', 'named': 'never', 'asyncArrow': 'always' }],
@@ -129,8 +129,5 @@ module.exports = {
 		}],
 		'@typescript-eslint/semi': ['warn', 'never'],
 		'@typescript-eslint/no-explicit-any': 'error',
-		// '@typescript-eslint/no-confusing-void-expression': 'error',
-		// '@typescript-eslint/no-floating-promises': 'error',
-		// 嗯对这几个不晓得怎么用不了。
 	},
 }

@@ -1,11 +1,15 @@
 {
 	"compilerOptions": {
 		"target": "ES5",
-    "esModuleInterop": true,
+		"esModuleInterop": true,
 		"outDir": "./dist",
-    "allowSyntheticDefaultImports": true,
-    // ... rest
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+		"allowSyntheticDefaultImports": true,
+		// ... rest
+	},
+	"include": [
+		"src/**/*"
+	],
+	"exclude": [
+		"node_modules"
+	]
 }
