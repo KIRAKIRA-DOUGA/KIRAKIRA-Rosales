@@ -23,8 +23,6 @@ module.exports = {
 		'indent': ['error', 'tab', {
 			'SwitchCase': 1,
 			'flatTernaryExpressions': true,
-			'ignoredNodes': ['Program > .body'],
-			'ignoreComments': true,
 		}],
 		'linebreak-style': ['error', 'unix'],
 		'quotes': ['warn', 'single'],
