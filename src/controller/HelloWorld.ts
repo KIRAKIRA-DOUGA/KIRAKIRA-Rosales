@@ -1,8 +1,7 @@
-import Koa from 'koa'
+import { koaCtx, koaNext } from '../type/index'
 
-const helloWorld = async (ctx: Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext, unknown>, next: Koa.Next): Promise<void> => {
+export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {
 	await next()
 	ctx.body = 'Hello World'
 }
 
-export default helloWorld

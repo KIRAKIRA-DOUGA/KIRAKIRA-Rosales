@@ -54,7 +54,7 @@ module.exports = {
 		'no-unreachable': 'error',
 		'use-isnan': 'error',
 		'valid-typeof': 'error',
-		'curly': ['error', 'multi'],
+		// 'curly': ['error', 'multi'],
 		'dot-notation': ['error'],
 		'guard-for-in': 'error',
 		'no-extra-label': 'error',
