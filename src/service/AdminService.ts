@@ -89,7 +89,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 						const heartBeatDataBaseConnects = ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__
 						const schemaObject: schemaType = { name: String }
 						const data = [{ name: 'abc' }]
-						type dataType = getTsTypeFromSchemaType<typeof schemaObject>
+						type dataType = getTsTypeFromSchemaType<typeof schemaObject> // TODO Can I move it into the function saveData2MongoDBShard ?
 						saveData2MongoDBShard<dataType>(heartBeatDataBaseConnects, schemaObject, data).then(result => {
 							if (result) {
 								// TODO
@@ -99,11 +99,6 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 						}).catch(e => {
 							// TODO
 						})
-	
-						// saveData2MongoDBShard<schemaType1>(connects, testSchema, [{ name: 'cat' }])
-						
-	
-						// DELETE BEFORE
 					})
 				}
 				

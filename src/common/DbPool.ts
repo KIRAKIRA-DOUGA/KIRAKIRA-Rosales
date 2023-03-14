@@ -97,6 +97,13 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 // 	})
 // }
 
+
+
+
+
+
+
+
 export type schemaType = Record<string, unknown>
 
 type constructor2Type<T> =
@@ -110,10 +117,6 @@ type constructor2Type<T> =
 export type getTsTypeFromSchemaType<T> = {
 	[key in keyof T]: constructor2Type<T[key]>;
 }
-
-const schemaObject: schemaType = { name: String }
-
-type aaa = getTsTypeFromSchemaType<typeof schemaObject>
 
 export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schema: schemaType, data: T[]): Promise<boolean> => {
 	return new Promise<boolean>((resolve, reject) => {
