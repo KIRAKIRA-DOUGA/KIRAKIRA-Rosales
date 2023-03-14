@@ -1,4 +1,4 @@
-import mongoose from 'mongoose'
+import mongoose, { Schema } from 'mongoose'
 import { koaCtx } from '../type'
 import { mongoDBConnectType, serviceInfoType } from '../type/AdminType'
 import { base64ToStr } from './Base64Gen'
@@ -7,13 +7,14 @@ import { base64ToStr } from './Base64Gen'
  * 根据资源信息，异步创建或 merge 数据库连接并返回
  * @param databaseInfos 数据库连接信息
  * @param ctx koa 上下文
+ * @param databaseName 要连接的数据库名
  */
-export const createOrMergeDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoType[], ctx: koaCtx): Promise<unknown> => {
+export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoType[], ctx: koaCtx): Promise<mongoDBConnectType[]> => {
 	return new Promise<mongoDBConnectType[]>((resolve, reject) => {
-		const databaseConnectPromise: Promise<unknown>[] = []
+		const databaseConnectPromise: Promise<mongoDBConnectType>[] = []
 		databaseInfos.forEach((databaseInfo: serviceInfoType) => {
 			const mongoConnectPromise = new Promise<mongoDBConnectType>((resolve, reject) => {
-				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${base64ToStr(base64ToStr(databaseInfo.adminPasswordBase64Base64))}@${databaseInfo.privateIPAddress}:${databaseInfo.port}/heartbeat?authSource=admin`
+				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${base64ToStr(base64ToStr(databaseInfo.adminPasswordBase64Base64))}@${databaseInfo.privateIPAddress}:${databaseInfo.port}/heart_base?authSource=admin`
 				const mongoConnect = mongoose.createConnection(databaseConnectString)
 				
 				mongoConnect.on('connected', (err: unknown) => {
@@ -52,5 +53,70 @@ export const createOrMergeDatabaseConnectByDatabaseInfo = (databaseInfos: servic
 				reject(allAvailableConnects)
 			}
 		})
+	})
+}
+
+
+// 数据库连接、数据的类型、数据
+/**
+ * 数据的类型：
+ * type dataTypeType = Record<string, 'string' | 'number' | ''>
+ * const dataType = {
+ * 	a: 'string'
+ * }
+ * */
+
+// export const broadcastData2MongoDB = (mongoDBConnects: mongoDBConnectType[], databaseName: string, collection: string, data: object): Promise<boolean> => {
+// 	return new Promise<boolean>((resolve, reject) => {
+
+// 	})
+// }
+
+// export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schema: Schema, data: T[]): Promise<boolean> => {
+// 	// data[0] as schemaType
+
+// 	// const testSchema = new Schema(T)
+
+// 	const heartBeat = mongoDBConnects[0].connect.model('heart', schema)
+// 	const entity = new heartBeat(data[0])
+// 	entity.save()
+
+// 	return new Promise<boolean>((resolve, reject) => {
+// 		resolve(true)
+// 	})
+// }
+
+
+
+
+// function bbb<U>(mongoDBConnects: mongoDBConnectType[], schemaObject: object, data: U[]): Promise<boolean> {
+// 	const schema = new Schema(schemaObject)
+
+// 	return new Promise<boolean>((resolve, reject) => {
+// 		resolve(true)
+// 	})
+// }
+
+export type schemaType = Record<string, unknown>
+
+type constructor2Type<T> =
+	T extends DateConstructor ? Date :
+		T extends BufferConstructor ? Buffer :
+			T extends { (): infer V } ? V :
+				T extends { type: infer V } ? constructor2Type<V> :
+					T extends never[] ? unknown[] :
+						T extends object ? getTsTypeFromSchemaType<T> : T
+
+export type getTsTypeFromSchemaType<T> = {
+	[key in keyof T]: constructor2Type<T[key]>;
+}
+
+const schemaObject: schemaType = { name: String }
+
+type aaa = getTsTypeFromSchemaType<typeof schemaObject>
+
+export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schema: schemaType, data: T[]): Promise<boolean> => {
+	return new Promise<boolean>((resolve, reject) => {
+		resolve(true)
 	})
 }

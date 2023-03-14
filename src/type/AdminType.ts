@@ -1,3 +1,5 @@
+import mongoose from 'mongoose'
+
 export type adminCheckStates = {
 	state: boolean;
 	callbackMessage: string;
@@ -35,7 +37,7 @@ export interface serviceInfoType { // 不论是 mongo 还是 mysql 还是 api，
 
 
 export interface mongoDBConnectType { // 存放 mongoose 的 mongodb 连接的对象
-	connect: unknown;
+	connect: mongoose.Connection;
 	connectStatus: 'ok' | 'error';
 	connectInfo: serviceInfoType;
 }

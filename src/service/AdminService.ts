@@ -2,7 +2,8 @@ import { callErrorMessage } from '../common/CallErrorMessage'
 import { adminCheckStates, initEnvType, serviceInitState, serviceInfoType, mongoDBConnectType } from '../type/AdminType'
 import { koaCtx } from '../type/index'
 import { strToBase64 } from '../common/Base64Gen'
-import { createOrMergeDatabaseConnectByDatabaseInfo } from '../common/DbPool'
+import { createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, schemaType, saveData2MongoDBShard, getTsTypeFromSchemaType } from '../common/DbPool'
+import { Schema } from 'mongoose'
 
 /**
  * 验证用户的一次性身份验证密钥
@@ -71,32 +72,53 @@ const urlHeartbeatDatabaseShardData2Array = (heartbeatDatabaseShardDataList: str
  * @param ONE_TIME_SECRET_KEY 环境变量中的一次性身份验证密钥
  * @param initEnvs 服务初始化字段
  */
-export const initService = async (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, ctx: koaCtx): Promise<serviceInitState> => {
-	const adminOneTimeSecretKeyCheckResult: adminCheckStates = checkOneTimeSecretKey(ONE_TIME_SECRET_KEY, initEnvs.userSendSecretKey)
+export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, ctx: koaCtx): Promise<serviceInitState> => {
+	return new Promise<serviceInitState>((resolve, reject) => {
+		const adminOneTimeSecretKeyCheckResult: adminCheckStates = checkOneTimeSecretKey(ONE_TIME_SECRET_KEY, initEnvs.userSendSecretKey)
 
-	if (adminOneTimeSecretKeyCheckResult.state) {
-		if (checkInitEnvs(initEnvs)) {
-			const { userSendSecretKey, systemAdminUserName, systemAdminPasswordBase64, localhostServicePublicIPAddress, localhostServicePrivateIPAddress, localhostServicePort, heartbeatDatabaseShardData } = initEnvs
-			ctx.state.__API_SERVER_LIST__ = [{ servicePublicIPAddress: localhostServicePublicIPAddress, servicePrivateIPAddress: localhostServicePrivateIPAddress, servicePort: localhostServicePort }]
-			ctx.state.__HEARTBEAT_DB_SHARD_LIST__ = urlHeartbeatDatabaseShardData2Array(heartbeatDatabaseShardData)
-			if (ctx.state.__HEARTBEAT_DB_SHARD_LIST__) {
-				await createOrMergeDatabaseConnectByDatabaseInfo(ctx.state.__HEARTBEAT_DB_SHARD_LIST__, ctx).then((connects: mongoDBConnectType[]) => {
-					console.log('connect: ', connects)
-					ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__ = connects
-				})
+		if (adminOneTimeSecretKeyCheckResult.state) {
+			if (checkInitEnvs(initEnvs)) {
+				const { userSendSecretKey, systemAdminUserName, systemAdminPasswordBase64, localhostServicePublicIPAddress, localhostServicePrivateIPAddress, localhostServicePort, heartbeatDatabaseShardData } = initEnvs
+				ctx.state.__API_SERVER_LIST__ = [{ servicePublicIPAddress: localhostServicePublicIPAddress, servicePrivateIPAddress: localhostServicePrivateIPAddress, servicePort: localhostServicePort }]
+				ctx.state.__HEARTBEAT_DB_SHARD_LIST__ = urlHeartbeatDatabaseShardData2Array(heartbeatDatabaseShardData)
+				if (ctx.state.__HEARTBEAT_DB_SHARD_LIST__) {
+					createOrMergeHeartBeatDatabaseConnectByDatabaseInfo(ctx.state.__HEARTBEAT_DB_SHARD_LIST__, ctx).then((connects: mongoDBConnectType[]) => {
+						console.log('connect: ', connects)
+						ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__ = connects
+	
+						const heartBeatDataBaseConnects = ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__
+						const schemaObject: schemaType = { name: String }
+						const data = [{ name: 'abc' }]
+						type dataType = getTsTypeFromSchemaType<typeof schemaObject>
+						saveData2MongoDBShard<dataType>(heartBeatDataBaseConnects, schemaObject, data).then(result => {
+							if (result) {
+								// TODO
+							} else {
+								// TODO
+							}
+						}).catch(e => {
+							// TODO
+						})
+	
+						// saveData2MongoDBShard<schemaType1>(connects, testSchema, [{ name: 'cat' }])
+						
+	
+						// DELETE BEFORE
+					})
+				}
+				
+	
+				// DONE 处理 heartbeatDatabaseShardData 并将其存入环境变量 __HEARTBEAT_DB_SHARD_LIST__
+				// DONE 判断 __HEARTBEAT_DB_SHARD_LIST__ 是否为空，如果不是，那这些信息去创建数据库连接并保存连接
+				// TODO 判断 __HEARTBEAT_DB_SHARD_CONNECT_LIST__ 是否为空，如果不是，向每一个心跳数据库分片广播 集群管理用户，密码、API信息，心跳数据库信息
+				// TODO 中断5s
+				// TODO 每隔 1s 随机去一个心跳数据库分片中获取 API信息列表 和 心跳数据库分片列表，并覆写全局变量
+				// TODO 启动健康检测
+				// TODO 销毁 一次性身份验证密钥
 			}
-			
-
-			// DONE 处理 heartbeatDatabaseShardData 并将其存入环境变量 __HEARTBEAT_DB_SHARD_LIST__
-			// TODO 判断 __HEARTBEAT_DB_SHARD_LIST__ 是否为空，如果不是，那这些信息去创建数据库连接并保存连接
-			// TODO 判断 __HEARTBEAT_DB_SHARD_CONNECT_LIST__ 是否为空，如果不是，向每一个心跳数据库分片广播 集群管理用户，密码、API信息，心跳数据库信息
-			// TODO 中断5s
-			// TODO 每隔 1s 随机去一个心跳数据库分片中获取 API信息列表 和 心跳数据库分片列表，并覆写全局变量
-			// TODO 启动健康检测
-			// TODO 销毁 一次性身份验证密钥
 		}
-	}
-	return { state: false, callbackMessage: '<p>初始化失败</p>' }
+		reject({ state: false, callbackMessage: '<p>初始化失败</p>' })
+	})
 }
 
 // TODO
