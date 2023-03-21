@@ -14,7 +14,7 @@ export type serviceInitState = {
 export type initEnvType = {
 	userSendSecretKey: string; // 一次性身份验证码，用于初始化集群(创建管理用户和密码)时使用
 	systemAdminUserName: string; // 集群管理员用户名
-	systemAdminPasswordBase64: string; // 集群管理员密码
+	adminPassword: string; // 集群管理员密码
 	localhostServicePublicIPAddress: string; // 初始化时，发送一次本机公有IP
 	localhostServicePrivateIPAddress: string; // 初始化时，发送一次本机私有IP
 	localhostServicePort: string; // 初始化时发送一次本机服务端口
@@ -26,7 +26,7 @@ export interface serviceInfoType { // 不论是 mongo 还是 mysql 还是 api，
 	privateIPAddress: string; // 该服务的私网 ip
 	port: number; // 该服务的所在的端口
 	adminAccountName?: string; // 该服务的账号名 (如果有)
-	adminPasswordBase64Base64?: string; // 该服务的密码 (如果有) (两次 Base64 编码)
+	adminPassword?: string; // 该服务的密码 (如果有) (两次 Base64 编码)
 	serviceType: 'mongo' | 'sql' | 'elastic' | 'api' | 'heartbeat'; // 服务的类型
 	shardGroup: number; // 当前分片隶属于哪个分片组
 	identity: 'master' | 'servant'; // 分片的身份，一个数据区块只有一个主分片，可以有多个从分片

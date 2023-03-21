@@ -1,7 +1,6 @@
 import mongoose, { Schema } from 'mongoose'
 import { koaCtx } from '../type'
 import { mongoDBConnectType, serviceInfoType } from '../type/AdminType'
-import { base64ToStr } from './Base64Gen'
 
 // /**
 //  * 根据资源信息，异步创建或 merge 心跳数据库连接并返回
@@ -15,7 +14,7 @@ import { base64ToStr } from './Base64Gen'
 // 		const databaseConnectPromise: Promise<mongoDBConnectType>[] = []
 // 		databaseInfos.forEach((databaseInfo: serviceInfoType) => {
 // 			const mongoConnectPromise = new Promise<mongoDBConnectType>((resolve, reject) => {
-// 				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${base64ToStr(base64ToStr(databaseInfo.adminPasswordBase64Base64))}@${databaseInfo.privateIPAddress}:${databaseInfo.port}/heart_base?authSource=admin`
+// 				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${databaseInfo.adminPasswordBase64Base64}@${databaseInfo.privateIPAddress}:${databaseInfo.port}/heart_base?authSource=admin`
 // 				const mongoConnect = mongoose.createConnection(databaseConnectString)
 				
 // 				mongoConnect.on('connected', (err: unknown) => {
@@ -72,45 +71,47 @@ export const createDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoTy
 		const availableIPAddress = databaseInfo.privateIPAddress || databaseInfo.publicIPAddress
 		if (availableIPAddress) {
 			const mongoConnectPromise = new Promise<mongoDBConnectType>((resolve, reject) => {
-				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${base64ToStr(base64ToStr(databaseInfo.adminPasswordBase64Base64))}@${databaseInfo.privateIPAddress}:${databaseInfo.port}/${databaseName}?authSource=admin`
-				// FIXME
-				console.log('databaseConnectString', databaseConnectString) // FIXME
-				// FIXME
-				mongoose.createConnection(databaseConnectString).asPromise().then(mongoConnect => {
-					mongoConnect.on('connected', (err: unknown) => {
-						if (err) {
-							reject({
-								connect: err,
-								connectStatus: 'error',
-								connectInfo: databaseInfo,
-							} as mongoDBConnectType)
-						} else {
-							resolve({
-								connect: mongoConnect,
-								connectStatus: 'ok',
-								connectInfo: databaseInfo,
-							} as mongoDBConnectType)
-						}
-					})
-				})
-				
-				// const mongoConnect = mongoose.createConnection(databaseConnectString)
-				
-				// mongoConnect.on('connected', (err: unknown) => {
-				// 	if (err) {
-				// 		reject({
-				// 			connect: err,
-				// 			connectStatus: 'error',
-				// 			connectInfo: databaseInfo,
-				// 		} as mongoDBConnectType)
-				// 	} else {
-				// 		resolve({
-				// 			connect: mongoConnect,
-				// 			connectStatus: 'ok',
-				// 			connectInfo: databaseInfo,
-				// 		} as mongoDBConnectType)
-				// 	}
+				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${databaseInfo.adminPassword}@${availableIPAddress}:${databaseInfo.port}/${databaseName}?authSource=admin`
+				// DELETE
+				console.log('databaseConnectString', databaseConnectString) // DELETE
+				// DELETE
+				// mongoose.createConnection(databaseConnectString).asPromise().then(mongoConnect => {
+				// 	mongoConnect.on('connected', (err: unknown) => {
+				// 		if (err) {
+				// 			reject({
+				// 				connect: err,
+				// 				connectStatus: 'error',
+				// 				connectInfo: databaseInfo,
+				// 			} as mongoDBConnectType)
+				// 		} else {
+				// 			resolve({
+				// 				connect: mongoConnect,
+				// 				connectStatus: 'ok',
+				// 				connectInfo: databaseInfo,
+				// 			} as mongoDBConnectType)
+				// 		}
+				// 	})
+				// }).catch(() => {
+				// 	// TODO
 				// })
+				
+				const mongoConnect = mongoose.createConnection(databaseConnectString)
+				
+				mongoConnect.on('connected', (err: unknown) => {
+					if (err) {
+						reject({
+							connect: err,
+							connectStatus: 'error',
+							connectInfo: databaseInfo,
+						} as mongoDBConnectType)
+					} else {
+						resolve({
+							connect: mongoConnect,
+							connectStatus: 'ok',
+							connectInfo: databaseInfo,
+						} as mongoDBConnectType)
+					}
+				})
 			})
 			databaseConnectPromises.push(mongoConnectPromise)
 		}
@@ -145,7 +146,7 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 }
 
 
-
+// DELETE
 // 数据库连接、数据的类型、数据
 /**
  * 数据的类型：
@@ -185,7 +186,7 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 // 		resolve(true)
 // 	})
 // }
-
+// DELETE
 
 
 
@@ -226,11 +227,13 @@ export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], 
 			const saveData2DatabasePromise = new Promise<boolean>(resolve => {
 				mongoDBConnect.connect.startSession().then(session => {
 					session.withTransaction(() => {
-						return new Promise<boolean>(() => {
+						return new Promise<void>(() => {
 							const schema = new Schema(schemaObject)
 							const model = mongoDBConnect.connect.model(collectionName, schema, collectionName)
 							const entity = new model(data)
-							entity.save({ session }).then(savedDoc => {
+							// FIXME 在 new model 的时候的 data 参数应该是对象，而此处传入的是对象数组
+							
+							entity.save().then(savedDoc => {
 								if (savedDoc === entity) {
 									session.commitTransaction()
 									resolve(true)
