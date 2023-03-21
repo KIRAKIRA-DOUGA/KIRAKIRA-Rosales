@@ -10,14 +10,15 @@ export type serviceInitState = {
 	callbackMessage: string;
 }
 
+// 详见：AdminController -> initKirakiraCluster
 export type initEnvType = {
-	userSendSecretKey: string;
-	systemAdminUserName: string;
-	systemAdminPasswordBase64: string;
-	localhostServicePublicIPAddress: string;
-	localhostServicePrivateIPAddress: string;
-	localhostServicePort: string;
-	heartbeatDatabaseShardData: string[];
+	userSendSecretKey: string; // 一次性身份验证码，用于初始化集群(创建管理用户和密码)时使用
+	systemAdminUserName: string; // 集群管理员用户名
+	systemAdminPasswordBase64: string; // 集群管理员密码
+	localhostServicePublicIPAddress: string; // 初始化时，发送一次本机公有IP
+	localhostServicePrivateIPAddress: string; // 初始化时，发送一次本机私有IP
+	localhostServicePort: string; // 初始化时发送一次本机服务端口
+	heartbeatDatabaseShardData: string[]; // 初始化时发送的心跳数据库信息
 }
 
 export interface serviceInfoType { // 不论是 mongo 还是 mysql 还是 api，每个分片都可用这一数据类型描述并存储至 mongoDB
@@ -40,4 +41,13 @@ export interface mongoDBConnectType { // 存放 mongoose 的 mongodb 连接的�
 	connect: mongoose.Connection;
 	connectStatus: 'ok' | 'error';
 	connectInfo: serviceInfoType;
+}
+
+export interface adminUserType {
+	userName: string;
+	password: string;
+	createDateTime?: number;
+	creator?: string;
+	updateDateTime?: number;
+	updater?: string;
 }

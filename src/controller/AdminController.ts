@@ -25,10 +25,11 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 			localhostServicePrivateIPAddress: ctx.query.localhostServicePrivateIPAddress as string, // 服务的私网 IP 地址
 			localhostServicePort: ctx.query.localhostServicePort as string, // 服务的端口号
 			heartbeatDatabaseShardData: [].concat(ctx.query.heartbeatDatabaseShardData as string[]), // 心跳数据库分片 IP 地址和端口数组，以及数据库用户密码，格式示例：1.1.1.1:10.10.10.10:5000:mongoU1:123123:1:master
-			//                                                                                                                                    公网ip:私网ip:端口:服务账号名:服务密码Base64:服务区块:服务身份
+			//                                                                                                                                            公网ip:私网ip:端口:服务账号名:服务密码Base64:服务区块:服务身份                                                           XX
 		}
 
-		console.log('ctx.query.heartbeatDatabaseShardData as string[]', ctx.query.heartbeatDatabaseShardData as string[])
+		// console.log('ctx.query.heartbeatDatabaseShardData as string[]', ctx.query.heartbeatDatabaseShardData as string[]) // FIXME
+		console.log('initEnvs', initEnvs) // FIXME
 
 		const serviceInitResult = await initService(ONE_TIME_SECRET_KEY, initEnvs, ctx)
 		if (serviceInitResult.state) {
