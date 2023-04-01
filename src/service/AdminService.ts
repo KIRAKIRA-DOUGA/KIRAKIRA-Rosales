@@ -1,7 +1,7 @@
 import { callErrorMessage } from '../common/CallErrorMessage'
 import { adminCheckStates, initEnvType, serviceInitState, serviceInfoType, mongoDBConnectType, adminUserType } from '../type/AdminType'
 import { koaCtx } from '../type/index'
-import { createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, saveData2MongoDBShard } from '../common/DbPool'
+import { createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, saveData2MongoDBShard, saveDataArray2MongoDBShard } from '../common/DbPool'
 
 /**
  * 验证用户的一次性身份验证密钥
@@ -48,7 +48,7 @@ const urlHeartbeatDatabaseShardData2Array = (heartbeatDatabaseShardDataList: str
 	console.log('heartbeatDatabaseShardDataList', heartbeatDatabaseShardDataList) // DELETE
 	// DELETE
 	heartbeatDatabaseShardDataList.forEach((heartbeatDatabaseShardData: string) => {
-		const heartbeatDatabaseShardDataArray = heartbeatDatabaseShardData.split(':')
+		const heartbeatDatabaseShardDataArray = heartbeatDatabaseShardData.split(':') // WARN 切割字符串，看起来不太妙...
 		// DELETE
 		console.log('heartbeatDatabaseShardDataArray', heartbeatDatabaseShardDataArray) // DELETE
 		// DELETE
@@ -110,7 +110,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 						const administratorDataSchema = { userName: String, password: String } // 数据 schema
 						const administratorData: adminUserType[] = [{ userName: systemAdminUserName, password: adminPassword }] // 数据
 						const administratorCollectionName: string = 'administrator' // 集合名
-						const saveAdministratorDataStatus = await saveData2MongoDBShard<typeof administratorDataSchema>(heartBeatDataBaseConnects, administratorDataSchema, administratorData, administratorCollectionName) // 向 所有心跳数据库的 administrator 集合广播 管理用户，密码
+						const saveAdministratorDataStatus = await saveDataArray2MongoDBShard<typeof administratorDataSchema>(heartBeatDataBaseConnects, administratorDataSchema, administratorData, administratorCollectionName) // 向 所有心跳数据库的 administrator 集合广播 管理用户，密码
 
 						const serviceCollectionName: string = 'service'
 
@@ -134,7 +134,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 							state: 'up',
 							editDateTime: new Date().getTime(),
 						}]
-						const saveAPIServiceDataStatus = await saveData2MongoDBShard<typeof localhostAPIserviceDataSchema>(heartBeatDataBaseConnects, localhostAPIserviceDataSchema, localhostAPIServiceData, serviceCollectionName) // 向 所有心跳数据库的 service 集合广播 本机 API server 信息
+						const saveAPIServiceDataStatus = await saveDataArray2MongoDBShard<typeof localhostAPIserviceDataSchema>(heartBeatDataBaseConnects, localhostAPIserviceDataSchema, localhostAPIServiceData, serviceCollectionName) // 向 所有心跳数据库的 service 集合广播 本机 API server 信息
 
 						const heartBeatDataBaseShardListDataSchema = {
 							publicIPAddress: String,
@@ -149,16 +149,26 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 							editDateTime: Number,
 						}
 						const heartBeatDataBaseShardListData = ctx.state.__HEARTBEAT_DB_SHARD_LIST__
-						const saveHeartBeatDataBaseShardListDataStatus = await saveData2MongoDBShard<typeof heartBeatDataBaseShardListDataSchema>(heartBeatDataBaseConnects, heartBeatDataBaseShardListDataSchema, heartBeatDataBaseShardListData, serviceCollectionName) // 向 所有心跳数据库的 service 集合广播 心跳数据库 信息
+						const saveHeartBeatDataBaseShardListDataStatus = await saveDataArray2MongoDBShard<typeof heartBeatDataBaseShardListDataSchema>(heartBeatDataBaseConnects, heartBeatDataBaseShardListDataSchema, heartBeatDataBaseShardListData, serviceCollectionName) // 向 所有心跳数据库的 service 集合广播 心跳数据库 信息
 
 						if (saveAdministratorDataStatus && saveAPIServiceDataStatus && saveHeartBeatDataBaseShardListDataStatus) { // 如果向所有心跳数据库广播的：集群管理员信息、本地serviceAPI信息、心跳数据库信息 全部完成
-							console.log('save success')
-							resolve({ state: false, callbackMessage: '<p>success</p>' })
+							// DELETE
+							console.log('save success') // DELETE
+							// DELETE
+							resolve({ state: true, callbackMessage: '<p>success</p>' })
 							// TODO
 						} else {
-							console.log('save failed')
-							// TODO
+							// DELETE
+							console.log('save failed') // DELETE
+							console.log('saveAdministratorDataStatus', saveAdministratorDataStatus) // DELETE
+							console.log('saveAPIServiceDataStatus', saveAPIServiceDataStatus) // DELETE
+							console.log('saveHeartBeatDataBaseShardListDataStatus', saveHeartBeatDataBaseShardListDataStatus) // DELETE
+							// DELETE
+							reject({ state: false, callbackMessage: '<p>初始化失败，插入数据时出现错误</p>' })
+							// TODO 插入数据失败，要怎么做？要不要删除？ (大概率时不用)
 						}
+					}).catch(() => {
+						reject({ state: false, callbackMessage: '<p>初始化失败，创建心跳数据库</p>' })
 					})
 				}
 				
@@ -174,7 +184,6 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 				// TODO 销毁 一次性身份验证密钥
 			}
 		}
-		reject({ state: false, callbackMessage: '<p>初始化失败</p>' })
 	})
 }
 
@@ -189,4 +198,4 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 
 
 
-// IDEA // TODO 查找时，先随机去一个数据库分片检索，如果没找到，则去主分片读取，如果读取不到则证明没这条数据
+// IDEA // TODO 查找时，先去目标分片组中随机一个数据库分片检索，如果没找到，则去主分片读取，如果读取不到则证明没这条数据

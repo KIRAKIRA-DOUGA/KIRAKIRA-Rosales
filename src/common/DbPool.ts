@@ -141,6 +141,8 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 			} else {
 				reject(allAvailableConnects)
 			}
+		}).catch(() => {
+			throw new Error('something error in function createOrMergeHeartBeatDatabaseConnectByDatabaseInfo')
 		})
 	})
 }
@@ -210,7 +212,7 @@ type getTsTypeFromSchemaType<T> = {
 
 /**
  *
- * 使用 Mongoose 向 MongoDB 插入数据 (事务级别)
+ * 使用 Mongoose 向 MongoDB 插入一行数据
  *
  * @param mongoDBConnects MongoDB 的连接，为了启用事务，需要是 asPromise 的 Mongoose 连接
  * @param schemaObject 数据的 Schema
@@ -219,7 +221,7 @@ type getTsTypeFromSchemaType<T> = {
  *
  * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不存在 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
  */
-export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schemaObject: schemaType, data: getTsTypeFromSchemaType<T>[], collectionName: string): Promise<boolean> => {
+export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schemaObject: schemaType, dataArray: getTsTypeFromSchemaType<T>, collectionName: string): Promise<boolean> => {
 	return new Promise<boolean>(resolve => {
 		const saveData2DatabasePromises: Promise<boolean>[] = []
 
@@ -230,9 +232,8 @@ export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], 
 						return new Promise<void>(() => {
 							const schema = new Schema(schemaObject)
 							const model = mongoDBConnect.connect.model(collectionName, schema, collectionName)
-							const entity = new model(data)
-							// FIXME 在 new model 的时候的 data 参数应该是对象，而此处传入的是对象数组
-							
+							const entity = new model(dataArray)
+
 							entity.save().then(savedDoc => {
 								if (savedDoc === entity) {
 									session.commitTransaction()
@@ -249,6 +250,9 @@ export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], 
 							})
 						})
 					})
+				}).catch(() => {
+					resolve(false)
+					throw new Error('something error in function saveData2MongoDBShard, when we save data to MongoDB')
 				})
 			})
 			saveData2DatabasePromises.push(saveData2DatabasePromise)
@@ -261,6 +265,39 @@ export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], 
 			} else {
 				resolve(false)
 			}
+		}).catch(() => {
+			resolve(false)
+			throw new Error('something error in function saveData2MongoDBShard, when we save data to All MongoDB')
+		})
+	})
+}
+
+export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schemaObject: schemaType, dataArray: getTsTypeFromSchemaType<T>[], collectionName: string): Promise<boolean> => {
+	return new Promise<boolean>(resolve => {
+		const saveDataArray2DatabasePromises: Promise<boolean>[] = []
+
+		dataArray.forEach(data => {
+			const saveDataArray2DatabasePromise = new Promise<boolean>(resolve => {
+				saveData2MongoDBShard(mongoDBConnects, schemaObject, data, collectionName).then((result: boolean) => {
+					resolve(result)
+				}).catch(() => {
+					resolve(false)
+					throw new Error('something error in function saveDataArray2MongoDBShard, when we call saveData2MongoDBShard to save data to All MongoDB')
+				})
+			})
+
+			saveDataArray2DatabasePromises.push(saveDataArray2DatabasePromise)
+		})
+		Promise.all(saveDataArray2DatabasePromises).then((results: boolean[]) => {
+			const saveDataResult = results.filter(result => !result).length === 0 // 判断是否全是 true
+			if (saveDataResult) {
+				resolve(true)
+			} else {
+				resolve(false)
+			}
+		}).catch(() => {
+			resolve(false)
+			throw new Error('something error in function saveDataArray2MongoDBShard, when we save dataArray to All MongoDB')
 		})
 	})
 }

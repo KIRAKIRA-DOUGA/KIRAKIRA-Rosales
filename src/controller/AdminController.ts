@@ -63,6 +63,7 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 
 // TODO 待办事项
 // MEME 这是彩蛋
+// IDEA 这是好主意
 // WARN 这是警告
 
 // FIXME 此处亟需修改
