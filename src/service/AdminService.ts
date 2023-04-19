@@ -68,11 +68,11 @@ const urlHeartbeatDatabaseShardData2Array = (heartbeatDatabaseShardDataList: str
 				}
 				formatHeartbeatDatabaseShardData.push(heartbeatDatabaseShardDataObject)
 			} else {
-				console.log('初始化失败，获取心跳数据库数据时，服务类型既不是主，也不是从')
+				console.error('初始化失败，获取心跳数据库数据时，服务类型既不是主，也不是从')
 				// TODO 添加错误处理
 			}
 		} else {
-			console.log('初始化失败，获取心跳数据库数据时，必要的参数不全')
+			console.error('初始化失败，获取心跳数据库数据时，必要的参数不全')
 			// TODO 添加错误处理
 		}
 	})
@@ -168,7 +168,8 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType, 
 							// TODO 插入数据失败，要怎么做？要不要删除？ (大概率时不用)
 						}
 					}).catch(() => {
-						reject({ state: false, callbackMessage: '<p>初始化失败，创建心跳数据库</p>' })
+						console.log('ddddddddddddddddddddddddd')
+						reject({ state: false, callbackMessage: '<p>初始化失败，根据输入的数据库信息创建心跳数据库连接时陷入困境</p>' })
 					})
 				}
 				

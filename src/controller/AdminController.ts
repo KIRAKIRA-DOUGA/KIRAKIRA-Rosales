@@ -40,6 +40,9 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 		console.log('initEnvs', initEnvs) // DELETE
 		// DELETE
 		const serviceInitResult = await initService(ONE_TIME_SECRET_KEY, initEnvs, ctx)
+		
+		console.log('serviceInitResult', serviceInitResult)
+		
 		if (serviceInitResult.state) {
 			ONE_TIME_SECRET_KEY = undefined
 		}
@@ -47,6 +50,7 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 			responseBody = serviceInitResult.callbackMessage
 		}
 	} catch (e) {
+		console.log('ccccccccccccccccccccccccccccc')
 		responseBody = callErrorMessage(e)
 	}
 

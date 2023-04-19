@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose'
+import mongoose, { Schema, connect } from 'mongoose'
 import { koaCtx } from '../type'
 import { mongoDBConnectType, serviceInfoType } from '../type/AdminType'
 
@@ -17,10 +17,10 @@ import { mongoDBConnectType, serviceInfoType } from '../type/AdminType'
 // 				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${databaseInfo.adminPasswordBase64Base64}@${databaseInfo.privateIPAddress}:${databaseInfo.port}/heart_base?authSource=admin`
 // 				const mongoConnect = mongoose.createConnection(databaseConnectString)
 				
-// 				mongoConnect.on('connected', (err: unknown) => {
-// 					if (err) {
+// 				mongoConnect.on('connected', (error: unknown) => {
+// 					if (error) {
 // 						reject({
-// 							connect: err,
+// 							connect: error,
 // 							connectStatus: 'error',
 // 							connectInfo: databaseInfo,
 // 						} as mongoDBConnectType)
@@ -70,54 +70,43 @@ export const createDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoTy
 	databaseInfos.forEach((databaseInfo: serviceInfoType) => {
 		const availableIPAddress = databaseInfo.privateIPAddress || databaseInfo.publicIPAddress
 		if (availableIPAddress) {
-			const mongoConnectPromise = new Promise<mongoDBConnectType>((resolve, reject) => {
+			const mongoConnectPromise = new Promise<mongoDBConnectType>(resolve => {
 				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${databaseInfo.adminPassword}@${availableIPAddress}:${databaseInfo.port}/${databaseName}?authSource=admin`
 				// DELETE
 				console.log('databaseConnectString', databaseConnectString) // DELETE
 				// DELETE
-				// mongoose.createConnection(databaseConnectString).asPromise().then(mongoConnect => {
-				// 	mongoConnect.on('connected', (err: unknown) => {
-				// 		if (err) {
-				// 			reject({
-				// 				connect: err,
-				// 				connectStatus: 'error',
-				// 				connectInfo: databaseInfo,
-				// 			} as mongoDBConnectType)
-				// 		} else {
-				// 			resolve({
-				// 				connect: mongoConnect,
-				// 				connectStatus: 'ok',
-				// 				connectInfo: databaseInfo,
-				// 			} as mongoDBConnectType)
-				// 		}
-				// 	})
-				// }).catch(() => {
-				// 	// TODO
-				// })
-				
-				const mongoConnect = mongoose.createConnection(databaseConnectString)
-				
-				mongoConnect.on('connected', (err: unknown) => {
-					if (err) {
-						reject({
-							connect: err,
-							connectStatus: 'error',
-							connectInfo: databaseInfo,
-						} as mongoDBConnectType)
-					} else {
+				try {
+					mongoose.createConnection(databaseConnectString).asPromise().then(mongoConnect => {
+						// console.log('mongoConnect', mongoConnect) // DELETE
 						resolve({
 							connect: mongoConnect,
 							connectStatus: 'ok',
 							connectInfo: databaseInfo,
 						} as mongoDBConnectType)
-					}
-				})
+					}).catch(error => {
+						resolve({
+							connect: error,
+							connectStatus: 'error',
+							connectInfo: databaseInfo,
+						} as mongoDBConnectType)
+					})
+				} catch (error) {
+					resolve({
+						connect: error,
+						connectStatus: 'error',
+						connectInfo: databaseInfo,
+					} as mongoDBConnectType)
+				}
 			})
 			databaseConnectPromises.push(mongoConnectPromise)
 		}
 	})
 
-	return Promise.all(databaseConnectPromises)
+	try {
+		return Promise.all(databaseConnectPromises)
+	} catch (e) {
+		console.error('something error in function createDatabaseConnectByDatabaseInfo -> "Promise.all"')
+	}
 }
 
 /**
@@ -130,20 +119,27 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 		const __HEARTBEAT_DB_SHARD_CONNECT_LIST__: mongoDBConnectType[] = ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__ || [] // 获取系统中已存在的心跳数据库连接信息
 
 		const databaseName: string = 'heart_base'
-		createDatabaseConnectByDatabaseInfo(databaseInfos, databaseName).then((connects: mongoDBConnectType[]) => { // 获取新的心跳数据库连接信息
-			// 去重并连接现有两个数组, 然后去除状态是 error 的对象
-			const allAvailableConnects: mongoDBConnectType[] = connects.concat(__HEARTBEAT_DB_SHARD_CONNECT_LIST__.filter((oldConnect: mongoDBConnectType) => {
-				return !connects.every((newConnect: mongoDBConnectType) => (newConnect.connectInfo.privateIPAddress === oldConnect.connectInfo.privateIPAddress || newConnect.connectInfo.publicIPAddress === oldConnect.connectInfo.publicIPAddress) && newConnect.connectInfo.port === oldConnect.connectInfo.port)
-			})).filter((mergedConnect: mongoDBConnectType) => mergedConnect.connectStatus !== 'error')
-	
-			if (allAvailableConnects.length > 0) {
-				resolve(allAvailableConnects)
-			} else {
-				reject(allAvailableConnects)
-			}
-		}).catch(() => {
-			throw new Error('something error in function createOrMergeHeartBeatDatabaseConnectByDatabaseInfo')
-		})
+		try {
+			createDatabaseConnectByDatabaseInfo(databaseInfos, databaseName).then((connects: mongoDBConnectType[]) => { // 获取新的心跳数据库连接信息
+				// 去重并连接现有两个数组, 然后去除状态是 error 的对象
+				const allAvailableConnects: mongoDBConnectType[] = connects.concat(__HEARTBEAT_DB_SHARD_CONNECT_LIST__.filter((oldConnect: mongoDBConnectType) => {
+					return !connects.every((newConnect: mongoDBConnectType) => (newConnect.connectInfo.privateIPAddress === oldConnect.connectInfo.privateIPAddress || newConnect.connectInfo.publicIPAddress === oldConnect.connectInfo.publicIPAddress) && newConnect.connectInfo.port === oldConnect.connectInfo.port)
+				})).filter((mergedConnect: mongoDBConnectType) => mergedConnect.connectStatus !== 'error')
+		
+				// console.log('allAvailableConnects', allAvailableConnects)
+				if (allAvailableConnects.length > 0) {
+					resolve(allAvailableConnects)
+				} else {
+					reject(allAvailableConnects)
+				}
+			}).catch(() => {
+				reject() // TODO we must reject something...
+				console.error('something error in function createOrMergeHeartBeatDatabaseConnectByDatabaseInfo')
+			})
+		} catch {
+			reject() // TODO we must reject something...
+			console.error('something error in function createOrMergeHeartBeatDatabaseConnectByDatabaseInfo when we try {} catch{}')
+		}
 	})
 }
 
@@ -223,52 +219,57 @@ type getTsTypeFromSchemaType<T> = {
  */
 export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schemaObject: schemaType, dataArray: getTsTypeFromSchemaType<T>, collectionName: string): Promise<boolean> => {
 	return new Promise<boolean>(resolve => {
-		const saveData2DatabasePromises: Promise<boolean>[] = []
+		try {
+			const saveData2DatabasePromises: Promise<boolean>[] = []
 
-		mongoDBConnects.forEach((mongoDBConnect: mongoDBConnectType) => {
-			const saveData2DatabasePromise = new Promise<boolean>(resolve => {
-				mongoDBConnect.connect.startSession().then(session => {
-					session.withTransaction(() => {
-						return new Promise<void>(() => {
-							const schema = new Schema(schemaObject)
-							const model = mongoDBConnect.connect.model(collectionName, schema, collectionName)
-							const entity = new model(dataArray)
-
-							entity.save().then(savedDoc => {
-								if (savedDoc === entity) {
-									session.commitTransaction()
-									resolve(true)
-								} else {
+			mongoDBConnects.forEach((mongoDBConnect: mongoDBConnectType) => {
+				const saveData2DatabasePromise = new Promise<boolean>(resolve => {
+					mongoDBConnect.connect.startSession().then(session => {
+						session.withTransaction(() => {
+							return new Promise<void>(() => {
+								const schema = new Schema(schemaObject)
+								const model = mongoDBConnect.connect.model(collectionName, schema, collectionName)
+								const entity = new model(dataArray)
+	
+								entity.save().then(savedDoc => {
+									if (savedDoc === entity) {
+										session.commitTransaction()
+										resolve(true)
+									} else {
+										session.abortTransaction()
+										resolve(false)
+									}
+								}).catch(() => {
 									session.abortTransaction()
 									resolve(false)
-								}
-							}).catch(() => {
-								session.abortTransaction()
-								resolve(false)
-							}).finally(() => {
-								session.endSession()
+								}).finally(() => {
+									session.endSession()
+								})
 							})
 						})
+					}).catch(() => {
+						resolve(false)
+						console.error('something error in function saveData2MongoDBShard, when we save data to MongoDB')
 					})
-				}).catch(() => {
-					resolve(false)
-					throw new Error('something error in function saveData2MongoDBShard, when we save data to MongoDB')
 				})
+				saveData2DatabasePromises.push(saveData2DatabasePromise)
 			})
-			saveData2DatabasePromises.push(saveData2DatabasePromise)
-		})
-
-		Promise.all(saveData2DatabasePromises).then((results: boolean[]) => {
-			const saveDataResult = results.filter(result => !result).length === 0 // 判断是否全是 true
-			if (saveDataResult) {
-				resolve(true)
-			} else {
+	
+			Promise.all(saveData2DatabasePromises).then((results: boolean[]) => {
+				const saveDataResult = results.filter(result => !result).length === 0 // 判断是否全是 true
+				if (saveDataResult) {
+					resolve(true)
+				} else {
+					resolve(false)
+				}
+			}).catch(() => {
 				resolve(false)
-			}
-		}).catch(() => {
+				console.error('something error in function saveData2MongoDBShard, when we save data to All MongoDB')
+			})
+		} catch (e) {
 			resolve(false)
-			throw new Error('something error in function saveData2MongoDBShard, when we save data to All MongoDB')
-		})
+			console.error('something error in function saveData2MongoDBShard, when we save data to All MongoDB 2')
+		}
 	})
 }
 
@@ -282,7 +283,7 @@ export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 					resolve(result)
 				}).catch(() => {
 					resolve(false)
-					throw new Error('something error in function saveDataArray2MongoDBShard, when we call saveData2MongoDBShard to save data to All MongoDB')
+					console.error('something error in function saveDataArray2MongoDBShard, when we call saveData2MongoDBShard to save data to All MongoDB')
 				})
 			})
 
@@ -297,7 +298,7 @@ export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 			}
 		}).catch(() => {
 			resolve(false)
-			throw new Error('something error in function saveDataArray2MongoDBShard, when we save dataArray to All MongoDB')
+			console.error('something error in function saveDataArray2MongoDBShard, when we save dataArray to All MongoDB')
 		})
 	})
 }
