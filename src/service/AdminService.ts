@@ -109,7 +109,6 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 						const saveAdministratorDataStatus = await saveDataArray2MongoDBShard<typeof administratorDataSchema>(heartBeatDataBaseConnects, administratorDataSchema, administratorData, administratorCollectionName) // 向 所有心跳数据库的 administrator 集合广播 管理用户，密码
 
 						const serviceCollectionName: string = 'service'
-
 						const localhostAPIserviceDataSchema = {
 							publicIPAddress: String,
 							privateIPAddress: String,
