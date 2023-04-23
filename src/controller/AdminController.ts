@@ -39,7 +39,7 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 		// console.log('ctx.query.heartbeatDatabaseShardData as string[]', ctx.query.heartbeatDatabaseShardData as string[]) // DELETE
 		console.log('initEnvs', initEnvs) // DELETE
 		// DELETE
-		const serviceInitResult = await initService(ONE_TIME_SECRET_KEY, initEnvs, ctx)
+		const serviceInitResult = await initService(ONE_TIME_SECRET_KEY, initEnvs)
 		
 		console.log('serviceInitResult', serviceInitResult)
 		

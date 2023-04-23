@@ -1,9 +1,24 @@
-import { koaCtx, koaNext } from '../type/index'
+// Thanks ChatGPT
+export class GlobalSingleton {
+	private static instance: GlobalSingleton
+	private globalVariables: Map<string, unknown>
 
-export const koaPublicStore = async (ctx: koaCtx, next: koaNext) => {
-	ctx.state.__API_SERVER_LIST__ = [] // API 服务器列表
-	ctx.state.__HEARTBEAT_DB_SHARD_LIST__ = [] // 心跳数据库列表
-	ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__ = [] // 心跳数据库连接列表
-	
-	await next()
+	private constructor() {
+		this.globalVariables = new Map<string, unknown>()
+	}
+
+	public static getInstance(): GlobalSingleton {
+		if (!GlobalSingleton.instance) {
+			GlobalSingleton.instance = new GlobalSingleton()
+		}
+		return GlobalSingleton.instance
+	}
+
+	public setVariable<T>(key: string, value: T): void {
+		this.globalVariables.set(key, value)
+	}
+
+	public getVariable<T>(key: string): T | undefined {
+		return this.globalVariables.get(key) as T
+	}
 }

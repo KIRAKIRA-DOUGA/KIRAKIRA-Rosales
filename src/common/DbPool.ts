@@ -1,63 +1,8 @@
-import mongoose, { Schema, connect } from 'mongoose'
-import { koaCtx } from '../type'
-import { mongoDBConnectType, serviceInfoType } from '../type/AdminType'
+import mongoose, { Schema } from 'mongoose'
+import { mongoDBConnectType, mongoServiceInfoType } from '../type/AdminType'
+import { GlobalSingleton } from '../store/index'
 
-// /**
-//  * 根据资源信息，异步创建或 merge 心跳数据库连接并返回
-//  * @param databaseInfos 数据库连接信息
-//  * @param ctx koa 上下文
-//  * @param databaseName 要连接的数据库名
-//  */
-// export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoType[], ctx: koaCtx): Promise<mongoDBConnectType[]> => {
-// 	return new Promise<mongoDBConnectType[]>((resolve, reject) => {
-// 		// 创建连接部分
-// 		const databaseConnectPromise: Promise<mongoDBConnectType>[] = []
-// 		databaseInfos.forEach((databaseInfo: serviceInfoType) => {
-// 			const mongoConnectPromise = new Promise<mongoDBConnectType>((resolve, reject) => {
-// 				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${databaseInfo.adminPasswordBase64Base64}@${databaseInfo.privateIPAddress}:${databaseInfo.port}/heart_base?authSource=admin`
-// 				const mongoConnect = mongoose.createConnection(databaseConnectString)
-				
-// 				mongoConnect.on('connected', (error: unknown) => {
-// 					if (error) {
-// 						reject({
-// 							connect: error,
-// 							connectStatus: 'error',
-// 							connectInfo: databaseInfo,
-// 						} as mongoDBConnectType)
-// 					} else {
-// 						resolve({
-// 							connect: mongoConnect,
-// 							connectStatus: 'ok',
-// 							connectInfo: databaseInfo,
-// 						} as mongoDBConnectType)
-// 					}
-// 				})
-// 			})
-// 			databaseConnectPromise.push(mongoConnectPromise)
-// 		})
-// 		// 创建连接部分结束
-
-// 		// merge 心跳信息部分开始
-// 		const __HEARTBEAT_DB_SHARD_CONNECT_LIST__: mongoDBConnectType[] = ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__ || []
-// 		Promise.all(databaseConnectPromise).then((connects: mongoDBConnectType[]) => {
-// 			// 去重并连接现有两个数组
-// 			// 去除状态是 error 的对象
-
-// 			// console.log('connects in promise', connects)
-
-// 			const allAvailableConnects: mongoDBConnectType[] = connects.concat(__HEARTBEAT_DB_SHARD_CONNECT_LIST__.filter((oldConnect: mongoDBConnectType) => {
-// 				return !connects.every((newConnect: mongoDBConnectType) => (newConnect.connectInfo.privateIPAddress === oldConnect.connectInfo.privateIPAddress || newConnect.connectInfo.publicIPAddress === oldConnect.connectInfo.publicIPAddress) && newConnect.connectInfo.port === oldConnect.connectInfo.port)
-// 			})).filter((mergedConnect: mongoDBConnectType) => mergedConnect.connectStatus !== 'error')
-	
-// 			if (allAvailableConnects.length > 0) {
-// 				resolve(allAvailableConnects)
-// 			} else {
-// 				reject(allAvailableConnects)
-// 			}
-// 		})
-// 		// merge 心跳信息部分结束
-// 	})
-// }
+const globalSingleton = GlobalSingleton.getInstance()
 
 
 /**
@@ -65,19 +10,16 @@ import { mongoDBConnectType, serviceInfoType } from '../type/AdminType'
  * @param databaseInfos 数据库连接信息
  * @param databaseName 要连接的数据库名
  */
-export const createDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoType[], databaseName: string): Promise<mongoDBConnectType[]> => {
+export const createDatabaseConnectByDatabaseInfo = (databaseInfos: mongoServiceInfoType[], databaseName: string): Promise<mongoDBConnectType[]> => {
 	const databaseConnectPromises: Promise<mongoDBConnectType>[] = []
-	databaseInfos.forEach((databaseInfo: serviceInfoType) => {
+	databaseInfos.forEach((databaseInfo: mongoServiceInfoType) => {
 		const availableIPAddress = databaseInfo.privateIPAddress || databaseInfo.publicIPAddress
 		if (availableIPAddress) {
 			const mongoConnectPromise = new Promise<mongoDBConnectType>(resolve => {
 				const databaseConnectString = `mongodb://${databaseInfo.adminAccountName}:${databaseInfo.adminPassword}@${availableIPAddress}:${databaseInfo.port}/${databaseName}?authSource=admin`
-				// DELETE
-				console.log('databaseConnectString', databaseConnectString) // DELETE
-				// DELETE
+
 				try {
 					mongoose.createConnection(databaseConnectString).asPromise().then(mongoConnect => {
-						// console.log('mongoConnect', mongoConnect) // DELETE
 						resolve({
 							connect: mongoConnect,
 							connectStatus: 'ok',
@@ -112,21 +54,19 @@ export const createDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoTy
 /**
  * 根据资源信息，异步创建或 merge 心跳数据库连接并返回
  * @param databaseInfos 数据库连接信息
- * @param ctx koa 上下文
  */
-export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfos: serviceInfoType[], ctx: koaCtx): Promise<mongoDBConnectType[]> => {
+export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfos: mongoServiceInfoType[]): Promise<mongoDBConnectType[]> => {
 	return new Promise<mongoDBConnectType[]>((resolve, reject) => {
-		const __HEARTBEAT_DB_SHARD_CONNECT_LIST__: mongoDBConnectType[] = ctx.state.__HEARTBEAT_DB_SHARD_CONNECT_LIST__ || [] // 获取系统中已存在的心跳数据库连接信息
+		const heartBeatDBShardConnectList: mongoDBConnectType[] | undefined = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
 
 		const databaseName: string = 'heart_base'
 		try {
 			createDatabaseConnectByDatabaseInfo(databaseInfos, databaseName).then((connects: mongoDBConnectType[]) => { // 获取新的心跳数据库连接信息
 				// 去重并连接现有两个数组, 然后去除状态是 error 的对象
-				const allAvailableConnects: mongoDBConnectType[] = connects.concat(__HEARTBEAT_DB_SHARD_CONNECT_LIST__.filter((oldConnect: mongoDBConnectType) => {
+				const allAvailableConnects: mongoDBConnectType[] = connects.concat(heartBeatDBShardConnectList ? heartBeatDBShardConnectList.filter((oldConnect: mongoDBConnectType) => {
 					return !connects.every((newConnect: mongoDBConnectType) => (newConnect.connectInfo.privateIPAddress === oldConnect.connectInfo.privateIPAddress || newConnect.connectInfo.publicIPAddress === oldConnect.connectInfo.publicIPAddress) && newConnect.connectInfo.port === oldConnect.connectInfo.port)
-				})).filter((mergedConnect: mongoDBConnectType) => mergedConnect.connectStatus !== 'error')
-		
-				// console.log('allAvailableConnects', allAvailableConnects)
+				}) : []).filter((mergedConnect: mongoDBConnectType) => mergedConnect.connectStatus !== 'error')
+
 				if (allAvailableConnects.length > 0) {
 					resolve(allAvailableConnects)
 				} else {
@@ -142,54 +82,6 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 		}
 	})
 }
-
-
-// DELETE
-// 数据库连接、数据的类型、数据
-/**
- * 数据的类型：
- * type dataTypeType = Record<string, 'string' | 'number' | ''>
- * const dataType = {
- * 	a: 'string'
- * }
- * */
-
-// export const broadcastData2MongoDB = (mongoDBConnects: mongoDBConnectType[], databaseName: string, collection: string, data: object): Promise<boolean> => {
-// 	return new Promise<boolean>((resolve, reject) => {
-
-// 	})
-// }
-
-// export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], schema: Schema, data: T[]): Promise<boolean> => {
-// 	// data[0] as schemaType
-
-// 	// const testSchema = new Schema(T)
-
-// 	const heartBeat = mongoDBConnects[0].connect.model('heart', schema)
-// 	const entity = new heartBeat(data[0])
-// 	entity.save()
-
-// 	return new Promise<boolean>((resolve, reject) => {
-// 		resolve(true)
-// 	})
-// }
-
-
-
-
-// function bbb<U>(mongoDBConnects: mongoDBConnectType[], schemaObject: object, data: U[]): Promise<boolean> {
-// 	const schema = new Schema(schemaObject)
-
-// 	return new Promise<boolean>((resolve, reject) => {
-// 		resolve(true)
-// 	})
-// }
-// DELETE
-
-
-
-
-
 
 
 type schemaType = Record<string, unknown>
