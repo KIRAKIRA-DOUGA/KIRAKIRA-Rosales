@@ -106,7 +106,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 						const administratorDataSchema = { userName: String, password: String } // 数据 schema
 						const administratorData: adminUserType[] = [{ userName: systemAdminUserName, password: adminPassword }] // 数据
 						const administratorCollectionName: string = 'administrator' // 集合名
-						const saveAdministratorDataStatus = await saveDataArray2MongoDBShard<typeof administratorDataSchema>(heartBeatDataBaseConnects, administratorDataSchema, administratorData, administratorCollectionName) // 向 所有心跳数据库的 administrator 集合广播 管理用户，密码
+						const saveAdministratorDataStatus = await saveDataArray2MongoDBShard<typeof administratorDataSchema>(heartBeatDataBaseConnects, administratorCollectionName, administratorDataSchema, administratorData) // 向 所有心跳数据库的 administrator 集合广播 管理用户，密码
 
 						const serviceCollectionName: string = 'service'
 						const localhostAPIserviceDataSchema = {
@@ -123,7 +123,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 							state: 'up',
 							editDateTime: new Date().getTime(),
 						}]
-						const saveAPIServiceDataStatus = await saveDataArray2MongoDBShard<typeof localhostAPIserviceDataSchema>(heartBeatDataBaseConnects, localhostAPIserviceDataSchema, localhostAPIServiceData, serviceCollectionName) // 向 所有心跳数据库的 service 集合广播 本机 API server 信息
+						const saveAPIServiceDataStatus = await saveDataArray2MongoDBShard<typeof localhostAPIserviceDataSchema>(heartBeatDataBaseConnects, serviceCollectionName, localhostAPIserviceDataSchema, localhostAPIServiceData) // 向 所有心跳数据库的 service 集合广播 本机 API server 信息
 
 						const heartBeatDataBaseShardListDataSchema = {
 							publicIPAddress: String,
@@ -137,7 +137,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 							state: { type: String, default: 'up' },
 							editDateTime: Number,
 						}
-						const saveHeartBeatDataBaseShardListDataStatus = await saveDataArray2MongoDBShard<typeof heartBeatDataBaseShardListDataSchema>(heartBeatDataBaseConnects, heartBeatDataBaseShardListDataSchema, heartBeatDBShardList, serviceCollectionName) // 向 所有心跳数据库的 service 集合广播 心跳数据库 信息
+						const saveHeartBeatDataBaseShardListDataStatus = await saveDataArray2MongoDBShard<typeof heartBeatDataBaseShardListDataSchema>(heartBeatDataBaseConnects, serviceCollectionName, heartBeatDataBaseShardListDataSchema, heartBeatDBShardList) // 向 所有心跳数据库的 service 集合广播 心跳数据库 信息
 
 						if (saveAdministratorDataStatus && saveAPIServiceDataStatus && saveHeartBeatDataBaseShardListDataStatus) { // 如果向所有心跳数据库广播的：集群管理员信息、本地serviceAPI信息、心跳数据库信息 全部完成
 							await sleep(3000)
@@ -148,7 +148,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 							// TODO
 						} else {
 							reject({ state: false, callbackMessage: '<p>初始化失败，插入数据时出现错误</p>' })
-							// TODO 插入数据失败，要怎么做？要不要删除？ (大概率时不用)
+							// TODO 插入数据失败，要怎么做？要不要删除？ (大概率不用)
 						}
 					}).catch(() => {
 						reject({ state: false, callbackMessage: '<p>初始化失败，根据输入的数据库信息创建心跳数据库连接时陷入困境</p>' })
@@ -162,8 +162,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 				// DONE 判断 __HEARTBEAT_DB_SHARD_LIST__ 是否为空，如果不是，那这些信息去创建数据库连接并保存连接
 				// DONE 判断 __HEARTBEAT_DB_SHARD_CONNECT_LIST__ 是否为空，如果不是，向每一个心跳数据库分片广播 集群管理用户，密码、API信息，心跳数据库信息 (向 administrator 集合广播 管理用户，密码，向 service 集合广播 本机 API server 信息，向 service 集合广播 心跳数据库 信息)
 				// DONE 睡眠 3s
-				// TODO 每隔 1s 随机去一个心跳数据库分片中获取 API信息列表 和 心跳数据库分片列表，并覆写全局变量
-				// TODO 启动健康检测
+				// TODO 启动心跳（健康检测）
 				// TODO 销毁 一次性身份验证密钥
 			}
 		}
@@ -196,9 +195,34 @@ const startHeartBeat = (ms: number) => {
 		
 		if (nodeService && heartBeatDBShardList && nodeService.length !== 0 && heartBeatDBShardList.length !== 0) {
 			const trueHeartBeatDBShardList = heartBeatDBShardList.filter(heartBeatDBShard => heartBeatDBShard.serviceType === 'heartbeat')
-			await console.log('lest:', nodeService, trueHeartBeatDBShardList) // DELETE
+
+			await Promise.all([checkAPI(nodeService), checkMongoDB(heartBeatDBShardList)]) // 心跳测试
+
+			console.log('lest:', nodeService, trueHeartBeatDBShardList) // DELETE
 		}
 	}, ms)
+}
+
+// 检查 Node 的情况
+const checkAPI = (nodeService: nodeServiceInfoType[]): Promise<void> => {
+	return new Promise<void>((resolve, reject) => {
+		// 去 heartbeat 数据库的 service 集合中寻找 node API 的连接信息
+		// 向 nodeAPI 发送网络请求
+		// 请求成功, API 信息追加到全局变量中（如果以前不存在）
+		// 请求失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, API 信息从全局变量中删除
+		resolve()
+	})
+}
+
+// 检查 MongoDB 的情况
+const checkMongoDB = (heartBeatDBShardList: mongoServiceInfoType[]): Promise<void> => {
+	return new Promise<void>((resolve, reject) => {
+		// 去 heartbeat 数据库的 service 集合中寻找状态为 up 的 mongodb 的连接信息 // __MONGO_DB_SHARD_LIST__ MongoDB 数据库连接信息
+		// 根据连接信息，去全局变量中找有没有对应的 connect，如果没有，就创建，如果有，就拿来用 // __MONGO_DB_SHARD_CONNECT_LIST__ MongoDB 数据库连接
+		// 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
+		// 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
+		resolve()
+	})
 }
 
 
