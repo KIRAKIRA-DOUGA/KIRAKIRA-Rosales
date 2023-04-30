@@ -22,3 +22,8 @@ export class GlobalSingleton {
 		return this.globalVariables.get(key) as T
 	}
 }
+
+// - 所有用到的全局变量名
+// __API_SERVER_LIST__ API 服务器的列表
+// __HEARTBEAT_DB_SHARD_LIST__ 心跳数据库列表
+// __HEARTBEAT_DB_SHARD_CONNECT_LIST__ 心跳数据库连接列表
