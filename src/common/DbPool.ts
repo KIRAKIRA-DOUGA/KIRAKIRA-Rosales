@@ -248,7 +248,7 @@ export const getDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 
 /**
  *
- * 随机去一个数据库查询结果
+ * 随机去一个给定的数据库连接查询结果，并返回查询结果
  * "有一个存放数据库连接的数组，随机的去这个数组中取出一个数据库连接并执行查询，如果查询到结果，就返回，如果没查询到结果，就去数组中再次取出一个连接并执行查询，重复此步骤直到数组中的每个连接都被执行过一遍查询，要求：不改变原数组"
  * BY: ChatGPT-4, 02
  *
@@ -288,7 +288,7 @@ export const getDataFromRandomMongoDBShard = async <T>(mongoDBConnects: mongoDBC
 
 /**
  *
- * 查询全部数据库，并将结果去重聚合
+ * 去给定的全部数据库连接查询数据，并将查询结果去重后返回
  * BY: ChatGPT-4, 02
  *
  * @param mongoDBConnects MongoDB 数据库连接列表
@@ -318,4 +318,4 @@ export const getDataFromAllMongoDBShardAndDuplicate = () => async <T>(mongoDBCon
 	}
 }
 
-
+// TODO 增加数据路由查询，可以通过路由计算出数据存储的分片组位置，只去正确的分片组查询数据
