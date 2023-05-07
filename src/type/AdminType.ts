@@ -63,6 +63,7 @@ export interface adminUserType {
 	updater?: string;
 }
 
+// BY 兰音
 type constructor2Type<T> =
 	T extends DateConstructor ? Date :
 		T extends BufferConstructor ? Buffer :
@@ -71,10 +72,30 @@ type constructor2Type<T> =
 					T extends never[] ? unknown[] :
 						T extends object ? getTsTypeFromSchemaType<T> : T
 
+/**
+ * 从 SchemaType 转换为正常的 Type
+ * BY 兰音
+ *  */
 export type getTsTypeFromSchemaType<T> = {
 	[key in keyof T]: constructor2Type<T[key]>;
 }
 
+/**
+ * 从 SchemaType 转换为正常的对象 Type，但每个元素都是可选的
+ * BY 02
+ *  */
 export type getTsTypeFromSchemaTypeOptional<T> = {
 	[key in keyof T]?: constructor2Type<T[key]>;
 }
+
+/**
+ * 将 Type 转换为 Type 至少一项有值
+ * BY ChatGPT-4 02
+ *  */
+export type AtLeastOne<T, U = { [K in keyof T]: Pick<T, K> }> = Partial<T> & U[keyof U]
+
+/**
+ * 将 Type 转换为 Type 只允许一项有值
+ * BY ChatGPT-4 02
+ *  */
+export type ExactlyOne<T, U = { [K in keyof T]: { [P in K]: T[P] } & { [P in Exclude<keyof T, K>]: never } }> = U[keyof U]

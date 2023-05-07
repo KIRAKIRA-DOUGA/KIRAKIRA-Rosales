@@ -2,6 +2,7 @@ import mongoose, { Schema } from 'mongoose'
 import { getTsTypeFromSchemaType, getTsTypeFromSchemaTypeOptional, mongoDBConnectType, mongoServiceInfoType } from '../type/AdminType'
 import { GlobalSingleton } from '../store/index'
 import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from './ArrayTool'
+import { hashData } from './HashTool'
 
 const globalSingleton = GlobalSingleton.getInstance()
 
@@ -97,12 +98,12 @@ type schemaType = Record<string, unknown>
  * @param schemaObject 数据的 Schema
  * @param data 准备插入的数据
  *
- * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不存在 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
+ * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不接受 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
  */
-export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, dataArray: getTsTypeFromSchemaType<T>): Promise<boolean> => {
+export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, data: getTsTypeFromSchemaType<T>): Promise<boolean> => {
 	return new Promise<boolean>(resolve => {
 		try {
-			if (mongoDBConnects && collectionName && schemaObject && dataArray) {
+			if (mongoDBConnects && collectionName && schemaObject && data) {
 				const saveData2DatabasePromises: Promise<boolean>[] = []
 
 				mongoDBConnects.forEach((mongoDBConnect: mongoDBConnectType) => {
@@ -112,7 +113,7 @@ export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], 
 								return new Promise<void>(() => {
 									const schema = new Schema(schemaObject)
 									const model = mongoDBConnect.connect.model(collectionName, schema, collectionName)
-									const entity = new model(dataArray)
+									const entity = new model(data)
 		
 									entity.save().then(savedDoc => {
 										if (savedDoc === entity) {
@@ -160,6 +161,18 @@ export const saveData2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], 
 	})
 }
 
+
+/**
+ *
+ * 使用 Mongoose 向 MongoDB 插入多行数据
+ *
+ * @param mongoDBConnects MongoDB 的连接、
+ * @param collectionName 数据被插入的集合名字 (精准名字，不需要在后面追加复数 “s”)
+ * @param schemaObject 数据的 Schema
+ * @param dataArray 准备插入的多行数据
+ *
+ * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不接受 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
+ */
 export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, dataArray: getTsTypeFromSchemaType<T>[]): Promise<boolean> => {
 	return new Promise<boolean>(resolve => {
 		try {
@@ -198,6 +211,68 @@ export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 		}
 	})
 }
+
+
+
+// TODO 增加数据路由查询，可以通过路由计算出数据存储的分片组位置，只去正确的分片组查询数据
+/**
+ * 路由存储数据
+ * 通过显示声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的 MongoDB 连接
+ * 然后使用普通方法向这些连接中插入数据
+ *
+ * BY 02，KIRAKIRA 版权所有, 启发自: ElasticSearch
+ *
+ * @param collectionName 数据被插入的集合名字 (精准名字，不需要在后面追加复数 “s”)
+ * @param schemaObject 数据的 Schema
+ * @param data 准备插入的数据
+ * @param primaryKey 显式声明的主键
+ *
+ * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不接受 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
+ */
+export const saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collectionName: string, schemaObject: schemaType, data: getTsTypeFromSchemaType<T>, primaryKey: keyof T): Promise<boolean> => {
+	return new Promise<boolean>(resolve => {
+		try {
+			const MONGO_SHARD_COUNT: string = process.env.MONGO_SHARD_COUNT // WARN 每个 Koa 节点的该值必须是相同的
+			if (MONGO_SHARD_COUNT) {
+				const mongoShardCountNumber = parseInt(MONGO_SHARD_COUNT, 10)
+				if (mongoShardCountNumber && mongoShardCountNumber >= 0) {
+					const primaryKeyData = data[primaryKey]
+					if (typeof primaryKeyData === 'string') {
+						const primaryKeyDataHash = hashData(primaryKeyData as string)
+						const primaryKeyDataHashBigInt = BigInt(`0x${primaryKeyDataHash}`)
+						const primaryKeyDataHashBigIntModulo = primaryKeyDataHashBigInt % BigInt(mongoShardCountNumber)
+						const primaryKeyDataHashModulo = Number(primaryKeyDataHashBigIntModulo)
+						const correctShardIndex = primaryKeyDataHashModulo
+						const mongoDBConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__')
+						const correctMongoDBconnectList = mongoDBConnectList.filter(mongoDBConnect => mongoDBConnect.connectInfo.shardGroup === correctShardIndex)
+						saveData2MongoDBShard<T>(correctMongoDBconnectList, collectionName, schemaObject, data).then(result => {
+							resolve(result)
+						}).catch(() => {
+							console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute -> saveData2MongoDBShard.catch')
+							resolve(false)
+						})
+					} else {
+						console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, primaryKeyData not is string')
+						resolve(false)
+					}
+				} else {
+					console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoShardCountNumber is empty or not >= 0')
+					resolve(false)
+				}
+			} else {
+				console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data MONGO_SHARD_COUNT is empty')
+				resolve(false)
+			}
+		} catch {
+			console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute')
+			resolve(false)
+		}
+	})
+}
+
+
+
+
 
 
 /**
@@ -351,5 +426,3 @@ export const getDataFromAllMongoDBShardAndDuplicate = async <T>(mongoDBConnects:
 		return [{}] as getTsTypeFromSchemaType<T>[]
 	}
 }
-
-// TODO 增加数据路由查询，可以通过路由计算出数据存储的分片组位置，只去正确的分片组查询数据
