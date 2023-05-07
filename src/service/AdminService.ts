@@ -210,36 +210,129 @@ const checkAPI = async () => {
 	return
 }
 
-// 检查 MongoDB 的情况
+// 检查 MongoDB 心跳数据库的情况
 const checkHeartBeatMongoDB = async () => {
-	const mongoDBConnectInfo = await getActiveHeartBeatMongoDBShardInfo()
-	const oldMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
-	const newMongoDBShardList = mergeAndDeduplicateObjectArrays<mongoServiceInfoType>(oldMongoDBShardList, mongoDBConnectInfo as mongoServiceInfoType[])
-	createDatabaseConnectByDatabaseInfo(newMongoDBShardList, 'testHeartBeat').then(connects => {
-		connects
-	}).catch(() => {
-		// Report
-	})
+	const activeHeartBeatMongoDBShardInfo = await getActiveHeartBeatMongoDBShardInfo()
+	const oldHeartBeatMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
+	if (activeHeartBeatMongoDBShardInfo && oldHeartBeatMongoDBShardList) {
+		const newHeartBeatMongoDBShardList = mergeAndDeduplicateObjectArrays<mongoServiceInfoType>(oldHeartBeatMongoDBShardList, activeHeartBeatMongoDBShardInfo as mongoServiceInfoType[])
+		createDatabaseConnectByDatabaseInfo(newHeartBeatMongoDBShardList, 'beat').then(connects => {
+			const oldHeartBeatMongoDBShardConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__') // 拿到旧连接
+			const correctHeartBeatMongoDBShardConnectList = correctMergeNewMongoDBConnect(oldHeartBeatMongoDBShardConnectList, connects)
+			globalSingleton.setVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__', correctHeartBeatMongoDBShardConnectList)
+		
+			const correctHeartBeatMongoShardDBList = correctHeartBeatMongoDBShardConnectList.reduce((accumulator: mongoServiceInfoType[], currentValue: mongoDBConnectType) => {
+				accumulator.push(currentValue.connectInfo)
+				return accumulator
+			}, [] as mongoServiceInfoType[])
+			globalSingleton.setVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__', correctHeartBeatMongoShardDBList)
 
-	// globalSingleton.setVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__', mongoDBConnectInfo as mongoServiceInfoType[])
-	return
+			const haveBrokenConnects = connects.filter(connect => connect.connectStatus !== 'ok').length >= 0
+			if (haveBrokenConnects) {
+			// Report // TODO
+			}
+		}).catch(() => {
+		// Report // TODO
+		})
+		return
+	} else {
+		// Report // TODO 这个 node 一个可用的 HeartBeat 数据库连接都没有了，当然要上报
+		console.error('something error in function checkHeartBeatMongoDB, required data is empty')
+		return
+	}
+	
 	// DONE 去 heartbeat 数据库的 service 集合中寻找状态为 up 的 heartbeat 的连接信息
-	// TODO 根据连接信息，去全局变量中找有没有相同的 connect 信息，如果没有，就创建，如果有，就拿来用
-	// TODO 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
+	// DONE 获取以前的心跳数据库连接信息，并且于刚刚获取的信息去重并 Merge，使用 Merge 后的连接列表创建
+	// DONE 连接成功，新创建的连接覆写全局变量
 	// TODO 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
 }
 
 // 检查 MongoDB 的情况
 const checkMongoDB = async () => {
-	await console.log()
-	// globalSingleton.setVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__', mongoDBConnectInfo as mongoServiceInfoType[])
-	return
+	const activeMongoDBShardInfo = await getActiveMongoDBShardInfo()
+	const oldMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__')
+	if (activeMongoDBShardInfo && oldMongoDBShardList) {
+		const newMongoDBShardList = mergeAndDeduplicateObjectArrays<mongoServiceInfoType>(oldMongoDBShardList, activeMongoDBShardInfo as mongoServiceInfoType[])
+		createDatabaseConnectByDatabaseInfo(newMongoDBShardList, 'beat').then(connects => {
+			const oldMongoDBShardConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__') // 拿到旧连接
+			const correctMongoDBShardConnectList = correctMergeNewMongoDBConnect(oldMongoDBShardConnectList, connects)
+			globalSingleton.setVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__', correctMongoDBShardConnectList)
+		
+			const correctMongoShardDBList = correctMongoDBShardConnectList.reduce((accumulator: mongoServiceInfoType[], currentValue: mongoDBConnectType) => {
+				accumulator.push(currentValue.connectInfo)
+				return accumulator
+			}, [] as mongoServiceInfoType[])
+			globalSingleton.setVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__', correctMongoShardDBList)
+
+			const haveBrokenConnects = connects.filter(connect => connect.connectStatus !== 'ok').length >= 0
+			if (haveBrokenConnects) {
+			// Report // TODO
+			}
+		}).catch(() => {
+		// Report // TODO
+		})
+		return
+	} else {
+		// Report // TODO 这个 node 一个可用的 MongoDB 数据库连接都没有了，当然要上报
+		console.error('something error in function checkMongoDB, required data is empty')
+		return
+	}
 	// DONE 去 heartbeat 数据库的 service 集合中寻找状态为 up 的 mongodb 的连接信息 // __MONGO_DB_SHARD_LIST__ MongoDB 数据库连接信息
 	// TODO 根据连接信息，去全局变量中找有没有相同的 connect 信息，如果没有，就创建，如果有，就拿来用 // __MONGO_DB_SHARD_CONNECT_LIST__ MongoDB 数据库连接
 	// TODO 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
 	// TODO 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
 }
 
+/**
+ * 正确合并新创建的连接和环境变量中以前的连接
+ * BY: 02
+ *
+ * @param connects 新的连接
+ * @returns 合并后的连接
+ */
+const correctMergeNewMongoDBConnect = (oldConnects: mongoDBConnectType[], newConnects: mongoDBConnectType[]): mongoDBConnectType[] => {
+	try {
+		const newBrokenMongoDBShardConnectList = newConnects.filter(connect => connect.connectStatus !== 'ok') // 新的但是坏连接
+		const newRightMongoDBShardConnectList = newConnects.filter(connect => connect.connectStatus === 'ok') // 新的好连接
+	
+		// 旧连接 对于 新的但是坏连接 的交集 (在最新一次检测中得到的 旧连接 中的 坏连接)
+		const oldConnectListButInNewBroken = oldConnects.filter(oldConnect => {
+			return newBrokenMongoDBShardConnectList.some(newBrokenConnect => {
+				return newBrokenConnect.connectInfo.privateIPAddress === oldConnect.connectInfo.privateIPAddress || newBrokenConnect.connectInfo.publicIPAddress === oldConnect.connectInfo.publicIPAddress
+			})
+		})
+	
+		// 旧连接中已经被判定为坏连接的就直接 close 掉
+		oldConnectListButInNewBroken.map(oldConnectButInNewBroken => oldConnectButInNewBroken.connect.close())
+	
+		// 旧连接 对于 新的但是坏连接 的差集 (删除 旧连接 中的 坏连接)
+		const oldConnectListDeleteNewBroken = oldConnects.filter(oldConnect => {
+			return !newBrokenMongoDBShardConnectList.some(newBrokenConnect => {
+				return newBrokenConnect.connectInfo.privateIPAddress === oldConnect.connectInfo.privateIPAddress || newBrokenConnect.connectInfo.publicIPAddress === oldConnect.connectInfo.publicIPAddress
+			})
+		})
+	
+		// 新的好连接 对于 已删除坏连接的旧连接 的差集 (在 旧连接 中没出现过的 新的好连接)
+		const newRightConnectButNeverFoundInOldConnect = newRightMongoDBShardConnectList.filter(newRightConnect => {
+			return !oldConnectListDeleteNewBroken.some(oldConnectDeleteNewBroken => {
+				return oldConnectDeleteNewBroken.connectInfo.privateIPAddress === newRightConnect.connectInfo.privateIPAddress || oldConnectDeleteNewBroken.connectInfo.publicIPAddress === newRightConnect.connectInfo.publicIPAddress
+			})
+		})
+	
+		// (在 旧连接 中没出现过的 新的好连接) 和 (没有坏连接的旧连接) 连接
+		const correctHearBeatConnect = oldConnectListDeleteNewBroken.concat(newRightConnectButNeverFoundInOldConnect)
+		return correctHearBeatConnect
+	} catch {
+		console.error('something error in function correctMergeNewMongoDBConnect')
+		return []
+	}
+}
+
+/**
+ * 去心跳数据库获取所有可用的 MongoDB 心跳数据库信息
+ *
+ * @returns 可用的心跳数据库信息
+ */
 export const getActiveHeartBeatMongoDBShardInfo = async (): Promise<getTsTypeFromSchemaType<typeof heartBeatDataBaseShardListDataSchema>[]> => {
 	const heartBeatDBConnect: mongoDBConnectType[] = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
 	const collectionName = 'service'
@@ -261,6 +354,37 @@ export const getActiveHeartBeatMongoDBShardInfo = async (): Promise<getTsTypeFro
 		return mongoDBInfo
 	} catch {
 		console.error('something error in function getActiveHeartBeatMongoDBShardInfo')
+		return []
+	}
+}
+
+
+/**
+ * 去心跳数据库获取所有可用的 MongoDB 数据库信息
+ *
+ * @returns 可用的心跳数据库信息
+ */
+export const getActiveMongoDBShardInfo = async (): Promise<getTsTypeFromSchemaType<typeof heartBeatDataBaseShardListDataSchema>[]> => {
+	const heartBeatDBConnect: mongoDBConnectType[] = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
+	const collectionName = 'service'
+	const heartBeatDataBaseShardListDataSchema = {
+		publicIPAddress: String,
+		privateIPAddress: String,
+		port: Number,
+		adminAccountName: String,
+		adminPassword: String,
+		serviceType: { type: String, default: 'api' },
+		shardGroup: { type: Number, default: 0 },
+		identity: String,
+		state: { type: String, default: 'up' },
+		editDateTime: Number,
+	}
+	const conditions = { serviceType: 'mongo', state: 'up' }
+	try {
+		const mongoDBInfo = await getDataFromAllMongoDBShardAndDuplicate<typeof heartBeatDataBaseShardListDataSchema>(heartBeatDBConnect, collectionName, heartBeatDataBaseShardListDataSchema, conditions)
+		return mongoDBInfo
+	} catch {
+		console.error('something error in function getActiveMongoDBShardInfo')
 		return []
 	}
 }

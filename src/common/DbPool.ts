@@ -49,6 +49,7 @@ export const createDatabaseConnectByDatabaseInfo = (databaseInfos: mongoServiceI
 		return Promise.all(databaseConnectPromises)
 	} catch (e) {
 		console.error('something error in function createDatabaseConnectByDatabaseInfo -> "Promise.all"')
+		return Promise.all([]) // ! is it right? 这是正确的吗？，一旦出现 catch 就要返回一个空 Promise 吗？
 	}
 }
 
