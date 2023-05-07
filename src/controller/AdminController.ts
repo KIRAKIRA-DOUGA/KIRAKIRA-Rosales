@@ -1,4 +1,4 @@
-import { getActiveMongoDBShardInfo, initService } from '../service/AdminService'
+import { getActiveHeartBeatMongoDBShardInfo, initService } from '../service/AdminService'
 import { koaCtx, koaNext } from '../type/index'
 import { initEnvType } from '../type/AdminType'
 import { callErrorMessage } from '../common/CallErrorMessage'
@@ -60,7 +60,7 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 }
 
 export const getActiveServerInfo = async (ctx: koaCtx, next: koaNext): Promise<void> => {
-	const result = await getActiveMongoDBShardInfo()
+	const result = await getActiveHeartBeatMongoDBShardInfo()
 	ctx.body = result
 	await next()
 }
