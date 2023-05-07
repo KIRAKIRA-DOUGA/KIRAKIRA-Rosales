@@ -1,8 +1,9 @@
 import { callErrorMessage } from '../common/CallErrorMessage'
-import { adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType } from '../type/AdminType'
-import { createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, saveData2MongoDBShard, saveDataArray2MongoDBShard } from '../common/DbPool'
+import { adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType, getTsTypeFromSchemaType } from '../type/AdminType'
+import { createDatabaseConnectByDatabaseInfo, createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, getDataFromAllMongoDBShardAndDuplicate, saveData2MongoDBShard, saveDataArray2MongoDBShard } from '../common/DbPool'
 import { sleep } from '../common/Sleep'
 import { GlobalSingleton } from '../store/index'
+import { mergeAndDeduplicateObjectArrays } from '../common/ArrayTool'
 
 const globalSingleton = GlobalSingleton.getInstance()
 
@@ -101,7 +102,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 				const heartBeatDBShardList: mongoServiceInfoType[] = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
 				if (heartBeatDBShardList) {
 					createOrMergeHeartBeatDatabaseConnectByDatabaseInfo(heartBeatDBShardList).then(async (heartBeatDataBaseConnects: mongoDBConnectType[]) => { // 连接到心跳数据库，回调结果是数据库连接(asPromise)
-						globalSingleton.setVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__', heartBeatDataBaseConnects) // 将链接存储到全局变量
+						globalSingleton.setVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__', heartBeatDataBaseConnects) // 将连接存储到全局变量
 				
 						const administratorDataSchema = { userName: String, password: String } // 数据 schema
 						const administratorData: adminUserType[] = [{ userName: systemAdminUserName, password: adminPassword }] // 数据
@@ -139,18 +140,23 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 						}
 						const saveHeartBeatDataBaseShardListDataStatus = await saveDataArray2MongoDBShard<typeof heartBeatDataBaseShardListDataSchema>(heartBeatDataBaseConnects, serviceCollectionName, heartBeatDataBaseShardListDataSchema, heartBeatDBShardList) // 向 所有心跳数据库的 service 集合广播 心跳数据库 信息
 
+						console.log('saveAdministratorDataStatus', saveAdministratorDataStatus) // DELETE
+						console.log('saveAPIServiceDataStatus', saveAPIServiceDataStatus) // DELETE
+						console.log('saveHeartBeatDataBaseShardListDataStatus', saveHeartBeatDataBaseShardListDataStatus) // DELETE
 						if (saveAdministratorDataStatus && saveAPIServiceDataStatus && saveHeartBeatDataBaseShardListDataStatus) { // 如果向所有心跳数据库广播的：集群管理员信息、本地serviceAPI信息、心跳数据库信息 全部完成
 							await sleep(3000)
 							
-							startHeartBeat(5000)
+							// startHeartBeat(5000)
 
 							resolve({ state: true, callbackMessage: '<p>success</p>' })
 							// TODO
 						} else {
+							console.error('初始化失败，插入数据时出现错误')
 							reject({ state: false, callbackMessage: '<p>初始化失败，插入数据时出现错误</p>' })
 							// TODO 插入数据失败，要怎么做？要不要删除？ (大概率不用)
 						}
 					}).catch(() => {
+						console.error('初始化失败，根据输入的数据库信息创建心跳数据库连接时陷入困境')
 						reject({ state: false, callbackMessage: '<p>初始化失败，根据输入的数据库信息创建心跳数据库连接时陷入困境</p>' })
 					})
 				}
@@ -186,43 +192,77 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
  */
 const startHeartBeat = (ms: number) => {
 	// TODO 获取本地缓存的服务器列表
-	// TODO 对于 MongoDB 执行 checkMongoDB, 对于 API 执行 checkAPI
+	// TODO 对于存放数据的 MongoDB 执行 checkMongoDB, 对于 API 执行 checkAPI，对于心跳 MongoDB 执行 checkHeartBeatMongoDB
 	// TODO 将无效的设为 down 并广播
 	// TODO 将本地的 __API_SERVER_LIST__ 和 __HEARTBEAT_DB_SHARD_LIST__ 更新到最新
 	setInterval(async () => {
-		const nodeService: nodeServiceInfoType[] | undefined = globalSingleton.getVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__')
-		const heartBeatDBShardList: mongoServiceInfoType[] = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
-		
-		if (nodeService && heartBeatDBShardList && nodeService.length !== 0 && heartBeatDBShardList.length !== 0) {
-			const trueHeartBeatDBShardList = heartBeatDBShardList.filter(heartBeatDBShard => heartBeatDBShard.serviceType === 'heartbeat')
-
-			await Promise.all([checkAPI(nodeService), checkMongoDB(heartBeatDBShardList)]) // 心跳测试
-
-			console.log('lest:', nodeService, trueHeartBeatDBShardList) // DELETE
-		}
+		await Promise.all([checkAPI(), checkMongoDB(), checkHeartBeatMongoDB()]) // 心跳测试
 	}, ms)
 }
 
 // 检查 Node 的情况
-const checkAPI = (nodeService: nodeServiceInfoType[]): Promise<void> => {
-	return new Promise<void>((resolve, reject) => {
-		// 去 heartbeat 数据库的 service 集合中寻找 node API 的连接信息
-		// 向 nodeAPI 发送网络请求
-		// 请求成功, API 信息追加到全局变量中（如果以前不存在）
-		// 请求失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, API 信息从全局变量中删除
-		resolve()
-	})
+const checkAPI = async () => {
+	await console.log()
+	// TODO 去 heartbeat 数据库的 service 集合中寻找 node API 的连接信息
+	// TODO 向 nodeAPI 发送网络请求
+	// TODO 请求成功, API 信息追加到全局变量中（如果以前不存在）
+	// TODO 请求失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, API 信息从全局变量中删除
+	return
 }
 
 // 检查 MongoDB 的情况
-const checkMongoDB = (heartBeatDBShardList: mongoServiceInfoType[]): Promise<void> => {
-	return new Promise<void>((resolve, reject) => {
-		// 去 heartbeat 数据库的 service 集合中寻找状态为 up 的 mongodb 的连接信息 // __MONGO_DB_SHARD_LIST__ MongoDB 数据库连接信息
-		// 根据连接信息，去全局变量中找有没有对应的 connect，如果没有，就创建，如果有，就拿来用 // __MONGO_DB_SHARD_CONNECT_LIST__ MongoDB 数据库连接
-		// 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
-		// 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
-		resolve()
+const checkHeartBeatMongoDB = async () => {
+	const mongoDBConnectInfo = await getActiveHeartBeatMongoDBShardInfo()
+	const oldMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
+	const newMongoDBShardList = mergeAndDeduplicateObjectArrays<mongoServiceInfoType>(oldMongoDBShardList, mongoDBConnectInfo as mongoServiceInfoType[])
+	createDatabaseConnectByDatabaseInfo(newMongoDBShardList, 'testHeartBeat').then(connects => {
+		connects
+	}).catch(() => {
+		// Report
 	})
+
+	// globalSingleton.setVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__', mongoDBConnectInfo as mongoServiceInfoType[])
+	return
+	// DONE 去 heartbeat 数据库的 service 集合中寻找状态为 up 的 heartbeat 的连接信息
+	// TODO 根据连接信息，去全局变量中找有没有相同的 connect 信息，如果没有，就创建，如果有，就拿来用
+	// TODO 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
+	// TODO 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
+}
+
+// 检查 MongoDB 的情况
+const checkMongoDB = async () => {
+	await console.log()
+	// globalSingleton.setVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__', mongoDBConnectInfo as mongoServiceInfoType[])
+	return
+	// DONE 去 heartbeat 数据库的 service 集合中寻找状态为 up 的 mongodb 的连接信息 // __MONGO_DB_SHARD_LIST__ MongoDB 数据库连接信息
+	// TODO 根据连接信息，去全局变量中找有没有相同的 connect 信息，如果没有，就创建，如果有，就拿来用 // __MONGO_DB_SHARD_CONNECT_LIST__ MongoDB 数据库连接
+	// TODO 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
+	// TODO 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
+}
+
+export const getActiveHeartBeatMongoDBShardInfo = async (): Promise<getTsTypeFromSchemaType<typeof heartBeatDataBaseShardListDataSchema>[]> => {
+	const heartBeatDBConnect: mongoDBConnectType[] = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
+	const collectionName = 'service'
+	const heartBeatDataBaseShardListDataSchema = {
+		publicIPAddress: String,
+		privateIPAddress: String,
+		port: Number,
+		adminAccountName: String,
+		adminPassword: String,
+		serviceType: { type: String, default: 'api' },
+		shardGroup: { type: Number, default: 0 },
+		identity: String,
+		state: { type: String, default: 'up' },
+		editDateTime: Number,
+	}
+	const conditions = { serviceType: 'heartbeat', state: 'up' }
+	try {
+		const mongoDBInfo = await getDataFromAllMongoDBShardAndDuplicate<typeof heartBeatDataBaseShardListDataSchema>(heartBeatDBConnect, collectionName, heartBeatDataBaseShardListDataSchema, conditions)
+		return mongoDBInfo
+	} catch {
+		console.error('something error in function getActiveHeartBeatMongoDBShardInfo')
+		return []
+	}
 }
 
 

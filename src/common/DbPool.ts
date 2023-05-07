@@ -1,5 +1,5 @@
 import mongoose, { Schema } from 'mongoose'
-import { mongoDBConnectType, mongoServiceInfoType } from '../type/AdminType'
+import { getTsTypeFromSchemaType, getTsTypeFromSchemaTypeOptional, mongoDBConnectType, mongoServiceInfoType } from '../type/AdminType'
 import { GlobalSingleton } from '../store/index'
 import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from './ArrayTool'
 
@@ -86,18 +86,6 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 
 
 type schemaType = Record<string, unknown>
-
-type constructor2Type<T> =
-	T extends DateConstructor ? Date :
-		T extends BufferConstructor ? Buffer :
-			T extends { (): infer V } ? V :
-				T extends { type: infer V } ? constructor2Type<V> :
-					T extends never[] ? unknown[] :
-						T extends object ? getTsTypeFromSchemaType<T> : T
-
-type getTsTypeFromSchemaType<T> = {
-	[key in keyof T]: constructor2Type<T[key]>;
-}
 
 /**
  *
@@ -222,7 +210,7 @@ export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
  *
  * @returns 查询结果
  */
-export const getDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnectType, collectionName: string, schemaObject: schemaType, conditions: Record<string, unknown> | null | undefined): Promise< getTsTypeFromSchemaType<T>[] > => {
+export const getDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnectType, collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>): Promise< getTsTypeFromSchemaType<T>[] > => {
 	return new Promise<getTsTypeFromSchemaType<T>[] >(resolve => {
 		try {
 			if (mongoDBConnects && collectionName && schemaObject) {
@@ -230,9 +218,12 @@ export const getDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 				
 				const schema = new Schema(schemaObject)
 				const model = mongoDBConnects.connect.model(collectionName, schema, collectionName)
-				model.find(fixedConditions).exec().then(result => {
-					resolve(result as getTsTypeFromSchemaType<T>[])
-				})
+				model.find(fixedConditions)
+					.exec()
+					.then(results => results.map(result => result.toObject()))
+					.then(resultsObject => {
+						resolve(resultsObject as getTsTypeFromSchemaType<T>[])
+					})
 			} else {
 				resolve([{}] as getTsTypeFromSchemaType<T>[])
 				console.error('something error in function getDataFromOneMongoDBShard, required data is empty')
@@ -241,8 +232,48 @@ export const getDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 			resolve([{}] as getTsTypeFromSchemaType<T>[])
 			console.error('something error in function getDataFromOneMongoDBShard')
 		}
-		
-		resolve([{}] as getTsTypeFromSchemaType<T>[]) // DELETE
+	})
+}
+
+/**
+ *
+ * 在某个 MongoDB 分片中查找数据，但允许自定义 select
+ * 比如说你想排除 MongoDB 默认生成的 '_id' 和 '__v' 字段，那么 @param customSelectAttributes 的值就应该是 '-_id -__v'
+ * 关于自定义排除字段，即 Mongoose select() 的使用方法，请参考：https://mongoosejs.com/docs/6.x/docs/api/query.html#query_Query-select
+ *
+ * @param mongoDBConnects 一个 MongoDB 数据库连接
+ * @param collectionName MongoDB 集合名 (精准名字，不需要在后面追加复数 “s”)
+ * @param schemaObject 数据的 Schema
+ * @param conditions 查询条件
+ * @param customSelectAttributes select 条件
+ *
+ * @returns 查询结果
+ */
+export const getDataFromOneMongoDBShardAllowCustomSelectAttributes = <T>(mongoDBConnects: mongoDBConnectType, collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>, customSelectAttributes: string): Promise< getTsTypeFromSchemaType<T>[] > => {
+	return new Promise<getTsTypeFromSchemaType<T>[] >(resolve => {
+		try {
+			if (mongoDBConnects && collectionName && schemaObject) {
+				const fixedConditions = conditions ? conditions : {}
+				const fixedCustomSelectAttributes = customSelectAttributes ? customSelectAttributes : ''
+				
+				const schema = new Schema(schemaObject)
+				const model = mongoDBConnects.connect.model(collectionName, schema, collectionName)
+				model
+					.find(fixedConditions)
+					.select(fixedCustomSelectAttributes)
+					.exec()
+					.then(results => results.map(result => result.toObject()))
+					.then(resultsObject => {
+						resolve(resultsObject as getTsTypeFromSchemaType<T>[])
+					})
+			} else {
+				resolve([{}] as getTsTypeFromSchemaType<T>[])
+				console.error('something error in function getDataFromOneMongoDBShard, required data is empty')
+			}
+		} catch {
+			resolve([{}] as getTsTypeFromSchemaType<T>[])
+			console.error('something error in function getDataFromOneMongoDBShard')
+		}
 	})
 }
 
@@ -259,7 +290,7 @@ export const getDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
  *
  * @returns 查询结果
  */
-export const getDataFromRandomMongoDBShard = async <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, conditions: Record<string, unknown> | null | undefined): Promise< getTsTypeFromSchemaType<T>[] > => {
+export const getDataFromRandomMongoDBShard = async <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>): Promise< getTsTypeFromSchemaType<T>[] > => {
 	try {
 		if (mongoDBConnects && collectionName && schemaObject) {
 			const indexArray: number[] = Array.from({ length: mongoDBConnects.length }, (_, i) => i)
@@ -298,14 +329,16 @@ export const getDataFromRandomMongoDBShard = async <T>(mongoDBConnects: mongoDBC
  *
  * @returns 查询结果
  */
-export const getDataFromAllMongoDBShardAndDuplicate = () => async <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, conditions: Record<string, unknown> | null | undefined): Promise< getTsTypeFromSchemaType<T>[] > => {
+export const getDataFromAllMongoDBShardAndDuplicate = async <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>): Promise< getTsTypeFromSchemaType<T>[] > => {
 	try {
 		if (mongoDBConnects && collectionName && schemaObject) {
 			const getDataFromMongoDBPromise: Promise<getTsTypeFromSchemaType<T>[] >[] = []
 			mongoDBConnects.forEach((mongoDBConnect: mongoDBConnectType) => {
-				const getDataFromMongoDB = getDataFromOneMongoDBShard<T>(mongoDBConnect, collectionName, schemaObject, conditions)
+				const excludeAttributes = '-_id -__v -editDateTime'
+				const getDataFromMongoDB = getDataFromOneMongoDBShardAllowCustomSelectAttributes<T>(mongoDBConnect, collectionName, schemaObject, conditions, excludeAttributes)
 				getDataFromMongoDBPromise.push(getDataFromMongoDB)
 			})
+
 			const queryResult: getTsTypeFromSchemaType<T>[][] = await Promise.all(getDataFromMongoDBPromise)
 			return removeDuplicateObjectsInDeepArrayAndDeepObjectStrong(queryResult)
 		} else {

@@ -1,7 +1,8 @@
-import { initService } from '../service/AdminService'
+import { getActiveMongoDBShardInfo, initService } from '../service/AdminService'
 import { koaCtx, koaNext } from '../type/index'
 import { initEnvType } from '../type/AdminType'
 import { callErrorMessage } from '../common/CallErrorMessage'
+import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from '../common/ArrayTool'
 
 let ONE_TIME_SECRET_KEY: string = process.env.ONE_TIME_SECRET_KEY
 
@@ -55,6 +56,12 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 	}
 
 	ctx.body = responseBody
+	await next()
+}
+
+export const getActiveServerInfo = async (ctx: koaCtx, next: koaNext): Promise<void> => {
+	const result = await getActiveMongoDBShardInfo()
+	ctx.body = result
 	await next()
 }
 

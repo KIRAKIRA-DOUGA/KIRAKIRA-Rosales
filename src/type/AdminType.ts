@@ -62,3 +62,19 @@ export interface adminUserType {
 	updateDateTime?: number;
 	updater?: string;
 }
+
+type constructor2Type<T> =
+	T extends DateConstructor ? Date :
+		T extends BufferConstructor ? Buffer :
+			T extends { (): infer V } ? V :
+				T extends { type: infer V } ? constructor2Type<V> :
+					T extends never[] ? unknown[] :
+						T extends object ? getTsTypeFromSchemaType<T> : T
+
+export type getTsTypeFromSchemaType<T> = {
+	[key in keyof T]: constructor2Type<T[key]>;
+}
+
+export type getTsTypeFromSchemaTypeOptional<T> = {
+	[key in keyof T]?: constructor2Type<T[key]>;
+}
