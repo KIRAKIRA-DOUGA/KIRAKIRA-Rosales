@@ -212,9 +212,6 @@ export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 	})
 }
 
-
-
-// TODO 增加数据路由查询，可以通过路由计算出数据存储的分片组位置，只去正确的分片组查询数据
 /**
  * 路由存储数据
  * 通过显示声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的 MongoDB 连接
@@ -225,45 +222,60 @@ export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
  * @param collectionName 数据被插入的集合名字 (精准名字，不需要在后面追加复数 “s”)
  * @param schemaObject 数据的 Schema
  * @param data 准备插入的数据
- * @param primaryKey 显式声明的主键
+ * @param primaryKey 显式声明的主键，必须是 Schema 的 key，且 key 所对应的 value 必须是字符串类型
  *
  * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不接受 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
  */
 export const saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collectionName: string, schemaObject: schemaType, data: getTsTypeFromSchemaType<T>, primaryKey: keyof T): Promise<boolean> => {
 	return new Promise<boolean>(resolve => {
 		try {
-			const MONGO_SHARD_COUNT: string = process.env.MONGO_SHARD_COUNT // WARN 每个 Koa 节点的该值必须是相同的
-			if (MONGO_SHARD_COUNT) {
-				const mongoShardCountNumber = parseInt(MONGO_SHARD_COUNT, 10)
-				if (mongoShardCountNumber && mongoShardCountNumber >= 0) {
-					const primaryKeyData = data[primaryKey]
-					if (typeof primaryKeyData === 'string') {
-						const primaryKeyDataHash = hashData(primaryKeyData as string)
-						const primaryKeyDataHashBigInt = BigInt(`0x${primaryKeyDataHash}`)
-						const primaryKeyDataHashBigIntModulo = primaryKeyDataHashBigInt % BigInt(mongoShardCountNumber)
-						const primaryKeyDataHashModulo = Number(primaryKeyDataHashBigIntModulo)
-						const correctShardIndex = primaryKeyDataHashModulo
-						const mongoDBConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__')
-						const correctMongoDBconnectList = mongoDBConnectList.filter(mongoDBConnect => mongoDBConnect.connectInfo.shardGroup === correctShardIndex)
-						saveData2MongoDBShard<T>(correctMongoDBconnectList, collectionName, schemaObject, data).then(result => {
-							resolve(result)
-						}).catch(() => {
-							console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute -> saveData2MongoDBShard.catch')
+			const MONGO_SHARD_COUNT: string = process.env.MONGO_SHARD_COUNT // 从环境变量中获取分片组的数量 // WARN 集群中每个 Koa 节点的 MONGO_SHARD_COUNT 值必须是相同的
+			if (MONGO_SHARD_COUNT) { // 非空验证
+				const mongoShardCountNumber = parseInt(MONGO_SHARD_COUNT, 10) // 转换为 number 类型
+				if (mongoShardCountNumber && mongoShardCountNumber > 0 && !!Number.isInteger(mongoShardCountNumber)) { // 非空验证，正整数验证
+					const primaryKeyData = data[primaryKey] // 取出主键的值
+					if (primaryKeyData) { // 非空验证
+						const primaryKeyDataHash = hashData(`${primaryKeyData}`) // Hash
+						const primaryKeyDataHashBigInt = BigInt(`0x${primaryKeyDataHash}`) // Hash 转换为 BigInt
+						const primaryKeyDataHashBigIntModulo = primaryKeyDataHashBigInt % BigInt(mongoShardCountNumber) // 取模运算
+						const primaryKeyDataHashModulo = Number(primaryKeyDataHashBigIntModulo) // 转换回 Number，得到路由
+						const correctShardIndex = primaryKeyDataHashModulo // rename ?
+						if (correctShardIndex && correctShardIndex > 0 && Number.isInteger(correctShardIndex)) { // 非空验证，正整数验证
+							const mongoDBConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__') // 从环境变量中取出全部 MongoDB 连接
+							if (mongoDBConnectList && mongoDBConnectList.length > 0) { // 非空验证和数组元素 > 0 验证
+								const correctMongoDBconnectList = mongoDBConnectList.filter(mongoDBConnect => mongoDBConnect.connectInfo.shardGroup === correctShardIndex) // 通过路由过滤刚刚拿到的连接
+								if (correctMongoDBconnectList && correctMongoDBconnectList.length > 0) { // 非空验证和数组元素 > 0 验证
+									saveData2MongoDBShard<T>(correctMongoDBconnectList, collectionName, schemaObject, data).then(result => { // 执行数据查询
+										resolve(result) // 返回插入结果
+									}).catch(() => { // 错误处理
+										console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute -> saveData2MongoDBShard.catch')
+										resolve(false)
+									})
+								} else { // 错误处理
+									console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data correctMongoDBconnectList is empty or length not > 0')
+									resolve(false)
+								}
+							} else { // 错误处理
+								console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoDBConnectList is empty or length not > 0')
+								resolve(false)
+							}
+						} else { // 错误处理
+							console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data correctShardIndex is empty or not > 0 or not Integer')
 							resolve(false)
-						})
-					} else {
-						console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, primaryKeyData not is string')
+						}
+					} else { // 错误处理
+						console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data primaryKeyData is empty')
 						resolve(false)
 					}
-				} else {
-					console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoShardCountNumber is empty or not >= 0')
+				} else { // 错误处理
+					console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoShardCountNumber is empty or not > 0 or not > 0 or not Integer')
 					resolve(false)
 				}
-			} else {
+			} else { // 错误处理
 				console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data MONGO_SHARD_COUNT is empty')
 				resolve(false)
 			}
-		} catch {
+		} catch { // 错误处理
 			console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute')
 			resolve(false)
 		}
@@ -355,7 +367,7 @@ export const getDataFromOneMongoDBShardAllowCustomSelectAttributes = <T>(mongoDB
 
 /**
  *
- * 随机去一个给定的数据库连接查询结果，并返回查询结果
+ * 随机去一个给定的数据库连接查询结果，直到拿到结果，或者全部连接都被执行过一次
  * "有一个存放数据库连接的数组，随机的去这个数组中取出一个数据库连接并执行查询，如果查询到结果，就返回，如果没查询到结果，就去数组中再次取出一个连接并执行查询，重复此步骤直到数组中的每个连接都被执行过一遍查询，要求：不改变原数组"
  * BY: ChatGPT-4, 02
  *
@@ -401,7 +413,7 @@ export const getDataFromRandomMongoDBShard = async <T>(mongoDBConnects: mongoDBC
  * @param mongoDBConnects MongoDB 数据库连接列表
  * @param collectionName MongoDB 集合名 (精准名字，不需要在后面追加复数 “s”)
  * @param schemaObject 数据的 Schema
- * @param conditions 查询条件
+ * @param conditions 查询条件 (where 条件)
  *
  * @returns 查询结果
  */
@@ -425,4 +437,75 @@ export const getDataFromAllMongoDBShardAndDuplicate = async <T>(mongoDBConnects:
 		console.error('something error in function getDataFromAllMongoDBShardAndDuplicate')
 		return [{}] as getTsTypeFromSchemaType<T>[]
 	}
+}
+
+
+/**
+ * 路由取回数据
+ * 通过显示声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的 MongoDB 连接
+ * 然后使用 getDataFromRandomMongoDBShard 方法从这些连接中取出数据
+ *
+ * BY 02，KIRAKIRA 版权所有, 启发自: ElasticSearch
+ *
+ * @param collectionName MongoDB 集合名 (精准名字，不需要在后面追加复数 “s”)
+ * @param schemaObject 数据的 Schema
+ * @param conditions 查询条件 (where 条件)
+ * @param primaryKey 显式声明的主键，必须是 Schema 的 key，且 key 所对应的 value 必须是字符串类型
+ *
+ * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不接受 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
+ */
+export const getData2CorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>, primaryKey: keyof getTsTypeFromSchemaTypeOptional<T>): Promise< getTsTypeFromSchemaType<T>[] > => {
+	return new Promise< getTsTypeFromSchemaType<T>[] >(resolve => {
+		try {
+			const MONGO_SHARD_COUNT: string = process.env.MONGO_SHARD_COUNT // 从环境变量中获取分片组的数量 // WARN 集群中每个 Koa 节点的 MONGO_SHARD_COUNT 值必须是相同的
+			if (MONGO_SHARD_COUNT) { // 非空验证
+				const mongoShardCountNumber = parseInt(MONGO_SHARD_COUNT, 10) // 转换为 number 类型
+				if (mongoShardCountNumber && mongoShardCountNumber > 0 && !!Number.isInteger(mongoShardCountNumber)) { // 非空验证，正整数验证
+					const primaryKeyData = conditions[primaryKey] // 取出主键的值
+					if (primaryKeyData) { // 非空验证
+						const primaryKeyDataHash = hashData(`${primaryKeyData}`) // Hash
+						const primaryKeyDataHashBigInt = BigInt(`0x${primaryKeyDataHash}`) // Hash 转换为 BigInt
+						const primaryKeyDataHashBigIntModulo = primaryKeyDataHashBigInt % BigInt(mongoShardCountNumber) // 取模运算
+						const primaryKeyDataHashModulo = Number(primaryKeyDataHashBigIntModulo) // 转换回 Number，得到路由
+						const correctShardIndex = primaryKeyDataHashModulo // rename ?
+						if (correctShardIndex && correctShardIndex > 0 && Number.isInteger(correctShardIndex)) { // 非空验证，正整数验证
+							const mongoDBConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__') // 从环境变量中取出全部 MongoDB 连接
+							if (mongoDBConnectList && mongoDBConnectList.length > 0) { // 非空验证和数组元素 > 0 验证
+								const correctMongoDBconnectList = mongoDBConnectList.filter(mongoDBConnect => mongoDBConnect.connectInfo.shardGroup === correctShardIndex) // 通过路由过滤刚刚拿到的连接
+								if (correctMongoDBconnectList && correctMongoDBconnectList.length > 0) { // 非空验证和数组元素 > 0 验证
+									getDataFromRandomMongoDBShard<T>(correctMongoDBconnectList, collectionName, schemaObject, conditions).then(result => { // 执行数据查询
+										resolve(result) // 返回插入结果
+									}).catch(() => { // 错误处理
+										console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute -> saveData2MongoDBShard.catch')
+										resolve([])
+									})
+								} else { // 错误处理
+									console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data correctMongoDBconnectList is empty or length not > 0')
+									resolve([])
+								}
+							} else { // 错误处理
+								console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoDBConnectList is empty or length not > 0')
+								resolve([])
+							}
+						} else { // 错误处理
+							console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data correctShardIndex is empty or not > 0 or not Integer')
+							resolve([])
+						}
+					} else { // 错误处理
+						console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data primaryKeyData is empty')
+						resolve([])
+					}
+				} else { // 错误处理
+					console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoShardCountNumber is empty or not > 0 or not > 0 or not Integer')
+					resolve([])
+				}
+			} else { // 错误处理
+				console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data MONGO_SHARD_COUNT is empty')
+				resolve([])
+			}
+		} catch { // 错误处理
+			console.error('something error in function saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute')
+			resolve([])
+		}
+	})
 }
