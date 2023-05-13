@@ -38,20 +38,27 @@ export interface mongoServiceInfoType { // MongoDB 信息
 	// 假设我要查询 mongodb 在 1 区块的主分片的地址和端口， 则： where serviceType = 'mongo' and shardGroup = 1 and identity = 'master' and state = 'up'
 }
 
+export interface mongoDBConnectType { // 存放 mongoose 的 mongodb 连接的对象
+	connect: mongoose.Connection;
+	connectStatus: 'ok' | 'error';
+	connectInfo: mongoServiceInfoType;
+}
+
+
 export interface nodeServiceInfoType { // API Server 信息
 	publicIPAddress: string; // 该服务的公网 ip
 	privateIPAddress: string; // 该服务的私网 ip
 	port: number; // 该服务的所在的端口
-	state: 'up' | 'down' | 'pending'; // 服务的状态
+	serviceType: string; // 服务的类型
+	state: string; // 服务的状态
 	editDateTime: number; // 最后编辑时间，时间戳格式
 	remark?: object; // 其他杂项
 	// 假设我要查询 mongodb 在 1 区块的主分片的地址和端口， 则： where serviceType = 'mongo' and shardGroup = 1 and identity = 'master' and state = 'up'
 }
 
-export interface mongoDBConnectType { // 存放 mongoose 的 mongodb 连接的对象
-	connect: mongoose.Connection;
-	connectStatus: 'ok' | 'error';
-	connectInfo: mongoServiceInfoType;
+export interface nodeServiceTestResultType {
+	nodeServiceInfo: nodeServiceInfoType; // node API server 连接信息
+	testResult: boolean; // 连接测试结果
 }
 
 export interface adminUserType {

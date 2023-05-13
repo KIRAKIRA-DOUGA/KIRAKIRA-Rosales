@@ -1,9 +1,10 @@
 import { callErrorMessage } from '../common/CallErrorMessage'
-import { adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType, getTsTypeFromSchemaType } from '../type/AdminType'
+import { adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType, getTsTypeFromSchemaType, nodeServiceTestResultType } from '../type/AdminType'
 import { createDatabaseConnectByDatabaseInfo, createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, getDataFromAllMongoDBShardAndDuplicate, saveData2MongoDBShard, saveDataArray2MongoDBShard } from '../common/DbPool'
 import { sleep } from '../common/Sleep'
 import { GlobalSingleton } from '../store/index'
 import { mergeAndDeduplicateObjectArrays } from '../common/ArrayTool'
+import axios from 'axios'
 
 const globalSingleton = GlobalSingleton.getInstance()
 
@@ -96,7 +97,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 			if (allInitEnvRight) { // 如果验证通过
 				const { systemAdminUserName, adminPassword, localhostServicePublicIPAddress, localhostServicePrivateIPAddress, localhostServicePort, heartbeatDatabaseShardData } = initEnvs // 玩的就是解构，不解构你就不酷了
 				
-				globalSingleton.setVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__', [{ publicIPAddress: localhostServicePublicIPAddress, privateIPAddress: localhostServicePrivateIPAddress, port: parseInt(localhostServicePort, 10), state: 'up', editDateTime: new Date().getTime() }]) // 在全局变量中存储 API 信息
+				globalSingleton.setVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__', [{ publicIPAddress: localhostServicePublicIPAddress, privateIPAddress: localhostServicePrivateIPAddress, port: parseInt(localhostServicePort, 10), serviceType: 'api', state: 'up', editDateTime: new Date().getTime() }]) // 在全局变量中存储 API 信息
 				globalSingleton.setVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__', urlHeartbeatDatabaseShardData2Array(heartbeatDatabaseShardData)) // 将URL中的心跳数据库字符数组转为对象数组，并存储到全局变量
 				
 				const heartBeatDBShardList: mongoServiceInfoType[] = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
@@ -114,6 +115,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 							publicIPAddress: String,
 							privateIPAddress: String,
 							port: Number,
+							serviceType: String,
 							state: { type: String, default: 'up' },
 							editDateTime: Number,
 						}
@@ -121,6 +123,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 							publicIPAddress: localhostServicePublicIPAddress,
 							privateIPAddress: localhostServicePrivateIPAddress,
 							port: parseInt(localhostServicePort, 10),
+							serviceType: 'api',
 							state: 'up',
 							editDateTime: new Date().getTime(),
 						}]
@@ -146,7 +149,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 						if (saveAdministratorDataStatus && saveAPIServiceDataStatus && saveHeartBeatDataBaseShardListDataStatus) { // 如果向所有心跳数据库广播的：集群管理员信息、本地serviceAPI信息、心跳数据库信息 全部完成
 							await sleep(3000)
 							
-							// startHeartBeat(5000)
+							startHeartBeat(60000) // 每分钟就执行一次心跳检测
 
 							resolve({ state: true, callbackMessage: '<p>success</p>' })
 							// TODO
@@ -193,8 +196,8 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 const startHeartBeat = (ms: number) => {
 	// TODO 获取本地缓存的服务器列表
 	// TODO 对于存放数据的 MongoDB 执行 checkMongoDB, 对于 API 执行 checkAPI，对于心跳 MongoDB 执行 checkHeartBeatMongoDB
-	// TODO 将无效的设为 down 并广播
 	// TODO 将本地的 __API_SERVER_LIST__ 和 __HEARTBEAT_DB_SHARD_LIST__ 更新到最新
+	// TODO 将无效的报告
 	setInterval(async () => {
 		await Promise.all([checkAPI(), checkMongoDB(), checkHeartBeatMongoDB()]) // 心跳测试
 	}, ms)
@@ -202,12 +205,63 @@ const startHeartBeat = (ms: number) => {
 
 // 检查 Node 的情况
 const checkAPI = async () => {
-	await console.log()
-	// TODO 去 heartbeat 数据库的 service 集合中寻找 node API 的连接信息
-	// TODO 向 nodeAPI 发送网络请求
-	// TODO 请求成功, API 信息追加到全局变量中（如果以前不存在）
-	// TODO 请求失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, API 信息从全局变量中删除
-	return
+	const oldApiServerList = globalSingleton.getVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__')
+	const newApiServerList = await getActiveAPIServerInfo()
+	if (oldApiServerList) {
+		const checkAPIServerPromiseList: Promise<nodeServiceTestResultType>[] = []
+		newApiServerList.forEach(apiServer => {
+			const checkAPIServerPromise = new Promise<nodeServiceTestResultType>(resolve => {
+				const targetIpAddress = apiServer.privateIPAddress || apiServer.publicIPAddress
+				const targetPort = apiServer.port
+				if (targetIpAddress && targetPort) {
+					const requestURL = `${targetIpAddress}:${targetPort}/02/koa/admin/heartbeat/test`
+					axios.get(requestURL).then(result => {
+						if (result) {
+							const testResult: nodeServiceTestResultType = { nodeServiceInfo: apiServer, testResult: true }
+							resolve(testResult)
+						}
+					}).catch(error => {
+						// Report // TODO
+						console.error('something error in function checkAPI -> checkAPIServerPromise -> axios.get -> catch, error: ', error)
+						const testResult: nodeServiceTestResultType = { nodeServiceInfo: apiServer, testResult: false }
+						resolve(testResult)
+					})
+				} else {
+					// Report // TODO
+					console.error('something error in function checkAPI -> checkAPIServerPromise, required data targetIpAddress or targetPort is empty')
+					const testResult: nodeServiceTestResultType = { nodeServiceInfo: apiServer, testResult: false }
+					resolve(testResult)
+				}
+			})
+			checkAPIServerPromiseList.push(checkAPIServerPromise)
+		})
+
+		const checkAPIResults = await Promise.all(checkAPIServerPromiseList)
+		const someApiCheckREsultIsFalse = checkAPIResults.some(result => !result.testResult)
+		if (someApiCheckREsultIsFalse) {
+			// Report // TODO
+			console.error('something error in function checkAPI, someApiCheckREsultIsFalse')
+		}
+		const correctAPIServer: nodeServiceInfoType[] = []
+		
+		checkAPIResults.forEach(result => {
+			if (result.testResult) {
+				return correctAPIServer.push(result.nodeServiceInfo)
+			}
+		})
+
+		globalSingleton.setVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__', correctAPIServer)
+
+		// DONE 去 heartbeat 数据库的 service 集合中寻找 node API 的连接信息
+		// DONE 向 nodeAPI 发送网络请求
+		// DONE 请求成功, API 信息追加到全局变量中（如果以前不存在）
+		// TODO 请求失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, API 信息从全局变量中删除
+		return
+	} else {
+		// Report // TODO
+		console.error('something error in function checkAPI, required data oldApiServerList is empty')
+		return
+	}
 }
 
 // 检查 MongoDB 心跳数据库的情况
@@ -278,8 +332,8 @@ const checkMongoDB = async () => {
 		return
 	}
 	// DONE 去 heartbeat 数据库的 service 集合中寻找状态为 up 的 mongodb 的连接信息 // __MONGO_DB_SHARD_LIST__ MongoDB 数据库连接信息
-	// TODO 根据连接信息，去全局变量中找有没有相同的 connect 信息，如果没有，就创建，如果有，就拿来用 // __MONGO_DB_SHARD_CONNECT_LIST__ MongoDB 数据库连接
-	// TODO 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
+	// DONE 根据连接信息，去全局变量中找有没有相同的 connect 信息，如果没有，就创建，如果有，就拿来用 // __MONGO_DB_SHARD_CONNECT_LIST__ MongoDB 数据库连接
+	// DONE 连接成功，新创建的连接追加到全局变量中（如果以前不存在）
 	// TODO 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
 }
 
@@ -342,10 +396,10 @@ export const getActiveHeartBeatMongoDBShardInfo = async (): Promise<getTsTypeFro
 		port: Number,
 		adminAccountName: String,
 		adminPassword: String,
-		serviceType: { type: String, default: 'api' },
-		shardGroup: { type: Number, default: 0 },
+		serviceType: String,
+		shardGroup: Number,
 		identity: String,
-		state: { type: String, default: 'up' },
+		state: String,
 		editDateTime: Number,
 	}
 	const conditions = { serviceType: 'heartbeat', state: 'up' }
@@ -362,7 +416,7 @@ export const getActiveHeartBeatMongoDBShardInfo = async (): Promise<getTsTypeFro
 /**
  * 去心跳数据库获取所有可用的 MongoDB 数据库信息
  *
- * @returns 可用的心跳数据库信息
+ * @returns 可用的 MongoDB 数据库信息
  */
 export const getActiveMongoDBShardInfo = async (): Promise<getTsTypeFromSchemaType<typeof heartBeatDataBaseShardListDataSchema>[]> => {
 	const heartBeatDBConnect: mongoDBConnectType[] = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
@@ -385,6 +439,33 @@ export const getActiveMongoDBShardInfo = async (): Promise<getTsTypeFromSchemaTy
 		return mongoDBInfo
 	} catch {
 		console.error('something error in function getActiveMongoDBShardInfo')
+		return []
+	}
+}
+
+
+/**
+ * 去心跳数据库获取所有可用的 API Server 信息
+ *
+ * @returns 可用的 API Server 信息
+ */
+export const getActiveAPIServerInfo = async (): Promise<getTsTypeFromSchemaType<typeof apiServiceDataSchema>[]> => {
+	const heartBeatDBConnect: mongoDBConnectType[] = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
+	const collectionName = 'service'
+	const apiServiceDataSchema = {
+		publicIPAddress: String,
+		privateIPAddress: String,
+		port: Number,
+		serviceType: String,
+		state: 'up' || 'down' || 'pending',
+		editDateTime: Number,
+	}
+	const conditions = { serviceType: 'api', state: 'up' }
+	try {
+		const mongoDBInfo = await getDataFromAllMongoDBShardAndDuplicate<typeof apiServiceDataSchema>(heartBeatDBConnect, collectionName, apiServiceDataSchema, conditions)
+		return mongoDBInfo
+	} catch {
+		console.error('something error in function getActiveAPIServerInfo')
 		return []
 	}
 }

@@ -59,9 +59,15 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 	await next()
 }
 
-export const getActiveServerInfo = async (ctx: koaCtx, next: koaNext): Promise<void> => {
+export const activeHeartBeatMongoDBShardInfo = async (ctx: koaCtx, next: koaNext): Promise<void> => {
 	const result = await getActiveHeartBeatMongoDBShardInfo()
 	ctx.body = result
+	await next()
+}
+
+export const heartBeatTest = async (ctx: koaCtx, next: koaNext) => {
+	const successString = 'success'
+	ctx.body = successString
 	await next()
 }
 
