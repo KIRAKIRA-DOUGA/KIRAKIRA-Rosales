@@ -93,7 +93,7 @@ export const testHeartBeat = async (ctx: koaCtx, next: koaNext) => {
  */
 export const registerService2Cluster = async (ctx: koaCtx, next: koaNext) => {
 	try {
-		await console.log('ctx', ctx.request.body)
+		console.log('ctx', ctx.request.body) // DELETE
 		const serviceInfo = ctx.request.body
 		const registerServiceResult = registerService2ClusterService(serviceInfo)
 		if (registerServiceResult) {

@@ -1,6 +1,7 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld'
 import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat, registerService2Cluster } from '../controller/AdminController'
+import { getUserSettingsByUUID, saveUserSettingsByUUID } from '../controller/UserController'
 
 const router = new Router()
 
@@ -23,6 +24,13 @@ router.get('/02/koa/admin/heartbeat/testHeartBeat', testHeartBeat) // 测试心�
 // http://localhost:9999/02/koa/admin/heartbeat/testHeartBeat
 
 router.post('/02/koa/admin/cluster/register', registerService2Cluster)
+
+
+
+
+router.post('/02/koa/user/settings/userSettings/save', saveUserSettingsByUUID)
+
+router.get('/02/koa/user/settings/userSettings/get', getUserSettingsByUUID)
 
 
 // router-end
