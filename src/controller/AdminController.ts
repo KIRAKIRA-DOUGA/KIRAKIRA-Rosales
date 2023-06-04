@@ -1,4 +1,4 @@
-import { getActiveHeartBeatMongoDBShardInfo, initService } from '../service/AdminService'
+import { checkAPI, checkHeartBeatMongoDB, checkMongoDB, getActiveHeartBeatMongoDBShardInfo, initService } from '../service/AdminService'
 import { koaCtx, koaNext } from '../type/index'
 import { initEnvType } from '../type/AdminType'
 import { callErrorMessage } from '../common/CallErrorMessage'
@@ -71,7 +71,17 @@ export const heartBeatTest = async (ctx: koaCtx, next: koaNext) => {
 	await next()
 }
 
-
+/**
+ *
+ * 手动触发一次心跳，用于测试 heartbeat 功能是否好用
+ *
+ * @param ctx
+ * @param next
+ */
+export const testHeartBeat = async (ctx: koaCtx, next: koaNext) => {
+	await Promise.all([checkAPI(), checkMongoDB(), checkHeartBeatMongoDB()])
+	await next()
+}
 // 这是一条注释
 // - 这是一条注释
 // > 这是一条注释

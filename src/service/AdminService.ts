@@ -149,7 +149,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 						if (saveAdministratorDataStatus && saveAPIServiceDataStatus && saveHeartBeatDataBaseShardListDataStatus) { // 如果向所有心跳数据库广播的：集群管理员信息、本地serviceAPI信息、心跳数据库信息 全部完成
 							await sleep(3000)
 							
-							startHeartBeat(60000) // 每分钟就执行一次心跳检测
+							// startHeartBeat(60000) // 每分钟就执行一次心跳检测
 
 							resolve({ state: true, callbackMessage: '<p>success</p>' })
 							// TODO
@@ -204,17 +204,19 @@ const startHeartBeat = (ms: number) => {
 }
 
 // 检查 Node 的情况
-const checkAPI = async () => {
+export const checkAPI = async () => {
 	const oldApiServerList = globalSingleton.getVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__')
 	const newApiServerList = await getActiveAPIServerInfo()
 	if (oldApiServerList) {
 		const checkAPIServerPromiseList: Promise<nodeServiceTestResultType>[] = []
+		console.log('newApiServerList', newApiServerList) // DELETE
 		newApiServerList.forEach(apiServer => {
 			const checkAPIServerPromise = new Promise<nodeServiceTestResultType>(resolve => {
 				const targetIpAddress = apiServer.privateIPAddress || apiServer.publicIPAddress
 				const targetPort = apiServer.port
 				if (targetIpAddress && targetPort) {
-					const requestURL = `${targetIpAddress}:${targetPort}/02/koa/admin/heartbeat/test`
+					const requestURL = `http://${targetIpAddress}:${targetPort}/02/koa/admin/heartbeat/test`
+					console.log('requestURL', requestURL) // DELETE
 					axios.get(requestURL).then(result => {
 						if (result) {
 							const testResult: nodeServiceTestResultType = { nodeServiceInfo: apiServer, testResult: true }
@@ -265,7 +267,7 @@ const checkAPI = async () => {
 }
 
 // 检查 MongoDB 心跳数据库的情况
-const checkHeartBeatMongoDB = async () => {
+export const checkHeartBeatMongoDB = async () => {
 	const activeHeartBeatMongoDBShardInfo = await getActiveHeartBeatMongoDBShardInfo()
 	const oldHeartBeatMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
 	if (activeHeartBeatMongoDBShardInfo && oldHeartBeatMongoDBShardList) {
@@ -302,7 +304,7 @@ const checkHeartBeatMongoDB = async () => {
 }
 
 // 检查 MongoDB 的情况
-const checkMongoDB = async () => {
+export const checkMongoDB = async () => {
 	const activeMongoDBShardInfo = await getActiveMongoDBShardInfo()
 	const oldMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__')
 	if (activeMongoDBShardInfo && oldMongoDBShardList) {
@@ -457,7 +459,7 @@ export const getActiveAPIServerInfo = async (): Promise<getTsTypeFromSchemaType<
 		privateIPAddress: String,
 		port: Number,
 		serviceType: String,
-		state: 'up' || 'down' || 'pending',
+		state: String,
 		editDateTime: Number,
 	}
 	const conditions = { serviceType: 'api', state: 'up' }
