@@ -1,5 +1,5 @@
 import { callErrorMessage } from '../common/CallErrorMessage'
-import { adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType, getTsTypeFromSchemaType, nodeServiceTestResultType } from '../type/AdminType'
+import { serverTypeType, adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType, getTsTypeFromSchemaType, nodeServiceTestResultType } from '../type/AdminType'
 import { createDatabaseConnectByDatabaseInfo, createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, getDataFromAllMongoDBShardAndDuplicate, saveData2MongoDBShard, saveDataArray2MongoDBShard } from '../common/DbPool'
 import { sleep } from '../common/Sleep'
 import { GlobalSingleton } from '../store/index'
@@ -135,7 +135,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 							port: Number,
 							adminAccountName: String,
 							adminPassword: String,
-							serviceType: { type: String, default: 'api' },
+							serviceType: { type: String, default: 'heartbeat' },
 							shardGroup: { type: Number, default: 0 },
 							identity: String,
 							state: { type: String, default: 'up' },
@@ -203,7 +203,12 @@ const startHeartBeat = (ms: number) => {
 	}, ms)
 }
 
-// 检查 Node 的情况
+/**
+ *
+ * 检查 Node 的情况
+ *
+ * @returns void
+ */
 export const checkAPI = async () => {
 	const oldApiServerList = globalSingleton.getVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__')
 	const newApiServerList = await getActiveAPIServerInfo()
@@ -266,7 +271,12 @@ export const checkAPI = async () => {
 	}
 }
 
-// 检查 MongoDB 心跳数据库的情况
+/**
+ *
+ * 检查 MongoDB 心跳数据库的情况
+ *
+ * @returns void
+ */
 export const checkHeartBeatMongoDB = async () => {
 	const activeHeartBeatMongoDBShardInfo = await getActiveHeartBeatMongoDBShardInfo()
 	const oldHeartBeatMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
@@ -303,7 +313,12 @@ export const checkHeartBeatMongoDB = async () => {
 	// TODO 连接失败，在 heartbeat 数据库的 report 集合中报告（广播）连接失败, 如果这个失败的连接在全局变量中存在，则把这个连接从全局变量中删除
 }
 
-// 检查 MongoDB 的情况
+/**
+ *
+ * 检查 MongoDB 的情况
+ *
+ * @returns void
+ */
 export const checkMongoDB = async () => {
 	const activeMongoDBShardInfo = await getActiveMongoDBShardInfo()
 	const oldMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__')
@@ -475,3 +490,98 @@ export const getActiveAPIServerInfo = async (): Promise<getTsTypeFromSchemaType<
 
 
 // IDEA // TODO 查找时，先去目标分片组中随机一个数据库分片检索，如果没找到，则去主分片读取，如果读取不到则证明没这条数据
+
+
+
+
+/**
+ *
+ * 创建一个服务
+ *
+ * @param serviceInfo 服务的信息
+ */
+export const registerService2ClusterService = async (serviceInfo: unknown): Promise<boolean> => {
+	try {
+		if (serviceInfo) {
+			if (typeof serviceInfo === 'object' && serviceInfo !== null && 'serviceType' in serviceInfo) {
+				const serviceType = serviceInfo.serviceType as serverTypeType
+				if (typeof serviceType === 'string') {
+					if (serviceType === 'mongo') {
+						return await registerMongoDBService2ClusterService(serviceInfo as mongoServiceInfoType)
+					} else if (serviceType === 'api') {
+						return await registerNodeService2ClusterService(serviceInfo as nodeServiceInfoType)
+					} else {
+						console.log('something error in function registerService2Cluster, required data serviceInfo.serviceType not a correct "serverTypeType"')
+						return false
+					}
+				} else {
+					console.log('something error in function registerService2Cluster, required data serviceInfo.serviceType not is string')
+					return false
+				}
+				// 现在你可以安全地使用 serviceType
+			} else {
+				console.error('something error in function registerService2Cluster, required data serviceInfo.serviceType is empty')
+				return false
+			}
+		} else {
+			console.error('something error in function registerService2Cluster, required data serviceInfo is empty')
+			return false
+		}
+	} catch (e) {
+		console.error('something error in function registerService2Cluster', e)
+		return false
+	}
+}
+
+
+const registerMongoDBService2ClusterService = async (mongoServiceInfo: mongoServiceInfoType): Promise<boolean> => {
+	try {
+		const heartBeatDBConnect: mongoDBConnectType[] = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
+		if (heartBeatDBConnect) {
+			const serviceCollectionName: string = 'service'
+			const mongoDataBaseShardListDataSchema = {
+				publicIPAddress: String,
+				privateIPAddress: String,
+				port: Number,
+				adminAccountName: String,
+				adminPassword: String,
+				serviceType: { type: String, default: 'mongo' },
+				shardGroup: { type: Number, default: 0 },
+				identity: String,
+				state: { type: String, default: 'up' },
+				editDateTime: Number,
+			}
+			return await saveData2MongoDBShard<typeof mongoDataBaseShardListDataSchema>(heartBeatDBConnect, serviceCollectionName, mongoDataBaseShardListDataSchema, mongoServiceInfo)
+		} else {
+			console.error('something error in function registerMongoDBService2ClusterService, required data serviceInfo.serviceType is empty')
+			return false
+		}
+	} catch (e) {
+		console.error('something error in function registerMongoDBService2ClusterService', e)
+		return false
+	}
+}
+
+const registerNodeService2ClusterService = async (nodeServiceInfo: nodeServiceInfoType): Promise<boolean> => {
+	try {
+		const heartBeatDBConnect: mongoDBConnectType[] = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__')
+		if (heartBeatDBConnect) {
+			const serviceCollectionName: string = 'service'
+			const localhostAPIserviceDataSchema = {
+				publicIPAddress: String,
+				privateIPAddress: String,
+				port: Number,
+				serviceType: String,
+				state: { type: String, default: 'up' },
+				editDateTime: Number,
+			}
+			return await saveData2MongoDBShard<typeof localhostAPIserviceDataSchema>(heartBeatDBConnect, serviceCollectionName, localhostAPIserviceDataSchema, nodeServiceInfo)
+		} else {
+			console.error('something error in function registerNodeService2ClusterService, required data serviceInfo.serviceType is empty')
+			return false
+		}
+	} catch (e) {
+		console.error('something error in function registerNodeService2ClusterService', e)
+		return false
+	}
+}

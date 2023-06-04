@@ -1,3 +1,4 @@
+import bodyParser from 'koa-bodyparser'
 import router from './route/router'
 import Koa from 'koa'
 
@@ -5,6 +6,7 @@ const SERVER_PORT: number = process.env.SERVER_PORT ? parseInt(process.env.SERVE
 
 const app = new Koa()
 app
+	.use(bodyParser())
 	.use(router.routes()) // 使用 koa-router
 	.use(router.allowedMethods()) // 所有路由中间件调用完成，ctx.status 仍为空或 404，程序自动丰富请求的响应头，方便 debug 或 handle
 	.listen(SERVER_PORT) // 监听指定端口

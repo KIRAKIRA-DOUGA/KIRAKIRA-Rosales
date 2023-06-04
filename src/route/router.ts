@@ -1,6 +1,6 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld'
-import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat } from '../controller/AdminController'
+import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat, registerService2Cluster } from '../controller/AdminController'
 
 const router = new Router()
 
@@ -21,6 +21,9 @@ router.get('/02/koa/admin/heartbeat/test', heartBeatTest) // 存活探针
 
 router.get('/02/koa/admin/heartbeat/testHeartBeat', testHeartBeat) // 测试心跳服务是否正常
 // http://localhost:9999/02/koa/admin/heartbeat/testHeartBeat
+
+router.post('/02/koa/admin/cluster/register', registerService2Cluster)
+
 
 // router-end
 

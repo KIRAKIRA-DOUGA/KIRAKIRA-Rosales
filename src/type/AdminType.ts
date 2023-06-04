@@ -1,6 +1,9 @@
 import mongoose from 'mongoose'
 
-type serverTypeType = 'mongo' | 'sql' | 'elastic' | 'api' | 'heartbeat'
+
+export type serverTypeType = 'mongo' | 'api'
+
+export type serviceTypeType = 'mongo' | 'sql' | 'elastic' | 'api' | 'heartbeat'
 
 export type adminCheckStates = {
 	state: boolean;
@@ -29,7 +32,7 @@ export interface mongoServiceInfoType { // MongoDB 信息
 	port: number; // 该服务的所在的端口
 	adminAccountName: string; // 该服务的账号名 (如果有)
 	adminPassword: string; // 该服务的密码 (如果有)
-	serviceType: serverTypeType; // 服务的类型
+	serviceType: serviceTypeType; // 服务的类型
 	shardGroup: number; // 当前分片隶属于哪个分片组
 	identity: 'master' | 'servant'; // 分片的身份，一个数据区块只有一个主分片，可以有多个从分片
 	state: 'up' | 'down' | 'pending'; // 服务的状态

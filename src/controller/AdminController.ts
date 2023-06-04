@@ -1,4 +1,4 @@
-import { checkAPI, checkHeartBeatMongoDB, checkMongoDB, getActiveHeartBeatMongoDBShardInfo, initService } from '../service/AdminService'
+import { checkAPI, checkHeartBeatMongoDB, checkMongoDB, getActiveHeartBeatMongoDBShardInfo, initService, registerService2ClusterService } from '../service/AdminService'
 import { koaCtx, koaNext } from '../type/index'
 import { initEnvType } from '../type/AdminType'
 import { callErrorMessage } from '../common/CallErrorMessage'
@@ -82,6 +82,36 @@ export const testHeartBeat = async (ctx: koaCtx, next: koaNext) => {
 	await Promise.all([checkAPI(), checkMongoDB(), checkHeartBeatMongoDB()])
 	await next()
 }
+
+
+/**
+ *
+ * 向集群中添加一个新的服务
+ *
+ * @param ctx
+ * @param next
+ */
+export const registerService2Cluster = async (ctx: koaCtx, next: koaNext) => {
+	try {
+		await console.log('ctx', ctx.request.body)
+		const serviceInfo = ctx.request.body
+		const registerServiceResult = registerService2ClusterService(serviceInfo)
+		if (registerServiceResult) {
+			ctx.body = '<p>success</p>'
+		}
+	} catch (e) {
+		console.error('something error in function registerService2Cluster', e)
+	}
+	await next()
+}
+
+
+
+
+
+
+
+
 // 这是一条注释
 // - 这是一条注释
 // > 这是一条注释
