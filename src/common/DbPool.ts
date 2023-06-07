@@ -341,7 +341,6 @@ export const getDataFromOneMongoDBShardAllowCustomSelectAttributes = <T>(mongoDB
 	return new Promise<getTsTypeFromSchemaType<T>[] >(resolve => {
 		try {
 			if (mongoDBConnects && collectionName && schemaObject) {
-				console.log('aaaaaaaaaaaaaaaaaaaaaaaaaaaa', { mongoDBConnects, collectionName, schemaObject }) // DELETE
 				const fixedConditions = conditions ? conditions : {}
 				const fixedCustomSelectAttributes = customSelectAttributes ? customSelectAttributes : ''
 				
@@ -355,7 +354,6 @@ export const getDataFromOneMongoDBShardAllowCustomSelectAttributes = <T>(mongoDB
 					.then(resultsObject => {
 						resolve(resultsObject as getTsTypeFromSchemaType<T>[])
 					})
-				console.log('bbbbbbbbbbbbbbbbb', { model, fixedConditions, fixedCustomSelectAttributes }) // DELETE
 			} else {
 				resolve([{}] as getTsTypeFromSchemaType<T>[])
 				console.error('something error in function getDataFromOneMongoDBShardAllowCustomSelectAttributes, required data is empty')

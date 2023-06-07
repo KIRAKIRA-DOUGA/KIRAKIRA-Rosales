@@ -150,15 +150,16 @@ export const removeDuplicateObjectsInDeepArrayAndDeepObjectStrong = <T>(inputArr
 export const mergeAndDeduplicateObjectArrays = <T>(arr1: T[], arr2: T[]): T[] => {
 	try {
 		// 检查数组是否为空
-		if (arr1 && arr2) {
+		if (arr1 || arr2) {
 			// 处理空数组情况
-			if (arr1 === null) return arr2
-			if (arr2 === null) return arr1
+			if (arr1 === undefined || arr1 === null) return arr2
+			if (arr2 === undefined || arr2 === null) return arr1
 
 			// 合并数组并去重
 			const mergedArray: T[] = [...arr1, ...arr2]
 			const uniqueArray: T[] = []
 
+			
 			mergedArray.forEach((item: T) => {
 				if (!uniqueArray.some((uniqueItem: T) => objectsAreEqual(item, uniqueItem))) {
 					uniqueArray.push(item)
@@ -167,7 +168,7 @@ export const mergeAndDeduplicateObjectArrays = <T>(arr1: T[], arr2: T[]): T[] =>
 
 			return uniqueArray
 		} else {
-			console.error('something error in function mergeAndDeduplicateObjectArrays, required data "inputArray" is empty')
+			console.error('something error in function mergeAndDeduplicateObjectArrays, required data "inputArray(arr1 and arr2)" is empty')
 			return []
 		}
 	} catch (error) {

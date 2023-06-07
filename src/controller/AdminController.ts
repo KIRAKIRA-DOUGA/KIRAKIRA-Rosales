@@ -1,8 +1,12 @@
 import { checkAPI, checkHeartBeatMongoDB, checkMongoDB, getActiveHeartBeatMongoDBShardInfo, initService, registerService2ClusterService } from '../service/AdminService'
 import { koaCtx, koaNext } from '../type/index'
-import { initEnvType } from '../type/AdminType'
+import { initEnvType, mongoServiceInfoType, nodeServiceInfoType } from '../type/AdminType'
 import { callErrorMessage } from '../common/CallErrorMessage'
 import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from '../common/ArrayTool'
+import { GlobalSingleton } from '../store' // DELETE
+
+const globalSingleton = GlobalSingleton.getInstance() // DELETE
+
 
 let ONE_TIME_SECRET_KEY: string = process.env.ONE_TIME_SECRET_KEY
 
@@ -80,6 +84,14 @@ export const heartBeatTest = async (ctx: koaCtx, next: koaNext) => {
  */
 export const testHeartBeat = async (ctx: koaCtx, next: koaNext) => {
 	await Promise.all([checkAPI(), checkMongoDB(), checkHeartBeatMongoDB()])
+
+	const oldMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__MONGO_DB_SHARD_LIST__') // DELETE
+	const oldHeartBeatMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__') // DELETE
+	const oldApiServerList = globalSingleton.getVariable<nodeServiceInfoType[]>('__API_SERVER_LIST__') // DELETE
+
+	console.log('ddddddddddddddddddddddddddddd', { oldMongoDBShardList, oldHeartBeatMongoDBShardList, oldApiServerList }) // DELETE
+
+	ctx.body = '<p>testHeartBeat success</p>'
 	await next()
 }
 
