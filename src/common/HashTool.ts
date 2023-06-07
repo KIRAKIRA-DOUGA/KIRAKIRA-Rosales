@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 
 /**
  * 将输入的字符串进行简单的 SHA-256 哈希

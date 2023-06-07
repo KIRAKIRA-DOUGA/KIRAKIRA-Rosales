@@ -33,7 +33,7 @@ export const saveUserSettingsByUUID = async (ctx: koaCtx, next: koaNext) => {
 export const getUserSettingsByUUID = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.query.uuid as string
 	if (uuid && typeof uuid === 'string') {
-		ctx.body = getUserSettingsByUUIDService(uuid)
+		ctx.body = await getUserSettingsByUUIDService(uuid)
 	} else {
 		console.error('something error in function getUserSettingsByUUID, required data uuid is empty, or uuid not is string')
 	}

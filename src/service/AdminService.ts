@@ -280,24 +280,21 @@ export const checkHeartBeatMongoDB = async () => {
 	const oldHeartBeatMongoDBShardList = globalSingleton.getVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__')
 	if (activeHeartBeatMongoDBShardInfo || oldHeartBeatMongoDBShardList) {
 		const newHeartBeatMongoDBShardList = mergeAndDeduplicateObjectArrays<mongoServiceInfoType>(oldHeartBeatMongoDBShardList, activeHeartBeatMongoDBShardInfo as mongoServiceInfoType[])
-		createDatabaseConnectByDatabaseInfo(newHeartBeatMongoDBShardList, 'beat').then(connects => {
-			const oldHeartBeatMongoDBShardConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__') // 拿到旧连接
-			const correctHeartBeatMongoDBShardConnectList = correctMergeNewMongoDBConnect(oldHeartBeatMongoDBShardConnectList, connects)
-			globalSingleton.setVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__', correctHeartBeatMongoDBShardConnectList)
-		
-			const correctHeartBeatMongoShardDBList = correctHeartBeatMongoDBShardConnectList.reduce((accumulator: mongoServiceInfoType[], currentValue: mongoDBConnectType) => {
-				accumulator.push(currentValue.connectInfo)
-				return accumulator
-			}, [] as mongoServiceInfoType[])
-			globalSingleton.setVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__', correctHeartBeatMongoShardDBList)
+		const connects = await createDatabaseConnectByDatabaseInfo(newHeartBeatMongoDBShardList, 'kirakira')
+		const oldHeartBeatMongoDBShardConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__') // 拿到旧连接
+		const correctHeartBeatMongoDBShardConnectList = correctMergeNewMongoDBConnect(oldHeartBeatMongoDBShardConnectList, connects)
+		globalSingleton.setVariable<mongoDBConnectType[]>('__HEARTBEAT_DB_SHARD_CONNECT_LIST__', correctHeartBeatMongoDBShardConnectList)
+	
+		const correctHeartBeatMongoShardDBList = correctHeartBeatMongoDBShardConnectList.reduce((accumulator: mongoServiceInfoType[], currentValue: mongoDBConnectType) => {
+			accumulator.push(currentValue.connectInfo)
+			return accumulator
+		}, [] as mongoServiceInfoType[])
+		globalSingleton.setVariable<mongoServiceInfoType[]>('__HEARTBEAT_DB_SHARD_LIST__', correctHeartBeatMongoShardDBList)
 
-			const haveBrokenConnects = connects.filter(connect => connect.connectStatus !== 'ok').length >= 0
-			if (haveBrokenConnects) {
-			// Report // TODO
-			}
-		}).catch(() => {
+		const haveBrokenConnects = connects.filter(connect => connect.connectStatus !== 'ok').length >= 0
+		if (haveBrokenConnects) {
 		// Report // TODO
-		})
+		}
 		return
 	} else {
 		// Report // TODO 这个 node 一个可用的 HeartBeat 数据库连接都没有了，当然要上报
@@ -323,7 +320,7 @@ export const checkMongoDB = async () => {
 	if (activeMongoDBShardInfo || oldMongoDBShardList) {
 		const newMongoDBShardList = mergeAndDeduplicateObjectArrays<mongoServiceInfoType>(oldMongoDBShardList, activeMongoDBShardInfo as mongoServiceInfoType[])
 
-		const connects = await createDatabaseConnectByDatabaseInfo(newMongoDBShardList, 'beat')
+		const connects = await createDatabaseConnectByDatabaseInfo(newMongoDBShardList, 'kirakira')
 
 		const oldMongoDBShardConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__') // 拿到旧连接
 		const correctMongoDBShardConnectList = correctMergeNewMongoDBConnect(oldMongoDBShardConnectList, connects)

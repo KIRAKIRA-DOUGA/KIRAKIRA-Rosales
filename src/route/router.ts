@@ -24,13 +24,35 @@ router.get('/02/koa/admin/heartbeat/testHeartBeat', testHeartBeat) // 测试心�
 // http://localhost:9999/02/koa/admin/heartbeat/testHeartBeat
 
 router.post('/02/koa/admin/cluster/register', registerService2Cluster)
+// http://localhost:9999/02/koa/admin/cluster/register
+//
+// {
+// 	"publicIPAddress": "52.199.162.17",
+// 	"port": "20003",
+// 	"adminAccountName": "admin",
+// 	"adminPassword": "123456",
+// 	"serviceType": "mongo",
+// 	"shardGroup": "1",
+// 	"identity": "master",
+// 	"state": "up"
+// }
 
 
 
 
 router.post('/02/koa/user/settings/userSettings/save', saveUserSettingsByUUID)
+// http://localhost:9999/02/koa/user/settings/userSettings/save
+//
+// {
+// 	"uuid": "u00001",
+// 	"systemStyle": "s1",
+// 	"systemColor": "#66CCFF",
+// 	"backgroundAnimation": "true",
+// 	"settingPageLastEnter": "PornHub"
+// }
 
 router.get('/02/koa/user/settings/userSettings/get', getUserSettingsByUUID)
+// http://localhost:9999/02/koa/user/settings/userSettings/get?uuid=u00001
 
 
 // router-end
