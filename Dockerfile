@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 COPY . .
 
 # 安装依赖
-RUN npm install --only=production
+RUN npm install
 
 # 设置默认的暴露端口为3000
 ENV SERVER_PORT 3000
