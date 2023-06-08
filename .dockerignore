@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+.git
+.gitignore
+README.md
+LICENSE
+.vscode
+.idea
+*.log
+.env
+*.pid
+*.seed
+*.out
+dist
+.env.powershell.temp

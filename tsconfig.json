@@ -5,6 +5,7 @@
 		"moduleResolution": "node",
 		"outDir": "./dist",
 		"allowSyntheticDefaultImports": true,
+		"module": "CommonJS",
 		// ... rest
 	},
 	"include": [
