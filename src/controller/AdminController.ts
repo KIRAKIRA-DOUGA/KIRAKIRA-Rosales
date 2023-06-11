@@ -55,7 +55,7 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 			responseBody = serviceInitResult.callbackMessage
 		}
 	} catch (e) {
-		console.log('ccccccccccccccccccccccccccccc')
+		console.error('initKirakiraCluster 意外终止')
 		responseBody = callErrorMessage(e)
 	}
 

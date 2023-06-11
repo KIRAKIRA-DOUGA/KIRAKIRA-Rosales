@@ -11,7 +11,7 @@ COPY . .
 # 安装依赖
 RUN npm install
 
-# 设置默认的暴露端口为3000
+# 设置环境变量，默认暴露的端口为3000
 ENV SERVER_PORT 3000
 EXPOSE $SERVER_PORT
 

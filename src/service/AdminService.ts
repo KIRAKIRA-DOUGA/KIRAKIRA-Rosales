@@ -149,7 +149,7 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 						if (saveAdministratorDataStatus && saveAPIServiceDataStatus && saveHeartBeatDataBaseShardListDataStatus) { // 如果向所有心跳数据库广播的：集群管理员信息、本地serviceAPI信息、心跳数据库信息 全部完成
 							await sleep(3000)
 							
-							// startHeartBeat(60000) // 每分钟就执行一次心跳检测
+							// startHeartBeat(60000) // 每分钟就执行一次心跳检测 // WARN 现在还没启动心跳，如需启用，请取消注释
 
 							resolve({ state: true, callbackMessage: '<p>success</p>' })
 							// TODO
@@ -172,8 +172,14 @@ export const initService = (ONE_TIME_SECRET_KEY: string, initEnvs: initEnvType):
 				// DONE 判断 __HEARTBEAT_DB_SHARD_CONNECT_LIST__ 是否为空，如果不是，向每一个心跳数据库分片广播 集群管理用户，密码、API信息，心跳数据库信息 (向 administrator 集合广播 管理用户，密码，向 service 集合广播 本机 API server 信息，向 service 集合广播 心跳数据库 信息)
 				// DONE 睡眠 3s
 				// TODO 启动心跳（健康检测）
-				// TODO 销毁 一次性身份验证密钥
+				// DONE 销毁 一次性身份验证密钥
+			} else {
+				console.error('初始化失败, initEnvs 检查未通过')
+				resolve({ state: false, callbackMessage: '<p>initEnvs 检查未通过</p>' })
 			}
+		} else {
+			console.error(`初始化失败，${adminOneTimeSecretKeyCheckResult.callbackMessage}`)
+			resolve({ state: false, callbackMessage: adminOneTimeSecretKeyCheckResult.callbackMessage })
 		}
 	})
 }
