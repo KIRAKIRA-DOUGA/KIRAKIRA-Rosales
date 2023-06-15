@@ -225,7 +225,7 @@ export const checkAPI = async () => {
 				const targetIpAddress = apiServer.privateIPAddress || apiServer.publicIPAddress
 				const targetPort = apiServer.port
 				if (targetIpAddress && targetPort) {
-					const requestURL = `http://${targetIpAddress}:${targetPort}/02/koa/admin/heartbeat/test`
+					const requestURL = `https://${targetIpAddress}:${targetPort}/02/koa/admin/heartbeat/test`
 					axios.get(requestURL).then(result => {
 						if (result) {
 							const testResult: nodeServiceTestResultType = { nodeServiceInfo: apiServer, testResult: true }
