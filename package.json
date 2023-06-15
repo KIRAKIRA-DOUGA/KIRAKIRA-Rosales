@@ -23,6 +23,7 @@
 		"typescript": "^4.9.4"
 	},
 	"dependencies": {
+		"@koa/cors": "^4.0.0",
 		"@types/koa-bodyparser": "^4.3.10",
 		"axios": "^1.4.0",
 		"greenlock": "^4.0.4",
