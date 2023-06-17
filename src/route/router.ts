@@ -1,7 +1,7 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld'
 import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat, registerService2Cluster } from '../controller/AdminController'
-import { getUserSettingsByUUID, saveUserSettingsByUUID } from '../controller/UserController'
+import { getUserSettingsByUUID, saveUserSettingsByUUID, updateUserSettingsByUUID } from '../controller/UserController'
 
 const router = new Router()
 
@@ -42,6 +42,17 @@ router.post('/02/koa/admin/cluster/register', registerService2Cluster)
 
 router.post('/02/koa/user/settings/userSettings/save', saveUserSettingsByUUID)
 // http://localhost:9999/02/koa/user/settings/userSettings/save
+//
+// {
+// 	"uuid": "u00001",
+// 	"systemStyle": "s1",
+// 	"systemColor": "#66CCFF",
+// 	"backgroundAnimation": "true",
+// 	"settingPageLastEnter": "PornHub"
+// }
+
+router.put('/02/koa/user/settings/userSettings/update', updateUserSettingsByUUID)
+// http://localhost:9999/02/koa/user/settings/userSettings/update
 //
 // {
 // 	"uuid": "u00001",

@@ -1,5 +1,5 @@
 import mongoose, { Schema } from 'mongoose'
-import { getTsTypeFromSchemaType, getTsTypeFromSchemaTypeOptional, mongoDBConnectType, mongoServiceInfoType } from '../type/AdminType'
+import { getTsTypeFromSchemaType, getTsTypeFromSchemaTypeOptional, mongoDBConnectType, mongoDbUpdateResultType, mongoServiceInfoType } from '../type/AdminType'
 import { GlobalSingleton } from '../store/index'
 import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from './ArrayTool'
 import { hashData } from './HashTool'
@@ -432,7 +432,7 @@ export const getDataFromRandomMongoDBShard = async <T>(mongoDBConnects: mongoDBC
 export const getDataFromAllMongoDBShardAndDuplicate = async <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>): Promise< getTsTypeFromSchemaType<T>[] > => {
 	try {
 		if (mongoDBConnects && collectionName && schemaObject) {
-			const getDataFromMongoDBPromise: Promise<getTsTypeFromSchemaType<T>[] >[] = []
+			const getDataFromMongoDBPromise: Promise<getTsTypeFromSchemaType<T>[]>[] = []
 			mongoDBConnects.forEach((mongoDBConnect: mongoDBConnectType) => {
 				const excludeAttributes = '-_id -__v -editDateTime'
 				const getDataFromMongoDB = getDataFromOneMongoDBShardAllowCustomSelectAttributes<T>(mongoDBConnect, collectionName, schemaObject, conditions, excludeAttributes)
@@ -522,6 +522,184 @@ export const getData2CorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collectionN
 		} catch { // 错误处理
 			console.error('something error in function getData2CorrectMongoDBShardByUnionPrimaryKeyRoute')
 			resolve([])
+		}
+	})
+}
+
+
+/**
+ *
+ * 在某个 MongoDB 分片中更新数据
+ *
+ * @param mongoDBConnects 一个 MongoDB 数据库连接
+ * @param collectionName MongoDB 集合名 (精准名字，不需要在后面追加复数 “s”)
+ * @param schemaObject 数据的 Schema
+ * @param conditions 查询（WHERE）条件
+ * @param updateData 你想要更新的数据
+ *
+ * @returns boolean 是否更新成功，更新至少一条数据才会返回 true，更新失败或更新条数等于
+ */
+export const updateDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnectType, collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>, updateData: getTsTypeFromSchemaTypeOptional<T>): Promise<mongoDbUpdateResultType> => {
+	return new Promise<mongoDbUpdateResultType>(resolve => {
+		try {
+			if (mongoDBConnects && collectionName && schemaObject && conditions && typeof conditions === 'object' && Object.keys(conditions).length !== 0) {
+				const schema = new Schema(schemaObject)
+				const model = mongoDBConnects.connect.model(collectionName, schema, collectionName)
+				model.updateMany(conditions, { $set: updateData }) // $set 确保在更新一行时，只是更新该被更新的字段，而不会删除该行没被更新的字段
+					.then(result => {
+						const modifiedCount = result.modifiedCount
+						if (modifiedCount && modifiedCount < 1) {
+							const updateResult: mongoDbUpdateResultType = { updateStatus: true, modifiedCount }
+							resolve(updateResult)
+						} else {
+							const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+							resolve(updateResult)
+							console.error('something error in function updateDataFromOneMongoDBShard, query success but nothing updated')
+						}
+					})
+			} else {
+				const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+				resolve(updateResult)
+				console.error('something error in function updateDataFromOneMongoDBShard, required data is empty')
+			}
+		} catch {
+			const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+			resolve(updateResult)
+			console.error('something error in function updateDataFromOneMongoDBShard')
+		}
+	})
+}
+
+
+/**
+ *
+ * 在多个 MongoDB 分片中更新数据
+ *
+ * @param mongoDBConnects 一个 MongoDB 数据库连接
+ * @param collectionName MongoDB 集合名 (精准名字，不需要在后面追加复数 “s”)
+ * @param schemaObject 数据的 Schema
+ * @param conditions 查询（WHERE）条件
+ * @param updateData 你想要更新的数据
+ *
+ * @returns boolean 是否更新成功，更新至少一条数据才会返回 true，更新失败或更新条数等于
+ */
+export const updateDataFromMongoDBShards = <T>(mongoDBConnects: mongoDBConnectType[], collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>, updateData: getTsTypeFromSchemaTypeOptional<T>): Promise<mongoDbUpdateResultType> => {
+	return new Promise<mongoDbUpdateResultType>(resolve => {
+		try {
+			if (mongoDBConnects && collectionName && schemaObject && conditions && typeof conditions === 'object' && Object.keys(conditions).length !== 0) {
+				const updateDataFromMongoDBShardsPromiseList: Promise<mongoDbUpdateResultType>[] = []
+				mongoDBConnects.forEach(connect => {
+					const updateDataFromMongoDBShardsPromise = updateDataFromOneMongoDBShard(connect, collectionName, schemaObject, conditions, updateData)
+					updateDataFromMongoDBShardsPromiseList.push(updateDataFromMongoDBShardsPromise)
+				})
+
+				Promise.all(updateDataFromMongoDBShardsPromiseList).then(results => {
+					const allUpdateSUccess = results.filter(result => !result.updateStatus).length === 0 // 判断是否全是 true
+					const modifiedCount = results[0].modifiedCount
+					if (allUpdateSUccess && modifiedCount) {
+						const updateResult: mongoDbUpdateResultType = { updateStatus: false, modifiedCount }
+						resolve(updateResult)
+					} else {
+						const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+						resolve(updateResult)
+						console.error('something error in function updateDataFromMongoDBShards, required data allUpdateSUccess or modifiedCount is empty')
+					}
+				})
+			} else {
+				const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+				resolve(updateResult)
+				console.error('something error in function updateDataFromMongoDBShards, required data is empty')
+			}
+		} catch {
+			const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+			resolve(updateResult)
+			console.error('something error in function updateDataFromMongoDBShards')
+		}
+	})
+}
+
+
+
+/**
+ * 路由更新数据
+ * 通过显示声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的一个 MongoDB 连接
+ * 然后使用 updateDataFromOneMongoDBShard 方法从连接取出数据
+ *
+ * BY 02，KIRAKIRA 版权所有, 启发自: ElasticSearch
+ *
+ * @param collectionName MongoDB 集合名 (精准名字，不需要在后面追加复数 “s”)
+ * @param schemaObject 数据的 Schema
+ * @param conditions 查询条件 (where 条件)
+ * @param primaryKey 显式声明的主键，必须是 Schema 的 key，且 key 所对应的 value 必须是字符串类型
+ * @param updateData 你想要更新的数据
+ *
+ * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不接受 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
+ */
+export const updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>, primaryKey: keyof getTsTypeFromSchemaTypeOptional<T>, updateData: getTsTypeFromSchemaTypeOptional<T>): Promise<mongoDbUpdateResultType> => {
+	return new Promise<mongoDbUpdateResultType>(resolve => {
+		try {
+			const MONGO_SHARD_COUNT: string = process.env.MONGO_SHARD_COUNT // 从环境变量中获取分片组的数量 // WARN 集群中每个 Koa 节点的 MONGO_SHARD_COUNT 值必须是相同的
+			if (MONGO_SHARD_COUNT) { // 非空验证
+				const mongoShardCountNumber = parseInt(MONGO_SHARD_COUNT, 10) // 转换为 number 类型
+				if (mongoShardCountNumber && mongoShardCountNumber > 0 && !!Number.isInteger(mongoShardCountNumber)) { // 非空验证，正整数验证
+					const primaryKeyData = conditions[primaryKey] // 取出主键的值
+					if (primaryKeyData) { // 非空验证
+						hashData(`${primaryKeyData}`).then(primaryKeyDataHash => { // Hash
+							const primaryKeyDataHashBigInt = BigInt(`0x${primaryKeyDataHash}`) // Hash 转换为 BigInt
+							const primaryKeyDataHashBigIntModulo = primaryKeyDataHashBigInt % BigInt(mongoShardCountNumber) // 取模运算
+							const primaryKeyDataHashModulo = Number(primaryKeyDataHashBigIntModulo) // 转换回 Number，得到路由
+							const correctShardIndex = primaryKeyDataHashModulo + 1 // 取模直接的结果要加一
+							if (correctShardIndex && correctShardIndex > 0 && Number.isInteger(correctShardIndex)) { // 非空验证，正整数验证
+								const mongoDBConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__') // 从环境变量中取出全部 MongoDB 连接
+								if (mongoDBConnectList && mongoDBConnectList.length > 0) { // 非空验证和数组元素 > 0 验证
+									const correctMongoDBconnectList = mongoDBConnectList.filter(mongoDBConnect => mongoDBConnect.connectInfo.shardGroup === correctShardIndex) // 通过路由过滤刚刚拿到的连接
+									if (correctMongoDBconnectList && correctMongoDBconnectList.length > 1) { // 非空验证和数组元素 > 0 验证
+										updateDataFromMongoDBShards<T>(correctMongoDBconnectList, collectionName, schemaObject, conditions, updateData).then(updateResult => { // 执行数据更新
+											resolve(updateResult) // 返回插入结果
+										}).catch(() => { // 错误处理
+											console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute -> saveData2MongoDBShard.catch')
+											const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+											resolve(updateResult)
+										})
+									} else { // 错误处理
+										console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data correctMongoDBconnectList is empty or length not > 0')
+										const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+										resolve(updateResult)
+									}
+								} else { // 错误处理
+									console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoDBConnectList is empty or length not > 0')
+									const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+									resolve(updateResult)
+								}
+							} else { // 错误处理
+								console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data correctShardIndex is empty or not > 0 or not Integer')
+								const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+								resolve(updateResult)
+							}
+						}).catch(e => { // 错误处理
+							console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute -> hashData()', e)
+							const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+							resolve(updateResult)
+						})
+					} else { // 错误处理
+						console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data primaryKeyData is empty')
+						const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+						resolve(updateResult)
+					}
+				} else { // 错误处理
+					console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data mongoShardCountNumber is empty or not > 0 or not > 0 or not Integer')
+					const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+					resolve(updateResult)
+				}
+			} else { // 错误处理
+				console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute, required data MONGO_SHARD_COUNT is empty')
+				const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+				resolve(updateResult)
+			}
+		} catch { // 错误处理
+			console.error('something error in function updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute')
+			const updateResult: mongoDbUpdateResultType = { updateStatus: false }
+			resolve(updateResult)
 		}
 	})
 }

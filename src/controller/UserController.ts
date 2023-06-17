@@ -1,32 +1,37 @@
-import { checkUserSettingsWithUuid, getUserSettingsByUUIDService, saveUserSettingsByUUIDService } from '../service/UserService'
+import { checkUserSettingsWithUuid, getUserSettingsByUUIDService, saveUserSettingsService, updateUserSettingsByUUIDService } from '../service/UserService'
 import { koaCtx, koaNext } from '../type'
 import { userSettingsType } from '../type/UserType'
 
 
 /**
  * 存储用户设置
+ *
  * @param ctx koa ctx
  * @param next koa next
  */
 export const saveUserSettingsByUUID = async (ctx: koaCtx, next: koaNext) => {
 	const userSettingsWithUuid = ctx.request.body as userSettingsType
 	if (checkUserSettingsWithUuid(userSettingsWithUuid)) {
-		const uuid = userSettingsWithUuid.uuid as string
-		
 		const userSettings = userSettingsWithUuid as userSettingsType
-		if (uuid && userSettings && typeof uuid === 'string') {
-			saveUserSettingsByUUIDService(uuid, userSettings)
+		if (userSettings) {
+			const saveUserSettingsResult = await saveUserSettingsService(userSettings)
+			if (saveUserSettingsResult) {
+				ctx.body = saveUserSettingsResult
+			}
 		} else {
-			console.error('something error in function saveUserSettingsByUUID, required data uuid or userSettings is empty, or uuid not is string')
+			console.error('something error in function saveUserSettingsByUUID, required data userSettings is empty, or uuid not is string')
+			ctx.body = '<p>something error in function saveUserSettingsByUUID, required data userSettings is empty, or uuid not is string</p>'
 		}
 	} else {
 		console.error('something error in function saveUserSettingsByUUID, checkUserSettingsWithUuid(userSettingsWithUuid) return a false')
+		ctx.body = '<p>something error in function saveUserSettingsByUUID, checkUserSettingsWithUuid(userSettingsWithUuid) return a false'
 	}
 	await next()
 }
 
 /**
  * 获取用户设置
+ *
  * @param ctx koa ctx
  * @param next koa next
  */
@@ -39,5 +44,32 @@ export const getUserSettingsByUUID = async (ctx: koaCtx, next: koaNext) => {
 	}
 	await next()
 }
+
+/**
+ * 存储用户设置
+ *
+ * @param ctx koa ctx
+ * @param next koa next
+ */
+export const updateUserSettingsByUUID = async (ctx: koaCtx, next: koaNext) => {
+	const userSettingsWithUuid = ctx.request.body as userSettingsType
+	if (checkUserSettingsWithUuid(userSettingsWithUuid)) {
+		const userSettings = userSettingsWithUuid as userSettingsType
+		if (userSettings) {
+			const updateResult = updateUserSettingsByUUIDService(userSettings)
+			ctx.body = updateResult
+		} else {
+			console.error('something error in function updateUserSettingsByUUID, required data userSettings is empty, or uuid not is string')
+			ctx.body = '<p>something error in function updateUserSettingsByUUID, required data userSettings is empty, or uuid not is string</p>'
+		}
+	} else {
+		console.error('something error in function updateUserSettingsByUUID, checkUserSettingsWithUuid(userSettingsWithUuid) return a false')
+		ctx.body = '<p>something error in function updateUserSettingsByUUID, checkUserSettingsWithUuid(userSettingsWithUuid) return a false</p>'
+	}
+	await next()
+}
+
+
+// /02/koa/user/settings/userSettings/update
 
 

@@ -109,3 +109,9 @@ export type AtLeastOne<T, U = { [K in keyof T]: Pick<T, K> }> = Partial<T> & U[k
  * BY ChatGPT-4 02
  *  */
 export type ExactlyOne<T, U = { [K in keyof T]: { [P in K]: T[P] } & { [P in Exclude<keyof T, K>]: never } }> = U[keyof U]
+
+
+export interface mongoDbUpdateResultType {
+	updateStatus: boolean;
+	modifiedCount?: number;
+}

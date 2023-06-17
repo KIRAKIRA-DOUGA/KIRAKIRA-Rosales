@@ -1,13 +1,14 @@
 import { userSettingsType } from '../type/UserType'
-import { saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, getData2CorrectMongoDBShardByUnionPrimaryKeyRoute } from '../common/DbPool'
+import { saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, getData2CorrectMongoDBShardByUnionPrimaryKeyRoute, updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute } from '../common/DbPool'
+import { mongoDbUpdateResultType } from '../type/AdminType'
 
 /**
  * 存储用户设置
- * @param uuid 用户 id
+ *
  * @param userSettings 用户设置
  * @returns boolean 成功返回 true, 失败返回 false
  */
-export const saveUserSettingsByUUIDService = async (uuid: string, userSettings: userSettingsType): Promise<boolean> => {
+export const saveUserSettingsService = async (userSettings: userSettingsType): Promise<boolean> => {
 	try {
 		const serviceCollectionName: string = 'user-settings'
 		const userSettingsSchema = {
@@ -26,6 +27,7 @@ export const saveUserSettingsByUUIDService = async (uuid: string, userSettings: 
 
 /**
  * 获取用户设置
+ *
  * @param uuid 用户 id
  * @returns unknown 用户设置
  */
@@ -52,6 +54,7 @@ export const getUserSettingsByUUIDService = async (uuid: string): Promise<unknow
 
 /**
  * 检查用户设置字段和 uuid 是否正确
+ *
  * @param userSettingsWithUuid 用户设置字段和 uuid
  * @returns boolean 正确 true, 错误 false
  */
@@ -60,5 +63,29 @@ export const checkUserSettingsWithUuid = (userSettingsWithUuid: userSettingsType
 		return true
 	} else {
 		return false
+	}
+}
+
+/**
+ * 更新用户设置
+ *
+ * @param userSettings 用户设置
+ * @returns boolean 成功返回 true, 失败返回 false
+ */
+export const updateUserSettingsByUUIDService = async (userSettings: userSettingsType): Promise<mongoDbUpdateResultType> => {
+	try {
+		const serviceCollectionName: string = 'user-settings'
+		const userSettingsSchema = {
+			uuid: String,
+			systemStyle: String,
+			systemColor: String,
+			backgroundAnimation: Boolean,
+			settingPageLastEnter: String,
+		}
+		const conditions = { uuid: userSettings.uuid }
+		const primaryKey = 'uuid'
+		return await updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute<typeof userSettingsSchema>(serviceCollectionName, userSettingsSchema, conditions, primaryKey, userSettings)
+	} catch (e) {
+		console.error('something error in function saveUserSettingsByUUIDService', e)
 	}
 }
