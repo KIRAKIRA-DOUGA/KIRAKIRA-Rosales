@@ -4,6 +4,7 @@ import { initEnvType, mongoServiceInfoType, nodeServiceInfoType } from '../type/
 import { callErrorMessage } from '../common/CallErrorMessage'
 import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from '../common/ArrayTool'
 import { GlobalSingleton } from '../store' // DELETE
+import { sleep } from '../common/Sleep'
 
 const globalSingleton = GlobalSingleton.getInstance() // DELETE
 
@@ -17,6 +18,19 @@ let ONE_TIME_SECRET_KEY: string = process.env.ONE_TIME_SECRET_KEY
 // 暂停 5s
 // 启动心跳：读取全局变量，每 1s 请求任意一个心跳数据库，使用请求得到的数据覆写全局变量
 // 销毁 一次性身份验证密钥
+
+export const lazySleepApi = async (ctx: koaCtx, next: koaNext) => {
+	let sleepMs = 5000
+	const trueSleepMs = ctx.query.sleep
+	if (trueSleepMs && typeof trueSleepMs === 'string' && parseInt(trueSleepMs, 10) > 0 && parseInt(trueSleepMs, 10) <= 20000) {
+		sleepMs = parseInt(trueSleepMs, 10)
+	}
+	console.log('sleep start')
+	await sleep(sleepMs)
+	console.log(`sleep end for ${sleepMs} ms`)
+	ctx.body = `sleep for ${sleepMs} ms`
+	next()
+}
 
 
 // 以下两个测试链接都不太好用
