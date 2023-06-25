@@ -2,7 +2,6 @@ import { checkAPI, checkHeartBeatMongoDB, checkMongoDB, getActiveHeartBeatMongoD
 import { koaCtx, koaNext } from '../type/index'
 import { initEnvType, mongoServiceInfoType, nodeServiceInfoType } from '../type/AdminType'
 import { callErrorMessage } from '../common/CallErrorMessage'
-import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from '../common/ArrayTool'
 import { GlobalSingleton } from '../store' // DELETE
 import { sleep } from '../common/Sleep'
 
@@ -19,6 +18,12 @@ let ONE_TIME_SECRET_KEY: string = process.env.ONE_TIME_SECRET_KEY
 // 启动心跳：读取全局变量，每 1s 请求任意一个心跳数据库，使用请求得到的数据覆写全局变量
 // 销毁 一次性身份验证密钥
 
+/**
+ * 用于模拟一个慢速的请求，休眠的时间最大 20000，超过 20000 自动改为 5000 （单位：毫秒）
+ *
+ * @param ctx
+ * @param next
+ */
 export const lazySleepApi = async (ctx: koaCtx, next: koaNext) => {
 	let sleepMs = 5000
 	const trueSleepMs = ctx.query.sleep

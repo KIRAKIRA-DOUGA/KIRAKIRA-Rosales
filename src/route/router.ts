@@ -7,12 +7,12 @@ const router = new Router()
 
 // router-begin
 
-router.get('/02/koa', helloWorld) // 主页，测试 // DELETE
-router.get('/02/koa/hello', helloWorld) // 测试 // DELETE
-router.get('/02/koa/serverInfo', activeHeartBeatMongoDBShardInfo) // DELETE 返回 MongoDB 心跳数据库中存储的心跳数据的连接信息，前提是环境变量中已有心跳数据库连接信息
+// router.get('/02/koa', helloWorld) // 主页，测试 // DELETE
+// router.get('/02/koa/hello', helloWorld) // 测试 // DELETE
+// router.get('/02/koa/serverInfo', activeHeartBeatMongoDBShardInfo) // 返回 MongoDB 心跳数据库中存储的心跳数据的连接信息，前提是环境变量中已有心跳数据库连接信息 // DELETE
 // http://localhost:9999/02/koa/serverInfo
 
-router.get('/02/koa/admin/sleep', lazySleepApi) // 一个可以自定义请求延时的 API，最大 20000 ms
+router.get('/02/koa/admin/sleep', lazySleepApi) // 用于模拟一个慢速的请求，休眠的时间最大 20000，超过 20000 自动改为 5000 （单位：毫秒）
 // http://localhost:9999/02/koa/admin/sleep?sleep=10000
 
 router.get('/02/koa/admin/cluster/init', initKirakiraCluster) // TODO 参数：oneTimeSecretKey，用于初始化集群
