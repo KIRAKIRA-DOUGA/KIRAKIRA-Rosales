@@ -56,7 +56,7 @@ export const updateUserSettingsByUUID = async (ctx: koaCtx, next: koaNext) => {
 	if (checkUserSettingsWithUuid(userSettingsWithUuid)) {
 		const userSettings = userSettingsWithUuid as userSettingsType
 		if (userSettings) {
-			const updateResult = updateUserSettingsByUUIDService(userSettings)
+			const updateResult = await updateUserSettingsByUUIDService(userSettings)
 			ctx.body = updateResult
 		} else {
 			console.error('something error in function updateUserSettingsByUUID, required data userSettings is empty, or uuid not is string')

@@ -2,10 +2,10 @@
 	"name": "kirakira-rosales",
 	"version": "1.0.0",
 	"description": "",
-	"main": "index.js",
+	"main": "src/app.ts",
 	"type": "module",
 	"scripts": {
-		"start": "node -r esbuild-register src/app.ts",
+		"start": "tsc && node ./dist/app.js",
 		"dev": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
 		"serve": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
 		"build": "tsc"

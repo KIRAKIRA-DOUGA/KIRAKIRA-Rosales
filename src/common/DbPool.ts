@@ -548,7 +548,8 @@ export const updateDataFromOneMongoDBShard = <T>(mongoDBConnects: mongoDBConnect
 				model.updateMany(conditions, { $set: updateData }) // $set 确保在更新一行时，只是更新该被更新的字段，而不会删除该行没被更新的字段
 					.then(result => {
 						const modifiedCount = result.modifiedCount
-						if (modifiedCount && modifiedCount < 1) {
+						console.log('modifiedCount', modifiedCount)
+						if (modifiedCount && modifiedCount > 0) {
 							const updateResult: mongoDbUpdateResultType = { updateStatus: true, modifiedCount }
 							resolve(updateResult)
 						} else {
@@ -597,7 +598,7 @@ export const updateDataFromMongoDBShards = <T>(mongoDBConnects: mongoDBConnectTy
 					const allUpdateSUccess = results.filter(result => !result.updateStatus).length === 0 // 判断是否全是 true
 					const modifiedCount = results[0].modifiedCount
 					if (allUpdateSUccess && modifiedCount) {
-						const updateResult: mongoDbUpdateResultType = { updateStatus: false, modifiedCount }
+						const updateResult: mongoDbUpdateResultType = { updateStatus: true, modifiedCount }
 						resolve(updateResult)
 					} else {
 						const updateResult: mongoDbUpdateResultType = { updateStatus: false }
