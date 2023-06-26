@@ -1,9 +1,9 @@
-import { checkAPI, checkHeartBeatMongoDB, checkMongoDB, getActiveHeartBeatMongoDBShardInfo, initService, registerService2ClusterService } from '../service/AdminService'
-import { koaCtx, koaNext } from '../type/index'
-import { initEnvType, mongoServiceInfoType, nodeServiceInfoType } from '../type/AdminType'
-import { callErrorMessage } from '../common/CallErrorMessage'
-import { GlobalSingleton } from '../store' // DELETE
-import { sleep } from '../common/Sleep'
+import { checkAPI, checkHeartBeatMongoDB, checkMongoDB, getActiveHeartBeatMongoDBShardInfo, initService, registerService2ClusterService } from '../service/AdminService.js'
+import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { initEnvType, mongoServiceInfoType, nodeServiceInfoType } from '../type/AdminTypes.js'
+import { callErrorMessage } from '../common/CallErrorMessage.js'
+import { GlobalSingleton } from '../store/index.js' // DELETE
+import { sleep } from '../common/Sleep.js'
 
 const globalSingleton = GlobalSingleton.getInstance() // DELETE
 

@@ -2,10 +2,10 @@
 	"compilerOptions": {
 		"target": "ESNext",
 		"esModuleInterop": true,
-		"moduleResolution": "node",
+		"moduleResolution": "NodeNext",
 		"outDir": "./dist",
 		"allowSyntheticDefaultImports": true,
-		"module": "CommonJS",
+		"module": "ESNext",
 		// ... rest
 	},
 	"include": [

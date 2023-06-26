@@ -1,6 +1,6 @@
-import { userSettingsType } from '../type/UserType'
-import { saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, getData2CorrectMongoDBShardByUnionPrimaryKeyRoute, updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute } from '../common/DbPool'
-import { mongoDbUpdateResultType } from '../type/AdminType'
+import { userSettingsType } from '../type/UserTypes.js'
+import { saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, getData2CorrectMongoDBShardByUnionPrimaryKeyRoute, updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute } from '../common/DbPool.js'
+import { mongoDbUpdateResultType } from '../type/AdminTypes.js'
 
 /**
  * 存储用户设置
@@ -70,7 +70,7 @@ export const checkUserSettingsWithUuid = (userSettingsWithUuid: userSettingsType
  * 更新用户设置
  *
  * @param userSettings 用户设置
- * @returns boolean 成功返回 true, 失败返回 false
+ * @returns
  */
 export const updateUserSettingsByUUIDService = async (userSettings: userSettingsType): Promise<mongoDbUpdateResultType> => {
 	try {

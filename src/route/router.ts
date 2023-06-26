@@ -1,7 +1,7 @@
 import Router from 'koa-router'
-import { helloWorld } from '../controller/HelloWorld'
-import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat, registerService2Cluster, lazySleepApi } from '../controller/AdminController'
-import { getUserSettingsByUUID, saveUserSettingsByUUID, updateUserSettingsByUUID } from '../controller/UserController'
+import { helloWorld } from '../controller/HelloWorld.js'
+import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat, registerService2Cluster, lazySleepApi } from '../controller/AdminController.js'
+import { getUserSettingsByUUID, saveUserSettingsByUUID, updateUserSettingsByUUID } from '../controller/UserController.js'
 
 const router = new Router()
 

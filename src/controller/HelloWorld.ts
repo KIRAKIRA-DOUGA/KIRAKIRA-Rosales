@@ -1,5 +1,5 @@
-import { koaCtx, koaNext } from '../type/index'
-import { GlobalSingleton } from '../store/index'
+import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { GlobalSingleton } from '../store/index.js'
 
 const globalSingleton = GlobalSingleton.getInstance()
 

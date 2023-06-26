@@ -1,9 +1,9 @@
-import { callErrorMessage } from '../common/CallErrorMessage'
-import { serverTypeType, adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType, getTsTypeFromSchemaType, nodeServiceTestResultType } from '../type/AdminType'
-import { createDatabaseConnectByDatabaseInfo, createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, getDataFromAllMongoDBShardAndDuplicate, saveData2MongoDBShard, saveDataArray2MongoDBShard } from '../common/DbPool'
-import { sleep } from '../common/Sleep'
-import { GlobalSingleton } from '../store/index'
-import { mergeAndDeduplicateObjectArrays } from '../common/ArrayTool'
+import { callErrorMessage } from '../common/CallErrorMessage.js'
+import { serverTypeType, adminCheckStates, initEnvType, serviceInitState, mongoServiceInfoType, nodeServiceInfoType, mongoDBConnectType, adminUserType, getTsTypeFromSchemaType, nodeServiceTestResultType } from '../type/AdminTypes.js'
+import { createDatabaseConnectByDatabaseInfo, createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, getDataFromAllMongoDBShardAndDuplicate, saveData2MongoDBShard, saveDataArray2MongoDBShard } from '../common/DbPool.js'
+import { sleep } from '../common/Sleep.js'
+import { GlobalSingleton } from '../store/index.js'
+import { mergeAndDeduplicateObjectArrays } from '../common/ArrayTool.js'
 import axios from 'axios'
 
 const globalSingleton = GlobalSingleton.getInstance()
