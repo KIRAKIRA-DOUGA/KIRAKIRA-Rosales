@@ -3,6 +3,7 @@
 	"version": "1.0.0",
 	"description": "",
 	"main": "index.js",
+	"type": "module",
 	"scripts": {
 		"start": "node -r esbuild-register src/app.ts",
 		"dev": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",

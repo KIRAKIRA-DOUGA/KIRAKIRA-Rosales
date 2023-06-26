@@ -1,8 +1,8 @@
 import mongoose, { Schema } from 'mongoose'
-import { getTsTypeFromSchemaType, getTsTypeFromSchemaTypeOptional, mongoDBConnectType, mongoDbUpdateResultType, mongoServiceInfoType } from '../type/AdminType'
-import { GlobalSingleton } from '../store/index'
-import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from './ArrayTool'
-import { hashData } from './HashTool'
+import { getTsTypeFromSchemaType, getTsTypeFromSchemaTypeOptional, mongoDBConnectType, mongoDbUpdateResultType, mongoServiceInfoType } from '../type/AdminTypes.js'
+import { GlobalSingleton } from '../store/index.js'
+import { removeDuplicateObjectsInDeepArrayAndDeepObjectStrong } from './ArrayTool.js'
+import { hashData } from './HashTool.js'
 
 const globalSingleton = GlobalSingleton.getInstance()
 

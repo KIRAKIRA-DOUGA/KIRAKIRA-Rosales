@@ -1,5 +1,5 @@
 import bodyParser from 'koa-bodyparser'
-import router from './route/router'
+import router from './route/router.js'
 import Koa from 'koa'
 import fs from 'fs'
 import https from 'https'

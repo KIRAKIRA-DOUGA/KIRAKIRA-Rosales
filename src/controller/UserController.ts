@@ -1,6 +1,6 @@
-import { checkUserSettingsWithUuid, getUserSettingsByUUIDService, saveUserSettingsService, updateUserSettingsByUUIDService } from '../service/UserService'
-import { koaCtx, koaNext } from '../type'
-import { userSettingsType } from '../type/UserType'
+import { checkUserSettingsWithUuid, getUserSettingsByUUIDService, saveUserSettingsService, updateUserSettingsByUUIDService } from '../service/UserService.js'
+import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { userSettingsType } from '../type/UserTypes.js'
 
 
 /**

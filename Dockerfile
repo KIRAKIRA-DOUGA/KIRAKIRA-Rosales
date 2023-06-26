@@ -1,4 +1,4 @@
-# BY: ChatGPT-4
+# BY: ChatGPT-4, 02
 # 使用官方的 node 基础镜像
 FROM node:alpine
 
