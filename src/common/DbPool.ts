@@ -653,7 +653,7 @@ export const updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collecti
 								const mongoDBConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__') // 从环境变量中取出全部 MongoDB 连接
 								if (mongoDBConnectList && mongoDBConnectList.length > 0) { // 非空验证和数组元素 > 0 验证
 									const correctMongoDBconnectList = mongoDBConnectList.filter(mongoDBConnect => mongoDBConnect.connectInfo.shardGroup === correctShardIndex) // 通过路由过滤刚刚拿到的连接
-									if (correctMongoDBconnectList && correctMongoDBconnectList.length > 1) { // 非空验证和数组元素 > 0 验证
+									if (correctMongoDBconnectList && correctMongoDBconnectList.length > 0) { // 非空验证和数组元素 > 0 验证
 										updateDataFromMongoDBShards<T>(correctMongoDBconnectList, collectionName, schemaObject, conditions, updateData).then(updateResult => { // 执行数据更新
 											resolve(updateResult) // 返回插入结果
 										}).catch(() => { // 错误处理
