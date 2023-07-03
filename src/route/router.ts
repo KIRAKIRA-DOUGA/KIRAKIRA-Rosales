@@ -1,7 +1,7 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat, registerService2Cluster, lazySleepApi } from '../controller/AdminController.js'
-import { getUserSettingsByUUID, saveUserSettingsByUUID, updateUserSettingsByUUID } from '../controller/UserController.js'
+import { getUserSettingsByUUID, saveUserSettingsByUUID, updateUserSettingsByUUID, userRegistrationController } from '../controller/UserController.js'
 
 const router = new Router()
 
@@ -67,6 +67,16 @@ router.put('/02/koa/user/settings/userSettings/update', updateUserSettingsByUUID
 
 router.get('/02/koa/user/settings/userSettings/get', getUserSettingsByUUID)
 // http://localhost:9999/02/koa/user/settings/userSettings/get?uuid=u00001
+
+
+
+router.post('/02/koa/user/register', userRegistrationController)
+// http://localhost:9999/02/koa/user/register
+// {
+// 	"userName": "u00001",
+// 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// }
+
 
 
 // router-end

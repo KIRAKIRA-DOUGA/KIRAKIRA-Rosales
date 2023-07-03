@@ -1,6 +1,6 @@
-import { checkUserSettingsWithUuid, getUserSettingsByUUIDService, saveUserSettingsService, updateUserSettingsByUUIDService } from '../service/UserService.js'
+import { checkUserLoginData, checkUserSettingsWithUuid, getUserSettingsByUUIDService, saveUserSettingsService, updateUserSettingsByUUIDService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { userSettingsType } from '../type/UserTypes.js'
+import { userLoginDataType, userSettingsType } from '../type/UserTypes.js'
 
 
 /**
@@ -68,8 +68,15 @@ export const updateUserSettingsByUUID = async (ctx: koaCtx, next: koaNext) => {
 	}
 	await next()
 }
-
-
 // /02/koa/user/settings/userSettings/update
+
+
+export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => {
+	const userLoginData = ctx.request.body as userLoginDataType
+	if (checkUserLoginData(userLoginData)) {
+		ctx.body = await userRegistrationService(userLoginData)
+	}
+	await next()
+}
 
 

@@ -70,9 +70,10 @@ export const createOrMergeHeartBeatDatabaseConnectByDatabaseInfo = (databaseInfo
 					return !connects.every((newConnect: mongoDBConnectType) => (newConnect.connectInfo.privateIPAddress === oldConnect.connectInfo.privateIPAddress || newConnect.connectInfo.publicIPAddress === oldConnect.connectInfo.publicIPAddress) && newConnect.connectInfo.port === oldConnect.connectInfo.port)
 				}) : []).filter((mergedConnect: mongoDBConnectType) => mergedConnect.connectStatus !== 'error')
 
-				if (allAvailableConnects.length > 0) {
+				if (allAvailableConnects && allAvailableConnects.length > 0) {
 					resolve(allAvailableConnects)
 				} else {
+					console.error('something error in function createOrMergeHeartBeatDatabaseConnectByDatabaseInfo, , required data allAvailableConnects is empty or length not > 0')
 					reject(allAvailableConnects)
 				}
 			}).catch(() => {
@@ -214,7 +215,7 @@ export const saveDataArray2MongoDBShard = <T>(mongoDBConnects: mongoDBConnectTyp
 
 /**
  * 路由存储数据
- * 通过显示声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的 MongoDB 连接
+ * 通过显式声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的 MongoDB 连接
  * 然后使用普通方法向这些连接中插入数据
  *
  * BY 02，KIRAKIRA 版权所有, 启发自: ElasticSearch
@@ -454,7 +455,7 @@ export const getDataFromAllMongoDBShardAndDuplicate = async <T>(mongoDBConnects:
 
 /**
  * 路由取回数据
- * 通过显示声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的 MongoDB 连接
+ * 通过显式声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的 MongoDB 连接
  * 然后使用 getDataFromRandomMongoDBShard 方法从这些连接中取出数据
  *
  * BY 02，KIRAKIRA 版权所有, 启发自: ElasticSearch
@@ -466,7 +467,7 @@ export const getDataFromAllMongoDBShardAndDuplicate = async <T>(mongoDBConnects:
  *
  * @returns Promise<boolean> 布尔类型的 Promise 返回值，仅有 then (resolve) 回调，不接受 catch (reject) 回调，如果 then 的结果是 true，则证明数据插入成功了
  */
-export const getData2CorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>, primaryKey: keyof getTsTypeFromSchemaTypeOptional<T>): Promise< getTsTypeFromSchemaType<T>[] > => {
+export const getDataFromCorrectMongoDBShardByUnionPrimaryKeyRoute = <T>(collectionName: string, schemaObject: schemaType, conditions: getTsTypeFromSchemaTypeOptional<T>, primaryKey: keyof getTsTypeFromSchemaTypeOptional<T>): Promise< getTsTypeFromSchemaType<T>[] > => {
 	return new Promise< getTsTypeFromSchemaType<T>[] >(resolve => {
 		try {
 			const MONGO_SHARD_COUNT: string = process.env.MONGO_SHARD_COUNT // 从环境变量中获取分片组的数量 // WARN 集群中每个 Koa 节点的 MONGO_SHARD_COUNT 值必须是相同的
@@ -623,7 +624,7 @@ export const updateDataFromMongoDBShards = <T>(mongoDBConnects: mongoDBConnectTy
 
 /**
  * 路由更新数据
- * 通过显示声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的一个 MongoDB 连接
+ * 通过显式声明的主键，计算出数据应该存放的分片组编号(路由)，并取出该分片组编号中所对应的分片的一个 MongoDB 连接
  * 然后使用 updateDataFromOneMongoDBShard 方法从连接取出数据
  *
  * BY 02，KIRAKIRA 版权所有, 启发自: ElasticSearch

@@ -74,8 +74,8 @@ export const initKirakiraCluster = async (ctx: koaCtx, next: koaNext): Promise<v
 			responseBody = serviceInitResult.callbackMessage
 		}
 	} catch (e) {
-		console.error('initKirakiraCluster 意外终止')
-		responseBody = callErrorMessage(e)
+		console.error('initKirakiraCluster 意外终止', e)
+		responseBody = callErrorMessage(e) // TODO e的值可能不是字符串
 	}
 
 	ctx.body = responseBody
