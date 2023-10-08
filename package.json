@@ -6,8 +6,9 @@
 	"type": "module",
 	"scripts": {
 		"start": "tsc && node ./dist/app.js",
-		"dev": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
-		"serve": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
+		"dev": "npm start",
+		"serve": "npm start",
+		"dev-hot": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
 		"build": "tsc"
 	},
 	"author": "",

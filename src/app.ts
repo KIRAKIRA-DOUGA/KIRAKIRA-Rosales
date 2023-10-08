@@ -3,7 +3,7 @@ import fs from 'fs'
 import https from 'https'
 import Koa from 'koa'
 import bodyParser from 'koa-bodyparser'
-import { connectMongoDBCluster } from './common/DbClusterPool.js'
+import { connectMongoDBCluster } from './dbPool/DbClusterPool.js'
 import router from './route/router.js'
 
 const SERVER_PORT: number = process.env.SERVER_PORT ? parseInt(process.env.SERVER_PORT, 10) : 4000 // 从环境变量中获取端口号，如果没获取到，则使用4000

@@ -1,13 +1,13 @@
 import Router from 'koa-router'
+import { activeHeartBeatMongoDBShardInfo, heartBeatTest, initKirakiraCluster, lazySleepApi, registerService2Cluster, testHeartBeat } from '../controller/AdminController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { activeHeartBeatMongoDBShardInfo, initKirakiraCluster, heartBeatTest, testHeartBeat, registerService2Cluster, lazySleepApi } from '../controller/AdminController.js'
 import { getUserSettingsByUUID, saveUserSettingsByUUID, updateUserSettingsByUUID, userRegistrationController } from '../controller/UserController.js'
 
 const router = new Router()
 
 // router-begin
 
-// router.get('/02/koa', helloWorld) // 主页，测试 // DELETE
+router.get('/02/koa', helloWorld) // 主页，测试 // DELETE
 // router.get('/02/koa/hello', helloWorld) // 测试 // DELETE
 // router.get('/02/koa/serverInfo', activeHeartBeatMongoDBShardInfo) // 返回 MongoDB 心跳数据库中存储的心跳数据的连接信息，前提是环境变量中已有心跳数据库连接信息 // DELETE
 // http://localhost:9999/02/koa/serverInfo
