@@ -1,162 +1,80 @@
-import { userAuthDataType, userLoginDataType, userSettingsType } from '../type/UserTypes.js'
-import { saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute, getDataFromCorrectMongoDBShardByUnionPrimaryKeyRoute, updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute, saveData2MongoDBShard } from '../common/DbPool.js'
-import { mongoDBConnectType, mongoDbUpdateResultType } from '../type/AdminTypes.js'
-import { generateSaltedHash, hashData } from '../common/HashTool.js'
+import { InferSchemaType, Schema } from 'mongoose'
+import { generateSaltedHash } from '../common/HashTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { GlobalSingleton } from '../store/index.js'
+import { userRegistrationDataDto, userRegistrationResultDto } from '../controller/UserControllerDto.js'
+import { insertData2MongoDB } from '../dbPool/DbClusterPool.js'
+import UserSchema from '../dbPool/schema/UserSchema.js'
 
-const globalSingleton = GlobalSingleton.getInstance()
-
-/**
- * 存储用户设置
- *
- * @param userSettings 用户设置
- * @returns boolean 成功返回 true, 失败返回 false
- */
-export const saveUserSettingsService = async (userSettings: userSettingsType): Promise<boolean> => {
+export const userRegistrationService = async (userRegistrationData: userRegistrationDataDto): Promise<userRegistrationResultDto> => {
 	try {
-		const serviceCollectionName: string = 'user-settings'
-		const userSettingsSchema = {
-			uuid: String,
-			systemStyle: String,
-			systemColor: String,
-			backgroundAnimation: Boolean,
-			settingPageLastEnter: String,
-		}
-		const primaryKey = 'uuid'
-		return await saveData2CorrectMongoDBShardByUnionPrimaryKeyRoute<typeof userSettingsSchema>(serviceCollectionName, userSettingsSchema, userSettings, primaryKey)
-	} catch (e) {
-		console.error('something error in function saveUserSettingsByUUIDService', e)
-	}
-}
-
-/**
- * 获取用户设置
- *
- * @param uuid 用户 id
- * @returns unknown 用户设置
- */
-export const getUserSettingsByUUIDService = async (uuid: string): Promise<unknown> => {
-	try {
-		const serviceCollectionName: string = 'user-settings'
-		const userSettingsSchema = {
-			uuid: String,
-			systemStyle: String,
-			systemColor: String,
-			backgroundAnimation: Boolean,
-			settingPageLastEnter: String,
-		}
-		const userSettingsConditions = {
-			uuid,
-		}
-		const primaryKey = 'uuid'
-
-		return await getDataFromCorrectMongoDBShardByUnionPrimaryKeyRoute<typeof userSettingsSchema>(serviceCollectionName, userSettingsSchema, userSettingsConditions, primaryKey)
-	} catch {
-		return {}
-	}
-}
-
-/**
- * 检查用户设置字段和 uuid 是否正确
- *
- * @param userSettingsWithUuid 用户设置字段和 uuid
- * @returns boolean 正确 true, 错误 false
- */
-export const checkUserSettingsWithUuid = (userSettingsWithUuid: userSettingsType): boolean => {
-	if (userSettingsWithUuid && userSettingsWithUuid.uuid) {
-		return true
-	} else {
-		return false
-	}
-}
-
-/**
- * 更新用户设置
- *
- * @param userSettings 用户设置
- * @returns
- */
-export const updateUserSettingsByUUIDService = async (userSettings: userSettingsType): Promise<mongoDbUpdateResultType> => {
-	try {
-		const serviceCollectionName: string = 'user-settings'
-		const userSettingsSchema = {
-			uuid: String,
-			systemStyle: String,
-			systemColor: String,
-			backgroundAnimation: Boolean,
-			settingPageLastEnter: String,
-		}
-		const conditions = { uuid: userSettings.uuid }
-		const primaryKey = 'uuid'
-		return await updateData2CorrectMongoDBShardByUnionPrimaryKeyRoute<typeof userSettingsSchema>(serviceCollectionName, userSettingsSchema, conditions, primaryKey, userSettings)
-	} catch (e) {
-		console.error('something error in function saveUserSettingsByUUIDService', e)
-	}
-}
-
-
-export const userRegistrationService = async (userLoginData: userLoginDataType): Promise<string> => {
-	try {
-		if (checkUserLoginData(userLoginData)) {
-			const passwordHashHash = await hashPassword(userLoginData)
-				.catch(e => {
-					console.error('something error in function userRegistrationService -> hashPassword', e)
-				})
+		if (checkUserLoginData(userRegistrationData)) {
+			const passwordHashHash = await hashPassword(userRegistrationData)
 			const token = generateSecureRandomString(64)
-			const mongoDBShardConnectList = globalSingleton.getVariable<mongoDBConnectType[]>('__MONGO_DB_SHARD_CONNECT_LIST__') // 拿到全部 MongoDB 数据持久化数据库分片的库连接
-	
-			if (passwordHashHash && token && mongoDBShardConnectList) {
-				const serviceCollectionName: string = 'user-auth'
-				const userAuthDataSchema = {
-					userName: String,
-					passwordHashHash: String,
-					token: String,
-					editDateTime: Number,
-				}
-				const userAuthData: userAuthDataType = {
-					userName: userLoginData.userName,
+			if (passwordHashHash && token) {
+				const { collectionName, schema: userSchema } = UserSchema
+				const schema = new Schema(userSchema)
+				type User = InferSchemaType<typeof schema>
+				const user: User = {
+					userName: userRegistrationData.userName,
 					passwordHashHash,
 					token,
 					editDateTime: new Date().getTime(),
 				}
-				const saveUserAuthDataStatus = await saveData2MongoDBShard<typeof userAuthDataSchema>(mongoDBShardConnectList, serviceCollectionName, userAuthDataSchema, userAuthData) // 向 所有心跳数据库的 service 集合广播 本机 API server 信息
-					.catch(e => {
-						console.error('something error in function userRegistrationService -> saveData2MongoDBShard', e)
-					})
-				if (saveUserAuthDataStatus)
-					return token
-				else {
-					console.error('something error in function userRegistrationService, Registration failed')
-					return ''
+
+				try {
+					await insertData2MongoDB(user, schema, collectionName)
+				} catch (error) {
+					console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
+					return { success: false, message: '用户注册失败：无法保存用户资料' }
 				}
+
+				return { success: true, token, message: '用户注册成功' }
 			} else {
-				console.error('something error in function userRegistrationService, required data passwordHashHash && token && mongoDBShardConnectList is empty')
-				return ''
+				console.error('ERROR', '用户注册失败：passwordHashHash 或 token 可能为空')
+				return { success: false, message: '用户注册失败：生成账户资料时失败' }
 			}
 		} else {
-			console.error('something error in function userRegistrationService, checkUserLoginData result is false')
-			return ''
+			console.error('ERROR', '用户注册失败：userRegistrationData 的非空验证没有通过')
+			return { success: false, message: '用户注册失败：非空验证没有通过' }
 		}
-	} catch (e) {
-		console.error('something error in function userRegistrationService', e)
-		return ''
+	} catch (error) {
+		console.error('userRegistrationService 函数中出现异常', error)
+		return { success: false, message: '用户注册失败：程序异常终止' }
 	}
 }
 
-const hashPassword = async (userLoginData: userLoginDataType): Promise<string> => {
+
+/**
+ * 非空验证
+ *
+ * @param userRegistrationData
+ * @returns
+ */
+const checkUserLoginData = (userRegistrationData: userRegistrationDataDto): boolean => {
+	return (!!userRegistrationData.passwordHash && !!userRegistrationData.userName)
+}
+
+/**
+ * 二次 Hash 密码，让用户密码可以安全存储在 DB 中
+ *
+ * @param userRegistrationData
+ * @returns
+ */
+const hashPassword = async (userRegistrationData: userRegistrationDataDto): Promise<string> => {
 	try {
-		if (checkUserLoginData(userLoginData)) {
+		if (checkUserLoginData(userRegistrationData)) {
 			const salt = generateSecureRandomString(32)
+			const userName = userRegistrationData.userName
+			const passwordHash = userRegistrationData.passwordHash
 			if (salt) {
-				const saltHash = await generateSaltedHash(salt, userLoginData.passwordHash)
+				const saltHash = await generateSaltedHash(salt, passwordHash)
 					.catch(e => {
 						console.error('something error in function hashPassword -> generateSaltedHash-1', e)
 					})
 				if (saltHash) {
-					const finalSalt = `${userLoginData.userName}-${userLoginData.passwordHash}-${saltHash}`
+					const finalSalt = `${userName}-${passwordHash}-${saltHash}`
 					if (finalSalt) {
-						const passwordHashHash = await generateSaltedHash(userLoginData.passwordHash, finalSalt)
+						const passwordHashHash = await generateSaltedHash(passwordHash, finalSalt)
 							.catch(e => {
 								console.error('something error in function hashPassword -> generateSaltedHash-2', e)
 							})
@@ -186,15 +104,4 @@ const hashPassword = async (userLoginData: userLoginDataType): Promise<string> =
 		console.error('something error in function hashPassword', e)
 		return ''
 	}
-}
-
-
-/**
- * 非空验证
- * 
- * @param userLoginData 
- * @returns 
- */
-export const checkUserLoginData = (userLoginData: userLoginDataType): boolean => {
-	return (!!userLoginData.passwordHash && !!userLoginData.userName)
 }
