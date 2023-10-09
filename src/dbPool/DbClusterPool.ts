@@ -1,6 +1,6 @@
 import { ReadPreferenceMode } from 'mongodb'
 import mongoose, { Model, Schema } from 'mongoose'
-import { DbPoolResultType } from './DbPoolTypes.js'
+import { DbPoolResultType, QueryType, SelectType } from './DbClusterPoolTypes.js'
 
 /**
  * 连接 MongoDB 复制集，应当在系统初始化时调用
@@ -49,14 +49,14 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 	}
 }
 
-export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionName: string): Promise<DbPoolResultType> => {
+export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionName: string): Promise< DbPoolResultType<T> > => {
 	try {
-		let mongoModel: Model<unknown>
+		let mongoModel: Model<T>
 		// 检查模型是否已存在
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model(collectionName, schema)
+			mongoModel = mongoose.model<T>(collectionName, schema)
 		}
 		mongoModel.createIndexes()
 		const model = new mongoModel(data)
@@ -66,10 +66,31 @@ export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionN
 			console.error('ERROR', '数据插入失败：', error)
 			throw { success: false, message: '数据插入失败', error }
 		}
-		
 		return { success: true, message: '数据插入成功' }
 	} catch (error) {
 		console.error('ERROR', 'insertData2MongoDB 发生错误')
 		throw { success: false, message: '数据插入失败，insertData2MongoDB 中发生错误：', error }
+	}
+}
+
+export const selectDataFromMongoDB = async <T>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string): Promise< DbPoolResultType<T> > => {
+	try {
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+		try {
+			const result = (await mongoModel.find(where, select)).map(results => results.toObject() as T)
+			return { success: true, message: '数据查询成功', result }
+		} catch (error) {
+			console.error('ERROR', '数据查询失败：', error)
+			throw { success: false, message: '数据查询失败', error }
+		}
+	} catch (error) {
+		console.error('ERROR', 'selectDataFromMongoDB 发生错误')
+		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
 	}
 }

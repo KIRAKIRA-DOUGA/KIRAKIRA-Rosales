@@ -1,6 +1,6 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { userRegistrationController } from '../controller/UserController.js'
+import { checkUserExistsCheckController, userLoginController, userRegistrationController } from '../controller/UserController.js'
 
 const router = new Router()
 
@@ -12,11 +12,22 @@ router.get('/02/koa/hello', helloWorld) // 测试 // DELETE
 // http://localhost:9999/02/koa/serverInfo
 
 router.post('/user/registering', userRegistrationController)
-// // http://localhost:9999/user/registering
-// // {
-// // 	"userName": "u00001",
-// // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-// // }
+// http://localhost:9999/user/registering
+// {
+// 	"userName": "u00001",
+// 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+//  "passwordHint": "YYYYYYYYYYYYYYY",
+// }
+
+router.post('/user/login', userLoginController)
+// http://localhost:9999/user/login
+// {
+// 	"userName": "u00001",
+// 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// }
+
+router.get('/user/existsCheck', checkUserExistsCheckController)
+// http://localhost:9999/user/existsCheck?username=xxxxxxx
 
 
 
