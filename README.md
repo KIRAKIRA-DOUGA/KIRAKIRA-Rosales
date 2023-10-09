@@ -5,6 +5,9 @@ KIRAKIRA-Rosales, The RESTful Back-end API Created by koa.
 
 ## 开发
 ```sh
+# 先设置环境变量，需要设置的环境变量参见：/.env.powershell.temp
+
+# 启动服务
 npm install
 npm run dev
 
