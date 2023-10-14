@@ -1,0 +1,72 @@
+name: Sync Dto Files to Front-end Repo
+
+on:
+  push:
+    paths:
+      - 'src/controller/UserControllerDto.d.ts'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Source Repo
+      uses: actions/checkout@v2
+
+    - name: Checkout Target Repo
+      uses: actions/checkout@v2
+      with:
+        repository: KIRAKIRA-DOUGA/KIRAKIRA-Cerasus
+        ref: develop
+        token: ${{ secrets.CFDXKK_TOKEN }}
+        path: /tmp/target-repo
+
+    - name: Sync Files
+      run: |
+        set -e
+        declare -a filesToSync=("src/controller/UserControllerDto.d.ts:composables/api/User/UserControllerDto.d.ts")
+
+        for item in "${filesToSync[@]}"; do
+          IFS=":" read -ra ADDR <<< "$item"
+          srcPath="${ADDR[0]}"
+          destPath="/tmp/target-repo/${ADDR[1]}"
+          currentTimeStamp=$(date +%s)
+
+          if [ -e "$srcPath" ]; then
+            if [ -d "$srcPath" ]; then
+              cp -r "$srcPath"/* "$destPath"/
+            else
+              cp "$srcPath" "$destPath"
+            fi
+          else
+            if [ -f "$destPath" ]; then
+              mv "$destPath" "$(dirname "$destPath")/${currentTimeStamp}_deleted_$(basename "$destPath")"
+            elif [ -d "$destPath" ]; then
+              for file in "$destPath"/*; do
+                mv "$file" "$destPath/${currentTimeStamp}_deleted_$(basename "$file")"
+              done
+            fi
+          fi
+        done
+
+    - name: Check for file changes
+      id: check_changes
+      run: |
+        cd /tmp/target-repo
+        if git diff --quiet; then
+          echo "No changes detected. Exiting..."
+          echo "::set-output name=has_changes::false"
+        else
+          echo "Changes detected."
+          echo "::set-output name=has_changes::true"
+        fi
+
+    - name: Create Pull Request
+      if: steps.check_changes.outputs.has_changes == 'true'
+      uses: peter-evans/create-pull-request@v3
+      with:
+        path: /tmp/target-repo
+        commit-message: Update synced files-${{ github.run_id }}
+        title: Update synced files-${{ github.run_id }}
+        branch: sync-files-branch-${{ github.run_id }}
+        base: develop
+        token: ${{ secrets.CFDXKK_TOKEN }}
