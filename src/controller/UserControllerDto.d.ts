@@ -57,7 +57,7 @@ export type UserExistsCheckDataDto = {
 /**
  * 验证用户是否已经存在的返回参数
  * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
- * @param exists 用户存在或者查询失败（悲观）都会返回 true，不存在返回 false // WARN 注意：用户存在或者查询失败时都会返回 true
+ * @param exists 用户存在或者查询失败（悲观）都会返回 true，不存在返回 false // WARN 注意：用户存在或查询失败时都会返回 true
  * @param message 附加的文本消息
  */
 export type UserExistsCheckResultDto = {
