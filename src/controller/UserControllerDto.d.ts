@@ -10,7 +10,7 @@ export type UserRegistrationDataDto = {
 }
 
 /**
- * 用户注册返回的参数
+ * 用户注册的返回参数
  * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
  * @param token 如果注册成功，则返回一个 token，如果注册失败，则 token 是一个假值（undefined、null 或 ''）
  * @param message 附加的文本消息
@@ -32,7 +32,7 @@ export type UserLoginDataDto = {
 }
 
 /**
- * 用户登录返回的参数
+ * 用户登录的返回参数
  * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
  * @param token 如果登录成功，则返回一个 token，如果登录失败，则 token 是一个假值（undefined、null 或 ''）
  * @param message 附加的文本消息
@@ -55,9 +55,9 @@ export type UserExistsCheckDataDto = {
 }
 
 /**
- * 验证用户是否存在返回的参数
+ * 验证用户是否已经存在的返回参数
  * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
- * @param exists 用户存在或者查询失败（悲观）都会返回 true，不存在返回 false // WARN 注意：用户存在和查询失败时都会返回 true
+ * @param exists 用户存在或者查询失败（悲观）都会返回 true，不存在返回 false // WARN 注意：用户存在或者查询失败时都会返回 true
  * @param message 附加的文本消息
  */
 export type UserExistsCheckResultDto = {
