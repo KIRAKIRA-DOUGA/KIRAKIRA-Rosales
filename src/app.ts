@@ -16,7 +16,9 @@ app
 	.use(bodyParser())
 	.use(router.routes()) // 使用 koa-router
 	.use(router.allowedMethods()) // 所有路由中间件调用完成，ctx.status 仍为空或 404，程序自动丰富请求的响应头，方便 debug 或 handle
-	.use(cors()) // 允许跨域
+	.use(cors({
+		credentials: true, // 允许跨域，并且允许保存跨域的 Cookie
+	}))
 
 await connectMongoDBCluster().catch(error => {
 	console.error('ERROR', '无法连接到 MongoDB, 错误原因：', error)
@@ -28,7 +30,9 @@ if (serverEnv && serverEnv !== 'dev') { // 非开发环境，启用 https（需�
 		key: fs.readFileSync('/usr/src/app/ssl/privkey.pem', 'utf8'),
 		cert: fs.readFileSync('/usr/src/app/ssl/fullchain.pem', 'utf8'),
 	}, app.callback()).listen(SERVER_PORT)
-} else { // 开发环境
-	app
-		.listen(SERVER_PORT) // 监听指定端口
+} else { // 开发环境，使用自签名证书
+	https.createServer({
+		key: fs.readFileSync('src/ssl/key.pem', 'utf8'),
+		cert: fs.readFileSync('src/ssl/cert.pem', 'utf8'),
+	}, app.callback()).listen(SERVER_PORT)
 }
