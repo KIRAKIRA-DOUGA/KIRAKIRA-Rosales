@@ -94,3 +94,38 @@ export const selectDataFromMongoDB = async <T>(where: QueryType<T>, select: Sele
 		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
 	}
 }
+
+export const getNextSequenceValuePool = async (sequenceId: string, schema: Schema, collectionName: string): Promise< DbPoolResultType<number> > => {
+	try {
+		let mongoModel
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model(collectionName, schema)
+		}
+		try {
+			let sequenceDocument = await mongoModel.findOne({ _id: sequenceId })
+			if (!sequenceDocument) {
+				sequenceDocument = await mongoModel.findOneAndUpdate(
+					{ _id: sequenceId },
+					{ $inc: { sequenceValue: 1000 } }, // 当文档首次创建时，设置增量为1000
+					{ upsert: true, new: true },
+				)
+			} else {
+				sequenceDocument = await mongoModel.findOneAndUpdate(
+					{ _id: sequenceId },
+					{ $inc: { sequenceValue: 1 } }, // 当文档已存在时，只增加1
+					{ new: true },
+				)
+			}
+			return { success: true, message: '自增 ID 查询成功', result: [sequenceDocument.sequenceValue] }
+		} catch (error) {
+			console.error('ERROR', '自增 ID 查询失败：', error)
+			throw { success: false, message: '自增 ID 查询失败', error }
+		}
+	} catch (error) {
+		console.error('ERROR', 'getNextSequenceValuePool 发生错误')
+		throw { success: false, message: '自增 ID 查询时发生错误', error }
+	}
+}

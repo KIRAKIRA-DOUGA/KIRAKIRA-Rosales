@@ -2,6 +2,7 @@
  * 用户注册提交的参数
  * @param username 用户名
  * @param passwordHash 在前端已经 Hash 过一次的的密码
+ * @param passwordHint 密码提示
  */
 export type UserRegistrationDataDto = {
 	username: string;
@@ -12,11 +13,13 @@ export type UserRegistrationDataDto = {
 /**
  * 用户注册的返回参数
  * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
+ * @param uid 用户 ID
  * @param token 如果注册成功，则返回一个 token，如果注册失败，则 token 是一个假值（undefined、null 或 ''）
  * @param message 附加的文本消息
  */
 export type UserRegistrationResultDto = {
 	success: boolean;
+	uid?: number;
 	token?: string;
 	message?: string;
 }
@@ -34,12 +37,16 @@ export type UserLoginDataDto = {
 /**
  * 用户登录的返回参数
  * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
+ * @param username 用户名
+ * @param uid 用户 ID
  * @param token 如果登录成功，则返回一个 token，如果登录失败，则 token 是一个假值（undefined、null 或 ''）
+ * @param passwordHint 密码提示
  * @param message 附加的文本消息
  */
 export type UserLoginResultDto = {
 	success: boolean;
 	username?: string;
+	uid?: number;
 	token?: string;
 	passwordHint?: string;
 	message?: string;

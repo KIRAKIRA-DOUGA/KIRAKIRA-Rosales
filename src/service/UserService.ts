@@ -4,7 +4,8 @@ import { generateSecureRandomString } from '../common/RandomTool.js'
 import { UserExistsCheckDataDto, UserExistsCheckResultDto, UserLoginDataDto, UserLoginResultDto, UserRegistrationDataDto, UserRegistrationResultDto } from '../controller/UserControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import UserSchema from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema } from '../dbPool/schema/UserSchema.js'
+import { getNextSequenceValueService } from './SequenceValueService.js'
 
 type HashPasswordResult = {
 	passwordHashHash: string;
@@ -23,26 +24,31 @@ export const userRegistrationService = async (userRegistrationData: UserRegistra
 			const { username, passwordHint } = userRegistrationData
 			const token = generateSecureRandomString(64)
 			if (passwordHashHash && token) {
-				const { collectionName, schema: userSchema } = UserSchema
-				const schema = new Schema(userSchema)
-				type User = InferSchemaType<typeof schema>
-				const user: User = {
-					username,
-					passwordHashHash,
-					salt,
-					token,
-					passwordHint,
-					editDateTime: new Date().getTime(),
+				const { collectionName, schema: userAuthSchema } = UserAuthSchema
+				const schema = new Schema(userAuthSchema)
+				const uid = (await getNextSequenceValueService('user')).sequenceValue
+				if (uid) {
+					type User = InferSchemaType<typeof schema>
+					const user: User = {
+						uid,
+						username,
+						passwordHashHash,
+						salt,
+						token,
+						passwordHint,
+						editDateTime: new Date().getTime(),
+					}
+					try {
+						await insertData2MongoDB(user, schema, collectionName)
+					} catch (error) {
+						console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
+						return { success: false, message: '用户注册失败：无法保存用户资料' }
+					}
+					return { success: true, uid, token, message: '用户注册成功' }
+				} else {
+					console.error('ERROR', '用户注册失败：UID 获取失败：')
+					return { success: false, message: '用户注册失败：生成用户 ID 失败' }
 				}
-
-				try {
-					await insertData2MongoDB(user, schema, collectionName)
-				} catch (error) {
-					console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
-					return { success: false, message: '用户注册失败：无法保存用户资料' }
-				}
-
-				return { success: true, token, message: '用户注册成功' }
 			} else {
 				console.error('ERROR', '用户注册失败：passwordHashHash 或 token 可能为空')
 				return { success: false, message: '用户注册失败：生成账户资料时失败' }
@@ -67,8 +73,8 @@ export const userLoginService = async (userLoginData: UserLoginDataDto): Promise
 		if (checkUserExistsCheckData(userLoginData)) {
 			const username = userLoginData.username
 
-			const { collectionName, schema: userSchema } = UserSchema
-			const schema = new Schema(userSchema)
+			const { collectionName, schema: userAuthSchema } = UserAuthSchema
+			const schema = new Schema(userAuthSchema)
 			type User = InferSchemaType<typeof schema>
 			const userSaltAndPasswordHintWhere: QueryType<User> = {
 				username: userLoginData.username,
@@ -115,6 +121,7 @@ export const userLoginService = async (userLoginData: UserLoginDataDto): Promise
 
 					const userLoginSelect: SelectType<User> = {
 						username: 1,
+						uid: 1,
 						token: 1,
 						passwordHint: 1,
 					}
@@ -130,7 +137,7 @@ export const userLoginService = async (userLoginData: UserLoginDataDto): Promise
 					if (result && result.success && result.result) {
 						const resultLength = result.result?.length
 						if (resultLength === 1) {
-							return { success: true, username: result.result?.[0].username, token: result.result?.[0].token, message: '用户登录成功' }
+							return { success: true, username: result.result?.[0].username, uid: result.result?.[0].uid, token: result.result?.[0].token, message: '用户登录成功' }
 						} else {
 							console.error('ERROR', `用户登录失败：查询失败，或者结果长度不为 1，用户名：【${username}】`)
 							return { success: false, username, passwordHint, message: '用户登录失败：查询结果异常' }
@@ -162,8 +169,8 @@ export const userLoginService = async (userLoginData: UserLoginDataDto): Promise
 export const checkUserExistsCheckService = async (serExistsCheckData: UserExistsCheckDataDto): Promise<UserExistsCheckResultDto> => {
 	try {
 		if (checkUserExistsCheckData(serExistsCheckData)) {
-			const { collectionName, schema: userSchema } = UserSchema
-			const schema = new Schema(userSchema)
+			const { collectionName, schema: userAuthSchema } = UserAuthSchema
+			const schema = new Schema(userAuthSchema)
 			type User = InferSchemaType<typeof schema>
 			const where: QueryType<User> = {
 				username: serExistsCheckData.username,
@@ -259,7 +266,7 @@ const getHashPasswordAndSalt = async (userRegistrationData: UserRegistrationData
 }
 
 /**
- * 通过用户传入的盐，二次 Hash 密码，让用户密码可以安全存储在 DB 中
+ * 通过用户传入的盐，二次 Hash 密码，获取的结果将与数据库中的值比对是否一致
  * @param userRegistrationData | UserLoginDataDto 用户注册或者登录时的信息
  * @param salt 盐
  * @returns string 被 Hash 后的密码

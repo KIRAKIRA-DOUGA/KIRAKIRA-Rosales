@@ -16,13 +16,16 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 	
-	ctx.cookies.set('token', userRegistrationResult.token, {
+	const cookieOption = {
 		httpOnly: true, // 仅 HTTP 访问，浏览器中的 Js 无法访问。
 		secure: true,
-		sameSite: 'none',
+		sameSite: 'none' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		// domain: 'yourdomain.com'   // 如果你在生产环境，可以设置 domain
-	})
+		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
+	}
+	ctx.cookies.set('token', userRegistrationResult.token, cookieOption)
+	ctx.cookies.set('username', data?.username, cookieOption)
+	ctx.cookies.set('uid', `${userRegistrationResult.uid}`, cookieOption)
 	ctx.body = userRegistrationResult
 	await next()
 }
@@ -39,13 +42,17 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 		passwordHash: data?.passwordHash,
 	}
 	const userLoginResult = await userLoginService(userRegistrationData)
-	ctx.cookies.set('token', userLoginResult.token, {
+
+	const cookieOption = {
 		httpOnly: true, // 仅 HTTP 访问，浏览器中的 Js 无法访问。
 		secure: true,
-		sameSite: 'none',
+		sameSite: 'none' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		// domain: 'yourdomain.com'   // 如果你在生产环境，可以设置 domain
-	})
+		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
+	}
+	ctx.cookies.set('token', userLoginResult.token, cookieOption)
+	ctx.cookies.set('username', userLoginResult.username, cookieOption)
+	ctx.cookies.set('uid', `${userLoginResult.uid}`, cookieOption)
 	ctx.body = userLoginResult
 	await next()
 }
