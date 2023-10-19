@@ -15,11 +15,11 @@
 const VideoSchema = {
 	schema: {
 		videoId: { type: Number, unique: true, required: true },
-		link: { type: Number, unique: true, required: true },
+		link: { type: String, unique: true, required: true },
 		image: { type: String, required: true },
 		updateDate: { type: Number, required: true },
 		watchedCount: { type: Number, required: true },
-		uploader: { type: Number, required: true },
+		uploader: { type: String, required: true },
 		uploaderId: { type: Number, required: true },
 		duration: { type: Number, required: true },
 		description: String,

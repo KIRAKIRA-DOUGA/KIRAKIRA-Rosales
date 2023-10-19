@@ -3,7 +3,7 @@ import mongoose, { Model, Schema } from 'mongoose'
 import { DbPoolResultType, QueryType, SelectType } from './DbClusterPoolTypes.js'
 
 /**
- * 连接 MongoDB 复制集，应当在系统初始化时调用
+ * 连接 MongoDB 复制集，这个方法应当在系统初始化时调用
  */
 export const connectMongoDBCluster = async (): Promise<void> => {
 	try {
@@ -49,6 +49,13 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 	}
 }
 
+/**
+ * 向数据库中插入数据
+ * @param data 被插入的数据
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 数据即将插入的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @returns 插入数据的状态和结果
+ */
 export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionName: string): Promise< DbPoolResultType<T> > => {
 	try {
 		let mongoModel: Model<T>
@@ -73,6 +80,14 @@ export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionN
 	}
 }
 
+/**
+ * 在 MongoDB 数据库中查找数据
+ * @param where 查询条件
+ * @param select 投影（可以理解为 SQL 的 SELECT 子句）
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @returns 查询状态和结果
+ */
 export const selectDataFromMongoDB = async <T>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string): Promise< DbPoolResultType<T> > => {
 	try {
 		let mongoModel: Model<T>
@@ -95,7 +110,16 @@ export const selectDataFromMongoDB = async <T>(where: QueryType<T>, select: Sele
 	}
 }
 
-export const getNextSequenceValuePool = async (sequenceId: string, schema: Schema, collectionName: string): Promise< DbPoolResultType<number> > => {
+/**
+ * 获取自增序列的下一个值，并自增
+ * @param sequenceId 自增序列的 key
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param sequenceDefaultNumber 序列的初始值，默认：0，如果序列已创建，则无效，该值可以为负数
+ * @parma sequenceStep 序列的步长，默认：1，每次调用该方法时可以指定不同的步长，该值可以为负数
+ * @returns 查询状态和结果，应为自增序列的下一个值
+ */
+export const getNextSequenceValuePool = async (sequenceId: string, schema: Schema, collectionName: string, sequenceDefaultNumber: number = 0, sequenceStep: number = 1): Promise< DbPoolResultType<number> > => {
 	try {
 		let mongoModel
 		// 检查模型是否已存在
@@ -104,18 +128,20 @@ export const getNextSequenceValuePool = async (sequenceId: string, schema: Schem
 		} else {
 			mongoModel = mongoose.model(collectionName, schema)
 		}
+		// TODO pass 2233 114514...
+		// TODO 为 kV ID 保留 100 位
 		try {
 			let sequenceDocument = await mongoModel.findOne({ _id: sequenceId })
 			if (!sequenceDocument) {
 				sequenceDocument = await mongoModel.findOneAndUpdate(
 					{ _id: sequenceId },
-					{ $inc: { sequenceValue: 1000 } }, // 当文档首次创建时，设置增量为1000
+					{ $inc: { sequenceValue: sequenceDefaultNumber } }, // 当文档首次创建时，设置增量为1000
 					{ upsert: true, new: true },
 				)
 			} else {
 				sequenceDocument = await mongoModel.findOneAndUpdate(
 					{ _id: sequenceId },
-					{ $inc: { sequenceValue: 1 } }, // 当文档已存在时，只增加1
+					{ $inc: { sequenceValue: sequenceStep } }, // 当文档已存在时，只增加1
 					{ new: true },
 				)
 			}

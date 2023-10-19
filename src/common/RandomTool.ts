@@ -32,7 +32,6 @@ export const generateSecureRandomString = (length: number): string => {
 	}
 }
 
-
 /**
  * 生成可能被预测的随机字符串，性能较好 // WARN
  *
@@ -57,4 +56,18 @@ export const generateRandomString = (length: number): string => {
 		console.error('something error in function generateRandomString', e)
 		return ''
 	}
+}
+
+/**
+ * 返回一个区间中的随机整数（包括区间两端的数）
+ * @param num1 第一个数
+ * @param num2 第二个数
+ * @returns 两个数区间的一个随机整数
+ */
+export const getRandomNumberInRange = (num1: number, num2: number): number => {
+	// 如果 num1 大于 num2，交换它们的值
+	if (num1 > num2) {
+		[num1, num2] = [num2, num1]
+	}
+	return Math.floor(Math.random() * (num2 - num1 + 1)) + num1
 }

@@ -2,8 +2,11 @@ import { Schema } from 'mongoose'
 import { getNextSequenceValuePool } from '../dbPool/DbClusterPool.js'
 import { SequenceValueSchema } from '../dbPool/schema/sequenceSchema.js'
 
+// NOTE 自增序列默认会跳过的值
+const __DEFAULT_SEQUENCE_EJECT__: number[] = [9, 42, 233, 404, 2233, 10388, 10492, 114514]
+
 // 自增 ID 的类型
-type SequenceIdType = 'user' | 'video'
+type SequenceIdType = 'user' | 'video' | 'test'
 
 /**
  * 获取自增 ID 的结果
@@ -19,14 +22,20 @@ type SequenceNumberResultType = {
 	message?: string;
 }
 
-export const getNextSequenceValueService = async (sequenceId: SequenceIdType): Promise<SequenceNumberResultType> => {
+/**
+ * 获取自增序列的下一个值
+ * @param sequenceId 自增序列的 key
+ * @param sequenceDefaultNumber 序列的初始值，默认：0，如果序列已创建，则无效，该值可以为负数
+ * @parma sequenceStep 序列的步长，默认：1，每次调用该方法时可以指定不同的步长，该值可以为负数
+ * @returns 查询状态和结果，应为自增序列的下一个值
+ */
+export const getNextSequenceValueService = async (sequenceId: SequenceIdType, sequenceDefaultNumber: number = 0, sequenceStep: number = 1): Promise<SequenceNumberResultType> => {
 	try {
 		if (sequenceId) {
 			const { collectionName, schema: sequenceValueSchema } = SequenceValueSchema
 			const schema = new Schema(sequenceValueSchema)
-
 			try {
-				const getNextSequenceValue = await getNextSequenceValuePool(sequenceId, schema, collectionName)
+				const getNextSequenceValue = await getNextSequenceValuePool(sequenceId, schema, collectionName, sequenceDefaultNumber, sequenceStep)
 				const sequenceValue = getNextSequenceValue?.result?.[0]
 				if (getNextSequenceValue.success && sequenceValue !== null && sequenceValue !== undefined) {
 					return { success: true, sequenceId, sequenceValue, message: '获取自增 ID 成功' }
@@ -47,3 +56,36 @@ export const getNextSequenceValueService = async (sequenceId: SequenceIdType): P
 		return { success: false, message: '程序错误，获取自增 ID 的程序执行时出现异常' }
 	}
 }
+
+/**
+ * 获取自增序列的下一个值，但是可以跳过 eject 数组中的 “非法值” 直到自增到下一个 “合法” 的值
+ * @param sequenceId 自增序列的 key
+ * @param eject 创建序列时主动跳过的数字的数组，需要每次调用该函数时指定，如果不指定则会使用 __DEFAULT_SEQUENCE_EJECT__ 作为缺省的跳过数组
+ * @param sequenceDefaultNumber 序列的初始值，默认：0，如果序列已创建，则无效，该值可以为负数
+ * @param sequenceStep 序列的步长，默认：1，每次调用该方法时可以指定不同的步长，该值可以为负数
+ * @returns 查询状态和结果，应为自增序列的下一个值
+ */
+export const getNextSequenceValueEjectService = async (sequenceId: SequenceIdType, eject: number[] = __DEFAULT_SEQUENCE_EJECT__, sequenceDefaultNumber: number = 0, sequenceStep: number = 1): Promise<SequenceNumberResultType> => {
+	try {
+		let getNextSequenceValueServiceResult: SequenceNumberResultType
+		let nextSequenceValue: number
+		do {
+			getNextSequenceValueServiceResult = await getNextSequenceValueService(sequenceId, sequenceDefaultNumber, sequenceStep)
+			nextSequenceValue = getNextSequenceValueServiceResult?.sequenceValue
+
+			// 如果获取失败或者返回的值为空，则直接跳出循环
+			if (!getNextSequenceValueServiceResult.success || nextSequenceValue === null || nextSequenceValue === undefined) {
+				console.error('ERROR', '循环获取自增 ID 时出现异常，数据异常')
+				return { success: false, sequenceId, message: '循环获取自增 ID 时出现异常，返回的结果可能为空或不成功' }
+			}
+		} while (eject && eject.includes(nextSequenceValue))
+		return { success: true, sequenceId, sequenceValue: nextSequenceValue, message: '获取自增序列成功' }
+	} catch (error) {
+		console.error('ERROR', '循环获取自增 ID 时出现异常')
+		return { success: false, sequenceId, message: '循环获取自增 ID 的程序执行时出现异常' }
+	}
+}
+
+
+
+

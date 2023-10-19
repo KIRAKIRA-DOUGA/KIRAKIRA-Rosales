@@ -27,7 +27,7 @@ export const userRegistrationService = async (userRegistrationData: UserRegistra
 				const { collectionName, schema: userAuthSchema } = UserAuthSchema
 				const schema = new Schema(userAuthSchema)
 				const uid = (await getNextSequenceValueService('user')).sequenceValue
-				if (uid) {
+				if (uid !== null && uid !== undefined) {
 					type User = InferSchemaType<typeof schema>
 					const user: User = {
 						uid,
@@ -211,6 +211,7 @@ export const checkUserExistsCheckService = async (serExistsCheckData: UserExists
  * @returns boolean 如果合法则返回 true
  */
 const checkUserRegistrationData = (userRegistrationData: UserRegistrationDataDto): boolean => {
+	// TODO // WARN 这里可能需要更安全的校验机制
 	return (!!userRegistrationData.passwordHash && !!userRegistrationData.username)
 }
 
@@ -322,5 +323,6 @@ const getHashPasswordBySalt = async (userRegistrationData: UserRegistrationDataD
  * @returns boolean 合法则返回 true
  */
 const checkUserExistsCheckData = (userExistsCheckData: UserExistsCheckDataDto): boolean => {
+	// TODO // WARN 这里可能需要更安全的校验机制
 	return !!userExistsCheckData.username
 }
