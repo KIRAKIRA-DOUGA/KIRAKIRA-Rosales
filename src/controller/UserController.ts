@@ -4,7 +4,8 @@ import { UserExistsCheckDataDto, UserLoginDataDto, UserRegistrationDataDto } fro
 
 /**
  * 用户注册
- * @param koa context
+ * @param ctx context
+ * @param next context
  * @returns 用户注册的结果，如果注册成功会包含 token
  */
 export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => {
@@ -32,7 +33,8 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 
 /**
  * 用户登录
- * @param koa context
+ * @param ctx context
+ * @param next context
  * @returns 用户登录的结果，如果登录成功会包含 token
  */
 export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
@@ -59,7 +61,8 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 检查一个用户是否存在
- * @param koa context
+ * @param ctx context
+ * @param next context
  * @return checkUserExistsCheckResultDto 检查结果，如果存在或查询失败则 exists: true
  */
 export const checkUserExistsCheckController = async (ctx: koaCtx, next: koaNext) => {
