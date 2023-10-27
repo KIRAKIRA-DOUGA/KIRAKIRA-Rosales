@@ -20,7 +20,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	const cookieOption = {
 		httpOnly: true, // 仅 HTTP 访问，浏览器中的 Js 无法访问。
 		secure: true,
-		sameSite: 'none' as boolean | 'none' | 'strict' | 'lax',
+		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
 		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
 	}
@@ -48,7 +48,7 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	const cookieOption = {
 		httpOnly: true, // 仅 HTTP 访问，浏览器中的 Js 无法访问。
 		secure: true,
-		sameSite: 'none' as boolean | 'none' | 'strict' | 'lax',
+		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
 		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
 	}
