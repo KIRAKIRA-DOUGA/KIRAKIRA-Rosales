@@ -14,10 +14,6 @@ RUN npm install
 # 将其他源代码文件复制到工作目录
 COPY . .
 
-# 设置环境变量，默认暴露的端口为3000
-ENV SERVER_PORT 3000
-EXPOSE $SERVER_PORT
-
 # build
 RUN npm run build
 
