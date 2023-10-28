@@ -19,7 +19,6 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		duration: data.duration,
 		description: data.description,
 	}
-	console.log('uploadVideoRequest', uploadVideoRequest)
 	const uploadVideoResponse = await updateVideoService(uploadVideoRequest)
 	ctx.body = uploadVideoResponse
 	await next()

@@ -35,7 +35,6 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					description: uploadVideoRequest.description,
 					editDateTime: nowDate,
 				}
-				console.log('video', video)
 				try {
 					await insertData2MongoDB(video, schema, collectionName)
 					return { success: true, videoId, message: '视频上传成功' }
