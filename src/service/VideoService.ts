@@ -1,5 +1,5 @@
 import { InferSchemaType, Schema } from 'mongoose'
-import { getVideoByKvidRequestDto, GetVideoByKvidResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, videoPartDto } from '../controller/VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import VideoSchema from '../dbPool/schema/VideoSchema.js'
@@ -114,7 +114,7 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
  * @param uploadVideoRequest 根据 kvid 获取视频的请求携带的请求载荷
  * @returns 视频数据
  */
-export const getVideoByKvidService = async (getVideoByKvidRequest: getVideoByKvidRequestDto): Promise<GetVideoByKvidResponseDto> => {
+export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvidRequestDto): Promise<GetVideoByKvidResponseDto> => {
 	try {
 		if (checkGetVideoByKvidRequest(getVideoByKvidRequest)) {
 			const { collectionName, schema: videoSchema } = VideoSchema
@@ -194,7 +194,7 @@ const checkUploadVideoRequest = (uploadVideoRequest: UploadVideoRequestDto) => {
  * @param videoPartDate 每一 P 视频的数据
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
-const checkVideoPartData = (videoPartDate: videoPartDto) => {
+const checkVideoPartData = (videoPartDate: VideoPartDto) => {
 	return (
 		videoPartDate.id !== null && videoPartDate.id !== undefined
 		&& videoPartDate.link
@@ -207,6 +207,6 @@ const checkVideoPartData = (videoPartDate: videoPartDto) => {
  * @param getVideoByKvidRequest 根据 kvid 获取视频数据时携带的请求参数
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
-const checkGetVideoByKvidRequest = (getVideoByKvidRequest: getVideoByKvidRequestDto) => {
+const checkGetVideoByKvidRequest = (getVideoByKvidRequest: GetVideoByKvidRequestDto) => {
 	return (getVideoByKvidRequest.videoId !== null && getVideoByKvidRequest.videoId !== undefined)
 }

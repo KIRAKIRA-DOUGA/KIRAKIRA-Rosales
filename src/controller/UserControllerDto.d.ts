@@ -1,74 +1,107 @@
 /**
  * 用户注册提交的参数
- * @param username 用户名
- * @param passwordHash 在前端已经 Hash 过一次的的密码
- * @param passwordHint 密码提示
  */
-export type UserRegistrationDataDto = {
-	username: string;
+export type UserRegistrationRequestDto = {
+	/** 用户邮箱 */
+	email: string;
+	/** 在前端已经 Hash 过一次的的密码 */
 	passwordHash: string;
+	/** 密码提示 */
 	passwordHint?: string;
 }
 
 /**
  * 用户注册的返回参数
- * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
- * @param uid 用户 ID
- * @param token 如果注册成功，则返回一个 token，如果注册失败，则 token 是一个假值（undefined、null 或 ''）
- * @param message 附加的文本消息
  */
-export type UserRegistrationResultDto = {
+export type UserRegistrationResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
+	/** 用户 ID */
 	uid?: number;
+	/** 如果注册成功，则返回一个 token，如果注册失败，则 token 是一个假值（undefined、null 或 ""） */
 	token?: string;
+	/** 附加的文本消息 */
 	message?: string;
 }
 
 /**
  * 用户登录提交的参数
- * @param username 用户名
- * @param passwordHash 在前端已经 Hash 过一次的的密码
  */
-export type UserLoginDataDto = {
-	username: string;
+export type UserLoginRequestDto = {
+	/** 用户邮箱 */
+	email: string;
+	/** 在前端已经 Hash 过一次的的密码 */
 	passwordHash: string;
 }
 
 /**
  * 用户登录的返回参数
- * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
- * @param username 用户名
- * @param uid 用户 ID
- * @param token 如果登录成功，则返回一个 token，如果登录失败，则 token 是一个假值（undefined、null 或 ''）
- * @param passwordHint 密码提示
- * @param message 附加的文本消息
  */
-export type UserLoginResultDto = {
+export type UserLoginResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
-	username?: string;
+	/** 用户邮箱 */
+	email?: string;
+	/** 用户 ID */
 	uid?: number;
+	/** 如果登录成功，则返回一个 token，如果登录失败，则 token 是一个假值（undefined、null 或 ''） */
 	token?: string;
+	/** 密码提示 */
 	passwordHint?: string;
+	/** 附加的文本消息 */
 	message?: string;
 }
 
-
 /**
- * 验证用户是否存在提交的参数
- * @param username 用户名
+ * 验证用户邮箱是否存在提交的参数
  */
-export type UserExistsCheckDataDto = {
-	username: string;
+export type UserExistsCheckRequestDto = {
+	/** 用户邮箱 */
+	email: string;
 }
 
 /**
- * 验证用户是否已经存在的返回参数
- * @param success 执行结果，程序执行成功，返回 true，程序执行失败，返回 false
- * @param exists 用户存在或者查询失败（悲观）都会返回 true，不存在返回 false // WARN 注意：用户存在或查询失败时都会返回 true
- * @param message 附加的文本消息
+ * 验证用户邮箱是否已经存在的返回参数
  */
-export type UserExistsCheckResultDto = {
+export type UserExistsCheckResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
-	exists: boolean;
+	/** 用户存在或者查询失败（悲观）都会返回 true，不存在返回 false */
+	exists: boolean;// WARN 注意：用户已存在或查询失败时都会返回 true
+	/** 附加的文本消息 */
 	message?: string;
+}
+
+/**
+ * 用户更改邮箱的请求的参数
+ */
+export type UpdateUserEmailRequestDto = {
+	/** 用户 ID */
+	uid: number;
+	/** 用户的旧邮箱 */
+	oldEmail: string;
+	/** 用户的新邮箱 */
+	newEmail: string;
+	/** 经过一次 Hash 的用户密码 */
+	passwordHash: string;
+}
+
+/**
+ * 用户更改邮箱返回的参数
+ */
+export type UpdateUserEmailResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 等待被 Hash 的密码和用户信息
+ */
+export type BeforeHashPasswordDataType = {
+	/** 用户邮箱 */
+	email: string;
+	/** 在前端已经 Hash 过一次的的密码 */
+	passwordHash: string;
 }

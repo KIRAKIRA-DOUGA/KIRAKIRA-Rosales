@@ -1,6 +1,6 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkUserExistsCheckController, userLoginController, userRegistrationController } from '../controller/UserController.js'
+import { updateUserEmailController, userExistsCheckController, userLoginController, userRegistrationController } from '../controller/UserController.js'
 import { getThumbVideoController, getVideoByKvidController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
@@ -20,7 +20,7 @@ router.get('/02/koa/hello', helloWorld) // 测试 // DELETE
 router.post('/user/registering', userRegistrationController) // 用户注册
 // https://localhost:9999/user/registering
 // {
-// 	"userName": "u00001",
+// 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 //  "passwordHint": "YYYYYYYYYYYYYYY"
 // }
@@ -28,14 +28,21 @@ router.post('/user/registering', userRegistrationController) // 用户注册
 router.post('/user/login', userLoginController) // 用户登录
 // https://localhost:9999/user/login
 // {
-// 	"userName": "u00001",
+// 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 // }
 
-router.get('/user/existsCheck', checkUserExistsCheckController) // 注册用户时检查用户是否存在
-// https://localhost:9999/user/existsCheck?username=xxxxxxx
+router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检查用户是否存在
+// https://localhost:9999/user/existsCheck?email=xxxxxxx
 
-
+router.post('/user/update/email', updateUserEmailController) // 用户登录
+// https://localhost:9999/user/update/email
+// {
+// 	"uid": "XXXXXXXXX",
+// 	"oldEmail": "aaa@aaa.aaa",
+// 	"newEmail": "bbb@bbb.bbb",
+// 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+// }
 
 
 

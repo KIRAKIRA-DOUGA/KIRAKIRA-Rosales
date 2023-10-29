@@ -1,6 +1,6 @@
 import { ReadPreferenceMode } from 'mongodb'
 import mongoose, { Model, Schema } from 'mongoose'
-import { DbPoolResultType, QueryType, SelectType } from './DbClusterPoolTypes.js'
+import { DbPoolResultType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 
 /**
  * 连接 MongoDB 复制集，这个方法应当在系统初始化时调用
@@ -111,7 +111,51 @@ export const selectDataFromMongoDB = async <T>(where: QueryType<T>, select: Sele
 }
 
 /**
+ * 向数据库中更新数据
+ * @param where 查询条件
+ * @param update 需要更新的数据
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @returns 更新数据的结果
+ */
+export const updateData4MongoDB = async <T>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string): Promise<UpdateResultType> => {
+	try {
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+		try {
+			const updateResult = await mongoModel.updateMany(where, { $set: update })
+			const acknowledged = updateResult.acknowledged
+			const matchedCount = updateResult.matchedCount
+			const modifiedCount = updateResult.modifiedCount
+			if (acknowledged || matchedCount > 0) {
+				if (modifiedCount > 0) {
+					return { success: true, message: '数据更新成功', result: { acknowledged, matchedCount, modifiedCount } }
+				} else {
+					console.warn('WARN', 'WARNING', '已匹配到数据并尝试更新数据，但数据未（无需）更新，可能是因为数据更新前后的值相同', { where, update })
+					return { success: true, message: '尝试更新数据，但数据无需更新', result: { acknowledged, matchedCount, modifiedCount } }
+				}
+			} else {
+				console.warn('ERROR', '尝试更新数据，但更新失败，因为未匹配到到数据', { where, update })
+				return { success: false, message: '尝试更新数据，但更新失败，可能是未匹配到数据', result: { acknowledged, matchedCount, modifiedCount } }
+			}
+		} catch (error) {
+			console.error('ERROR', '数据更新失败：', error, { where, update })
+			throw { success: false, message: '数据更新失败', error }
+		}
+	} catch (error) {
+		console.error('ERROR', '数据更新失败，未知错误')
+		throw { success: false, message: '数据更新失败，updateData4MongoDB 中发生错误：', error }
+	}
+}
+
+/**
  * 获取自增序列的下一个值，并自增
+ * // WARN 请调用 SequenceValueService 的 getNextSequenceValueEjectService 方法或 getNextSequenceValueService 方法来获取自增值，而不是直接调用 Pool 层
  * @param sequenceId 自增序列的 key
  * @param schema MongoDB Schema 对象
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）

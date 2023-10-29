@@ -1,6 +1,6 @@
 import { getThumbVideoService, getVideoByKvidService, updateVideoService } from '../service/VideoService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { getVideoByKvidRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
 /**
  * 上传视频
@@ -44,7 +44,7 @@ export const getThumbVideoController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const getVideoByKvidController = async (ctx: koaCtx, next: koaNext) => {
 	const videoId = ctx.query.videoId as string
-	const uploadVideoRequest: getVideoByKvidRequestDto = {
+	const uploadVideoRequest: GetVideoByKvidRequestDto = {
 		videoId: videoId ? parseInt(videoId, 10) : -1, // WARN -1 means you can't find any video
 	}
 	const getVideoByKvidResponse = await getVideoByKvidService(uploadVideoRequest)
