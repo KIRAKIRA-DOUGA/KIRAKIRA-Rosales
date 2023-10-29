@@ -1,6 +1,6 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { updateUserEmailController, userExistsCheckController, userLoginController, userRegistrationController } from '../controller/UserController.js'
+import { getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userRegistrationController } from '../controller/UserController.js'
 import { getThumbVideoController, getVideoByKvidController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
@@ -35,7 +35,7 @@ router.post('/user/login', userLoginController) // 用户登录
 router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检查用户是否存在
 // https://localhost:9999/user/existsCheck?email=xxxxxxx
 
-router.post('/user/update/email', updateUserEmailController) // 用户登录
+router.post('/user/update/email', updateUserEmailController) // 更新用户邮箱
 // https://localhost:9999/user/update/email
 // {
 // 	"uid": "XXXXXXXXX",
@@ -44,6 +44,31 @@ router.post('/user/update/email', updateUserEmailController) // 用户登录
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 // }
 
+router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或创建用户信息
+// https://localhost:9999/user/update/info
+// cookie: uid, token
+// {
+// 	"username": "XXXXXXXXX",
+// 	"avatar": "https://xxx.xxx.xxx/xxx.png",
+// 	"userBannerImage": "https://yyy.yyy.yyy/yyy.png",
+// 	"signature": "aaaaaaaaaaaaaaa",
+// 	"gender": "AH-64",
+// 	"label": [
+// 		{
+// 			"id": "0",
+// 			"labelName": "bbbbbb",
+// 		}
+// 	]
+// }
+
+router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户信息
+// https://localhost:9999/user/info
+// cookie: uid, token
+
+
+
+
+
 
 
 
@@ -51,12 +76,19 @@ router.post('/user/update/email', updateUserEmailController) // 用户登录
 router.post('/video/upload', updateVideoController) // 上传视频
 // https://localhost:9999/video/upload
 // {
-// 	"link": "https://video.com/video/0000000001.mp4",
-// 	"image": "https://image.com/image/0000000001.jpg",
-// 	"uploader": "user@user.com",
+// 	"videoPart": [
+// 		{
+// 			"id": "0",
+// 			"videoPartTitle": "2953-day1",
+// 			"link": "https://xxx.xxx.xxx/xxx.mp4"
+// 		}
+// 	],
+// 	"title": "[博物馆奇妙夜] 2953 公民控 VRC 虚拟观赏会（第一天）",
+// 	"image": "https://xxx.xxx.xxx/xxx.png",
+// 	"uploader": "cfdxkk@kirakira.moe",
 // 	"uploaderId": "123",
-// 	"duration": "300",
-// 	"description": "你所热爱的，就是你的生活"
+// 	"duration": "19573",
+// 	"description": "和群里的朋友一起熬夜从凌晨两点看到早上八点。不得不说今年的公民控是真的很精彩。"
 // }
 
 router.get('/video/home', getThumbVideoController) // 获取首页视频

@@ -8,7 +8,7 @@ type VideoPartDto = {
 	videoPartTitle: string;
 	/** 视频直链 */
 	link: string;
-};
+}
 /**
  * 展示视频卡片返回的参数
  */
@@ -27,7 +27,7 @@ export type UploadVideoRequestDto = {
 	duration: number;
 	/** 视频描述 */
 	description?: string;
-};
+}
 
 /**
  * 视频上传的返回的参数
@@ -39,7 +39,7 @@ export type UploadVideoResponseDto = {
 	message?: string;
 	/** 视频 ID */
 	videoId?: number;
-};
+}
 
 // export type ThumbVideoRequestDto = {
 // 	username: string;
@@ -76,7 +76,7 @@ export type ThumbVideoResponseDto = {
 		/** 视频描述 */
 		description?: string;
 	}[];
-};
+}
 
 /**
  * 从视频 ID 获取视频的请求参数
@@ -84,7 +84,7 @@ export type ThumbVideoResponseDto = {
 export type GetVideoByKvidRequestDto = {
 	/** 视频 ID (KVID) */
 	videoId: number;
-};
+}
 
 /**
  * 视频页面需要的响应
@@ -117,4 +117,4 @@ export type GetVideoByKvidResponseDto = {
 		/** 视频描述 */
 		description?: string;
 	};
-};
+}

@@ -1,6 +1,6 @@
 import { ReadPreferenceMode } from 'mongodb'
 import mongoose, { Model, Schema } from 'mongoose'
-import { DbPoolResultType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
+import { DbPoolResultsType, DbPoolResultType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 
 /**
  * 连接 MongoDB 复制集，这个方法应当在系统初始化时调用
@@ -56,7 +56,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
  * @param collectionName 数据即将插入的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @returns 插入数据的状态和结果
  */
-export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionName: string): Promise< DbPoolResultType<T> > => {
+export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionName: string): Promise< DbPoolResultsType<T> > => {
 	try {
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
@@ -88,7 +88,7 @@ export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionN
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @returns 查询状态和结果
  */
-export const selectDataFromMongoDB = async <T>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string): Promise< DbPoolResultType<T> > => {
+export const selectDataFromMongoDB = async <T>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string): Promise< DbPoolResultsType<T> > => {
 	try {
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
@@ -132,7 +132,7 @@ export const updateData4MongoDB = async <T>(where: QueryType<T>, update: UpdateT
 			const acknowledged = updateResult.acknowledged
 			const matchedCount = updateResult.matchedCount
 			const modifiedCount = updateResult.modifiedCount
-			if (acknowledged || matchedCount > 0) {
+			if (acknowledged && matchedCount > 0) {
 				if (modifiedCount > 0) {
 					return { success: true, message: '数据更新成功', result: { acknowledged, matchedCount, modifiedCount } }
 				} else {
@@ -150,6 +150,42 @@ export const updateData4MongoDB = async <T>(where: QueryType<T>, update: UpdateT
 	} catch (error) {
 		console.error('ERROR', '数据更新失败，未知错误')
 		throw { success: false, message: '数据更新失败，updateData4MongoDB 中发生错误：', error }
+	}
+}
+
+/**
+ * 从数据库中寻找一条匹配的数据并更新，然后返回更新后的结果 // WARN 请在业务中避免查询条件匹配到多条数据，如果匹配到多条数据，则只会更新第一条，造成数据不匹配！
+ * @param where 查询条件 // WARN 请在业务中避免查询条件匹配到多条数据，如果匹配到多条数据，则只会更新第一条，造成数据不匹配！
+ * @param update 需要更新的数据
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @returns 更新后的数据
+ */
+export const findOneAndUpdateData4MongoDB = async <T>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string): Promise< DbPoolResultType<T> > => {
+	try {
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+		try {
+			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: true, upsert: true })).toObject() as T
+
+			if (updateResult) {
+				return { success: true, message: '数据更新成功', result: updateResult }
+			} else {
+				console.warn('ERROR', '数据更新失败，没有找到返回结果', { where, update })
+				return { success: false, message: '数据更新失败，没有找到返回结果' }
+			}
+		} catch (error) {
+			console.error('ERROR', '数据更新失败：', error, { where, update })
+			throw { success: false, message: '数据更新失败', error }
+		}
+	} catch (error) {
+		console.error('ERROR', '数据更新失败，未知错误')
+		throw { success: false, message: '数据更新失败，findOneAndUpdateData4MongoDB 中发生错误：', error }
 	}
 }
 
@@ -189,7 +225,7 @@ export const getNextSequenceValuePool = async (sequenceId: string, schema: Schem
 					{ new: true },
 				)
 			}
-			return { success: true, message: '自增 ID 查询成功', result: [sequenceDocument.sequenceValue] }
+			return { success: true, message: '自增 ID 查询成功', result: sequenceDocument.sequenceValue }
 		} catch (error) {
 			console.error('ERROR', '自增 ID 查询失败：', error)
 			throw { success: false, message: '自增 ID 查询失败', error }

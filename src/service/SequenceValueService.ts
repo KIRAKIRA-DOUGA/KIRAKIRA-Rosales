@@ -36,7 +36,7 @@ export const getNextSequenceValueService = async (sequenceId: SequenceIdType, se
 			const schema = new Schema(sequenceValueSchema)
 			try {
 				const getNextSequenceValue = await getNextSequenceValuePool(sequenceId, schema, collectionName, sequenceDefaultNumber, sequenceStep)
-				const sequenceValue = getNextSequenceValue?.result?.[0]
+				const sequenceValue = getNextSequenceValue?.result
 				if (getNextSequenceValue.success && sequenceValue !== null && sequenceValue !== undefined) {
 					return { success: true, sequenceId, sequenceValue, message: '获取自增 ID 成功' }
 				} else {
@@ -58,7 +58,7 @@ export const getNextSequenceValueService = async (sequenceId: SequenceIdType, se
 }
 
 /**
- * 获取自增序列的下一个值，但是可以跳过 eject 数组中的 “非法值” 直到自增到下一个 “合法” 的值
+ * 获取自增序列的下一个值，但是可以跳过 eject 指定数组中的 “非法值” 直到自增到下一个 “合法” 的值
  * @param sequenceId 自增序列的 key
  * @param eject 创建序列时主动跳过的数字的数组，需要每次调用该函数时指定，如果不指定则会使用 __DEFAULT_SEQUENCE_EJECT__ 作为缺省的跳过数组
  * @param sequenceDefaultNumber 序列的初始值，默认：0，如果序列已创建，则无效，该值可以为负数

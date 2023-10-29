@@ -1,6 +1,6 @@
-import { updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -89,5 +89,40 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 		passwordHash: data?.passwordHash,
 	}
 	ctx.body = await updateUserEmailService(userRegistrationData)
+	await next()
+}
+
+/**
+ * 更新或创建用户信息
+ * @param ctx context
+ * @param next context
+ * @return UpdateOrCreateUserInfoResponseDto 更新或创建后的结果和新的用户信息，如果更新成功则 success: true，不成功则 success: false
+ */
+export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<UpdateOrCreateUserInfoRequestDto>
+	const updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto = {
+		username: data?.username,
+		avatar: data?.avatar,
+		userBannerImage: data?.userBannerImage,
+		signature: data?.signature,
+		gender: data?.gender,
+		label: data?.label,
+	}
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	ctx.body = await updateOrCreateUserInfoService(updateOrCreateUserInfoRequest, uid, token)
+	await next()
+}
+
+/**
+ * 更新或创建用户信息
+ * @param ctx context
+ * @param next context
+ * @return GetUserInfoByUidResponseDto 通过 uid 获取到的用户信息，如果更新成功则 success: true，不成功则 success: false
+ */
+export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	ctx.body = await getUserInfoByUidService(uid, token)
 	await next()
 }

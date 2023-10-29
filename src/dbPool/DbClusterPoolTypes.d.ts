@@ -1,14 +1,29 @@
 /**
- * success 操作是否成功
- * message 附加消息
- * error 错误信息（如果有的话）
- * result 数据操作的结果（如果有的话）
+ * 数据操作的结果（结果为对象数组）
+ */
+export type DbPoolResultsType<T> = {
+	/** 操作是否成功 */
+	success: boolean;
+	/** 附加消息 */
+	message: string;
+	/** 错误信息（如果有的话） */
+	error?: unknown;
+	/** 数据操作的结果数组（如果有的话） */
+	result?: T[];
+}
+
+/**
+ * 数据操作的结果（结果为对象）
  */
 export type DbPoolResultType<T> = {
+	/** 操作是否成功 */
 	success: boolean;
+	/** 附加消息 */
 	message: string;
+	/** 错误信息（如果有的话） */
 	error?: unknown;
-	result?: T[];
+	/** 数据操作的结果对象（如果有的话） */
+	result?: T;
 }
 
 /**
