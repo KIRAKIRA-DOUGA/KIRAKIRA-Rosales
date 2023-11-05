@@ -1,7 +1,7 @@
 import { InferSchemaType, Schema } from 'mongoose'
 import { generateSaltedHash } from '../common/HashTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { BeforeHashPasswordDataType, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
@@ -402,6 +402,26 @@ export const getUserInfoByUidService = async (uid: number, token: string): Promi
 	} catch (error) {
 		console.error('ERROR', '获取用户信息时失败，未知错误：', error)
 		return { success: false, message: '获取用户信息时失败，未知错误' }
+	}
+}
+
+export const checkUserTokenService = async (uid: number, token: string): Promise<CheckUserTokenResponseDto> => {
+	try {
+		if (uid !== undefined && uid !== null && token) {
+			const checkUserTokenResult = await checkUserToken(uid, token)
+			if (checkUserTokenResult) {
+				return { success: true, message: '用户校验成功', userTokenOk: true }
+			} else {
+				console.error('ERROR', `用户校验失败！非法用户！用户 UID：${uid}`)
+				return { success: false, message: '用户校验失败！非法用户！', userTokenOk: false }
+			}
+		} else {
+			console.error('ERROR', `用户校验失败！用户 uid 或 token 不存在，用户 UID：${uid}`)
+			return { success: false, message: '用户校验失败！', userTokenOk: false }
+		}
+	} catch {
+		console.error('ERROR', `用户校验异常！用户 UID：${uid}`)
+		return { success: false, message: '用户校验异常！', userTokenOk: false }
 	}
 }
 

@@ -1,13 +1,13 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userRegistrationController } from '../controller/UserController.js'
+import { checkUserTokenController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { getThumbVideoController, getVideoByKvidController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
 
 // router-begin
 
-router.get('/', helloWorld) // 主页，测试 // DELETE
+router.get('/', helloWorld) // 测试 // DELETE
 router.get('/02/koa/hello', helloWorld) // 测试 // DELETE
 // router.get('/02/koa/serverInfo', activeHeartBeatMongoDBShardInfo) // 返回 MongoDB 心跳数据库中存储的心跳数据的连接信息，前提是环境变量中已有心跳数据库连接信息 // DELETE
 // https://localhost:9999/02/koa/serverInfo
@@ -65,9 +65,13 @@ router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户�
 // https://localhost:9999/user/info
 // cookie: uid, token
 
+router.get('/user/check', checkUserTokenController) // 根据 uid, token 校验用户
+// https://localhost:9999/user/check
+// cookie: uid, token
 
 
-
+router.get('/user/logout', userLogoutController) // 清除浏览器中的 cookie（用户登出）
+// https://localhost:9999/user/logout
 
 
 

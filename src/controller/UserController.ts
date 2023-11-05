@@ -1,6 +1,6 @@
-import { getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkUserTokenService, getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -18,7 +18,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 	
 	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 Js 无法访问。
+		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
 		secure: true,
 		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
@@ -46,7 +46,7 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	const userLoginResult = await userLoginService(userRegistrationData)
 
 	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 Js 无法访问。
+		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
 		secure: true,
 		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
@@ -118,11 +118,45 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
  * 更新或创建用户信息
  * @param ctx context
  * @param next context
- * @return GetUserInfoByUidResponseDto 通过 uid 获取到的用户信息，如果更新成功则 success: true，不成功则 success: false
+ * @return GetUserInfoByUidResponseDto 通过 uid 获取到的用户信息，如果获取成功则 success: true，不成功则 success: false
  */
 export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
 	ctx.body = await getUserInfoByUidService(uid, token)
+	await next()
+}
+
+/**
+ * 校验用户 token
+ * @param ctx context
+ * @param next context
+ * @return CheckUserTokenResponseDto 通过 token 中的 uid 和 token 校验用户，如果校验成功则 success: true 并且 userTokenOk: true，不成功则 success: false 或 userTokenOk: false
+ */
+export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	ctx.body = await checkUserTokenService(uid, token)
+	await next()
+}
+
+export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
+	// TODO 理论上这里还可以做一些操作，比如说记录用户登出事件...
+
+	const cookieOption = {
+		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+		secure: true,
+		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+		maxAge: 0, // 立即过期
+		expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
+		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
+	}
+
+	ctx.cookies.set('token', '', cookieOption)
+	ctx.cookies.set('email', '', cookieOption)
+	ctx.cookies.set('uid', '', cookieOption)
+
+	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
+
 	await next()
 }
