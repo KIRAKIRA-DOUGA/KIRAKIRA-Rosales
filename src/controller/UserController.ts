@@ -1,4 +1,4 @@
-import { checkUserTokenService, getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkUserTokenService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
@@ -115,7 +115,7 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 }
 
 /**
- * 更新或创建用户信息
+ * 获取用户信息
  * @param ctx context
  * @param next context
  * @return GetUserInfoByUidResponseDto 通过 uid 获取到的用户信息，如果获取成功则 success: true，不成功则 success: false
@@ -140,6 +140,11 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 	await next()
 }
 
+/**
+ * 用户登出，清除和用户身份相关 Token
+ * @param ctx context
+ * @param next context
+ */
 export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	// TODO 理论上这里还可以做一些操作，比如说记录用户登出事件...
 
@@ -158,5 +163,19 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 
 	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
 
+	await next()
+}
+
+
+/**
+ * 更新用户头像，并获取用于用户上传头像的预签名 URL, 上传限时 60 秒
+ * @param ctx context
+ * @param next context
+ */
+export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	console.log('uuuuuuuuuuuuuu', { uid, token })
+	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
 	await next()
 }

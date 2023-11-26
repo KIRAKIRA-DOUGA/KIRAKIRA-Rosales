@@ -1,6 +1,6 @@
 import Router from 'koa-router'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkUserTokenController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { checkUserTokenController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { getThumbVideoController, getVideoByKvidController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
@@ -73,6 +73,9 @@ router.get('/user/check', checkUserTokenController) // 根据 uid, token 校验�
 router.get('/user/logout', userLogoutController) // 清除浏览器中的 cookie（用户登出）
 // https://localhost:9999/user/logout
 
+router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 获取用于上传头像的预签名 URL, 上传限时 60 秒
+// https://localhost:9999/user/avatar/preUpload
+// cookie: uid, token
 
 
 

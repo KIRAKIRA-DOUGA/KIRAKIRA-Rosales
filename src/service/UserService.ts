@@ -1,10 +1,11 @@
 import { InferSchemaType, Schema } from 'mongoose'
 import { generateSaltedHash } from '../common/HashTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
+import { createR2PutSignedUrl } from '../oss/CreateR2Client.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 
 type HashPasswordResult = {
@@ -405,6 +406,48 @@ export const getUserInfoByUidService = async (uid: number, token: string): Promi
 	}
 }
 
+/**
+ * 更新用户头像，并获取用于用户上传头像的预签名 URL, 上传限时 60 秒
+ * @param uid 用户 ID
+ * @param token 用户 token
+ * @returns 用于用户上传头像的预签名 URL 的结果
+ */
+export const getUserAvatarUploadSignedUrlService = async (uid: number, token: string): Promise<GetUserAvatarUploadSignedUrlResultDto> => {
+	try {
+		if (await checkUserToken(uid, token)) {
+			const now = new Date().getTime()
+			const fileName = `avatar-${generateSecureRandomString(32)}-${now}`
+			
+			const { collectionName, schema: userInfoSchema } = UserInfoSchema
+			const schema = new Schema(userInfoSchema)
+			type UserInfo = InferSchemaType<typeof schema>
+			const updateUserInfoWhere: QueryType<UserInfo> = {
+				uid,
+			}
+			const updateUserInfoUpdate: UserInfo = {
+				uid,
+				avatar: `https://kirafile.com/${fileName}`,
+				label: [],
+				editDateTime: now,
+			}
+			const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schema, collectionName)
+
+			if (updateResult.success) {
+				const signedUrl = await createR2PutSignedUrl('kirakira-file-public-apac', fileName, 60)
+				return { success: true, message: '准备开始上传头像', userAvatarUploadSignedUrl: signedUrl }
+			} else {
+				return { success: false, message: '上传失败，无法更新用户数据' }
+			}
+		} else {
+			console.log('ERROR', '获取上传图片用的预签名 URL 失败，用户不合法', { uid })
+			return { success: false, message: '上传失败，无法获取上传权限' }
+		}
+	} catch (error) {
+		console.log('ERROR', '获取上传图片用的预签名 URL 失败，错误信息', error, { uid })
+	}
+}
+
+
 export const checkUserTokenService = async (uid: number, token: string): Promise<CheckUserTokenResponseDto> => {
 	try {
 		if (uid !== undefined && uid !== null && token) {
@@ -584,7 +627,7 @@ const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequ
  */
 const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 	try {
-		if (uid !== null && uid !== undefined && token) {
+		if (uid !== null && !Number.isNaN(uid) && uid !== undefined && token) {
 			const { collectionName, schema: userAuthSchema } = UserAuthSchema
 			const schema = new Schema(userAuthSchema)
 			type UserAuth = InferSchemaType<typeof schema>
@@ -613,7 +656,7 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 				return false
 			}
 		} else {
-			console.error('ERROR', '查询用户 Token 时出错，必要的参数为空')
+			console.error('ERROR', `查询用户 Token 时出错，必要的参数 uid 或 token为空：【${uid}】`)
 			return false
 		}
 	} catch (error) {
