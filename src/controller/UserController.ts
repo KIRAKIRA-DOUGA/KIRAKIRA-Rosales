@@ -175,7 +175,6 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
-	console.log('uuuuuuuuuuuuuu', { uid, token })
 	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
 	await next()
 }

@@ -1,4 +1,5 @@
 import Router from 'koa-router'
+import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { getThumbVideoController, getVideoByKvidController, updateVideoController } from '../controller/VideoController.js'
@@ -106,6 +107,24 @@ router.get('/video', getVideoByKvidController) // 根据视频 ID (KVID) 获取�
 
 
 
+
+
+
+router.post('/video/danmaku/emit', emitDanmakuController) // 发送弹幕的接口
+// https://localhost:9999/video/danmaku/emit
+// {
+// 	"videoId": 10,
+// 	"uid": 2,
+// 	"time": 5,
+// 	"text": "这是一条测试弹幕",
+// 	"color": "#66CCFF",
+// 	"fontSIze": "medium",
+// 	"mode": "rtl",
+// 	"enableRainbow": false
+// }
+
+router.get('/video/danmaku', getDanmakuListByKvidController) // 根据视频 ID 获取弹幕
+// https://localhost:9999/video/danmaku?videoId=10
 
 
 

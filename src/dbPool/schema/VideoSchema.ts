@@ -23,7 +23,7 @@ const VideoSchema = {
 		/** 非空 - 视频标题 */
 		title: { type: String, required: true },
 		/** 非空 - 分 P 视频的数据 */
-		videoPart: [videoPartSchema],
+		videoPart: { type: [videoPartSchema], required: true },
 		/** 非空 - 封面图链接 */
 		image: { type: String, required: true },
 		/** 非空 - 视频上传的日期，时间戳格式 */
