@@ -1,6 +1,6 @@
-import { checkUserTokenService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { GetUserInfoByUidRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -115,15 +115,30 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 }
 
 /**
+ * 获取当前登录的用户信息
+ * @param ctx context
+ * @param next context
+ * @return GetSelfUserInfoResponseDto 当前登录的用户信息，如果获取成功则 success: true，不成功则 success: false
+ */
+export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	ctx.body = await getSelfUserInfoService(uid, token)
+	await next()
+}
+
+/**
  * 获取用户信息
  * @param ctx context
  * @param next context
  * @return GetUserInfoByUidResponseDto 通过 uid 获取到的用户信息，如果获取成功则 success: true，不成功则 success: false
  */
 export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
-	const token = ctx.cookies.get('token')
-	ctx.body = await getUserInfoByUidService(uid, token)
+	const uid = ctx.query.uid as string
+	const getUserInfoByUidRequest: GetUserInfoByUidRequestDto = {
+		uid: uid ? parseInt(uid, 10) : -1, // WARN -1 代表这个 UID 是永远无法查找到结果
+	}
+	ctx.body = await getUserInfoByUidService(getUserInfoByUidRequest)
 	await next()
 }
 

@@ -1,7 +1,7 @@
 import Router from 'koa-router'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkUserTokenController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { getThumbVideoController, getVideoByKvidController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
@@ -62,9 +62,13 @@ router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或�
 // 	]
 // }
 
-router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户信息
+
+router.get('/user/self', getSelfUserInfoController) // 获取当前登录的用户信息
 // https://localhost:9999/user/info
 // cookie: uid, token
+
+router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户信息
+// https://localhost:9999/user/info?uid=10
 
 router.get('/user/check', checkUserTokenController) // 根据 uid, token 校验用户
 // https://localhost:9999/user/check

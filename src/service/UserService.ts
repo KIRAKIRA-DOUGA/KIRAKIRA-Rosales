@@ -1,7 +1,7 @@
 import { InferSchemaType, Schema } from 'mongoose'
 import { generateSaltedHash } from '../common/HashTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
@@ -351,12 +351,12 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 }
 
 /**
- * 通过 uid 获取用户信息
+ * 获取当前登录的用户信息
  * @param uid 用户 ID
  * @param token 用户 token
- * @returns 获取用户信息的请求结果
+ * @returns 获取到的当前登录的用户信息
  */
-export const getUserInfoByUidService = async (uid: number, token: string): Promise<GetUserInfoByUidResponseDto> => {
+export const getSelfUserInfoService = async (uid: number, token: string): Promise<GetSelfUserInfoResponseDto> => {
 	try {
 		if (uid !== null && uid !== undefined && token) {
 			if (await checkUserToken(uid, token)) {
@@ -367,12 +367,12 @@ export const getUserInfoByUidService = async (uid: number, token: string): Promi
 					uid,
 				}
 				const getUserInfoSelect: SelectType<UserInfo> = {
-					label: 1,
-					username: 1,
-					avatar: 1,
-					userBannerImage: 1,
-					signature: 1,
-					gender: 1,
+					label: 1, // 用户标签
+					username: 1, // 用户名
+					avatar: 1, // 用户头像
+					userBannerImage: 1, // 用户的背景图
+					signature: 1, // 用户的个性签名
+					gender: 1, // 用户的性别
 				}
 				try {
 					const userInfoResult = await selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, schema, collectionName)
@@ -395,6 +395,57 @@ export const getUserInfoByUidService = async (uid: number, token: string): Promi
 			} else {
 				console.error('ERROR', '获取用户信息时失败，用户的 token 校验未通过，非法用户！')
 				return { success: false, message: '获取用户信息时失败，非法用户！' }
+			}
+		} else {
+			console.error('ERROR', '获取用户信息时失败，uid 或 token 为空')
+			return { success: false, message: '获取用户信息时失败，必要的参数为空' }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取用户信息时失败，未知错误：', error)
+		return { success: false, message: '获取用户信息时失败，未知错误' }
+	}
+}
+
+/**
+ * 通过 uid 获取用户信息
+ * @param uid 用户 ID
+ * @returns 获取用户信息的请求结果
+ */
+export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserInfoByUidRequestDto): Promise<GetUserInfoByUidResponseDto> => {
+	try {
+		const uid = getUserInfoByUidRequest?.uid
+		if (uid !== null && uid !== undefined) {
+			const { collectionName, schema: userInfoSchema } = UserInfoSchema
+			const schema = new Schema(userInfoSchema)
+			type UserInfo = InferSchemaType<typeof schema>
+			const getUserInfoWhere: QueryType<UserInfo> = {
+				uid,
+			}
+			const getUserInfoSelect: SelectType<UserInfo> = {
+				label: 1, // 用户标签
+				username: 1, // 用户名
+				avatar: 1, // 用户头像
+				userBannerImage: 1, // 用户的背景图
+				signature: 1, // 用户的个性签名
+				gender: 1, // 用户的性别
+			}
+			try {
+				const userInfoResult = await selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, schema, collectionName)
+				if (userInfoResult && userInfoResult.success) {
+					const result = userInfoResult?.result
+					if (result?.length === 1 && result?.[0]) {
+						return { success: true, message: '获取用户信息成功', result: result[0] }
+					} else {
+						console.error('ERROR', '获取用户信息时失败，获取到的结果长度不为 1')
+						return { success: false, message: '获取用户信息时失败，结果异常' }
+					}
+				} else {
+					console.error('ERROR', '获取用户信息时失败，获取到的结果为空')
+					return { success: false, message: '获取用户信息时失败，结果为空' }
+				}
+			} catch (error) {
+				console.error('ERROR', '获取用户信息时失败，查询数据时出错：0', error)
+				return { success: false, message: '获取用户信息时失败' }
 			}
 		} else {
 			console.error('ERROR', '获取用户信息时失败，uid 或 token 为空')
