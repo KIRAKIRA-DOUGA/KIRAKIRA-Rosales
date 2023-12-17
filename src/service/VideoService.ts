@@ -1,5 +1,5 @@
 import { InferSchemaType, Schema } from 'mongoose'
-import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import VideoSchema from '../dbPool/schema/VideoSchema.js'
@@ -155,20 +155,79 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 						}
 					} else {
 						console.error('ERROR', '视频页 - 获取到的视频数组长度不等于 1')
-						return { success: false, message: '视频页 - 获取首页视频时出现异常，视频数量为 0' }
+						return { success: false, message: '视频页 - 获取到的视频数量不为 1' }
 					}
 				} else {
 					console.error('ERROR', '视频页 - 获取到的视频结果或视频数组为空')
-					return { success: false, message: '视频页 - 获取首页视频时出现异常，未获取到视频' }
+					return { success: false, message: '视频页 - 未获取到视频' }
 				}
 			} catch (error) {
-				console.error('ERROR', '获取首页视频时出现异常，查询失败：', error)
-				return { success: false, message: '获取首页视频时出现异常' }
+				console.error('ERROR', '视频页 - 视频查询失败：', error)
+				return { success: false, message: '视频页 - 视频查询失败' }
 			}
+		} else {
+			console.error('ERROR', '视频页 - KVID 为空')
+			return { success: false, message: '视频页 - 必要的请求参数为空' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取首页视频失败：', error)
-		return { success: false, message: '获取首页视频失败' }
+		console.error('ERROR', '获取视频失败：', error)
+		return { success: false, message: '获取视频失败：' }
+	}
+}
+
+/**
+ * 根据 UID 获取该用户上传的视频
+ * @param getVideoByUidRequest 根据 UID 获取该用户上传的视频的请求 UID
+ * @returns 请求到的视频信息
+ */
+export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideoByUidRequestDto): Promise<GetVideoByUidResponseDto> => {
+	try {
+		if (checkGetVideoByUidRequest(getVideoByUidRequest)) {
+			const { collectionName, schema: videoSchema } = VideoSchema
+			const schema = new Schema(videoSchema)
+			type Video = InferSchemaType<typeof schema>
+			const where: QueryType<Video> = {
+				uploaderId: getVideoByUidRequest.uid,
+			}
+			const select: SelectType<Video> = {
+				videoId: 1,
+				videoPart: 1,
+				title: 1,
+				image: 1,
+				updateDate: 1,
+				watchedCount: 1,
+				uploader: 1,
+				uploaderId: 1,
+				duration: 1,
+				description: 1,
+				editDateTime: 1,
+			}
+
+			try {
+				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const videoResult = result.result
+				if (result.success && videoResult) {
+					const videoResultLength = videoResult?.length
+					if (videoResultLength > 0) {
+						return { success: true, message: '根据 UID 获取视频成功', videosCount: videoResultLength, videos: videoResult }
+					} else {
+						return { success: false, message: '该用户似乎未上传过视频', videosCount: 0, videos: [] }
+					}
+				} else {
+					console.log('根据 UID 获取视频失败，获取的结果失败或为空')
+					return { success: false, message: '根据 UID 获取视频失败，获取的结果失败或为空', videosCount: 0, videos: [] }
+				}
+			} catch (error) {
+				console.log('根据 UID 获取视频失败，检索视频出错：', error)
+				return { success: false, message: '根据 UID 获取视频失败，检索视频出错', videosCount: 0, videos: [] }
+			}
+		} else {
+			console.log('根据 UID 获取视频失败，请求的 UID 为空：')
+			return { success: false, message: '根据 UID 获取视频失败，请求的 UID 为空', videosCount: 0, videos: [] }
+		}
+	} catch (error) {
+		console.log('根据 UID 获取视频失败，未知原因：', error)
+		return { success: false, message: '根据 UID 获取视频失败，未知原因', videosCount: 0, videos: [] }
 	}
 }
 
@@ -210,3 +269,14 @@ const checkVideoPartData = (videoPartDate: VideoPartDto) => {
 const checkGetVideoByKvidRequest = (getVideoByKvidRequest: GetVideoByKvidRequestDto) => {
 	return (getVideoByKvidRequest.videoId !== null && getVideoByKvidRequest.videoId !== undefined)
 }
+
+/**
+ * 检查根据 uid 获取视频列表时的 uid 是否存在
+ * @param getVideoByUidRequest 根据 uid 获取视频列表数据时携带的请求参数
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkGetVideoByUidRequest = (getVideoByUidRequest: GetVideoByUidRequestDto) => {
+	return (getVideoByUidRequest.uid !== null && getVideoByUidRequest.uid !== undefined)
+}
+
+

@@ -2,7 +2,7 @@ import Router from 'koa-router'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
-import { getThumbVideoController, getVideoByKvidController, updateVideoController } from '../controller/VideoController.js'
+import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
 
@@ -64,7 +64,7 @@ router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或�
 
 
 router.get('/user/self', getSelfUserInfoController) // 获取当前登录的用户信息
-// https://localhost:9999/user/info
+// https://localhost:9999/user/self
 // cookie: uid, token
 
 router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户信息
@@ -106,8 +106,12 @@ router.post('/video/upload', updateVideoController) // 上传视频
 router.get('/video/home', getThumbVideoController) // 获取首页视频
 // https://localhost:9999/video/home
 
-router.get('/video', getVideoByKvidController) // 根据视频 ID (KVID) 获取视频中的数据
-// https://localhost:9999/video
+router.get('/video', getVideoByKvidController) // 根据视频 ID (KVID) 获取视频的数据
+// https://localhost:9999/video?videoId=1
+
+router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户上传的视频
+// https://localhost:9999/video/user?uid=2
+
 
 
 

@@ -367,6 +367,7 @@ export const getSelfUserInfoService = async (uid: number, token: string): Promis
 					uid,
 				}
 				const getUserInfoSelect: SelectType<UserInfo> = {
+					uid: 1, // 用户 UID
 					label: 1, // 用户标签
 					username: 1, // 用户名
 					avatar: 1, // 用户头像
