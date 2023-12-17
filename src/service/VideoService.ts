@@ -4,6 +4,7 @@ import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPo
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import VideoSchema from '../dbPool/schema/VideoSchema.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
+import { getUserInfoByUidService } from './UserService.js'
 
 /**
  * 上传视频
@@ -22,17 +23,21 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				type Video = InferSchemaType<typeof schema>
 				const nowDate = new Date().getTime()
 				const videoPart = uploadVideoRequest.videoPart.map(video => ({ ...video, editDateTime: nowDate }))
+				const videoTags = uploadVideoRequest.videoTags.map(tag => ({ ...tag, editDateTime: nowDate }))
 				const video: Video = {
 					videoId,
 					videoPart,
 					title: uploadVideoRequest.title,
 					image: uploadVideoRequest.image,
-					updateDate: new Date().getTime(),
+					uploadDate: new Date().getTime(),
 					watchedCount: 0,
 					uploader: uploadVideoRequest.uploader,
 					uploaderId: uploadVideoRequest.uploaderId,
 					duration: uploadVideoRequest.duration,
 					description: uploadVideoRequest.description,
+					videoCategory: uploadVideoRequest.videoCategory,
+					copyright: uploadVideoRequest.copyright,
+					videoTags,
 					editDateTime: nowDate,
 				}
 				try {
@@ -71,7 +76,7 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			videoId: 1,
 			title: 1,
 			image: 1,
-			updateDate: 1,
+			uploadDate: 1,
 			watchedCount: 1,
 			uploader: 1,
 			uploaderId: 1,
@@ -128,13 +133,16 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				videoPart: 1,
 				title: 1,
 				image: 1,
-				updateDate: 1,
+				uploadDate: 1,
 				watchedCount: 1,
 				uploader: 1,
 				uploaderId: 1,
 				duration: 1,
 				description: 1,
 				editDateTime: 1,
+				videoCategory: 1,
+				copyright: 1,
+				videoTags: 1,
 			}
 			try {
 				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
@@ -142,8 +150,16 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				if (result.success && videoResult) {
 					const videosCount = result.result?.length
 					if (videosCount === 1) {
-						const video = videoResult?.[0]
+						const video = videoResult?.[0] as GetVideoByKvidResponseDto['video']
 						if (video) {
+							const getVideoByUidRequest: GetVideoByUidRequestDto = {
+								uid: video.uploaderId,
+							}
+							const userInfoResult = await getUserInfoByUidService(getVideoByUidRequest) // 通过视频的上传者 ID 获取上传者信息
+							const userInfo = userInfoResult.result
+							if (userInfoResult.success) { // 如果获取到的话，就将视频上传者信息附加到请求响应中
+								video.uploaderInfo = { uid: video.uploaderId, username: userInfo.username, avatar: userInfo.avatar, userBannerImage: userInfo.userBannerImage, signature: userInfo.signature }
+							}
 							return {
 								success: true,
 								message: '获取首页视频成功',
@@ -194,7 +210,7 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 				videoPart: 1,
 				title: 1,
 				image: 1,
-				updateDate: 1,
+				uploadDate: 1,
 				watchedCount: 1,
 				uploader: 1,
 				uploaderId: 1,
