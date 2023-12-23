@@ -2,6 +2,7 @@ import Router from 'koa-router'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
@@ -139,9 +140,33 @@ router.get('/video/danmaku', getDanmakuListByKvidController) // 根据视频 ID 
 
 
 
+router.post('/video/comment/emit', emitVideoCommentController) // 发送视频评论的接口
+// https://localhost:9999/video/comment/emit
+// cookie: uid, token
+// {
+// 	"videoId": 13,
+// 	"text": "这是一条测试评论"
+// }
 
+router.get('/video/comment', getVideoCommentListByKvidController) // 根据 KVID 获取视频评论列表，并检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应的值会变为 true
+// https://localhost:9999/video/comment?videoId=13
+// 可选：cookie: uid, token
 
+router.post('/video/comment/upvote', emitVideoCommentUpvoteController) // 用户为视频评论点赞
+// https://localhost:9999/video/comment/upvote
+// cookie: uid, token
+// {
+// 	"videoId": 13,
+// 	"id": "65859fbfae7bd341a408fe42"
+// }
 
+router.post('/video/comment/downvote', emitVideoCommentDownvoteController) // 用户为视频评论点踩
+// https://localhost:9999/video/comment/upvote
+// cookie: uid, token
+// {
+// 	"videoId": 13,
+// 	"id": "65859fbfae7bd341a408fe42"
+// }
 
 
 

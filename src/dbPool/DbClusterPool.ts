@@ -56,7 +56,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
  * @param collectionName 数据即将插入的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @returns 插入数据的状态和结果
  */
-export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionName: string): Promise< DbPoolResultsType<T> > => {
+export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionName: string): Promise< DbPoolResultsType<T & {_id: string}> > => {
 	try {
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
@@ -68,12 +68,12 @@ export const insertData2MongoDB = async <T>(data: T, schema: Schema, collectionN
 		mongoModel.createIndexes()
 		const model = new mongoModel(data)
 		try {
-			await model.save()
+			const result = await model.save() as T & {_id: string}
+			return { success: true, message: '数据插入成功', result: [result] }
 		} catch (error) {
 			console.error('ERROR', '数据插入失败：', error)
 			throw { success: false, message: '数据插入失败', error }
 		}
-		return { success: true, message: '数据插入成功' }
 	} catch (error) {
 		console.error('ERROR', 'insertData2MongoDB 发生错误')
 		throw { success: false, message: '数据插入失败，insertData2MongoDB 中发生错误：', error }
@@ -190,7 +190,7 @@ export const findOneAndUpdateData4MongoDB = async <T>(where: QueryType<T>, updat
 }
 
 /**
- * 获取自增序列的下一个值，并自增
+ * 创建或获取自增序列的下一个值，并自增
  * // WARN 请调用 SequenceValueService 的 getNextSequenceValueEjectService 方法或 getNextSequenceValueService 方法来获取自增值，而不是直接调用 Pool 层
  * @param sequenceId 自增序列的 key
  * @param schema MongoDB Schema 对象
@@ -208,20 +208,18 @@ export const getNextSequenceValuePool = async (sequenceId: string, schema: Schem
 		} else {
 			mongoModel = mongoose.model(collectionName, schema)
 		}
-		// TODO pass 2233 114514...
-		// TODO 为 kV ID 保留 100 位
 		try {
 			let sequenceDocument = await mongoModel.findOne({ _id: sequenceId })
 			if (!sequenceDocument) {
 				sequenceDocument = await mongoModel.findOneAndUpdate(
 					{ _id: sequenceId },
-					{ $inc: { sequenceValue: sequenceDefaultNumber } }, // 当文档首次创建时，设置增量为1000
+					{ $inc: { sequenceValue: sequenceDefaultNumber } }, // 当文档首次创建时，通过设置步长的方式设置初始值
 					{ upsert: true, new: true },
 				)
 			} else {
 				sequenceDocument = await mongoModel.findOneAndUpdate(
 					{ _id: sequenceId },
-					{ $inc: { sequenceValue: sequenceStep } }, // 当文档已存在时，只增加1
+					{ $inc: { sequenceValue: sequenceStep } }, // 当文档已存在时，只增加一倍步长
 					{ new: true },
 				)
 			}
@@ -233,5 +231,40 @@ export const getNextSequenceValuePool = async (sequenceId: string, schema: Schem
 	} catch (error) {
 		console.error('ERROR', 'getNextSequenceValuePool 发生错误')
 		throw { success: false, message: '自增 ID 查询时发生错误', error }
+	}
+}
+
+/**
+ * 在指定的 schema 及 collectionName 中，通过 MongoDB 唯一 ID 找到一个值并自增
+ * @param mongodbId MongoDB 唯一 ID
+ * @param key 查找到的 MongoDB 文档中被自增的项
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名），需要与 schema 一致
+ * @parma sequenceStep 自增的步长，默认：1，每次调用该方法时可以指定不同的步长，该值可以为负数
+ * @returns 查询状态和结果，成功时，应为自增序列的下一个值
+ */
+export const findOneAndPlusByMongodbId = async (mongodbId: string, key: string, schema: Schema, collectionName: string, sequenceStep: number = 1): Promise< DbPoolResultType<number> > => {
+	try {
+		let mongoModel
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model(collectionName, schema)
+		}
+		try {
+			const sequenceDocument = await mongoModel.findOneAndUpdate(
+				{ _id: mongodbId },
+				{ $inc: { [key]: sequenceStep } }, // 步长，可以为负数
+				{ new: false },
+			)
+			return { success: true, message: '自增成功', result: sequenceDocument.sequenceValue }
+		} catch (error) {
+			console.error('ERROR', '自增失败：', error)
+			throw { success: false, message: '自增失败', error }
+		}
+	} catch (error) {
+		console.error('ERROR', 'findOneAndPlusByMongodbId 发生错误')
+		throw { success: false, message: '自增时发生错误', error }
 	}
 }

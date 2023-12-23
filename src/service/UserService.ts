@@ -500,6 +500,12 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 }
 
 
+/**
+ * 用户校验
+ * @param uid 用户 ID, 为空时会导致校验失败
+ * @param token 用户 ID 对应的 token，为空时会导致校验失败
+ * @returns 校验结果
+ */
 export const checkUserTokenService = async (uid: number, token: string): Promise<CheckUserTokenResponseDto> => {
 	try {
 		if (uid !== undefined && uid !== null && token) {

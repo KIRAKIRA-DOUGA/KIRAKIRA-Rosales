@@ -4,19 +4,19 @@
 export const UserAuthSchema = {
 	/** MongoDB Schema */
 	schema: {
-		/** 非空-用户的 UID */
+		/** 用户的 UID - 非空 */
 		uid: { type: Number, unique: true, required: true },
-		/** 非空-用户邮箱 */
+		/** 用户邮箱 - 非空 */
 		email: { type: String, unique: true, required: true },
-		/** 非空-被两次 Hash 的密码 */
+		/** 被两次 Hash 的密码 - 非空 */
 		passwordHashHash: { type: String, required: true },
-		/** 非空-盐 */
+		/** 盐 - 非空 */
 		salt: { type: String, required: true },
-		/** 非空-用户的身分令牌 */
+		/** 用户的身分令牌 - 非空 */
 		token: { type: String, required: true },
 		/** 密码提示 */
 		passwordHint: String,
-		/** 非空-系统专用字段-最后编辑时间 */
+		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	},
 	/** MongoDB 集合名 */
@@ -39,9 +39,9 @@ const userLabelSchema = {
 export const UserInfoSchema = {
 	/** MongoDB Schema */
 	schema: {
-		/** 非空-用户的 UID */
+		/** 用户的 UID - 非空 - 唯一 */
 		uid: { type: Number, unique: true, required: true },
-		/** 用户名 */
+		/** 用户名 - 唯一 */
 		username: { type: String, unique: true },
 		/** 用户头像的链接 */
 		avatar: { type: String },
@@ -53,7 +53,7 @@ export const UserInfoSchema = {
 		gender: { type: String },
 		/** 用户的个人标签 */
 		label: { type: [userLabelSchema], required: false },
-		/** 非空-系统专用字段-最后编辑时间 */
+		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	},
 	/** MongoDB 集合名 */

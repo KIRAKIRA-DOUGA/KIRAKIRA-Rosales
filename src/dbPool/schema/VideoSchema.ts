@@ -2,13 +2,13 @@
  * 分P 视频的数据
  */
 const VideoPartSchema = {
-	/** 非空 - 分P 视频的顺序 */
+	/** 分P 视频的顺序 - 非空 */
 	id: { type: Number, required: true },
-	/** 非空 - 每 P 视频的标题 */
+	/** 每 P 视频的标题 - 非空 */
 	videoPartTitle: { type: String, required: true },
-	/** 非空 - 每 P 视频的链接 */
+	/** 每 P 视频的链接 - 非空 */
 	link: { type: String, required: true },
-	/** 非空 - 系统专用字段-最后编辑时间 */
+	/** 系统专用字段-最后编辑时间 - 非空 */
 	editDateTime: { type: Number, required: true },
 }
 
@@ -16,13 +16,13 @@ const VideoPartSchema = {
  * 视频 TAG 的数据
  */
 const VideoTagSchema = {
-	/** 非空 - 视频的 TAG ID */
+	/** 视频的 TAG ID - 非空 */
 	tagId: { type: Number, required: true },
-	/** 非空 - 视频 TAG 的名称 */
+	/** 视频 TAG 的名称 - 非空 */
 	tag: { type: String, required: true },
 	/** TAG 描述 */
 	description: String,
-	/** 非空 - 系统专用字段-最后编辑时间 */
+	/** 系统专用字段-最后编辑时间 - 非空 */
 	editDateTime: { type: Number, required: true },
 }
 
@@ -32,33 +32,33 @@ const VideoTagSchema = {
 const VideoSchema = {
 	/** MongoDB Schema */
 	schema: {
-		/** 非空 - 唯一 - KVID 视频 ID */
+		/** KVID 视频 ID - 非空 - 唯一 */
 		videoId: { type: Number, unique: true, required: true },
-		/** 非空 - 视频标题 */
+		/** 视频标题 - 非空 */
 		title: { type: String, required: true },
-		/** 非空 - 分 P 视频的数据 */
+		/** 分 P 视频的数据 - 非空 */
 		videoPart: { type: [VideoPartSchema], required: true },
-		/** 非空 - 封面图链接 */
+		/** 封面图链接 - 非空 */
 		image: { type: String, required: true },
-		/** 非空 - 视频上传的日期，时间戳格式 */
+		/** 视频上传的日期，时间戳格式 - 非空 */
 		uploadDate: { type: Number, required: true },
-		/** 非空 - 视频播放量 */
+		/** 视频播放量 - 非空 */
 		watchedCount: { type: Number, required: true },
-		/** 非空 - 视频作者 ID */
+		/** 视频作者 ID - 非空 */
 		uploader: { type: String, required: true },
-		/** 非空 - 创作者 UID */
+		/** 创作者 UID - 非空 */
 		uploaderId: { type: Number, required: true },
-		/** 非空 - 视频时长，单位 ms */
+		/** 视频时长，单位 ms - 非空 */
 		duration: { type: Number, required: true },
 		/** 视频描述 */
 		description: String,
-		/** 非空 - 视频分区 */
+		/** 视频分区 - 非空 */
 		videoCategory: { type: String, required: true },
-		/** 非空 - 视频版权 */
+		/** 视频版权 - 非空 */
 		copyright: { type: String, required: true },
-		/** 非空 - 视频 TAG */
+		/** 视频 TAG - 非空 */
 		videoTags: { type: [VideoTagSchema], required: true },
-		/** 非空 - 系统专用字段-最后编辑时间 */
+		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	},
 	/** MongoDB 集合名 */

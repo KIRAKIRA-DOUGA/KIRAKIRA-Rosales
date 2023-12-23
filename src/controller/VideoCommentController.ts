@@ -1,0 +1,81 @@
+import { emitVideoCommentDownvoteService, emitVideoCommentService, emitVideoCommentUpvoteService, getVideoCommentListByKvidService } from '../service/VideoCommentService.js'
+import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { EmitVideoCommentDownvoteRequestDto, EmitVideoCommentRequestDto, EmitVideoCommentUpvoteRequestDto, GetVideoCommentByKvidRequestDto } from './VideoCommentControllerDto.js'
+
+/**
+ * 用户发送视频评论
+ * @param ctx context
+ * @param next context
+ */
+export const emitVideoCommentController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<EmitVideoCommentRequestDto>
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	const emitVideoCommentRequest: EmitVideoCommentRequestDto = {
+		/** KVID 视频 ID */
+		videoId: data.videoId,
+		/** 评论正文 */
+		text: data.text,
+	}
+	const emitVideoCommentResponse = await emitVideoCommentService(emitVideoCommentRequest, uid, token)
+	ctx.body = emitVideoCommentResponse
+	await next()
+}
+
+
+/**
+ * 根据 KVID 获取视频评论列表，并检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应的值会变为 true
+ * @param ctx context
+ * @param next context
+ */
+export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koaNext) => {
+	const videoId = ctx.query.videoId as string
+	const getVideoCommentByKvidRequest: GetVideoCommentByKvidRequestDto = {
+		videoId: videoId ? parseInt(videoId, 10) : -1, // WARN -1 means you can't find any video
+	}
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	const videoCommentListResponse = await getVideoCommentListByKvidService(getVideoCommentByKvidRequest, uid, token)
+	ctx.body = videoCommentListResponse
+	await next()
+}
+
+/**
+ * 用户为视频评论点赞
+ * @param ctx context
+ * @param next context
+ */
+export const emitVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<EmitVideoCommentUpvoteRequestDto>
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	const emitVideoCommentUpvoteRequest: EmitVideoCommentUpvoteRequestDto = {
+		/** KVID 视频 ID */
+		videoId: data.videoId,
+		/** 评论 ID */
+		id: data.id,
+	}
+	const emitVideoCommentResponse = await emitVideoCommentUpvoteService(emitVideoCommentUpvoteRequest, uid, token)
+	ctx.body = emitVideoCommentResponse
+	await next()
+}
+
+/**
+ * 用户为视频评论点踩
+ * @param ctx context
+ * @param next context
+ */
+export const emitVideoCommentDownvoteController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<EmitVideoCommentDownvoteRequestDto>
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	const emitVideoCommentUpvoteRequest: EmitVideoCommentDownvoteRequestDto = {
+		/** KVID 视频 ID */
+		videoId: data.videoId,
+		/** 评论 ID */
+		id: data.id,
+	}
+	const emitVideoCommentResponse = await emitVideoCommentDownvoteService(emitVideoCommentUpvoteRequest, uid, token)
+	ctx.body = emitVideoCommentResponse
+	await next()
+}
