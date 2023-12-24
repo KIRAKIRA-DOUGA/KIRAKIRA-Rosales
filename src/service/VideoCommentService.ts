@@ -125,13 +125,10 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 				const videoCommentList = result.result as GetVideoCommentByKvidResponseDto['videoCommentList']
 				if (result.success) {
 					if (videoCommentList && videoCommentList.length > 0) {
-						const videoCommentUpvoteResult = getVideoCommentUpvoteResult.videoCommentUpvoteResult
-						const videoCommentDownvoteResult = getVideoCommentDownvoteResult.videoCommentDownvoteResult
-						const videoCommentUpvoteResultLength = videoCommentUpvoteResult.length
-						const videoCommentDownvoteResultLength = videoCommentDownvoteResult.length
-
-						const haveUpvote = (getVideoCommentUpvoteResult.success && videoCommentUpvoteResult && videoCommentUpvoteResultLength > 0)
-						const haveDownvote = (getVideoCommentDownvoteResult.success && videoCommentDownvoteResult && videoCommentDownvoteResultLength > 0)
+						const videoCommentUpvoteResult = getVideoCommentUpvoteResult?.videoCommentUpvoteResult
+						const videoCommentDownvoteResult = getVideoCommentDownvoteResult?.videoCommentDownvoteResult
+						const haveUpvote = (getVideoCommentUpvoteResult?.success && videoCommentUpvoteResult && videoCommentUpvoteResult?.length > 0)
+						const haveDownvote = (getVideoCommentDownvoteResult?.success && videoCommentDownvoteResult && videoCommentDownvoteResult?.length > 0)
 
 						/**
 						 * 检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应值会变为 true
