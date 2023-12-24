@@ -90,6 +90,10 @@ export const VideoCommentUpvoteSchema = {
 		commentId: { type: String, required: true },
 		/** 评论点赞者的用户的 UID - 非空 */
 		uid: { type: Number, required: true },
+		/** 评论点赞无效化标识（用户取消点赞） */
+		invalidFlag: { type: Boolean, required: true },
+		/** 系统专用字段-删除标识 - 非空 */
+		deleteFlag: { type: Boolean, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	},
@@ -110,6 +114,10 @@ export const VideoCommentDownvoteSchema = {
 		commentId: { type: String, required: true },
 		/** 评论点踩者的用户的 UID - 非空 */
 		uid: { type: Number, required: true },
+		/** 评论点踩无效化标识（用户取消点踩） */
+		invalidFlag: { type: Boolean, required: true },
+		/** 系统专用字段-删除标识 - 非空 */
+		deleteFlag: { type: Boolean, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	},
