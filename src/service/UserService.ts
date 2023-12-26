@@ -491,11 +491,11 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 				return { success: false, message: '上传失败，无法更新用户数据' }
 			}
 		} else {
-			console.log('ERROR', '获取上传图片用的预签名 URL 失败，用户不合法', { uid })
+			console.error('ERROR', '获取上传图片用的预签名 URL 失败，用户不合法', { uid })
 			return { success: false, message: '上传失败，无法获取上传权限' }
 		}
 	} catch (error) {
-		console.log('ERROR', '获取上传图片用的预签名 URL 失败，错误信息', error, { uid })
+		console.error('ERROR', '获取上传图片用的预签名 URL 失败，错误信息', error, { uid })
 	}
 }
 

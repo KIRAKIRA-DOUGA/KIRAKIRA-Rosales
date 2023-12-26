@@ -156,8 +156,6 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 						const haveUpvote = (getVideoCommentUpvoteResult?.success && videoCommentUpvoteResult && videoCommentUpvoteResult?.length > 0)
 						const haveDownvote = (getVideoCommentDownvoteResult?.success && videoCommentDownvoteResult && videoCommentDownvoteResult?.length > 0)
 
-						console.log('aaaaaaaaaaaaaaaaaaa', { videoCommentUpvoteResult, videoCommentDownvoteResult, haveUpvote, haveDownvote })
-
 						/**
 						 * 检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应值会变为 true
 						 * 获取每个评论的发送者的用户信息

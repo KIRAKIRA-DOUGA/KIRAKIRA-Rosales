@@ -230,19 +230,19 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 						return { success: false, message: '该用户似乎未上传过视频', videosCount: 0, videos: [] }
 					}
 				} else {
-					console.log('根据 UID 获取视频失败，获取的结果失败或为空')
+					console.error('ERROR', '根据 UID 获取视频失败，获取的结果失败或为空')
 					return { success: false, message: '根据 UID 获取视频失败，获取的结果失败或为空', videosCount: 0, videos: [] }
 				}
 			} catch (error) {
-				console.log('根据 UID 获取视频失败，检索视频出错：', error)
+				console.error('ERROR', '根据 UID 获取视频失败，检索视频出错：', error)
 				return { success: false, message: '根据 UID 获取视频失败，检索视频出错', videosCount: 0, videos: [] }
 			}
 		} else {
-			console.log('根据 UID 获取视频失败，请求的 UID 为空：')
+			console.error('ERROR', '根据 UID 获取视频失败，请求的 UID 为空：')
 			return { success: false, message: '根据 UID 获取视频失败，请求的 UID 为空', videosCount: 0, videos: [] }
 		}
 	} catch (error) {
-		console.log('根据 UID 获取视频失败，未知原因：', error)
+		console.error('ERROR', '根据 UID 获取视频失败，未知原因：', error)
 		return { success: false, message: '根据 UID 获取视频失败，未知原因', videosCount: 0, videos: [] }
 	}
 }
