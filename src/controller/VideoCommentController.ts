@@ -55,8 +55,8 @@ export const emitVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNex
 		/** 评论 ID */
 		id: data.id,
 	}
-	const emitVideoCommentResponse = await emitVideoCommentUpvoteService(emitVideoCommentUpvoteRequest, uid, token)
-	ctx.body = emitVideoCommentResponse
+	const emitVideoCommentUpvoteResponse = await emitVideoCommentUpvoteService(emitVideoCommentUpvoteRequest, uid, token)
+	ctx.body = emitVideoCommentUpvoteResponse
 	await next()
 }
 
@@ -75,7 +75,7 @@ export const emitVideoCommentDownvoteController = async (ctx: koaCtx, next: koaN
 		/** 评论 ID */
 		id: data.id,
 	}
-	const emitVideoCommentResponse = await emitVideoCommentDownvoteService(emitVideoCommentUpvoteRequest, uid, token)
-	ctx.body = emitVideoCommentResponse
+	const emitVideoCommentDownvoteResponse = await emitVideoCommentDownvoteService(emitVideoCommentUpvoteRequest, uid, token)
+	ctx.body = emitVideoCommentDownvoteResponse
 	await next()
 }
