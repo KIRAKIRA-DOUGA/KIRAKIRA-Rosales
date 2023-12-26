@@ -160,9 +160,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 						 * 检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应值会变为 true
 						 * 获取每个评论的发送者的用户信息
 						 */
-						const correctVideoComment: GetVideoCommentByKvidResponseDto['videoCommentList'] = []
-						for (let videoCommentCycleIndex = 0; videoCommentCycleIndex < videoCommentList.length; videoCommentCycleIndex++) {
-							const videoComment = videoCommentList[videoCommentCycleIndex]
+						const correctVideoComment = await Promise.all(videoCommentList.map(async videoComment => {
 							let isUpvote = false
 							let isDownvote = false
 							if (haveUpvote) {
@@ -177,7 +175,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 								const videoCommentSenderUserInfo = await getUserInfoByUidService(getUserInfoByUidRequest)
 								const videoCommentSenderUserInfoResult = videoCommentSenderUserInfo.result
 								if (videoCommentSenderUserInfo.success && videoCommentSenderUserInfoResult) {
-									correctVideoComment.push({
+									return {
 										...videoComment,
 										isUpvote,
 										isDownvote,
@@ -188,19 +186,65 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 											signature: videoCommentSenderUserInfoResult.signature,
 											gender: videoCommentSenderUserInfoResult.gender,
 										},
-									})
+									}
 								} else {
 									console.warn('WARN', 'WARNING', '获取评论的发送者信息时出错：请求失败或未获取到数据', { ...videoComment })
-									correctVideoComment.push({
+									return {
 										...videoComment,
 										isUpvote,
 										isDownvote,
-									})
+									}
 								}
 							} catch (error) {
 								console.warn('WARN', 'WARNING', '获取评论的发送者信息时出错：未知原因', error, { ...videoComment })
 							}
-						}
+						}))
+
+						// /**
+						//  * 检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应值会变为 true
+						//  * 获取每个评论的发送者的用户信息
+						//  */
+						// const correctVideoComment: GetVideoCommentByKvidResponseDto['videoCommentList'] = []
+						// for (let videoCommentCycleIndex = 0; videoCommentCycleIndex < videoCommentList.length; videoCommentCycleIndex++) {
+						// 	const videoComment = videoCommentList[videoCommentCycleIndex]
+						// 	let isUpvote = false
+						// 	let isDownvote = false
+						// 	if (haveUpvote) {
+						// 		isUpvote = videoCommentUpvoteResult.some(upvote => upvote.commentId === videoComment._id?.toString())
+						// 	}
+						// 	if (haveDownvote) {
+						// 		isDownvote = videoCommentDownvoteResult.some(upvote => upvote.commentId === videoComment._id?.toString())
+						// 	}
+
+						// 	const getUserInfoByUidRequest: GetUserInfoByUidRequestDto = { uid: videoComment.uid }
+						// 	try {
+						// 		const videoCommentSenderUserInfo = await getUserInfoByUidService(getUserInfoByUidRequest)
+						// 		const videoCommentSenderUserInfoResult = videoCommentSenderUserInfo.result
+						// 		if (videoCommentSenderUserInfo.success && videoCommentSenderUserInfoResult) {
+						// 			correctVideoComment.push({
+						// 				...videoComment,
+						// 				isUpvote,
+						// 				isDownvote,
+						// 				userInfo: {
+						// 					username: videoCommentSenderUserInfoResult.username,
+						// 					avatar: videoCommentSenderUserInfoResult.avatar,
+						// 					userBannerImage: videoCommentSenderUserInfoResult.userBannerImage,
+						// 					signature: videoCommentSenderUserInfoResult.signature,
+						// 					gender: videoCommentSenderUserInfoResult.gender,
+						// 				},
+						// 			})
+						// 		} else {
+						// 			console.warn('WARN', 'WARNING', '获取评论的发送者信息时出错：请求失败或未获取到数据', { ...videoComment })
+						// 			correctVideoComment.push({
+						// 				...videoComment,
+						// 				isUpvote,
+						// 				isDownvote,
+						// 			})
+						// 		}
+						// 	} catch (error) {
+						// 		console.warn('WARN', 'WARNING', '获取评论的发送者信息时出错：未知原因', error, { ...videoComment })
+						// 	}
+						// }
 
 						return { success: true, message: '获取视频评论列表成功', videoCommentCount: correctVideoComment.length, videoCommentList: correctVideoComment }
 					} else {
@@ -425,7 +469,7 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
  * @param token 用户 UID 对应的 token
  * @returns 用户取消点赞一个视频评论的结果
  */
-const cancelVideoCommentUpvoteService = async (cancelVideoCommentUpvoteRequest: CancelVideoCommentUpvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentUpvoteResponseDto> => {
+export const cancelVideoCommentUpvoteService = async (cancelVideoCommentUpvoteRequest: CancelVideoCommentUpvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentUpvoteResponseDto> => {
 	try {
 		if (checkCancelVideoCommentUpvoteRequest(cancelVideoCommentUpvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能取消点赞
@@ -631,7 +675,7 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
  * @param token 用户 UID 对应的 token
  * @returns 用户取消点踩一个视频评论的结果
  */
-const cancelVideoCommentDownvoteService = async (cancelVideoCommentDownvoteRequest: CancelVideoCommentDownvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentDownvoteResponseDto> => {
+export const cancelVideoCommentDownvoteService = async (cancelVideoCommentDownvoteRequest: CancelVideoCommentDownvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentDownvoteResponseDto> => {
 	try {
 		if (checkCancelVideoCommentDownvoteRequest(cancelVideoCommentDownvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能取消点踩
