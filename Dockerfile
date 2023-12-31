@@ -1,4 +1,6 @@
 # BY: ChatGPT-4, 02
+# 尽可能为 AMD64 与 ARM64 平台提供兼容性
+
 # 使用官方的 node 基础镜像
 FROM node:alpine
 
