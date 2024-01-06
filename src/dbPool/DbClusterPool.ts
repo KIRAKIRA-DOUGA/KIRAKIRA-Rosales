@@ -38,7 +38,9 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 		}
 	
 		try {
+			mongoose.set('strictQuery', true) // 设为 true 的话，如果在查询时传入了 schema 定义的字段以外的字段，则会忽略这些字段
 			await mongoose.connect(mongoURL, connectionOptions)
+			console.log('MongoDB Cluster Connect successfully!')
 		} catch (error) {
 			console.error('ERROR', '创建数据库连接失败：', error)
 			process.exit()
