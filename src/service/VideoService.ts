@@ -7,7 +7,7 @@ import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import VideoSchema from '../dbPool/schema/VideoSchema.js'
 import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/elasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/elasticsearchClusterPoolTypes.js'
-import { VideoDocument } from '../elasticsearchPool/templent/videoDocument.js'
+import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
 import { getUserInfoByUidService } from './UserService.js'
 
