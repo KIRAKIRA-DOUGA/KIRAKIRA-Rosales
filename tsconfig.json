@@ -6,6 +6,7 @@
 		"outDir": "./dist",
 		"allowSyntheticDefaultImports": true,
 		"module": "ESNext",
+		// "strict": true, // 好吧，严格模式
 		// ... rest
 	},
 	"include": [

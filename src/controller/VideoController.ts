@@ -1,6 +1,6 @@
-import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, updateVideoService } from '../service/VideoService.js'
+import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, searchVideoByKeywordService, updateVideoService } from '../service/VideoService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, SearchVideoByKeywordRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
 /**
  * 上传视频
@@ -11,18 +11,19 @@ import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, UploadVideoRequestDt
 export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UploadVideoRequestDto>
 	const uploadVideoRequest: UploadVideoRequestDto = {
-		title: data.title,
-		videoPart: data.videoPart,
-		image: data.image,
-		uploader: data.uploader,
-		uploaderId: data.uploaderId,
-		duration: data.duration,
-		description: data.description,
-		videoCategory: data.videoCategory,
-		copyright: data.copyright,
-		videoTags: data.videoTags,
+		title: data.title || '',
+		videoPart: data.videoPart || [],
+		image: data.image || '',
+		uploader: data.uploader || '',
+		uploaderId: data.uploaderId ?? -1,
+		duration: data.duration ?? -1,
+		description: data.description || '',
+		videoCategory: data.videoCategory || '',
+		copyright: data.copyright || '',
+		videoTags: data.videoTags || [],
 	}
-	const uploadVideoResponse = await updateVideoService(uploadVideoRequest)
+	const esClient = ctx.elasticsearchClient
+	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, esClient)
 	ctx.body = uploadVideoResponse
 	await next()
 }
@@ -70,3 +71,21 @@ export const getVideoByUidController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.body = getVideoByKvidResponse
 	await next()
 }
+
+/**
+ * 根据关键字搜索视频
+ * @param ctx context
+ * @param next context
+ * @returns 获取到的视频信息
+ */
+export const searchVideoByKeywordController = async (ctx: koaCtx, next: koaNext) => {
+	const keyword = ctx.query.keyword as string
+	const searchVideoByKeywordRequest: SearchVideoByKeywordRequestDto = {
+		keyword: keyword ?? '', // WARN '' means you can't find any video
+	}
+	const esClient = ctx.elasticsearchClient
+	const searchVideoByKeywordResponse = await searchVideoByKeywordService(searchVideoByKeywordRequest, esClient)
+	ctx.body = searchVideoByKeywordResponse
+	await next()
+}
+

@@ -12,12 +12,12 @@ const SERVER_ENV = process.env.SERVER_ENV
 
 const app = new Koa()
 
-// 配置程序
+// 配置程序 // WARN 注意：顺序很重要
 app
+	.use(elasticsearchMiddleware) // 为 ctx 附加 elasticsearchClient（elasticsearch 集群连接客户端）属性
 	.use(bodyParser())
 	.use(router.routes()) // 使用 koa-router
 	.use(router.allowedMethods()) // 所有路由中间件调用完成，ctx.status 仍为空或 404，程序自动丰富请求的响应头，方便 debug 或 handle
-	.use(elasticsearchMiddleware) // 为 ctx 附加 elasticsearchClient（elasticsearch 集群连接客户端）属性
 	.use(cors({
 		credentials: true, // 允许跨域，并且允许保存跨域的 Cookie
 	}))
