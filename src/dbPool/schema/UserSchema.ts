@@ -16,6 +16,11 @@ export const UserAuthSchema = {
 		token: { type: String, required: true },
 		/** 密码提示 */
 		passwordHint: String,
+
+		// // TODO 用户创建日期
+		// /** 用户创建时间 */
+		// userCreateDate: { type: Number, required: true },
+
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	},
@@ -23,14 +28,35 @@ export const UserAuthSchema = {
 	collectionName: 'user-auth',
 }
 
+
 /**
  * 用户的个人标签
  */
-const userLabelSchema = {
+const UserLabelSchema = {
 	/** 标签 ID */
 	id: { type: Number, required: true },
 	/** 标签名 */
 	labelName: { type: String, required: true },
+}
+
+/**
+ * 用户的关联账户
+ */
+const UserLinkAccountsSchema = {
+	/** 关联账户类型 - 例："X" */
+	accountType: { type: String, required: true },
+	/** 关联账户唯一标识 */
+	accountUniqueId: { type: String, required: true },
+}
+
+/**
+ * 用户的关联网站
+ */
+const UserWebsiteSchema = {
+	/** 关联网站名 - 例："我的个人主页" */
+	websiteName: { type: String, required: true },
+	/** 关联网站 URL */
+	websiteUrl: { type: String, required: true },
 }
 
 /**
@@ -52,7 +78,15 @@ export const UserInfoSchema = {
 		/** 用户的性别，男、女和自定义（字符串）v */
 		gender: { type: String },
 		/** 用户的个人标签 */
-		label: { type: [userLabelSchema], required: false },
+		label: { type: [UserLabelSchema], required: false },
+		/** 用户生日 */
+		userBirthday: { type: Number },
+		/** 用户主页 Markdown */
+		userProfileMarkdown: { type: String },
+		/** 用户的关联账户 */
+		userLinkAccounts: { type: [UserLinkAccountsSchema], required: false },
+		/** 用户关联网站 */
+		userWebsite: { type: UserWebsiteSchema },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	},

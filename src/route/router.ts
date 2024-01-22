@@ -1,7 +1,7 @@
 import Router from 'koa-router'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettings, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
 
@@ -56,17 +56,38 @@ router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或�
 // 	"signature": "aaaaaaaaaaaaaaa",
 // 	"gender": "AH-64",
 // 	"label": [
-// 		{
-// 			"id": "0",
-// 			"labelName": "bbbbbb",
-// 		}
-// 	]
+// 			{
+// 					"id": "0",
+// 					"labelName": "bbbbbb"
+// 			}
+// 	],
+// 	"userBirthday": 1705327908351,
+// 	"userProfileMarkdown": "### 小作文时间！",
+// 	"userLinkAccounts": [
+// 			{
+// 					"accountType": "X",
+// 					"accountUniqueId": "xxx"
+// 			},
+// 			{
+// 					"accountType": "bili",
+// 					"accountUniqueId": "xxxx"
+// 			}
+// 	],
+// 	"userWebsite": {
+// 			"websiteName": "XXXXXXXX",
+// 			"websiteUrl": "https://xxxx.xxx/xxxxx"
+// 	}
 // }
 
 
-router.get('/user/self', getSelfUserInfoController) // 获取当前登录的用户信息
+router.post('/user/self', getSelfUserInfoController) // 获取当前登录的用户信息，可以通过 cookie 传递，也可以通过请求体
 // https://localhost:9999/user/self
 // cookie: uid, token
+// or
+// {
+// 	"uid": "XXXXXXXXX",
+// 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// }
 
 router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户信息
 // https://localhost:9999/user/info?uid=10
@@ -82,6 +103,20 @@ router.get('/user/logout', userLogoutController) // 清除浏览器中的 cookie
 router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 获取用于上传头像的预签名 URL, 上传限时 60 秒
 // https://localhost:9999/user/avatar/preUpload
 // cookie: uid, token
+
+router.post('/user/settings', getUserSettings) // TODO // WARN 实验性：在服务端或客户端获取用户设置信息用以正确渲染页面，施工中
+// https://localhost:9999/user/settings
+// cookie: uid, token
+// or
+// {
+// 	"uid": "XXXXXXXXX",
+// 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// }
+//
+// 施工中，总是返回： { success: true, userSettings: { coloredSideBar: true } }
+
+
+
 
 
 

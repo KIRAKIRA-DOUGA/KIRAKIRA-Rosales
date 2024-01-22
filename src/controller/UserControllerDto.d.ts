@@ -8,6 +8,10 @@ export type UserRegistrationRequestDto = {
 	passwordHash: string;
 	/** 密码提示 */
 	passwordHint?: string;
+
+	// // TODO 用户创建时间
+	// /** 用户创建时间 */
+	// userCreateDate: number;
 }
 
 /**
@@ -106,6 +110,38 @@ export type BeforeHashPasswordDataType = {
 	passwordHash: string;
 }
 
+
+
+/**
+ * 用户的个人标签
+ */
+export type UserLabel = {
+	/** 标签 ID */
+	id: number;
+	/** 标签名 */
+	labelName: string;
+}
+
+/**
+ * 用户的关联账户
+ */
+export type UserLinkAccounts = {
+	/** 关联账户类型 - 例："X" */
+	accountType: string;
+	/** 关联账户唯一标识 */
+	accountUniqueId: string;
+}
+
+/**
+ * 用户的关联网站
+ */
+export type UserWebsite = {
+	/** 关联网站名 - 例："我的个人主页" */
+	websiteName: string;
+	/** 关联网站 URL */
+	websiteUrl: string;
+}
+
 /**
  * 更新或创建用户信息时的请求参数
  */
@@ -121,18 +157,17 @@ export type UpdateOrCreateUserInfoRequestDto = {
 	/** 用户的性别，男、女和自定义（字符串） */
 	gender?: string;
 	/** 用户的个人标签 */
-	label: UserLabelSchema[];
+	label?: UserLabel[];
+	/** 用户生日 */
+	userBirthday?: number;
+	/** 用户主页 Markdown */
+	userProfileMarkdown?: string;
+	/** 用户的关联账户 */
+	userLinkAccounts?: UserLinkAccounts[];
+	/** 用户的关联网站 */
+	userWebsite?: UserWebsite;
 }
 
-/**
- * 用户的个人标签
- */
-export type UserLabelSchema = {
-	/** 标签 ID */
-	id: number;
-	/** 标签名 */
-	labelName: string;
-}
 
 /**
  * 更新或创建用户信息的请求结果
@@ -143,22 +178,19 @@ export type UpdateOrCreateUserInfoResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 	/** 请求结果 */
-	result?: {
-		/** 用户的 UID */
-		uid: number;
-		/** 用户名 */
-		username?: string;
-		/** 用户头像的链接 */
-		avatar?: string;
-		/** 用户背景图片的链接 */
-		userBannerImage?: string;
-		/** 用户的个性签名 */
-		signature?: string;
-		/** 用户的性别，男、女和自定义（字符串） */
-		gender?: string;
-		/** 用户的个人标签 */
-		label?: UserLabelSchema[];
-	};
+	result?: {} & UpdateOrCreateUserInfoRequestDto;
+}
+
+
+
+/**
+ * 获取当前登录的用户信息的请求参数
+ */
+export type GetSelfUserInfoRequestDto = {
+	/** 用户 ID */
+	uid: number;
+	/** 用户的身分令牌 */
+	token: string;
 }
 
 /**
@@ -170,22 +202,7 @@ export type GetSelfUserInfoResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 	/** 请求结果 */
-	result?: {
-		/** 用户 UID */
-		uid?: number;
-		/** 用户名 */
-		username?: string;
-		/** 用户头像的链接 */
-		avatar?: string;
-		/** 用户背景图片的链接 */
-		userBannerImage?: string;
-		/** 用户的个性签名 */
-		signature?: string;
-		/** 用户的性别，男、女和自定义（字符串） */
-		gender?: string;
-		/** 用户的个人标签 */
-		label?: UserLabelSchema[];
-	};
+	result?: { uid?: number } & UpdateOrCreateUserInfoRequestDto;
 }
 
 /**
@@ -217,7 +234,7 @@ export type GetUserInfoByUidResponseDto = {
 		/** 用户的性别，男、女和自定义（字符串） */
 		gender?: string;
 		/** 用户的个人标签 */
-		label?: UserLabelSchema[];
+		label?: UserLabel[];
 	};
 }
 
@@ -254,3 +271,8 @@ export type GetUserAvatarUploadSignedUrlResultDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+
+/**
+ * 获取用于渲染页面的用户设定的请求参数
+ */
+export type GetUserSettingsRequestDto = {} & GetSelfUserInfoRequestDto

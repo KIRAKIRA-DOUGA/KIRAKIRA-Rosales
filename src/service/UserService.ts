@@ -1,7 +1,8 @@
 import { InferSchemaType, Schema } from 'mongoose'
 import { generateSaltedHash } from '../common/HashTool.js'
+import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
@@ -31,6 +32,9 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				const uid = (await getNextSequenceValueService('user')).sequenceValue
 				if (uid !== null && uid !== undefined) {
 					type UserAuth = InferSchemaType<typeof schema>
+
+					// TODO 添加创建日期字段，先获取用户创建日期，如果没有创建日期则以当前日期为创建日期
+					
 					const user: UserAuth = {
 						uid,
 						email,
@@ -206,6 +210,11 @@ export const userExistsCheckService = async (userExistsCheckRequest: UserExistsC
 	}
 }
 
+/**
+ * 修改用户的 email
+ * @param updateUserEmailRequest 修改用户的 email 的请求参数
+ * @returns 修改用户的 email 的请求响应
+ */
 export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserEmailRequestDto): Promise<UpdateUserEmailResponseDto> => {
 	try {
 		if (checkUpdateUserEmailRequest(updateUserEmailRequest)) {
@@ -308,7 +317,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 }
 
 /**
- * 更新或创建用户信息
+ * 根据 UID 更新或创建用户信息
  * @param updateUserInfoRequest 更新或创建用户信息时的请求参数
  * @param uid 用户 ID
  * @param token 用户 token
@@ -327,6 +336,8 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 				const updateUserInfoUpdate: UserInfo = {
 					uid,
 					...updateOrCreateUserInfoRequest,
+					label: updateOrCreateUserInfoRequest.label,
+					userLinkAccounts: updateOrCreateUserInfoRequest.userLinkAccounts,
 					editDateTime: new Date().getTime(),
 				}
 				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schema, collectionName)
@@ -337,8 +348,8 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 					return { success: false, message: '更新用户信息失败，没有返回用户数据' }
 				}
 			} else {
-				console.error('ERROR', '更新用户信息时失败，未找到必要的数据：', { updateOrCreateUserInfoRequest, uid, token })
-				return { success: false, message: '更新用户数据时失败，未找到必要的数据' }
+				console.error('ERROR', '更新用户信息时失败，未找到必要的数据，或者关联账户平台类型不合法：', { updateOrCreateUserInfoRequest, uid, token })
+				return { success: false, message: '更新用户数据时失败，必要的数据为空或关联平台信息出错' }
 			}
 		} else {
 			console.error('ERROR', '更新用户数据时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uid, token })
@@ -356,8 +367,10 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
  * @param token 用户 token
  * @returns 获取到的当前登录的用户信息
  */
-export const getSelfUserInfoService = async (uid: number, token: string): Promise<GetSelfUserInfoResponseDto> => {
+export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUserInfoRequestDto): Promise<GetSelfUserInfoResponseDto> => {
 	try {
+		const uid = getSelfUserInfoRequest.uid
+		const token = getSelfUserInfoRequest.token
 		if (uid !== null && uid !== undefined && token) {
 			if (await checkUserToken(uid, token)) {
 				const { collectionName, schema: userInfoSchema } = UserInfoSchema
@@ -479,7 +492,8 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 			const updateUserInfoUpdate: UserInfo = {
 				uid,
 				avatar: `https://kirafile.com/${fileName}`,
-				label: [],
+				label: undefined,
+				userLinkAccounts: undefined,
 				editDateTime: now,
 			}
 			const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schema, collectionName)
@@ -723,7 +737,39 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 	}
 }
 
+/**
+ * 检查更新或创建用户信息的请求参数
+ * @param updateOrCreateUserInfoRequest 更新或创建用户信息的请求参数
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
 const checkUpdateOrCreateUserInfoRequest = (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto): boolean => {
-	// TODO 好吧，这里没有什么可以验证的，因为它的所有参数都是可选的，也许我们应该在未来为其添加更多验证以避免可能的注入风险
-	return !!updateOrCreateUserInfoRequest
+	// TODO 也许我们应该在未来为其添加更多验证以避免可能的注入风险
+
+	// WARN // TODO 或许这些数据放到环境变量里更好？
+	const ALLOWED_ACCOUNT_TYPE = [
+		'X', // Twitter → X
+		'qq',
+		'wechat',
+		'bili', // 哔哩哔哩
+		'niconico',
+		'youtube',
+		'otomadwiki', // 音 MAD 维基
+		'weibo', // 新浪微博
+		'NECM', // 网易云音乐
+		'discord',
+		'telegram',
+		'midishow',
+		'linkedin',
+		'facebook',
+		'ins', // Instagram
+		'douyin', // 抖音
+		'tiktok', // TikTok
+		'pixiv',
+		'coub',
+		'github',
+	]
+	return (
+		!!updateOrCreateUserInfoRequest && !isEmptyObject(updateOrCreateUserInfoRequest)
+		&& updateOrCreateUserInfoRequest.userLinkAccounts.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))
+	)
 }

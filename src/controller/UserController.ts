@@ -1,6 +1,6 @@
 import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { GetUserInfoByUidRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -107,6 +107,10 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 		signature: data?.signature,
 		gender: data?.gender,
 		label: data?.label,
+		userBirthday: data?.userBirthday,
+		userProfileMarkdown: data?.userProfileMarkdown,
+		userLinkAccounts: data?.userLinkAccounts,
+		userWebsite: data?.userWebsite,
 	}
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
@@ -121,9 +125,17 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
  * @return GetSelfUserInfoResponseDto 当前登录的用户信息，如果获取成功则 success: true，不成功则 success: false
  */
 export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
-	const token = ctx.cookies.get('token')
-	ctx.body = await getSelfUserInfoService(uid, token)
+	const data = ctx.request.body as Partial<GetSelfUserInfoRequestDto>
+
+	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const token = ctx.cookies.get('token') || data?.token
+
+	const getSelfUserInfoRequest: GetSelfUserInfoRequestDto = {
+		uid,
+		token,
+	}
+
+	ctx.body = await getSelfUserInfoService(getSelfUserInfoRequest)
 	await next()
 }
 
@@ -192,4 +204,27 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
 	const token = ctx.cookies.get('token')
 	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
 	await next()
+}
+
+/**
+ * // TODO // WARN 实验性：在服务端或客户端获取用户设置信息用以正确渲染页面，施工中
+ * 施工中，总是返回： { success: true, userSettings: { coloredSideBar: true } }
+ * @param ctx context
+ * @param next context
+ */
+export const getUserSettings = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<GetSelfUserInfoRequestDto>
+
+	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const token = ctx.cookies.get('token') || data?.token
+
+	await console.log('uid: ', uid) // DELETE ME
+	await console.log('token: ', token) // DELETE ME
+
+	ctx.body = { success: true, userSettings: { coloredSideBar: true } }
+	await next()
+
+
+	// ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
+	// await next()
 }
