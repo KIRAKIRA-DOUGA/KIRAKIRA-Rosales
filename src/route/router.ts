@@ -1,7 +1,7 @@
 import Router from 'koa-router'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettings, updateOrCreateUserInfoController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
 
@@ -104,7 +104,7 @@ router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 
 // https://localhost:9999/user/avatar/preUpload
 // cookie: uid, token
 
-router.post('/user/settings', getUserSettings) // TODO // WARN 实验性：在服务端或客户端获取用户设置信息用以正确渲染页面，施工中
+router.post('/user/settings', getUserSettingsController) // 在服务端或客户端获取用户设置信息用以正确渲染页面
 // https://localhost:9999/user/settings
 // cookie: uid, token
 // or
@@ -112,11 +112,13 @@ router.post('/user/settings', getUserSettings) // TODO // WARN 实验性：在�
 // 	"uid": "XXXXXXXXX",
 // 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 // }
-//
-// 施工中，总是返回： { success: true, userSettings: { coloredSideBar: true } }
 
-
-
+router.post('/user/settings/update', updateOrCreateUserSettingsController) // 更新或创建用户设置
+// https://localhost:9999/user/settings/update
+// cookie: uid, token
+// {
+// 	"coloredSideBar": "true"
+// }
 
 
 

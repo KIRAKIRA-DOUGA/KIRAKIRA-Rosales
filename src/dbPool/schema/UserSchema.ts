@@ -33,9 +33,9 @@ export const UserAuthSchema = {
  * 用户的个人标签
  */
 const UserLabelSchema = {
-	/** 标签 ID */
+	/** 标签 ID - 非空 */
 	id: { type: Number, required: true },
-	/** 标签名 */
+	/** 标签名 - 非空 */
 	labelName: { type: String, required: true },
 }
 
@@ -43,9 +43,9 @@ const UserLabelSchema = {
  * 用户的关联账户
  */
 const UserLinkAccountsSchema = {
-	/** 关联账户类型 - 例："X" */
+	/** 关联账户类型 - 非空 - 例："X" */
 	accountType: { type: String, required: true },
-	/** 关联账户唯一标识 */
+	/** 关联账户唯一标识 - 非空 */
 	accountUniqueId: { type: String, required: true },
 }
 
@@ -53,9 +53,9 @@ const UserLinkAccountsSchema = {
  * 用户的关联网站
  */
 const UserWebsiteSchema = {
-	/** 关联网站名 - 例："我的个人主页" */
+	/** 关联网站名 - 非空 - 例："我的个人主页" */
 	websiteName: { type: String, required: true },
-	/** 关联网站 URL */
+	/** 关联网站 URL - 非空 */
 	websiteUrl: { type: String, required: true },
 }
 
@@ -92,4 +92,70 @@ export const UserInfoSchema = {
 	},
 	/** MongoDB 集合名 */
 	collectionName: 'user-info',
+}
+
+
+/**
+ * 用户关联账户的隐私设置
+ */
+const UserLinkAccountsPrivacySettingSchema = {
+	/** 关联账户类型 - 非空 - 例："X" */
+	accountType: { type: String, required: true },
+	/** 显示方式 - 非空 - 允许的值有：{public: 公开, following: 仅关注, private: 隐藏} */
+	privacyType: { type: String, required: true },
+}
+
+/**
+ * 用户个性设定集合
+ */
+export const UserSettingsSchema = {
+	/** MongoDB Schema */
+	schema: {
+		/** 用户的 UID - 非空 - 唯一 */
+		uid: { type: Number, unique: true, required: true },
+		/** 是否启用 Cookie - 布尔 */
+		enableCookie: { type: Boolean },
+		/** 主题外观设置（主题类型） - 可选的值：{light: 浅色, dark: 深色, system: 跟随系统} */
+		themeType: { type: String },
+		/** 主题颜色 - 字符串，颜色字符串 */
+		themeColor: { type: String },
+		/** 壁纸（背景图 URL） - 字符串 */
+		wallpaper: { type: String },
+		/** 是否启用彩色导航栏 - 布尔 */
+		coloredSideBar: { type: Boolean },
+		/** 节流模式 - 字符串，{standard: 标准, limit: 节流模式, preview: 超前加载} */
+		dataSaverMode: { type: String },
+		/** 禁用搜索推荐 - 布尔 */
+		noSearchRecommendations: { type: Boolean },
+		/** 禁用相关视频推荐 - 布尔 */
+		noRelatedVideos: { type: Boolean },
+		/** 禁用搜索历史 - 布尔 */
+		noRecentSearch: { type: Boolean },
+		/** 禁用视频历史 - 布尔 */
+		noViewHistory: { type: Boolean },
+		/** 是否在新窗口打开视频 - 布尔 */
+		openInNewWindow: { type: Boolean },
+		/** 显示语言 - 字符串 */
+		currentLocale: { type: String },
+		/** 用户时区 - 字符串 */
+		timezone: { type: String },
+		/** 用户单位制度 - 字符串，刻度制或分度值，英制或美制等内容 */
+		unitSystemType: { type: String },
+		/** 是否进入了开发者模式 - 布尔 */
+		devMode: { type: Boolean },
+		/** 实验性：启用动态背景 - 布尔 */
+		showCssDoodle: { type: Boolean },
+		/** 实验性：启用直角模式 - 布尔 */
+		sharpAppearanceMode: { type: Boolean },
+		/** 实验性：启用扁平模式 - 布尔 */
+		flatAppearanceMode: { type: Boolean },
+		/** 用户关联网站的隐私设置 */
+		userWebsitePrivacySetting: { type: String },
+		/** 用户关联账户的隐私设置 */
+		userLinkAccountsPrivacySetting: { type: [UserLinkAccountsPrivacySettingSchema] },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	},
+	/** MongoDB 集合名 // WARN 不要使用单词的复数形式，Mongoose 会自动添加！ */
+	collectionName: 'user-setting',
 }
