@@ -244,6 +244,7 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 			return (value !== undefined && value !== null)
 		}
 		const userSettingsCookieOption = {
+			httpOnly: false,
 			secure: true,
 			sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 			expires: new Date('9999/9/9'),
