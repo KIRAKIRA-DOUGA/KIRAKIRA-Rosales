@@ -16,7 +16,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 		passwordHint: data?.passwordHint,
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
-	
+
 	const cookieOption = {
 		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
 		secure: true,
@@ -237,87 +237,6 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 		...data,
 	}
 
-	const updateOrCreateResult = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uid, token)
-
-	if (updateOrCreateResult.success) {
-		const checkNotNull = (value: unknown): boolean => {
-			return (value !== undefined && value !== null)
-		}
-		const userSettingsCookieOption = {
-			httpOnly: false,
-			secure: true,
-			sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-			expires: new Date('9999/9/9'),
-			// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
-		}
-		
-		checkNotNull(updateOrCreateResult.userSettings.enableCookie) && ctx.cookies.set('enable-cookie', `${updateOrCreateResult.userSettings.enableCookie}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.themeType) && ctx.cookies.set('theme-type', `${updateOrCreateResult.userSettings.themeType}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.themeColor) && ctx.cookies.set('theme-color', `${updateOrCreateResult.userSettings.themeColor}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.wallpaper) && ctx.cookies.set('wallpaper', `${updateOrCreateResult.userSettings.wallpaper}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.dataSaverMode) && ctx.cookies.set('data-saver-mode', `${updateOrCreateResult.userSettings.dataSaverMode}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.noSearchRecommendations) && ctx.cookies.set('no-search-recommendations', `${updateOrCreateResult.userSettings.noSearchRecommendations}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.noRelatedVideos) && ctx.cookies.set('no-related-videos', `${updateOrCreateResult.userSettings.noRelatedVideos}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.noRecentSearch) && ctx.cookies.set('no-recent-search', `${updateOrCreateResult.userSettings.noRecentSearch}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.noViewHistory) && ctx.cookies.set('no-view-history', `${updateOrCreateResult.userSettings.noViewHistory}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.openInNewWindow) && ctx.cookies.set('open-in-new-window', `${updateOrCreateResult.userSettings.openInNewWindow}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.currentLocale) && ctx.cookies.set('current-locale', `${updateOrCreateResult.userSettings.currentLocale}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.timezone) && ctx.cookies.set('timezone', `${updateOrCreateResult.userSettings.timezone}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.devMode) && ctx.cookies.set('dev-mode', `${updateOrCreateResult.userSettings.devMode}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.showCssDoodle) && ctx.cookies.set('show-css-doodle', `${updateOrCreateResult.userSettings.showCssDoodle}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.sharpAppearanceMode) && ctx.cookies.set('sharp-appearance-mode', `${updateOrCreateResult.userSettings.sharpAppearanceMode}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.flatAppearanceMode) && ctx.cookies.set('flat-appearance-mode', `${updateOrCreateResult.userSettings.flatAppearanceMode}`, userSettingsCookieOption)
-		checkNotNull(updateOrCreateResult.userSettings.userWebsitePrivacySetting) && ctx.cookies.set('user-website-privacy-setting', `${updateOrCreateResult.userSettings.userWebsitePrivacySetting}`, userSettingsCookieOption)
-		
-
-
-
-
-
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-
-		// /** 用户关联账户的隐私设置 */
-		// userLinkAccountsPrivacySetting?: UserLinkAccountsPrivacySettingDto[];
-
-
-
-
-
-
-		
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		// checkNotNull(updateOrCreateResult.userSettings.coloredSideBar) && ctx.cookies.set('colored-side-bar', `${updateOrCreateResult.userSettings.coloredSideBar}`, userSettingsCookieOption)
-		//
-		// enableCookie?: boolean;
-		// themeType?: 'light' | 'dark' | 'system';
-		// themeColor?: string;
-		// wallpaper?: string;
-		// coloredSideBar?: boolean;
-		// dataSaverMode?: 'standard' | 'limit' | 'preview';
-		// noSearchRecommendations?: boolean;
-		// noRelatedVideos?: boolean;
-		// noRecentSearch?: boolean;
-		// noViewHistory?: boolean;
-		// openInNewWindow?: boolean;
-		// currentLocale?: string;
-		// timezone?: string;
-		// unitSystemType?: string;
-		// devMode?: boolean;
-		// showCssDoodle?: boolean;
-		// sharpAppearanceMode?: boolean;
-		// flatAppearanceMode?: boolean;
-		// /** 用户关联网站的隐私设置 */
-		// userWebsitePrivacySetting?: string
-		// /** 用户关联账户的隐私设置 */
-		// userLinkAccountsPrivacySetting?: UserLinkAccountsPrivacySettingDto[];
-	}
-
-	ctx.body = updateOrCreateResult
+	ctx.body = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uid, token)
 	await next()
 }
