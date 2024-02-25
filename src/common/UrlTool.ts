@@ -1,3 +1,7 @@
+/**
+ * 获取正确的 Cookie Domain 设置
+ * @returns string Cookie Domain
+ */
 export function getCorrectCookieDomain(): string {
 	try {
 		const serverEnv = process.env.SERVER_ENV
