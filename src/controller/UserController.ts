@@ -1,3 +1,4 @@
+import { getCorrectCookieDomain } from '../common/UrlTool.js'
 import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
@@ -181,7 +182,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 0, // 立即过期
 		expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
-		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
+		domain: getCorrectCookieDomain(), // TODO 如果你在生产环境，可以设置 domain
 	}
 
 	ctx.cookies.set('token', '', cookieOption)
