@@ -23,7 +23,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 		secure: true,
 		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
+		domain: getCorrectCookieDomain(),
 	}
 	ctx.cookies.set('token', userRegistrationResult.token, cookieOption)
 	ctx.cookies.set('email', data?.email, cookieOption)
@@ -51,7 +51,7 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 		secure: true,
 		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		// domain: 'yourdomain.com'   // TODO 如果你在生产环境，可以设置 domain
+		domain: getCorrectCookieDomain(),
 	}
 	ctx.cookies.set('token', userLoginResult.token, cookieOption)
 	ctx.cookies.set('email', userLoginResult.email, cookieOption)
@@ -182,7 +182,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
 		maxAge: 0, // 立即过期
 		expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
-		domain: getCorrectCookieDomain(), // TODO 如果你在生产环境，可以设置 domain
+		domain: getCorrectCookieDomain(),
 	}
 
 	ctx.cookies.set('token', '', cookieOption)
