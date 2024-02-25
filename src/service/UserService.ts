@@ -1,10 +1,11 @@
 import { InferSchemaType, Schema } from 'mongoose'
 import { generateSaltedHash } from '../common/HashTool.js'
+import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserInfoSchema, UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { createR2PutSignedUrl } from '../oss/CreateR2Client.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 
@@ -31,6 +32,9 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				const uid = (await getNextSequenceValueService('user')).sequenceValue
 				if (uid !== null && uid !== undefined) {
 					type UserAuth = InferSchemaType<typeof schema>
+
+					// TODO 添加创建日期字段，先获取用户创建日期，如果没有创建日期则以当前日期为创建日期
+					
 					const user: UserAuth = {
 						uid,
 						email,
@@ -206,6 +210,11 @@ export const userExistsCheckService = async (userExistsCheckRequest: UserExistsC
 	}
 }
 
+/**
+ * 修改用户的 email
+ * @param updateUserEmailRequest 修改用户的 email 的请求参数
+ * @returns 修改用户的 email 的请求响应
+ */
 export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserEmailRequestDto): Promise<UpdateUserEmailResponseDto> => {
 	try {
 		if (checkUpdateUserEmailRequest(updateUserEmailRequest)) {
@@ -308,7 +317,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 }
 
 /**
- * 更新或创建用户信息
+ * 根据 UID 更新或创建用户信息
  * @param updateUserInfoRequest 更新或创建用户信息时的请求参数
  * @param uid 用户 ID
  * @param token 用户 token
@@ -327,21 +336,23 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 				const updateUserInfoUpdate: UserInfo = {
 					uid,
 					...updateOrCreateUserInfoRequest,
+					label: updateOrCreateUserInfoRequest.label,
+					userLinkAccounts: updateOrCreateUserInfoRequest.userLinkAccounts,
 					editDateTime: new Date().getTime(),
 				}
 				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schema, collectionName)
 				if (updateResult && updateResult.success && updateResult.result) {
 					return { success: true, message: '更新用户信息成功', result: updateResult.result }
 				} else {
-					console.error('ERROR', '更新用户信息失败，没有返回用户数据', { updateOrCreateUserInfoRequest, uid, token })
+					console.error('ERROR', '更新用户信息失败，没有返回用户数据', { updateOrCreateUserInfoRequest, uid })
 					return { success: false, message: '更新用户信息失败，没有返回用户数据' }
 				}
 			} else {
-				console.error('ERROR', '更新用户信息时失败，未找到必要的数据：', { updateOrCreateUserInfoRequest, uid, token })
-				return { success: false, message: '更新用户数据时失败，未找到必要的数据' }
+				console.error('ERROR', '更新用户信息时失败，未找到必要的数据，或者关联账户平台类型不合法：', { updateOrCreateUserInfoRequest, uid })
+				return { success: false, message: '更新用户数据时失败，必要的数据为空或关联平台信息出错' }
 			}
 		} else {
-			console.error('ERROR', '更新用户数据时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uid, token })
+			console.error('ERROR', '更新用户数据时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uid })
 			return { success: false, message: '更新用户数据时失败，非法用户！' }
 		}
 	} catch (error) {
@@ -352,12 +363,13 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 
 /**
  * 获取当前登录的用户信息
- * @param uid 用户 ID
- * @param token 用户 token
+ * @param getSelfUserInfoRequest 获取当前登录的用户信息的请求参数
  * @returns 获取到的当前登录的用户信息
  */
-export const getSelfUserInfoService = async (uid: number, token: string): Promise<GetSelfUserInfoResponseDto> => {
+export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUserInfoRequestDto): Promise<GetSelfUserInfoResponseDto> => {
 	try {
+		const uid = getSelfUserInfoRequest.uid
+		const token = getSelfUserInfoRequest.token
 		if (uid !== null && uid !== undefined && token) {
 			if (await checkUserToken(uid, token)) {
 				const { collectionName, schema: userInfoSchema } = UserInfoSchema
@@ -479,7 +491,8 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 			const updateUserInfoUpdate: UserInfo = {
 				uid,
 				avatar: `https://kirafile.com/${fileName}`,
-				label: [],
+				label: undefined,
+				userLinkAccounts: undefined,
 				editDateTime: now,
 			}
 			const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schema, collectionName)
@@ -498,6 +511,117 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 		console.error('ERROR', '获取上传图片用的预签名 URL 失败，错误信息', error, { uid })
 	}
 }
+
+/**
+ * 获取用户个性设置数据
+ * @param uid 用户 ID
+ * @param token 用户 token
+ * @returns 用户个性设置数据
+ */
+export const getUserSettingsService = async (uid: number, token: string): Promise<GetUserSettingsResponseDto> => {
+	try {
+		if (await checkUserToken(uid, token)) {
+			const { collectionName, schema: userSettingsSchema } = UserSettingsSchema
+			const schema = new Schema(userSettingsSchema)
+			type UserSettings = InferSchemaType<typeof schema>
+			const getUserSettingsWhere: QueryType<UserSettings> = {
+				uid,
+			}
+			const getUserSettingsSelect: SelectType<UserSettings> = {
+				uid: 1,
+				enableCookie: 1,
+				themeType: 1,
+				themeColor: 1,
+				wallpaper: 1,
+				coloredSideBar: 1,
+				dataSaverMode: 1,
+				noSearchRecommendations: 1,
+				noRelatedVideos: 1,
+				noRecentSearch: 1,
+				noViewHistory: 1,
+				openInNewWindow: 1,
+				currentLocale: 1,
+				timezone: 1,
+				unitSystemType: 1,
+				devMode: 1,
+				showCssDoodle: 1,
+				sharpAppearanceMode: 1,
+				flatAppearanceMode: 1,
+				userLinkAccountsPrivacySetting: 1,
+				userWebsitePrivacySetting: 1,
+				editDateTime: 1,
+			}
+			try {
+				const userSettingsResult = await selectDataFromMongoDB(getUserSettingsWhere, getUserSettingsSelect, schema, collectionName)
+				const userSettings = userSettingsResult?.result?.[0]
+				if (userSettingsResult?.success && userSettings) {
+					return { success: true, message: '获取用户设置成功！', userSettings }
+				} else {
+					console.error('ERROR', '获取用户个性设置失败，晨讯成功，但获取数据失败或数据为空：', { uid })
+					return { success: false, message: '获取用户个性设置失败，数据查询未成功' }
+				}
+			} catch (error) {
+				console.error('ERROR', '获取用户个性设置失败，查询数据时出错：', { uid })
+				return { success: false, message: '获取用户个性设置失败，查询数据时出错' }
+			}
+		} else {
+			console.error('ERROR', '获取用户个性设置失败，用户验证时未通过：', { uid })
+			return { success: false, message: '获取用户个性设置失败，用户验证时未通过' }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取用户个性设置失败，未知异常：', error)
+		return { success: false, message: '获取用户个性设置失败，未知异常' }
+	}
+}
+
+
+/**
+ * 根据 UID 更新或创建用户设置
+ * @param updateOrCreateUserSettingsRequest 更新或创建用户设置时的请求参数
+ * @param uid 用户 ID
+ * @param token 用户 token
+ * @returns 更新或创建用户设置的请求结果
+ */
+export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettingsRequest: UpdateOrCreateUserSettingsRequestDto, uid: number, token: string): Promise<UpdateOrCreateUserSettingsResponseDto> => {
+	try {
+		if (await checkUserToken(uid, token)) {
+			if (checkUpdateOrCreateUserSettingsRequest(updateOrCreateUserSettingsRequest)) {
+				const { collectionName, schema: userSettingsSchema } = UserSettingsSchema
+				const schema = new Schema(userSettingsSchema)
+				type UserSettings = InferSchemaType<typeof schema>
+				const updateOrCreateUserSettingsWhere: QueryType<UserSettings> = {
+					uid,
+				}
+				const updateOrCreateUserSettingsUpdate: UserSettings = {
+					uid,
+					...updateOrCreateUserSettingsRequest,
+					userLinkAccountsPrivacySetting: updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting,
+					editDateTime: new Date().getTime(),
+				}
+				const updateResult = await findOneAndUpdateData4MongoDB(updateOrCreateUserSettingsWhere, updateOrCreateUserSettingsUpdate, schema, collectionName)
+				const userSettings = updateResult?.result?.[0]
+				if (updateResult?.success) {
+					return { success: true, message: '更新或创建用户设置成功', userSettings: userSettings || updateOrCreateUserSettingsUpdate }
+				} else {
+					console.error('ERROR', '更新或创建用户设置失败，没有返回用户设置数据', { updateOrCreateUserSettingsRequest, uid })
+					return { success: false, message: '更新或创建用户设置失败，没有返回用户设置数据' }
+				}
+			} else {
+				console.error('ERROR', '更新或创建用户设置失败，未找到必要的数据，或者关联账户平台类型不合法：', { updateOrCreateUserSettingsRequest, uid })
+				return { success: false, message: '更新或创建用户设置失败，必要的数据为空或关联平台信息出错' }
+			}
+		} else {
+			console.error('ERROR', '更新或创建用户设置失败，token 校验失败，非法用户！', { updateOrCreateUserSettingsRequest, uid })
+			return { success: false, message: '更新或创建用户设置失败，非法用户！' }
+		}
+	} catch (error) {
+		console.error('ERROR', '更新或创建用户设置时失败，未知异常', error)
+		return { success: false, message: '更新或创建用户设置失败，未知异常' }
+	}
+}
+
+
+
 
 
 /**
@@ -723,7 +847,69 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 	}
 }
 
+
+// WARN // TODO 或许这些数据放到环境变量里更好？
+const ALLOWED_ACCOUNT_TYPE = [
+	'X', // Twitter → X
+	'qq',
+	'wechat',
+	'bili', // 哔哩哔哩
+	'niconico',
+	'youtube',
+	'otomadwiki', // 音 MAD 维基
+	'weibo', // 新浪微博
+	'NECM', // 网易云音乐
+	'discord',
+	'telegram',
+	'midishow',
+	'linkedin',
+	'facebook',
+	'ins', // Instagram
+	'douyin', // 抖音
+	'tiktok', // TikTok
+	'pixiv',
+	'coub',
+	'github',
+]
+
+/**
+ * 检查更新或创建用户信息的请求参数
+ * @param updateOrCreateUserInfoRequest 更新或创建用户信息的请求参数
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
 const checkUpdateOrCreateUserInfoRequest = (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto): boolean => {
-	// TODO 好吧，这里没有什么可以验证的，因为它的所有参数都是可选的，也许我们应该在未来为其添加更多验证以避免可能的注入风险
-	return !!updateOrCreateUserInfoRequest
+	// TODO 也许我们应该在未来为其添加更多验证以避免可能的注入风险
+
+	if (!updateOrCreateUserInfoRequest || isEmptyObject(updateOrCreateUserInfoRequest)) {
+		return false
+	}
+
+	if (updateOrCreateUserInfoRequest.userLinkAccounts) {
+		if (updateOrCreateUserInfoRequest.userLinkAccounts.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
+			return false
+		}
+	}
+
+	return true
+}
+
+/**
+ * 检查更新或创建用户设置时的请求参数
+ * @param updateOrCreateUserSettingsRequest 更新或创建用户设置时的请求参数
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkUpdateOrCreateUserSettingsRequest = (updateOrCreateUserSettingsRequest: UpdateOrCreateUserSettingsRequestDto): boolean => {
+	// TODO 也许我们应该在未来为其添加更多验证以避免可能的注入风险
+
+	if (!updateOrCreateUserSettingsRequest || isEmptyObject(updateOrCreateUserSettingsRequest)) {
+		return false
+	}
+
+	if (updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting) {
+		if (updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
+			return false
+		}
+	}
+
+	return true
 }

@@ -1,6 +1,6 @@
-import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, updateOrCreateUserInfoService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { GetUserInfoByUidRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -16,7 +16,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 		passwordHint: data?.passwordHint,
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
-	
+
 	const cookieOption = {
 		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
 		secure: true,
@@ -107,6 +107,10 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 		signature: data?.signature,
 		gender: data?.gender,
 		label: data?.label,
+		userBirthday: data?.userBirthday,
+		userProfileMarkdown: data?.userProfileMarkdown,
+		userLinkAccounts: data?.userLinkAccounts,
+		userWebsite: data?.userWebsite,
 	}
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
@@ -121,9 +125,17 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
  * @return GetSelfUserInfoResponseDto 当前登录的用户信息，如果获取成功则 success: true，不成功则 success: false
  */
 export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
-	const token = ctx.cookies.get('token')
-	ctx.body = await getSelfUserInfoService(uid, token)
+	const data = ctx.request.body as Partial<GetSelfUserInfoRequestDto>
+
+	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const token = ctx.cookies.get('token') || data?.token
+
+	const getSelfUserInfoRequest: GetSelfUserInfoRequestDto = {
+		uid,
+		token,
+	}
+
+	ctx.body = await getSelfUserInfoService(getSelfUserInfoRequest)
 	await next()
 }
 
@@ -191,5 +203,40 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
 	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
+	await next()
+}
+
+/**
+ * 在服务端或客户端获取用户个性设置数据用以正确渲染页面
+ * @param ctx context
+ * @param next context
+ */
+export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<GetUserSettingsRequestDto>
+
+	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const token = ctx.cookies.get('token') || data?.token
+
+	ctx.body = await getUserSettingsService(uid, token)
+	await next()
+}
+
+
+/**
+ * 更新或创建用户设置
+ * @param ctx context
+ * @param next context
+ */
+export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<UpdateOrCreateUserSettingsRequestDto>
+
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	const updateOrCreateUserSettingsRequest: UpdateOrCreateUserSettingsRequestDto = {
+		...data,
+	}
+
+	ctx.body = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uid, token)
 	await next()
 }
