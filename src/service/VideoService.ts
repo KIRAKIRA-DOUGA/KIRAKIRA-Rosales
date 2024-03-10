@@ -1,10 +1,10 @@
 import { Client } from '@elastic/elasticsearch'
-import { InferSchemaType, Schema } from 'mongoose'
+import { InferSchemaType } from 'mongoose'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import VideoSchema from '../dbPool/schema/VideoSchema.js'
+import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/elasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/elasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
@@ -34,9 +34,8 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				const videoTags = uploadVideoRequest.videoTags.map(tag => ({ ...tag, editDateTime: nowDate }))
 
 				// 准备上传到 MongoDB 的数据
-				const { collectionName, schema: videoSchema } = VideoSchema
-				const schema = new Schema(videoSchema)
-				type Video = InferSchemaType<typeof schema>
+				const { collectionName, schemaInstance } = VideoSchema
+				type Video = InferSchemaType<typeof schemaInstance>
 				const video: Video = {
 					videoId,
 					videoPart,
@@ -66,7 +65,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				}
 
 				try {
-					const insert2MongoDBPromise = insertData2MongoDB(video, schema, collectionName)
+					const insert2MongoDBPromise = insertData2MongoDB(video, schemaInstance, collectionName)
 					const refreshFlag = true
 					const insert2ElasticsearchPromise = insertData2ElasticsearchCluster(esClient, esIndexName, videoEsSchema, videoEsData, refreshFlag)
 					const [insert2MongoDBResult, insert2ElasticsearchResult] = await Promise.all([insert2MongoDBPromise, insert2ElasticsearchPromise])
@@ -102,9 +101,8 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
  */
 export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => {
 	try {
-		const { collectionName, schema: videoSchema } = VideoSchema
-		const schema = new Schema(videoSchema)
-		type Video = InferSchemaType<typeof schema>
+		const { collectionName, schemaInstance } = VideoSchema
+		type Video = InferSchemaType<typeof schemaInstance>
 		const where: QueryType<Video> = {}
 		const select: SelectType<Video> = {
 			videoId: 1,
@@ -119,7 +117,7 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			editDateTime: 1,
 		}
 		try {
-			const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 			const videoResult = result.result
 			if (result.success && videoResult) {
 				const videosCount = videoResult?.length
@@ -156,9 +154,8 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvidRequestDto): Promise<GetVideoByKvidResponseDto> => {
 	try {
 		if (checkGetVideoByKvidRequest(getVideoByKvidRequest)) {
-			const { collectionName, schema: videoSchema } = VideoSchema
-			const schema = new Schema(videoSchema)
-			type Video = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = VideoSchema
+			type Video = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<Video> = {
 				videoId: getVideoByKvidRequest.videoId,
 			}
@@ -179,7 +176,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				videoTags: 1,
 			}
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				const videoResult = result.result
 				if (result.success && videoResult) {
 					const videosCount = result.result?.length
@@ -201,7 +198,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 								video,
 							}
 						} else {
-							console.error('ERROR', '视频页 - 获取到的视频为空', { result, getVideoByKvidRequest, VideoSchema, where, select })
+							console.error('ERROR', '视频页 - 获取到的视频为空', { result, getVideoByKvidRequest, where, select })
 							return { success: false, message: '视频页 - 获取到的视频数据为空' }
 						}
 					} else {
@@ -234,9 +231,8 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideoByUidRequestDto): Promise<GetVideoByUidResponseDto> => {
 	try {
 		if (checkGetVideoByUidRequest(getVideoByUidRequest)) {
-			const { collectionName, schema: videoSchema } = VideoSchema
-			const schema = new Schema(videoSchema)
-			type Video = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = VideoSchema
+			type Video = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<Video> = {
 				uploaderId: getVideoByUidRequest.uid,
 			}
@@ -255,7 +251,7 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 			}
 
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				const videoResult = result.result
 				if (result.success && videoResult) {
 					const videoResultLength = videoResult?.length
@@ -297,7 +293,7 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 					query: searchVideoByKeywordRequest.keyword,
 				},
 			}
-		
+
 			try {
 				const esSearchResult = await searchDataFromElasticsearchCluster(client, esIndexName, videoEsSchema, esQuery)
 				if (esSearchResult.success) {

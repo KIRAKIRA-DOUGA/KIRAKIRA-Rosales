@@ -1,8 +1,8 @@
-import { InferSchemaType, Schema } from 'mongoose'
+import { InferSchemaType } from 'mongoose'
 import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidRequestDto, GetDanmakuByKvidResponseDto } from '../controller/DanmakuControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import DanmakuSchema from '../dbPool/schema/DanmakuSchema.js'
+import { DanmakuSchema } from '../dbPool/schema/DanmakuSchema.js'
 import { checkUserTokenService } from './UserService.js'
 
 /**
@@ -16,9 +16,8 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 	try {
 		if (checkEmitDanmakuRequest(emitDanmakuRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
-				const { collectionName, schema: danmakuSchema } = DanmakuSchema
-				const schema = new Schema(danmakuSchema)
-				type Danmaku = InferSchemaType<typeof schema>
+				const { collectionName, schemaInstance } = DanmakuSchema
+				type Danmaku = InferSchemaType<typeof schemaInstance>
 				const nowDate = new Date().getTime()
 				const danmaku: Danmaku = {
 					uid,
@@ -26,7 +25,7 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 					editDateTime: nowDate,
 				}
 				try {
-					const insertData2MongoDBResult = await insertData2MongoDB(danmaku, schema, collectionName)
+					const insertData2MongoDBResult = await insertData2MongoDB(danmaku, schemaInstance, collectionName)
 					if (insertData2MongoDBResult && insertData2MongoDBResult.success) {
 						return { success: true, message: '弹幕发送成功！', danmaku: emitDanmakuRequest }
 					}
@@ -56,13 +55,12 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto): Promise<GetDanmakuByKvidResponseDto> => {
 	try {
 		if (checkGetDanmakuByKvidRequest(getDanmakuByKvidRequest)) {
-			const { collectionName, schema: danmakuSchema } = DanmakuSchema
-			const schema = new Schema(danmakuSchema)
-			type Danmaku = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = DanmakuSchema
+			type Danmaku = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<Danmaku> = {
 				videoId: getDanmakuByKvidRequest.videoId,
 			}
-	
+
 			const select: SelectType<Danmaku> = {
 				videoId: 1,
 				time: 1,
@@ -73,9 +71,9 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 				enableRainbow: 1,
 				editDateTime: 1,
 			}
-			
+
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				const danmakuList = result.result
 				if (result.success) {
 					if (danmakuList && danmakuList.length > 0) {

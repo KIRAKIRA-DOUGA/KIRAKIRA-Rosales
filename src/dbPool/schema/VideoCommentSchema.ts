@@ -1,3 +1,5 @@
+import { Schema } from 'mongoose'
+
 /**
  * 在父评论或子评论中存储的子评论 ID
  */
@@ -48,9 +50,9 @@ export const VideoSubCommentSchema = {
 /**
  * 视频评论数据
  */
-export const VideoCommentSchema = {
+class VideoCommentSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** 评论的路由 - 非空 */ /** 如：1.2.3（视频的第一个评论的第二个回复的第三个回复） */
 		commentRoute: { type: String, required: true },
 		/** KVID 视频 ID - 非空 */
@@ -73,17 +75,20 @@ export const VideoCommentSchema = {
 		subCommentsCount: { type: Number, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 */
-	collectionName: 'video-comment',
+	collectionName = 'video-comment'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
+export const VideoCommentSchema = new VideoCommentSchemaFactory()
 
 /**
  * 视频评论点赞
  */
-export const VideoCommentUpvoteSchema = {
+class VideoCommentUpvoteSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true },
 		/** 评论的ID - 非空 */
@@ -96,18 +101,21 @@ export const VideoCommentUpvoteSchema = {
 		deleteFlag: { type: Boolean, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 */
-	collectionName: 'video-comment-upvote',
+	collectionName = 'video-comment-upvote'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
+export const VideoCommentUpvoteSchema = new VideoCommentUpvoteSchemaFactory()
 
 
 /**
  * 视频评论点踩
  */
-export const VideoCommentDownvoteSchema = {
+class VideoCommentDownvoteSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true },
 		/** 评论的ID - 非空 */
@@ -120,7 +128,11 @@ export const VideoCommentDownvoteSchema = {
 		deleteFlag: { type: Boolean, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 */
-	collectionName: 'video-comment-downvote',
+	collectionName = 'video-comment-downvote'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
+
+export const VideoCommentDownvoteSchema = new VideoCommentDownvoteSchemaFactory()

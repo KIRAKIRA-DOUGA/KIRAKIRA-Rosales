@@ -1,12 +1,19 @@
+import { Schema } from 'mongoose'
+
 /**
  * 自增序列
- * @param _id 自增的项，比如：videoId
- * @param sequenceValue 自增的值
  */
-export const SequenceValueSchema = {
-	schema: {
-		_id: { type: String, unique: true, required: true }, // 例如 'videoId'
+export class SequenceValueSchemaFactory {
+	schema = {
+		/** 自增的项，比如：videoId */
+		_id: { type: String, unique: true, required: true },
+		/** 自增的值 */
 		sequenceValue: { type: Number, required: true },
-	},
-	collectionName: 'sequence-value',
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'sequence-value'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
+
+export const SequenceValueSchema = new SequenceValueSchemaFactory()

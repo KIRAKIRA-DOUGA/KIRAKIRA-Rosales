@@ -1,9 +1,11 @@
+import { Schema } from 'mongoose'
+
 /**
  * 弾幕数据
  */
-const DanmakuSchema = {
+class DanmakuSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true },
 		/** 弹幕发送者的用户的 UID - 非空 */
@@ -22,9 +24,11 @@ const DanmakuSchema = {
 		enableRainbow: { type: Boolean, required: false, default: false },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 */
-	collectionName: 'danmaku',
+	collectionName = 'danmaku'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
 
-export default DanmakuSchema
+export const DanmakuSchema = new DanmakuSchemaFactory()

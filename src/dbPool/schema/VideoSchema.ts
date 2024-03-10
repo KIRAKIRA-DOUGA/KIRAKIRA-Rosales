@@ -1,3 +1,5 @@
+import { Schema } from 'mongoose'
+
 /**
  * 分P 视频的数据
  */
@@ -29,9 +31,9 @@ const VideoTagSchema = {
 /**
  * 视频数据
  */
-const VideoSchema = {
+class VideoSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** KVID 视频 ID - 非空 - 唯一 */
 		videoId: { type: Number, unique: true, required: true },
 		/** 视频标题 - 非空 */
@@ -60,9 +62,11 @@ const VideoSchema = {
 		videoTags: { type: [VideoTagSchema], required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 */
-	collectionName: 'video',
+	collectionName = 'video'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
 
-export default VideoSchema
+export const VideoSchema = new VideoSchemaFactory()

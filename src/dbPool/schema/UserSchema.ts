@@ -1,9 +1,11 @@
+import { Schema } from 'mongoose'
+
 /**
  * 用户安全认证集合
  */
-export const UserAuthSchema = {
+class UserAuthSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** 用户的 UID - 非空 */
 		uid: { type: Number, unique: true, required: true },
 		/** 用户邮箱 - 非空 */
@@ -23,11 +25,13 @@ export const UserAuthSchema = {
 
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 */
-	collectionName: 'user-auth',
+	collectionName = 'user-auth'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
-
+export const UserAuthSchema = new UserAuthSchemaFactory()
 
 /**
  * 用户的个人标签
@@ -62,9 +66,9 @@ const UserWebsiteSchema = {
 /**
  * 用户信息集合
  */
-export const UserInfoSchema = {
+class UserInfoSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** 用户的 UID - 非空 - 唯一 */
 		uid: { type: Number, unique: true, required: true },
 		/** 用户名 - 唯一 */
@@ -89,11 +93,13 @@ export const UserInfoSchema = {
 		userWebsite: { type: UserWebsiteSchema },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 */
-	collectionName: 'user-info',
+	collectionName = 'user-info'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
-
+export const UserInfoSchema = new UserInfoSchemaFactory()
 
 /**
  * 用户关联账户的隐私设置
@@ -108,9 +114,9 @@ const UserLinkAccountsPrivacySettingSchema = {
 /**
  * 用户个性设定集合
  */
-export const UserSettingsSchema = {
+class UserSettingsSchemaFactory {
 	/** MongoDB Schema */
-	schema: {
+	schema = {
 		/** 用户的 UID - 非空 - 唯一 */
 		uid: { type: Number, unique: true, required: true },
 		/** 是否启用 Cookie - 布尔 */
@@ -155,7 +161,10 @@ export const UserSettingsSchema = {
 		userLinkAccountsPrivacySetting: { type: [UserLinkAccountsPrivacySettingSchema] },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
-	},
+	}
 	/** MongoDB 集合名 // WARN 不要使用单词的复数形式，Mongoose 会自动添加！ */
-	collectionName: 'user-setting',
+	collectionName = 'user-setting'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
 }
+export const UserSettingsSchema = new UserSettingsSchemaFactory()

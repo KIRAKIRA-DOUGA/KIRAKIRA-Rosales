@@ -1,4 +1,4 @@
-import { InferSchemaType, Schema } from 'mongoose'
+import { InferSchemaType } from 'mongoose'
 import { generateSaltedHash } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
@@ -27,14 +27,13 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			const { passwordHashHash, salt } = await getHashPasswordAndSalt(beforeHashPasswordData)
 			const token = generateSecureRandomString(64)
 			if (passwordHashHash && token) {
-				const { collectionName, schema: userAuthSchema } = UserAuthSchema
-				const schema = new Schema(userAuthSchema)
+				const { collectionName, schemaInstance } = UserAuthSchema
 				const uid = (await getNextSequenceValueService('user')).sequenceValue
 				if (uid !== null && uid !== undefined) {
-					type UserAuth = InferSchemaType<typeof schema>
+					type UserAuth = InferSchemaType<typeof schemaInstance>
 
 					// TODO 添加创建日期字段，先获取用户创建日期，如果没有创建日期则以当前日期为创建日期
-					
+
 					const user: UserAuth = {
 						uid,
 						email,
@@ -45,7 +44,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 						editDateTime: new Date().getTime(),
 					}
 					try {
-						await insertData2MongoDB(user, schema, collectionName)
+						await insertData2MongoDB(user, schemaInstance, collectionName)
 					} catch (error) {
 						console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
 						return { success: false, message: '用户注册失败：无法保存用户资料' }
@@ -79,9 +78,8 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		if (checkUserLoginRequest(userLoginRequest)) {
 			const { email, passwordHash } = userLoginRequest
 
-			const { collectionName, schema: userAuthSchema } = UserAuthSchema
-			const schema = new Schema(userAuthSchema)
-			type UserAuth = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = UserAuthSchema
+			type UserAuth = InferSchemaType<typeof schemaInstance>
 			const userSaltAndPasswordHintWhere: QueryType<UserAuth> = {
 				email,
 			}
@@ -95,7 +93,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			let saltResult: DbPoolResultsType<UserAuth>
 
 			try {
-				saltResult = await selectDataFromMongoDB(userSaltAndPasswordHintWhere, userSaltAndPasswordHintSelect, schema, collectionName)
+				saltResult = await selectDataFromMongoDB(userSaltAndPasswordHintWhere, userSaltAndPasswordHintSelect, schemaInstance, collectionName)
 			} catch (error) {
 				console.error('ERROR', `用户登录（查询用户盐）时出现异常，用户邮箱：【${email}】，错误信息：`, error)
 				return { success: false, email, message: '用户登录（初始化用户信息）时出现异常' }
@@ -133,9 +131,9 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 						passwordHint: 1,
 					}
 					let result: DbPoolResultsType<UserAuth>
-		
+
 					try {
-						result = await selectDataFromMongoDB(userLoginWhere, userLoginSelect, schema, collectionName)
+						result = await selectDataFromMongoDB(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
 					} catch (error) {
 						console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，错误信息：`, error)
 						return { success: false, email, message: '用户登录（检索用户信息）时出现异常' }
@@ -176,9 +174,8 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 export const userExistsCheckService = async (userExistsCheckRequest: UserExistsCheckRequestDto): Promise<UserExistsCheckResponseDto> => {
 	try {
 		if (checkUserExistsCheckRequest(userExistsCheckRequest)) {
-			const { collectionName, schema: userAuthSchema } = UserAuthSchema
-			const schema = new Schema(userAuthSchema)
-			type UserAuth = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = UserAuthSchema
+			type UserAuth = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<UserAuth> = {
 				email: userExistsCheckRequest.email,
 			}
@@ -188,7 +185,7 @@ export const userExistsCheckService = async (userExistsCheckRequest: UserExistsC
 
 			let result: DbPoolResultsType<UserAuth>
 			try {
-				result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 			} catch (error) {
 				console.error('ERROR', '验证用户是否存在（查询用户）时出现异常：', error)
 				return { success: false, exists: true, message: '验证用户是否存在时出现异常' }
@@ -220,9 +217,8 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		if (checkUpdateUserEmailRequest(updateUserEmailRequest)) {
 			const { uid, oldEmail, newEmail, passwordHash } = updateUserEmailRequest
 
-			const { collectionName, schema: userAuthSchema } = UserAuthSchema
-			const schema = new Schema(userAuthSchema)
-			type UserAuth = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = UserAuthSchema
+			type UserAuth = InferSchemaType<typeof schemaInstance>
 			const userSaltAndPasswordHintWhere: QueryType<UserAuth> = {
 				uid,
 			}
@@ -235,7 +231,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 
 			let userInfo: DbPoolResultsType<UserAuth>
 			try {
-				userInfo = await selectDataFromMongoDB(userSaltAndPasswordHintWhere, userSaltAndPasswordHintSelect, schema, collectionName)
+				userInfo = await selectDataFromMongoDB(userSaltAndPasswordHintWhere, userSaltAndPasswordHintSelect, schemaInstance, collectionName)
 			} catch (error) {
 				console.error('ERROR', `修改用户邮箱（查询用户信息）时出现异常，用户uid：【${uid}】，错误信息：`, error)
 				return { success: false, message: '更新用户邮箱时出现异常，无法查询用户信息' }
@@ -273,7 +269,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 									passwordHashHash: newPasswordHashHash,
 								}
 								try {
-									const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schema, collectionName)
+									const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
 									if (updateResult && updateResult.success && updateResult.result) {
 										if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
 											return { success: true, message: '用户邮箱更新成功' }
@@ -327,9 +323,8 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 	try {
 		if (await checkUserToken(uid, token)) {
 			if (checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
-				const { collectionName, schema: userInfoSchema } = UserInfoSchema
-				const schema = new Schema(userInfoSchema)
-				type UserInfo = InferSchemaType<typeof schema>
+				const { collectionName, schemaInstance } = UserInfoSchema
+				type UserInfo = InferSchemaType<typeof schemaInstance>
 				const updateUserInfoWhere: QueryType<UserInfo> = {
 					uid,
 				}
@@ -340,7 +335,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 					userLinkAccounts: updateOrCreateUserInfoRequest.userLinkAccounts,
 					editDateTime: new Date().getTime(),
 				}
-				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schema, collectionName)
+				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
 				if (updateResult && updateResult.success && updateResult.result) {
 					return { success: true, message: '更新用户信息成功', result: updateResult.result }
 				} else {
@@ -372,9 +367,8 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 		const token = getSelfUserInfoRequest.token
 		if (uid !== null && uid !== undefined && token) {
 			if (await checkUserToken(uid, token)) {
-				const { collectionName, schema: userInfoSchema } = UserInfoSchema
-				const schema = new Schema(userInfoSchema)
-				type UserInfo = InferSchemaType<typeof schema>
+				const { collectionName, schemaInstance } = UserInfoSchema
+				type UserInfo = InferSchemaType<typeof schemaInstance>
 				const getUserInfoWhere: QueryType<UserInfo> = {
 					uid,
 				}
@@ -388,7 +382,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 					gender: 1, // 用户的性别
 				}
 				try {
-					const userInfoResult = await selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, schema, collectionName)
+					const userInfoResult = await selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, schemaInstance, collectionName)
 					if (userInfoResult && userInfoResult.success) {
 						const result = userInfoResult?.result
 						if (result?.length === 1 && result?.[0]) {
@@ -428,9 +422,8 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 	try {
 		const uid = getUserInfoByUidRequest?.uid
 		if (uid !== null && uid !== undefined) {
-			const { collectionName, schema: userInfoSchema } = UserInfoSchema
-			const schema = new Schema(userInfoSchema)
-			type UserInfo = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = UserInfoSchema
+			type UserInfo = InferSchemaType<typeof schemaInstance>
 			const getUserInfoWhere: QueryType<UserInfo> = {
 				uid,
 			}
@@ -443,7 +436,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 				gender: 1, // 用户的性别
 			}
 			try {
-				const userInfoResult = await selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, schema, collectionName)
+				const userInfoResult = await selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, schemaInstance, collectionName)
 				if (userInfoResult && userInfoResult.success) {
 					const result = userInfoResult?.result
 					if (result?.length === 1 && result?.[0]) {
@@ -481,10 +474,9 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 		if (await checkUserToken(uid, token)) {
 			const now = new Date().getTime()
 			const fileName = `avatar-${generateSecureRandomString(32)}-${now}`
-			
-			const { collectionName, schema: userInfoSchema } = UserInfoSchema
-			const schema = new Schema(userInfoSchema)
-			type UserInfo = InferSchemaType<typeof schema>
+
+			const { collectionName, schemaInstance } = UserInfoSchema
+			type UserInfo = InferSchemaType<typeof schemaInstance>
 			const updateUserInfoWhere: QueryType<UserInfo> = {
 				uid,
 			}
@@ -495,7 +487,7 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 				userLinkAccounts: undefined,
 				editDateTime: now,
 			}
-			const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schema, collectionName)
+			const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
 
 			if (updateResult.success) {
 				const signedUrl = await createR2PutSignedUrl('kirakira-file-public-apac', fileName, 60)
@@ -521,9 +513,8 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 export const getUserSettingsService = async (uid: number, token: string): Promise<GetUserSettingsResponseDto> => {
 	try {
 		if (await checkUserToken(uid, token)) {
-			const { collectionName, schema: userSettingsSchema } = UserSettingsSchema
-			const schema = new Schema(userSettingsSchema)
-			type UserSettings = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = UserSettingsSchema
+			type UserSettings = InferSchemaType<typeof schemaInstance>
 			const getUserSettingsWhere: QueryType<UserSettings> = {
 				uid,
 			}
@@ -552,7 +543,7 @@ export const getUserSettingsService = async (uid: number, token: string): Promis
 				editDateTime: 1,
 			}
 			try {
-				const userSettingsResult = await selectDataFromMongoDB(getUserSettingsWhere, getUserSettingsSelect, schema, collectionName)
+				const userSettingsResult = await selectDataFromMongoDB(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
 				const userSettings = userSettingsResult?.result?.[0]
 				if (userSettingsResult?.success && userSettings) {
 					return { success: true, message: '获取用户设置成功！', userSettings }
@@ -586,9 +577,8 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 	try {
 		if (await checkUserToken(uid, token)) {
 			if (checkUpdateOrCreateUserSettingsRequest(updateOrCreateUserSettingsRequest)) {
-				const { collectionName, schema: userSettingsSchema } = UserSettingsSchema
-				const schema = new Schema(userSettingsSchema)
-				type UserSettings = InferSchemaType<typeof schema>
+				const { collectionName, schemaInstance } = UserSettingsSchema
+				type UserSettings = InferSchemaType<typeof schemaInstance>
 				const updateOrCreateUserSettingsWhere: QueryType<UserSettings> = {
 					uid,
 				}
@@ -598,7 +588,7 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 					userLinkAccountsPrivacySetting: updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting,
 					editDateTime: new Date().getTime(),
 				}
-				const updateResult = await findOneAndUpdateData4MongoDB(updateOrCreateUserSettingsWhere, updateOrCreateUserSettingsUpdate, schema, collectionName)
+				const updateResult = await findOneAndUpdateData4MongoDB(updateOrCreateUserSettingsWhere, updateOrCreateUserSettingsUpdate, schemaInstance, collectionName)
 				const userSettings = updateResult?.result?.[0]
 				if (updateResult?.success) {
 					return { success: true, message: '更新或创建用户设置成功', userSettings: userSettings || updateOrCreateUserSettingsUpdate }
@@ -810,9 +800,8 @@ const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequ
 const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 	try {
 		if (uid !== null && !Number.isNaN(uid) && uid !== undefined && token) {
-			const { collectionName, schema: userAuthSchema } = UserAuthSchema
-			const schema = new Schema(userAuthSchema)
-			type UserAuth = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = UserAuthSchema
+			type UserAuth = InferSchemaType<typeof schemaInstance>
 			const userTokenWhere: QueryType<UserAuth> = {
 				uid,
 				token,
@@ -821,7 +810,7 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 				uid: 1,
 			}
 			try {
-				const userInfo = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schema, collectionName)
+				const userInfo = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
 				if (userInfo && userInfo.success) {
 					if (userInfo.result?.length === 1) {
 						return true

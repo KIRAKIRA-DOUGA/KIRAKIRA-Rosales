@@ -1,4 +1,4 @@
-import { InferSchemaType, Schema } from 'mongoose'
+import { InferSchemaType } from 'mongoose'
 import { GetUserInfoByUidRequestDto } from '../controller/UserControllerDto.js'
 import { CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, GetVideoCommentDownvotePropsDto, GetVideoCommentDownvoteResultDto, GetVideoCommentUpvotePropsDto, GetVideoCommentUpvoteResultDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
 import { findOneAndPlusByMongodbId, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
@@ -21,9 +21,8 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 				const getCommentIndexResult = await getNextSequenceValueService(`KVID-${emitVideoCommentRequest.videoId}`) // 以视频 ID 为键，获取下一个值，即评论楼层
 				const commentIndex = getCommentIndexResult.sequenceValue
 				if (getCommentIndexResult.success && commentIndex !== undefined && commentIndex !== null) {
-					const { collectionName, schema: videoCommentSchema } = VideoCommentSchema
-					const schema = new Schema(videoCommentSchema)
-					type VideoComment = InferSchemaType<typeof schema>
+					const { collectionName, schemaInstance } = VideoCommentSchema
+					type VideoComment = InferSchemaType<typeof schemaInstance>
 					const nowDate = new Date().getTime()
 					const videoComment: VideoComment = {
 						...emitVideoCommentRequest,
@@ -38,7 +37,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 						editDateTime: nowDate,
 					}
 					try {
-						const insertData2MongoDBResult = await insertData2MongoDB(videoComment, schema, collectionName)
+						const insertData2MongoDBResult = await insertData2MongoDB(videoComment, schemaInstance, collectionName)
 						if (insertData2MongoDBResult && insertData2MongoDBResult.success) {
 							const getUserInfoByUidRequest: GetUserInfoByUidRequestDto = { uid: videoComment.uid }
 							try {
@@ -124,13 +123,12 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 				getVideoCommentDownvoteResult = videoCommentDownvoteResult
 			}
 
-			const { collectionName, schema: videoCommentSchema } = VideoCommentSchema
-			const schema = new Schema(videoCommentSchema)
-			type VideoComment = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = VideoCommentSchema
+			type VideoComment = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<VideoComment> = {
 				videoId,
 			}
-	
+
 			const select: SelectType<VideoComment & {_id: 1}> = {
 				_id: 1,
 				commentRoute: 1,
@@ -145,9 +143,9 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 				subCommentsCount: 1,
 				editDateTime: 1,
 			}
-			
+
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				const videoCommentList = result.result as GetVideoCommentByKvidResponseDto['videoCommentList']
 				if (result.success) {
 					if (videoCommentList && videoCommentList.length > 0) {
@@ -277,24 +275,23 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 const getVideoCommentUpvoteByUid = async (getVideoCommentUpvoteProps: GetVideoCommentUpvotePropsDto): Promise<GetVideoCommentUpvoteResultDto> => {
 	try {
 		if (checkGetVideoCommentUpvoteProps(getVideoCommentUpvoteProps)) {
-			const { collectionName, schema: videoCommentUpvoteSchema } = VideoCommentUpvoteSchema
-			const schema = new Schema(videoCommentUpvoteSchema)
-			type VideoCommentUpvote = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = VideoCommentUpvoteSchema
+			type VideoCommentUpvote = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<VideoCommentUpvote> = {
 				videoId: getVideoCommentUpvoteProps.videoId,
 				uid: getVideoCommentUpvoteProps.uid,
 				invalidFlag: false,
 			}
-	
+
 			const select: SelectType<VideoCommentUpvote> = {
 				videoId: 1,
 				commentId: 1,
 				uid: 1,
 				editDateTime: 1,
 			}
-			
+
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				const videoCommentUpvoteList = result.result
 				if (result.success) {
 					if (videoCommentUpvoteList && videoCommentUpvoteList.length > 0) {
@@ -328,24 +325,23 @@ const getVideoCommentUpvoteByUid = async (getVideoCommentUpvoteProps: GetVideoCo
 const getVideoCommentDownvoteByUid = async (getVideoCommentDownvoteProps: GetVideoCommentDownvotePropsDto): Promise<GetVideoCommentDownvoteResultDto> => {
 	try {
 		if (checkGetVideoCommentDownvoteProps(getVideoCommentDownvoteProps)) {
-			const { collectionName, schema: videoCommentDownvoteSchema } = VideoCommentDownvoteSchema
-			const schema = new Schema(videoCommentDownvoteSchema)
-			type VideoCommentDownvote = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = VideoCommentDownvoteSchema
+			type VideoCommentDownvote = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<VideoCommentDownvote> = {
 				videoId: getVideoCommentDownvoteProps.videoId,
 				uid: getVideoCommentDownvoteProps.uid,
 				invalidFlag: false,
 			}
-	
+
 			const select: SelectType<VideoCommentDownvote> = {
 				videoId: 1,
 				commentId: 1,
 				uid: 1,
 				editDateTime: 1,
 			}
-			
+
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				const videoCommentDownvoteList = result.result
 				if (result.success) {
 					if (videoCommentDownvoteList && videoCommentDownvoteList.length > 0) {
@@ -383,8 +379,7 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 	try {
 		if (checkEmitVideoCommentUpvoteRequestData(emitVideoCommentUpvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点赞
-				const { collectionName: videoCommentUpvoteCollectionName, schema: videoCommentUpvoteSchema } = VideoCommentUpvoteSchema
-				const correctVideoCommentUpvoteSchema = new Schema(videoCommentUpvoteSchema)
+				const { collectionName: videoCommentUpvoteCollectionName, schemaInstance: correctVideoCommentUpvoteSchema } = VideoCommentUpvoteSchema
 				type VideoCommentUpvote = InferSchemaType<typeof correctVideoCommentUpvoteSchema>
 				const videoId = emitVideoCommentUpvoteRequest.videoId
 				const commentId = emitVideoCommentUpvoteRequest.id
@@ -402,8 +397,7 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 					try {
 						const insertData2MongoDBResult = await insertData2MongoDB(videoCommentUpvote, correctVideoCommentUpvoteSchema, videoCommentUpvoteCollectionName)
 						if (insertData2MongoDBResult && insertData2MongoDBResult.success) {
-							const { collectionName: videoCommentCollectionName, schema: videoCommentSchema } = VideoCommentSchema
-							const correctVideoCommentSchema = new Schema(videoCommentSchema)
+							const { collectionName: videoCommentCollectionName, schemaInstance: correctVideoCommentSchema } = VideoCommentSchema
 							const upvoteBy = 'upvoteCount'
 							try {
 								const updateResult = await findOneAndPlusByMongodbId(commentId, upvoteBy, correctVideoCommentSchema, videoCommentCollectionName)
@@ -473,8 +467,7 @@ export const cancelVideoCommentUpvoteService = async (cancelVideoCommentUpvoteRe
 	try {
 		if (checkCancelVideoCommentUpvoteRequest(cancelVideoCommentUpvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能取消点赞
-				const { collectionName: videoCommentUpvoteCollectionName, schema: videoCommentUpvoteSchema } = VideoCommentUpvoteSchema
-				const correctVideoCommentUpvoteSchema = new Schema(videoCommentUpvoteSchema)
+				const { collectionName: videoCommentUpvoteCollectionName, schemaInstance: correctVideoCommentUpvoteSchema } = VideoCommentUpvoteSchema
 				type VideoCommentUpvote = InferSchemaType<typeof correctVideoCommentUpvoteSchema>
 				const commentId = cancelVideoCommentUpvoteRequest.id
 				const cancelVideoCommentUpvoteWhere: QueryType<VideoCommentUpvote> = {
@@ -490,8 +483,7 @@ export const cancelVideoCommentUpvoteService = async (cancelVideoCommentUpvoteRe
 					if (updateResult && updateResult.success && updateResult.result) {
 						if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
 							try {
-								const { collectionName: videoCommentCollectionName, schema: videoCommentSchema } = VideoCommentSchema
-								const correctVideoCommentSchema = new Schema(videoCommentSchema)
+								const { collectionName: videoCommentCollectionName, schemaInstance: correctVideoCommentSchema } = VideoCommentSchema
 								const upvoteBy = 'upvoteCount'
 								const updateResult = await findOneAndPlusByMongodbId(commentId, upvoteBy, correctVideoCommentSchema, videoCommentCollectionName, -1)
 								if (updateResult.success) {
@@ -536,22 +528,21 @@ export const cancelVideoCommentUpvoteService = async (cancelVideoCommentUpvoteRe
 const checkUserHasUpvoted = async (commentId: string, uid: number): Promise<boolean> => {
 	try {
 		if (commentId && uid !== undefined && uid !== null) {
-			const { collectionName, schema: videoCommentUpvoteSchema } = VideoCommentUpvoteSchema
-			const schema = new Schema(videoCommentUpvoteSchema)
-			type VideoCommentUpvote = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = VideoCommentUpvoteSchema
+			type VideoCommentUpvote = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<VideoCommentUpvote> = {
 				commentId,
 				invalidFlag: false,
 			}
-	
+
 			const select: SelectType<VideoCommentUpvote> = {
 				videoId: 1,
 				commentId: 1,
 				uid: 1,
 			}
-			
+
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				if (result.success) {
 					if (result.result && result.result.length > 0) {
 						return true // 查询到结果了，证明用户已点赞过了，所以返回 true
@@ -589,8 +580,8 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
 	try {
 		if (checkEmitVideoCommentDownvoteRequestData(emitVideoCommentDownvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点踩
-				const { collectionName: videoCommentDownvoteCollectionName, schema: videoCommentDownvoteSchema } = VideoCommentDownvoteSchema
-				const correctVideoCommentDownvoteSchema = new Schema(videoCommentDownvoteSchema)
+				const { collectionName: videoCommentDownvoteCollectionName, schemaInstance: correctVideoCommentDownvoteSchema } = VideoCommentDownvoteSchema
+
 				type VideoCommentDownvote = InferSchemaType<typeof correctVideoCommentDownvoteSchema>
 				const videoId = emitVideoCommentDownvoteRequest.videoId
 				const commentId = emitVideoCommentDownvoteRequest.id
@@ -608,8 +599,7 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
 					try {
 						const insertData2MongoDBResult = await insertData2MongoDB(videoCommentDownvote, correctVideoCommentDownvoteSchema, videoCommentDownvoteCollectionName)
 						if (insertData2MongoDBResult && insertData2MongoDBResult.success) {
-							const { collectionName: videoCommentCollectionName, schema: videoCommentSchema } = VideoCommentSchema
-							const correctVideoCommentSchema = new Schema(videoCommentSchema)
+							const { collectionName: videoCommentCollectionName, schemaInstance: correctVideoCommentSchema } = VideoCommentSchema
 							const downvoteBy = 'downvoteCount'
 							try {
 								const updateResult = await findOneAndPlusByMongodbId(commentId, downvoteBy, correctVideoCommentSchema, videoCommentCollectionName)
@@ -679,8 +669,7 @@ export const cancelVideoCommentDownvoteService = async (cancelVideoCommentDownvo
 	try {
 		if (checkCancelVideoCommentDownvoteRequest(cancelVideoCommentDownvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能取消点踩
-				const { collectionName: videoCommentDownvoteCollectionName, schema: videoCommentDownvoteSchema } = VideoCommentDownvoteSchema
-				const correctVideoCommentDownvoteSchema = new Schema(videoCommentDownvoteSchema)
+				const { collectionName: videoCommentDownvoteCollectionName, schemaInstance: correctVideoCommentDownvoteSchema } = VideoCommentDownvoteSchema
 				type VideoCommentDownvote = InferSchemaType<typeof correctVideoCommentDownvoteSchema>
 				const commentId = cancelVideoCommentDownvoteRequest.id
 				const cancelVideoCommentDownvoteWhere: QueryType<VideoCommentDownvote> = {
@@ -696,8 +685,7 @@ export const cancelVideoCommentDownvoteService = async (cancelVideoCommentDownvo
 					if (updateResult && updateResult.success && updateResult.result) {
 						if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
 							try {
-								const { collectionName: videoCommentCollectionName, schema: videoCommentSchema } = VideoCommentSchema
-								const correctVideoCommentSchema = new Schema(videoCommentSchema)
+								const { collectionName: videoCommentCollectionName, schemaInstance: correctVideoCommentSchema } = VideoCommentSchema
 								const downvoteBy = 'downvoteCount'
 								const updateResult = await findOneAndPlusByMongodbId(commentId, downvoteBy, correctVideoCommentSchema, videoCommentCollectionName, -1)
 								if (updateResult.success) {
@@ -742,22 +730,21 @@ export const cancelVideoCommentDownvoteService = async (cancelVideoCommentDownvo
 const checkUserHasDownvoted = async (commentId: string, uid: number): Promise<boolean> => {
 	try {
 		if (commentId && uid !== undefined && uid !== null) {
-			const { collectionName, schema: videoCommentDownvoteSchema } = VideoCommentDownvoteSchema
-			const schema = new Schema(videoCommentDownvoteSchema)
-			type VideoCommentDownvote = InferSchemaType<typeof schema>
+			const { collectionName, schemaInstance } = VideoCommentDownvoteSchema
+			type VideoCommentDownvote = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<VideoCommentDownvote> = {
 				commentId,
 				invalidFlag: false,
 			}
-	
+
 			const select: SelectType<VideoCommentDownvote> = {
 				videoId: 1,
 				commentId: 1,
 				uid: 1,
 			}
-			
+
 			try {
-				const result = await selectDataFromMongoDB(where, select, schema, collectionName)
+				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 				if (result.success) {
 					if (result.result && result.result.length > 0) {
 						return true // 查询到结果了，证明用户已点踩过了，所以返回 true
