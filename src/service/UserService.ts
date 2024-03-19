@@ -1,4 +1,5 @@
 import { InferSchemaType } from 'mongoose'
+import { createCloudflareImageUploadSignedUrl, createCloudflareR2PutSignedUrl } from '../cloudflare/index.js'
 import { generateSaltedHash } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
@@ -6,7 +7,6 @@ import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetSelfUserInfoR
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserInfoSchema, UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
-import { createR2PutSignedUrl } from '../oss/CreateR2Client.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 
 type HashPasswordResult = {
@@ -470,10 +470,11 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
  * @returns 用于用户上传头像的预签名 URL 的结果
  */
 export const getUserAvatarUploadSignedUrlService = async (uid: number, token: string): Promise<GetUserAvatarUploadSignedUrlResultDto> => {
+	// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新头像链接替换数据库中的旧头像链接，而且当前图片没有加入审核流程
 	try {
 		if (await checkUserToken(uid, token)) {
 			const now = new Date().getTime()
-			const fileName = `avatar-${generateSecureRandomString(32)}-${now}`
+			const fileName = `avatar-${uid}-${generateSecureRandomString(32)}-${now}`
 
 			const { collectionName, schemaInstance } = UserInfoSchema
 			type UserInfo = InferSchemaType<typeof schemaInstance>
@@ -482,7 +483,7 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 			}
 			const updateUserInfoUpdate: UserInfo = {
 				uid,
-				avatar: `https://kirafile.com/${fileName}`,
+				avatar: fileName,
 				label: undefined,
 				userLinkAccounts: undefined,
 				editDateTime: now,
@@ -490,8 +491,13 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 			const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
 
 			if (updateResult.success) {
-				const signedUrl = await createR2PutSignedUrl('kirakira-file-public-apac', fileName, 60)
-				return { success: true, message: '准备开始上传头像', userAvatarUploadSignedUrl: signedUrl }
+				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 180)
+				if (signedUrl && fileName) {
+					return { success: true, message: '准备开始上传头像', userAvatarUploadSignedUrl: signedUrl, userAvatarFilename: fileName }
+				} else {
+					// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新头像链接替换数据库中的旧头像链接，而且当前图片没有加入审核流程
+					return { success: false, message: '上传失败，无法生成图片上传 URL，请重新上传头像' }
+				}
 			} else {
 				return { success: false, message: '上传失败，无法更新用户数据' }
 			}
