@@ -120,7 +120,6 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 			if (imageUploadSignedUrlResult.status === 200 && imageUploadSignedUrl) {
 				return imageUploadSignedUrl
 			} else {
-				console.log('aaaaaaaaa', imageUploadSignedUrlResult.status === 200, imageUploadSignedUrlResult.data)
 				console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL：未能创建 URL！', { fileName, expiresIn, metaData })
 				return undefined
 			}

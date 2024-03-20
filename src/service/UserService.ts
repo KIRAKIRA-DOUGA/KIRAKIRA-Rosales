@@ -1,18 +1,14 @@
-import { InferSchemaType } from 'mongoose'
+import mongoose, { InferSchemaType } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl, createCloudflareR2PutSignedUrl } from '../cloudflare/index.js'
-import { generateSaltedHash } from '../common/HashTool.js'
+import { isInvalidEmail } from '../common/EmailTool.js'
+import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { BeforeHashPasswordDataType, CheckUserTokenResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { CheckUserTokenResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResultDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserInfoSchema, UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-
-type HashPasswordResult = {
-	passwordHashHash: string;
-	salt: string;
-}
 
 /**
  * 用户注册
@@ -23,39 +19,61 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 	try {
 		if (checkUserRegistrationData(userRegistrationRequest)) {
 			const { email, passwordHash, passwordHint } = userRegistrationRequest
-			const beforeHashPasswordData: BeforeHashPasswordDataType = { email, passwordHash }
-			const { passwordHashHash, salt } = await getHashPasswordAndSalt(beforeHashPasswordData)
+			const emailLowerCase = email.toLowerCase()
+			const passwordHashHash = hashPasswordSync(passwordHash)
 			const token = generateSecureRandomString(64)
-			if (passwordHashHash && token) {
+			const uid = (await getNextSequenceValueService('user')).sequenceValue
+
+			if (email && emailLowerCase && passwordHashHash && token && (uid !== null && uid !== undefined)) {
+				// 启动事务
+				const session = await mongoose.startSession()
+				session.startTransaction()
+
 				const { collectionName, schemaInstance } = UserAuthSchema
-				const uid = (await getNextSequenceValueService('user')).sequenceValue
-				if (uid !== null && uid !== undefined) {
-					type UserAuth = InferSchemaType<typeof schemaInstance>
+				type UserAuth = InferSchemaType<typeof schemaInstance>
 
-					// TODO 添加创建日期字段，先获取用户创建日期，如果没有创建日期则以当前日期为创建日期
-
-					const user: UserAuth = {
-						uid,
-						email,
-						passwordHashHash,
-						salt,
-						token,
-						passwordHint,
-						editDateTime: new Date().getTime(),
+				const userAuthWhere: QueryType<UserAuth> = { emailLowerCase }
+				const userAuthSelect: SelectType<UserAuth> = { emailLowerCase: 1 }
+				try {
+					const useAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
+					if (useAuthResult.result && useAuthResult.result.length >= 1) {
+						console.error('ERROR', '用户注册失败：用户邮箱重复：', { email, emailLowerCase })
+						session.abortTransaction()
+						session.endSession()
+						return { success: false, message: '用户注册失败：用户邮箱重复' }
 					}
-					try {
-						await insertData2MongoDB(user, schemaInstance, collectionName)
-					} catch (error) {
-						console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
-						return { success: false, message: '用户注册失败：无法保存用户资料' }
-					}
-					return { success: true, uid, token, message: '用户注册成功' }
-				} else {
-					console.error('ERROR', '用户注册失败：UID 获取失败：')
-					return { success: false, message: '用户注册失败：生成用户 ID 失败' }
+				} catch (error) {
+					console.error('ERROR', '用户注册失败：用户邮箱查重时出现异常：', error, { email, emailLowerCase })
+					session.abortTransaction()
+					session.endSession()
+					return { success: false, message: '用户注册失败：用户邮箱查重时出现异常' }
 				}
+
+				const now = new Date().getTime()
+				const user: UserAuth = {
+					uid,
+					email,
+					emailLowerCase,
+					passwordHashHash,
+					token,
+					passwordHint,
+					userCreateDateTime: now,
+					editDateTime: now,
+				}
+
+				try {
+					await insertData2MongoDB(user, schemaInstance, collectionName, { session })
+				} catch (error) {
+					console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
+					session.abortTransaction()
+					session.endSession()
+					return { success: false, message: '用户注册失败：无法保存用户资料' }
+				}
+				await session.commitTransaction()
+				session.endSession()
+				return { success: true, uid, token, message: '用户注册成功' }
 			} else {
-				console.error('ERROR', '用户注册失败：passwordHashHash 或 token 可能为空')
+				console.error('ERROR', '用户注册失败：email 或 emailLowerCase 或 passwordHashHash 或 token 或 uid 可能为空')
 				return { success: false, message: '用户注册失败：生成账户资料时失败' }
 			}
 		} else {
@@ -77,88 +95,42 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 	try {
 		if (checkUserLoginRequest(userLoginRequest)) {
 			const { email, passwordHash } = userLoginRequest
+			const emailLowerCase = email.toLowerCase()
 
 			const { collectionName, schemaInstance } = UserAuthSchema
 			type UserAuth = InferSchemaType<typeof schemaInstance>
-			const userSaltAndPasswordHintWhere: QueryType<UserAuth> = {
-				email,
-			}
 
-			const userSaltAndPasswordHintSelect: SelectType<UserAuth> = {
+			const userLoginWhere: QueryType<UserAuth> = { emailLowerCase }
+
+			const userLoginSelect: SelectType<UserAuth> = {
 				email: 1,
-				salt: 1,
+				uid: 1,
+				token: 1,
 				passwordHint: 1,
+				passwordHashHash: 1,
 			}
-
-			let saltResult: DbPoolResultsType<UserAuth>
 
 			try {
-				saltResult = await selectDataFromMongoDB(userSaltAndPasswordHintWhere, userSaltAndPasswordHintSelect, schemaInstance, collectionName)
-			} catch (error) {
-				console.error('ERROR', `用户登录（查询用户盐）时出现异常，用户邮箱：【${email}】，错误信息：`, error)
-				return { success: false, email, message: '用户登录（初始化用户信息）时出现异常' }
-			}
-
-			let salt: string
-			let passwordHint: string
-			if (saltResult && saltResult.success && saltResult.result) {
-				const saltResultLength = saltResult?.result?.length
-				if (saltResult?.result && saltResultLength === 1) {
-					salt = saltResult.result?.[0].salt
-					passwordHint = saltResult.result?.[0].passwordHint
-				} else {
-					console.error('ERROR', `用户登录失败：盐查询失败，或者结果长度不为 1，用户邮箱：【${email}】`)
-					return { success: false, email, message: '用户登录失败：初始化查询结果异常' }
-				}
-			} else {
-				console.error('ERROR', `用户登录失败：盐查询失败，或者结果为空，用户邮箱：【${email}】`)
-				return { success: false, email, message: '用户登录失败：初始化查询失败' }
-			}
-
-			if (salt) {
-				const beforeHashPasswordData: BeforeHashPasswordDataType = { email, passwordHash }
-				const passwordHashHash = await getHashPasswordBySalt(beforeHashPasswordData, salt)
-				if (passwordHashHash) {
-					const userLoginWhere: QueryType<UserAuth> = {
-						email,
-						passwordHashHash,
-					}
-
-					const userLoginSelect: SelectType<UserAuth> = {
-						email: 1,
-						uid: 1,
-						token: 1,
-						passwordHint: 1,
-					}
-					let result: DbPoolResultsType<UserAuth>
-
-					try {
-						result = await selectDataFromMongoDB(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
-					} catch (error) {
-						console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，错误信息：`, error)
-						return { success: false, email, message: '用户登录（检索用户信息）时出现异常' }
-					}
-
-					if (result && result.success && result.result) {
-						const resultLength = result.result?.length
-						if (resultLength === 1) {
-							return { success: true, email: result.result?.[0].email, uid: result.result?.[0].uid, token: result.result?.[0].token, message: '用户登录成功' }
-						} else {
-							console.error('ERROR', `用户登录失败：查询失败，或者结果长度不为 1，用户邮箱：【${email}】`)
-							return { success: false, email, passwordHint, message: '用户登录失败：查询结果异常' }
-						}
+				const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
+				if (userAuthResult?.result && userAuthResult.result?.length === 1) {
+					const userAuthInfo = userAuthResult.result[0]
+					const isCorrectPassword = comparePasswordSync(passwordHash, userAuthInfo.passwordHashHash)
+					if (isCorrectPassword && userAuthInfo.email && userAuthInfo.token && userAuthInfo.uid !== undefined && userAuthInfo.uid !== null) {
+						return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, message: '用户登录成功' }
 					} else {
-						console.error('ERROR', `用户登录失败：查询失败，或者结果为空，用户邮箱：【${email}】`)
-						return { success: false, email, passwordHint, message: '用户登录失败：查询失败' }
+						return { success: false, email, passwordHint: userAuthInfo.passwordHint, message: '用户密码错误' }
 					}
 				} else {
-					console.error('ERROR', `Hash 用户密码时出错，Hash 后的密码为空，用户邮箱：【${email}】`)
-					return { success: false, email, passwordHint, message: '用户登录失败：整理密码时出错或非法密码' }
+					console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，用户未注册或信息异常'`)
+					return { success: false, email, message: '用户未注册或信息异常' }
 				}
-			} else {
-				console.error('ERROR', `用户登录失败：盐是空字符串，用户名：【${email}】`)
-				return { success: false, email, passwordHint, message: '用户登录失败：初始化查询结果为空' }
+			} catch (error) {
+				console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，错误信息：`, error)
+				return { success: false, email, message: '用户登录（检索用户信息）时出现异常' }
 			}
+		} else {
+			console.error('ERROR', '用户登录时程序异常：用户信息校验未通过')
+			return { success: false, message: '用户信息校验未通过' }
 		}
 	} catch (error) {
 		console.error('ERROR', '用户登录时程序异常：', error)
@@ -177,10 +149,10 @@ export const userExistsCheckService = async (userExistsCheckRequest: UserExistsC
 			const { collectionName, schemaInstance } = UserAuthSchema
 			type UserAuth = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<UserAuth> = {
-				email: userExistsCheckRequest.email,
+				emailLowerCase: userExistsCheckRequest.email.toLowerCase(),
 			}
 			const select: SelectType<UserAuth> = {
-				email: 1,
+				emailLowerCase: 1,
 			}
 
 			let result: DbPoolResultsType<UserAuth>
@@ -219,92 +191,65 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 
 			const { collectionName, schemaInstance } = UserAuthSchema
 			type UserAuth = InferSchemaType<typeof schemaInstance>
-			const userSaltAndPasswordHintWhere: QueryType<UserAuth> = {
+
+			const oldEmailLowerCase = oldEmail.toLowerCase()
+
+			// 启动事务
+			const session = await mongoose.startSession()
+			session.startTransaction()
+
+			const userAuthWhere: QueryType<UserAuth> = { emailLowerCase: oldEmailLowerCase }
+			const userAuthSelect: SelectType<UserAuth> = { passwordHashHash: 1 }
+			try {
+				const useAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
+				if (useAuthResult.result && useAuthResult.result.length >= 1) {
+					console.error('ERROR', '更新用户邮箱失败，用户密码错误', { uid, oldEmail })
+					session.abortTransaction()
+					session.endSession()
+					return { success: false, message: '更新用户邮箱失败，用户密码错误' }
+				}
+			} catch (error) {
+				console.error('ERROR', '更新用户邮箱失败，校验用户密码时程序出现异常', error, { uid, oldEmail })
+				session.abortTransaction()
+				session.endSession()
+				return { success: false, message: '用户注册失败：校验用户密码失败' }
+			}
+
+			const updateUserEmailWhere: QueryType<UserAuth> = {
 				uid,
 			}
-
-			const userSaltAndPasswordHintSelect: SelectType<UserAuth> = {
-				email: 1,
-				salt: 1,
-				passwordHashHash: 1,
+			const updateUserEmailUpdate: QueryType<UserAuth> = {
+				email: newEmail,
+				editDateTime: new Date().getTime(),
 			}
-
-			let userInfo: DbPoolResultsType<UserAuth>
 			try {
-				userInfo = await selectDataFromMongoDB(userSaltAndPasswordHintWhere, userSaltAndPasswordHintSelect, schemaInstance, collectionName)
-			} catch (error) {
-				console.error('ERROR', `修改用户邮箱（查询用户信息）时出现异常，用户uid：【${uid}】，错误信息：`, error)
-				return { success: false, message: '更新用户邮箱时出现异常，无法查询用户信息' }
-			}
-
-			if (userInfo && userInfo.success && userInfo.result) {
-				const saltResultLength = userInfo?.result?.length
-				if (userInfo?.result && saltResultLength === 1) {
-					const salt = userInfo.result?.[0].salt
-					if (salt) {
-						const oldPasswordHashHashInDb = userInfo.result?.[0].passwordHashHash
-						const beforeHashPasswordData: BeforeHashPasswordDataType = { email: oldEmail, passwordHash }
-						let passwordHashHash: string
-						try {
-							passwordHashHash = await getHashPasswordBySalt(beforeHashPasswordData, salt)
-						} catch (error) {
-							console.error('ERROR', '生成用户原始密码时出错', { uid, oldEmail, newEmail, passwordHash }, error)
-							return { success: false, message: '用户邮箱更新失败，验证原始密码时出错' }
-						}
-						if (oldPasswordHashHashInDb && passwordHashHash && oldPasswordHashHashInDb === passwordHashHash) {
-							let newPasswordHashHash: string
-							try {
-								const newPasswordBeforeHashPasswordData: BeforeHashPasswordDataType = { email: newEmail, passwordHash }
-								newPasswordHashHash = await getHashPasswordBySalt(newPasswordBeforeHashPasswordData, salt)
-							} catch (error) {
-								console.error('ERROR', '生成用户新密码时出错', { uid, oldEmail, newEmail, passwordHash }, error)
-								return { success: false, message: '用户邮箱更新失败，获取用户身份时出错' }
-							}
-							if (newPasswordHashHash) {
-								const updateUserEmailWhere: QueryType<UserAuth> = {
-									uid,
-								}
-								const updateUserEmailUpdate: QueryType<UserAuth> = {
-									email: newEmail,
-									passwordHashHash: newPasswordHashHash,
-								}
-								try {
-									const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
-									if (updateResult && updateResult.success && updateResult.result) {
-										if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
-											return { success: true, message: '用户邮箱更新成功' }
-										} else {
-											console.error('ERROR', '更新用户邮箱和密码时，更新数量为 0', { uid, oldEmail, newEmail, passwordHash })
-											return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
-										}
-									}
-								} catch (error) {
-									console.error('ERROR', '更新用户邮箱和密码时出错', { uid, oldEmail, newEmail, passwordHash }, error)
-									return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
-								}
-							} else {
-								console.error('ERROR', '更新用户邮箱时，未获取到新密码', { uid, oldEmail, newEmail, passwordHash })
-								return { success: false, message: '用户邮箱更新失败，无法获取用户身份' }
-							}
-						} else {
-							console.error('ERROR', '更新用户邮箱时，获取到的旧密码为空或数据库中的旧密码和生成的密码不一致', { uid, oldEmail, newEmail, passwordHash })
-							return { success: false, message: '用户邮箱更新失败，验证原始密码未通过' }
-						}
+				const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
+				if (updateResult && updateResult.success && updateResult.result) {
+					if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
+						await session.commitTransaction()
+						session.endSession()
+						return { success: true, message: '用户邮箱更新成功' }
 					} else {
-						console.error('ERROR', '更新用户邮箱时出错，为获取到盐', { uid, oldEmail, newEmail, passwordHash })
-						return { success: false, message: '用户邮箱更新失败，无法获取用户原始安全数据' }
+						console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail, passwordHash })
+						session.abortTransaction()
+						session.endSession()
+						return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
 					}
 				} else {
-					console.error('ERROR', '更新用户邮箱时失败，原始数据数组长度为 0', { uid, oldEmail, newEmail, passwordHash })
-					return { success: false, message: '用户邮箱更新失败，无法获取用户原始信息' }
+					console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail, passwordHash })
+					session.abortTransaction()
+					session.endSession()
+					return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
 				}
-			} else {
-				console.error('ERROR', '更新用户邮箱时失败，未获取到原始数据', { uid, oldEmail, newEmail, passwordHash })
-				return { success: false, message: '用户邮箱更新失败，无法获取用户原始信息，数据为空' }
+			} catch (error) {
+				console.error('ERROR', '更新用户邮箱出错', { uid, oldEmail, newEmail, passwordHash }, error)
+				session.abortTransaction()
+				session.endSession()
+				return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
 			}
 		} else {
-			console.error('ERROR', '修改用户邮箱失败，缺少必要参数：', { updateUserEmailRequest })
-			return { success: false, message: '修改用户邮箱失败，缺少必要参数' }
+			console.error('ERROR', '更新用户邮箱时失败，未获取到原始数据')
+			return { success: false, message: '用户邮箱更新失败，无法获取用户原始信息，数据可能为空' }
 		}
 	} catch (error) {
 		console.error('ERROR', '修改用户邮箱失败，未知错误：', error)
@@ -331,8 +276,8 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 				const updateUserInfoUpdate: UserInfo = {
 					uid,
 					...updateOrCreateUserInfoRequest,
-					label: updateOrCreateUserInfoRequest.label,
-					userLinkAccounts: updateOrCreateUserInfoRequest.userLinkAccounts,
+					label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
+					userLinkAccounts: updateOrCreateUserInfoRequest.userLinkAccounts as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
 					editDateTime: new Date().getTime(),
 				}
 				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
@@ -376,6 +321,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 					uid: 1, // 用户 UID
 					label: 1, // 用户标签
 					username: 1, // 用户名
+					userNickname: 1, // 用户昵称
 					avatar: 1, // 用户头像
 					userBannerImage: 1, // 用户的背景图
 					signature: 1, // 用户的个性签名
@@ -414,7 +360,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 }
 
 /**
- * 通过 uid 获取用户信息
+ * 通过 uid 获取（其他）用户信息
  * @param uid 用户 ID
  * @returns 获取用户信息的请求结果
  */
@@ -430,6 +376,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 			const getUserInfoSelect: SelectType<UserInfo> = {
 				label: 1, // 用户标签
 				username: 1, // 用户名
+				userNickname: 1, // 用户昵称
 				avatar: 1, // 用户头像
 				userBannerImage: 1, // 用户的背景图
 				signature: 1, // 用户的个性签名
@@ -554,7 +501,7 @@ export const getUserSettingsService = async (uid: number, token: string): Promis
 				if (userSettingsResult?.success && userSettings) {
 					return { success: true, message: '获取用户设置成功！', userSettings }
 				} else {
-					console.error('ERROR', '获取用户个性设置失败，晨讯成功，但获取数据失败或数据为空：', { uid })
+					console.error('ERROR', '获取用户个性设置失败，查询成功，但获取数据失败或数据为空：', { uid })
 					return { success: false, message: '获取用户个性设置失败，数据查询未成功' }
 				}
 			} catch (error) {
@@ -591,7 +538,7 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 				const updateOrCreateUserSettingsUpdate: UserSettings = {
 					uid,
 					...updateOrCreateUserSettingsRequest,
-					userLinkAccountsPrivacySetting: updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting,
+					userLinkAccountsPrivacySetting: updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting as UserSettings['userLinkAccountsPrivacySetting'], // TODO: Mongoose issue: #12420
 					editDateTime: new Date().getTime(),
 				}
 				const updateResult = await findOneAndUpdateData4MongoDB(updateOrCreateUserSettingsWhere, updateOrCreateUserSettingsUpdate, schemaInstance, collectionName)
@@ -615,10 +562,6 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 		return { success: false, message: '更新或创建用户设置失败，未知异常' }
 	}
 }
-
-
-
-
 
 /**
  * 用户校验
@@ -647,119 +590,13 @@ export const checkUserTokenService = async (uid: number, token: string): Promise
 }
 
 /**
- * 用户注册信息的非空验证
+ * 校验用户注册信息
  * @param userRegistrationRequest
  * @returns boolean 如果合法则返回 true
  */
 const checkUserRegistrationData = (userRegistrationRequest: UserRegistrationRequestDto): boolean => {
 	// TODO // WARN 这里可能需要更安全的校验机制
-	return (!!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email)
-}
-
-/**
- * 生成随机盐，通过盐二次 Hash 密码，让用户密码可以安全存储在 DB 中
- * @param userRegistrationRequest 用户注册时的信息
- * @returns HashPasswordResult 被 Hash 后的密码和盐
- */
-const getHashPasswordAndSalt = async (beforeHashPasswordData: BeforeHashPasswordDataType): Promise<HashPasswordResult> => {
-	try {
-		if (checkUserRegistrationData(beforeHashPasswordData)) {
-			const salt = generateSecureRandomString(32)
-			const email = beforeHashPasswordData.email
-			const passwordHash = beforeHashPasswordData.passwordHash
-			if (salt) {
-				try {
-					const saltHash = await generateSaltedHash(salt, passwordHash)
-					if (saltHash) {
-						const finalSalt = `${email}-${passwordHash}-${saltHash}`
-						if (finalSalt) {
-							try {
-								const passwordHashHash = await generateSaltedHash(passwordHash, finalSalt)
-								if (passwordHashHash) {
-									return { passwordHashHash, salt }
-								} else {
-									console.error('something error in function getHashPasswordAndSalt, required data passwordHashHash is empty')
-									return { passwordHashHash: '', salt: '' }
-								}
-							} catch (error) {
-								console.error('something error in function getHashPasswordAndSalt -> generateSaltedHash-2', error)
-							}
-						} else {
-							console.error('something error in function getHashPasswordAndSalt, required data finalSalt is empty')
-							return { passwordHashHash: '', salt: '' }
-						}
-					} else {
-						console.error('something error in function getHashPasswordAndSalt, required data saltHash is empty')
-						return { passwordHashHash: '', salt: '' }
-					}
-				} catch (error) {
-					console.error('something error in function getHashPasswordAndSalt -> generateSaltedHash-1', error)
-				}
-			} else {
-				console.error('something error in function getHashPasswordAndSalt, required data salt is empty')
-				return { passwordHashHash: '', salt: '' }
-			}
-		} else {
-			console.error('something error in function getHashPasswordAndSalt, checkUserLoginData result is false')
-			return { passwordHashHash: '', salt: '' }
-		}
-	} catch (e) {
-		console.error('something error in function getHashPasswordAndSalt', e)
-		return { passwordHashHash: '', salt: '' }
-	}
-}
-
-/**
- * 通过用户传入的盐，二次 Hash 密码，获取的结果将与数据库中的值比对是否一致
- * @param beforeHashPasswordData 等待被 Hash 的密码和用户信息
- * @param salt 盐
- * @returns string 被 Hash 后的密码
- */
-const getHashPasswordBySalt = async (beforeHashPasswordData: BeforeHashPasswordDataType, salt: string): Promise<string> => {
-	try {
-		if (checkUserRegistrationData(beforeHashPasswordData)) {
-			const email = beforeHashPasswordData.email
-			const passwordHash = beforeHashPasswordData.passwordHash
-			if (salt) {
-				try {
-					const saltHash = await generateSaltedHash(salt, passwordHash)
-					if (saltHash) {
-						const finalSalt = `${email}-${passwordHash}-${saltHash}`
-						if (finalSalt) {
-							try {
-								const passwordHashHash = await generateSaltedHash(passwordHash, finalSalt)
-								if (passwordHashHash) {
-									return passwordHashHash
-								} else {
-									console.error('something error in function getHashPasswordBySalt, required data passwordHashHash is empty')
-									return ''
-								}
-							} catch (error) {
-								console.error('something error in function getHashPasswordBySalt -> generateSaltedHash-2', error)
-							}
-						} else {
-							console.error('something error in function getHashPasswordBySalt, required data finalSalt is empty')
-							return ''
-						}
-					} else {
-						console.error('something error in function getHashPasswordBySalt, required data saltHash is empty')
-						return ''
-					}
-				} catch (error) {
-					console.error('something error in function getHashPasswordBySalt -> generateSaltedHash-1', error)
-				}
-			} else {
-				console.error('something error in function getHashPasswordBySalt, required data salt is empty')
-				return ''
-			}
-		} else {
-			console.error('something error in function getHashPasswordBySalt, checkUserLoginData result is false')
-			return ''
-		}
-	} catch (e) {
-		console.error('something error in function getHashPasswordBySalt', e)
-		return ''
-	}
+	return (!!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email && !isInvalidEmail(userRegistrationRequest.email))
 }
 
 /**
@@ -769,17 +606,17 @@ const getHashPasswordBySalt = async (beforeHashPasswordData: BeforeHashPasswordD
  */
 const checkUserExistsCheckRequest = (userExistsCheckRequest: UserExistsCheckRequestDto): boolean => {
 	// TODO // WARN 这里可能需要更安全的校验机制
-	return !!userExistsCheckRequest.email
+	return (!!userExistsCheckRequest.email && !isInvalidEmail(userExistsCheckRequest.email))
 }
 
 /**
- * 用户登录的请求参数的非空验证
+ * 用户登录的请求参数的校验
  * @param userExistsCheckRequest
  * @returns boolean 合法则返回 true
  */
 const checkUserLoginRequest = (userLoginRequest: UserLoginRequestDto): boolean => {
 	// TODO // WARN 这里可能需要更安全的校验机制
-	return (!!userLoginRequest.email && !!userLoginRequest.passwordHash)
+	return (!!userLoginRequest.email && !isInvalidEmail(userLoginRequest.email) && !!userLoginRequest.passwordHash)
 }
 
 /**
@@ -791,8 +628,8 @@ const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequ
 	// TODO // WARN 这里可能需要更安全的校验机制
 	return (
 		updateUserEmailRequest.uid !== null && updateUserEmailRequest.uid !== undefined
-		&& !!updateUserEmailRequest.oldEmail
-		&& !!updateUserEmailRequest.newEmail
+		&& !!updateUserEmailRequest.oldEmail && !isInvalidEmail(updateUserEmailRequest.oldEmail)
+		&& !!updateUserEmailRequest.newEmail && !isInvalidEmail(updateUserEmailRequest.newEmail)
 		&& !!updateUserEmailRequest.passwordHash
 	)
 }
@@ -880,7 +717,7 @@ const checkUpdateOrCreateUserInfoRequest = (updateOrCreateUserInfoRequest: Updat
 	}
 
 	if (updateOrCreateUserInfoRequest.userLinkAccounts) {
-		if (updateOrCreateUserInfoRequest.userLinkAccounts.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
+		if (!updateOrCreateUserInfoRequest.userLinkAccounts.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
 			return false
 		}
 	}
@@ -900,7 +737,7 @@ const checkUpdateOrCreateUserSettingsRequest = (updateOrCreateUserSettingsReques
 		return false
 	}
 
-	if (updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting) {
+	if (!updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting) {
 		if (updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
 			return false
 		}

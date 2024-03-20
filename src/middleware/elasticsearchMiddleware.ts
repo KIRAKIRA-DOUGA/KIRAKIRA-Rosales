@@ -1,5 +1,5 @@
 import { Client } from '@elastic/elasticsearch'
-import { connectElasticSearchCluster } from '../elasticsearchPool/elasticsearchClusterPool.js'
+import { connectElasticSearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 
 let client: Client

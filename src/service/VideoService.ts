@@ -5,8 +5,8 @@ import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidReque
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
-import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/elasticsearchClusterPool.js'
-import { EsSchema2TsType } from '../elasticsearchPool/elasticsearchClusterPoolTypes.js'
+import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
+import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
 import { getUserInfoByUidService } from './UserService.js'
@@ -36,9 +36,10 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				// 准备上传到 MongoDB 的数据
 				const { collectionName, schemaInstance } = VideoSchema
 				type Video = InferSchemaType<typeof schemaInstance>
+
 				const video: Video = {
 					videoId,
-					videoPart,
+					videoPart: videoPart as Video['videoPart'], // TODO: Mongoose issue: #12420
 					title,
 					image: uploadVideoRequest.image,
 					uploadDate: new Date().getTime(),
@@ -49,7 +50,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					description,
 					videoCategory,
 					copyright: uploadVideoRequest.copyright,
-					videoTags,
+					videoTags: videoTags as Video['videoTags'], // TODO: Mongoose issue: #12420
 					editDateTime: nowDate,
 				}
 

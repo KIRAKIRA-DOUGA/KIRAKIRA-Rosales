@@ -29,14 +29,16 @@
 		"@aws-sdk/s3-request-presigner": "^3.456.0",
 		"@elastic/elasticsearch": "^8.11.0",
 		"@koa/cors": "^4.0.0",
+		"@types/bcrypt": "^5.0.2",
 		"@types/koa-bodyparser": "^4.3.10",
 		"axios": "^1.4.0",
+		"bcrypt": "^5.1.1",
 		"greenlock": "^4.0.4",
 		"js-base64": "^3.7.5",
 		"koa": "^2.14.1",
 		"koa-bodyparser": "^4.4.0",
 		"koa-router": "^12.0.0",
 		"koa-sslify": "^5.0.1",
-		"mongoose": "^6.9.1"
+		"mongoose": "^8.2.2"
 	}
 }

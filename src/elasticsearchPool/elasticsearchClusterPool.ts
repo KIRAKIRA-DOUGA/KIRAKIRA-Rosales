@@ -1,7 +1,7 @@
 import { Client } from '@elastic/elasticsearch'
 import { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { EsQueryType, EsResultType, EsSchema2TsType } from './elasticsearchClusterPoolTypes.js'
+import { EsQueryType, EsResultType, EsSchema2TsType } from './ElasticsearchClusterPoolTypes.js'
 
 /**
  * 创建 Elasticsearch 连接，这个函数在整个应用的生命周期里应该只被调用一次（only in elasticsearchMiddleware.ts）
@@ -12,7 +12,7 @@ export const connectElasticSearchCluster = async (): Promise<Client> => {
 		const ELASTICSEARCH_ADMIN_USERNAME = process.env.ELASTICSEARCH_ADMIN_USERNAME
 		const ELASTICSEARCH_ADMIN_PASSWORD = process.env.ELASTICSEARCH_ADMIN_PASSWORD
 		const ELASTICSEARCH_CLUSTER_HOST = process.env.ELASTICSEARCH_CLUSTER_HOST
-	
+
 		if (!ELASTICSEARCH_ADMIN_USERNAME) {
 			console.error('ERROR', '创建或连接搜索引擎集群失败：ELASTICSEARCH_ADMIN_USERNAME 为空，请检查环境变量设置')
 			process.exit()
@@ -25,14 +25,14 @@ export const connectElasticSearchCluster = async (): Promise<Client> => {
 			console.error('ERROR', '创建或连接搜索引擎集群失败：ELASTICSEARCH_CLUSTER_HOST 为空，请检查环境变量设置')
 			process.exit()
 		}
-	
+
 		const ELASTICSEARCH_CLUSTER_HOST_LIST = ELASTICSEARCH_CLUSTER_HOST?.split(',')?.map(host => `https://${host}`)
-	
+
 		if (!ELASTICSEARCH_CLUSTER_HOST_LIST || ELASTICSEARCH_CLUSTER_HOST_LIST?.length <= 0) {
 			console.error('ERROR', '创建或连接搜索引擎集群失败：ELASTICSEARCH_CLUSTER_HOST_LIST 为空，请检查环境变量设置，集群地址必须由以逗号分隔的集群地址和端口号组成，例：XXX.XXX.XXX.XXX:32000,YYY.YYY.YYY.YYY:32000,ZZZ.ZZZ.ZZZ.ZZZ:32000')
 			process.exit()
 		}
-	
+
 		const client = new Client({
 			node: ELASTICSEARCH_CLUSTER_HOST_LIST,
 			auth: {
@@ -50,7 +50,7 @@ export const connectElasticSearchCluster = async (): Promise<Client> => {
 			console.error('ERROR', '创建或连接搜索引擎集群失败：PING 返回了一个错误的结果：', error)
 			process.exit()
 		}
-	
+
 		try {
 			const elasticsearchClusterInfoResult = await client.info()
 			console.log('Elasticsearch Cluster Connect successfully!')

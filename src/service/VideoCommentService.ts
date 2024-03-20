@@ -32,7 +32,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 						emitTime: nowDate,
 						upvoteCount: 0,
 						downvoteCount: 0,
-						subComments: [],
+						subComments: [] as VideoComment['subComments'], // TODO: Mongoose issue: #12420
 						subCommentsCount: 0,
 						editDateTime: nowDate,
 					}

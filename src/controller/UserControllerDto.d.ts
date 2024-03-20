@@ -4,7 +4,7 @@
 export type UserRegistrationRequestDto = {
 	/** 用户邮箱 */
 	email: string;
-	/** 在前端已经 Hash 过一次的的密码 */
+	/** 在前端已经被 Bcrypt Hash 过一次的的密码 */
 	passwordHash: string;
 	/** 密码提示 */
 	passwordHint?: string;
@@ -148,6 +148,8 @@ export type UserWebsite = {
 export type UpdateOrCreateUserInfoRequestDto = {
 	/** 用户名 */
 	username?: string;
+	/** 用户昵称 */
+	userNickname?: string;
 	/** 用户头像的链接 */
 	avatar?: string;
 	/** 用户背景图片的链接 */
@@ -268,6 +270,8 @@ export type GetUserAvatarUploadSignedUrlResultDto = {
 	success: boolean;
 	/** 用于用户上传头像的预签名 URL */
 	userAvatarUploadSignedUrl?: string;
+	/** 用于用户上传头像文件名 */
+	userAvatarFilename?: string;
 	/** 附加的文本消息 */
 	message?: string;
 }

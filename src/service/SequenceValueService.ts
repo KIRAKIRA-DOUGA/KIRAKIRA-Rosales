@@ -1,5 +1,4 @@
 import { getNextSequenceValuePool } from '../dbPool/DbClusterPool.js';
-import { SequenceValueSchema } from '../dbPool/schema/SequenceSchema.js';
 
 // NOTE 自增序列默认会跳过的值
 const __DEFAULT_SEQUENCE_EJECT__: number[] = [9, 42, 233, 404, 2233, 10388, 10492, 114514]
@@ -28,9 +27,8 @@ type SequenceNumberResultType = {
 export const getNextSequenceValueService = async (sequenceId: string, sequenceDefaultNumber: number = 0, sequenceStep: number = 1): Promise<SequenceNumberResultType> => {
 	try {
 		if (sequenceId) {
-			const { collectionName, schemaInstance } = SequenceValueSchema
 			try {
-				const getNextSequenceValue = await getNextSequenceValuePool(sequenceId, schemaInstance, collectionName, sequenceDefaultNumber, sequenceStep)
+				const getNextSequenceValue = await getNextSequenceValuePool(sequenceId, sequenceDefaultNumber, sequenceStep)
 				const sequenceValue = getNextSequenceValue?.result
 				if (getNextSequenceValue.success && sequenceValue !== null && sequenceValue !== undefined) {
 					return { success: true, sequenceId, sequenceValue, message: '获取自增 ID 成功' }

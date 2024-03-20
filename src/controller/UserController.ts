@@ -103,6 +103,7 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 	const data = ctx.request.body as Partial<UpdateOrCreateUserInfoRequestDto>
 	const updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto = {
 		username: data?.username,
+		userNickname: data?.userNickname,
 		avatar: data?.avatar,
 		userBannerImage: data?.userBannerImage,
 		signature: data?.signature,

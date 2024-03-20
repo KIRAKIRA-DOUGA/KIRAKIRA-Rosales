@@ -10,19 +10,16 @@ class UserAuthSchemaFactory {
 		uid: { type: Number, unique: true, required: true },
 		/** 用户邮箱 - 非空 */
 		email: { type: String, unique: true, required: true },
-		/** 被两次 Hash 的密码 - 非空 */
+		/** 全小写的用户邮箱 - 非空 */
+		emailLowerCase: { type: String, unique: true, required: true },
+		/** 被两次 Bcrypt Hash 的密码 - 非空 */
 		passwordHashHash: { type: String, required: true },
-		/** 盐 - 非空 */
-		salt: { type: String, required: true },
 		/** 用户的身分令牌 - 非空 */
 		token: { type: String, required: true },
 		/** 密码提示 */
 		passwordHint: String,
-
-		// // TODO 用户创建日期
-		// /** 用户创建时间 */
-		// userCreateDate: { type: Number, required: true },
-
+		/** 系统专用字段-创建时间 - 非空 */
+		userCreateDateTime: { type: Number, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	}
@@ -73,6 +70,8 @@ class UserInfoSchemaFactory {
 		uid: { type: Number, unique: true, required: true },
 		/** 用户名 - 唯一 */
 		username: { type: String, unique: true },
+		/** 用户昵称 */
+		userNickname: { type: String },
 		/** 用户头像的链接 */
 		avatar: { type: String },
 		/** 用户背景图片的链接 */
