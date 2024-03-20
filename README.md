@@ -2,7 +2,8 @@
 KIRAKIRA-Rosales, The RESTful Back-end API Created by koa.  
 在完善以下内容后本存储库将开源  
 - [ ] 编写开发文档相关工作
-- [ ] 修复每个请求都创建一个 mongoose schema 的问题
+- [x] 修复每个请求都创建一个 mongoose schema 的问题
+- [ ] 优化用户注册/登录流程
 
 <br/>
 
