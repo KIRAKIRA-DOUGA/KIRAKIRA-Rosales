@@ -716,10 +716,8 @@ const checkUpdateOrCreateUserInfoRequest = (updateOrCreateUserInfoRequest: Updat
 		return false
 	}
 
-	if (updateOrCreateUserInfoRequest.userLinkAccounts) {
-		if (!updateOrCreateUserInfoRequest.userLinkAccounts.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
-			return false
-		}
+	if (updateOrCreateUserInfoRequest?.userLinkAccounts?.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
+		return false
 	}
 
 	return true
@@ -737,10 +735,8 @@ const checkUpdateOrCreateUserSettingsRequest = (updateOrCreateUserSettingsReques
 		return false
 	}
 
-	if (!updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting) {
-		if (updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
-			return false
-		}
+	if (updateOrCreateUserSettingsRequest?.userLinkAccountsPrivacySetting?.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
+		return false
 	}
 
 	return true
