@@ -46,8 +46,6 @@ class VideoSchemaFactory {
 		uploadDate: { type: Number, required: true },
 		/** 视频播放量 - 非空 */
 		watchedCount: { type: Number, required: true },
-		/** 视频作者 - 非空 */
-		uploader: { type: String, required: true },
 		/** 创作者 UID - 非空 */
 		uploaderId: { type: Number, required: true },
 		/** 视频时长，单位 ms - 非空 */

@@ -3,7 +3,7 @@ import { emitDanmakuController, getDanmakuListByKvidController } from '../contro
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
+import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoFileTusEndpointController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
 
@@ -153,6 +153,7 @@ router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户
 router.get('/video/search', searchVideoByKeywordController) // 根据关键字搜索视频
 // https://localhost:9999/video/search?keyword=fate
 
+router.post('/video/tus', getVideoFileTusEndpointController) // 获取 TUS 上传 Endpoint
 
 
 

@@ -1,7 +1,8 @@
 import { Client } from '@elastic/elasticsearch'
+import axios from 'axios'
 import { InferSchemaType } from 'mongoose'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
@@ -9,7 +10,7 @@ import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } f
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
-import { getUserInfoByUidService } from './UserService.js'
+import { checkUserTokenService, getUserInfoByUidService } from './UserService.js'
 
 /**
  * 上传视频
@@ -28,7 +29,6 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				const nowDate = new Date().getTime()
 				const title = uploadVideoRequest.title
 				const description = uploadVideoRequest.description
-				const uploader = uploadVideoRequest.uploader
 				const videoCategory = uploadVideoRequest.videoCategory
 				const videoPart = uploadVideoRequest.videoPart.map(video => ({ ...video, editDateTime: nowDate }))
 				const videoTags = uploadVideoRequest.videoTags.map(tag => ({ ...tag, editDateTime: nowDate }))
@@ -44,7 +44,6 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					image: uploadVideoRequest.image,
 					uploadDate: new Date().getTime(),
 					watchedCount: 0,
-					uploader,
 					uploaderId: uploadVideoRequest.uploaderId,
 					duration: uploadVideoRequest.duration,
 					description,
@@ -59,7 +58,6 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				const videoEsData: EsSchema2TsType<typeof videoEsSchema> = {
 					title,
 					description,
-					uploader,
 					kvid: videoId,
 					videoCategory,
 					videoTags,
@@ -86,7 +84,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '视频上传失败，获取视频 ID 失败' }
 			}
 		} else {
-			console.error('ERROR', `上传视频时的字段校验未通过或 Es 客户端未连接，用户名：${uploadVideoRequest.uploader}, 用户ID：${uploadVideoRequest.uploaderId}`)
+			console.error('ERROR', `上传视频时的字段校验未通过或 Es 客户端未连接，用户ID：${uploadVideoRequest.uploaderId}`)
 			return { success: false, message: '上传时携带的参数不正确或搜索引擎客户端未连接' }
 		}
 	} catch (error) {
@@ -111,7 +109,6 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			image: 1,
 			uploadDate: 1,
 			watchedCount: 1,
-			uploader: 1,
 			uploaderId: 1,
 			duration: 1,
 			description: 1,
@@ -167,7 +164,6 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				image: 1,
 				uploadDate: 1,
 				watchedCount: 1,
-				uploader: 1,
 				uploaderId: 1,
 				duration: 1,
 				description: 1,
@@ -244,7 +240,6 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 				image: 1,
 				uploadDate: 1,
 				watchedCount: 1,
-				uploader: 1,
 				uploaderId: 1,
 				duration: 1,
 				description: 1,
@@ -360,6 +355,54 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 	}
 }
 
+
+export const getVideoFileTusEndpointService = async (uid: number, token: string, getVideoFileTusEndpointRequest: GetVideoFileTusEndpointRequestDto): Promise<string | undefined> => {
+	try {
+		if ((await checkUserTokenService(uid, token)).success) {
+			const streamTusEndpointUrl = process.env.CF_STREAM_TUS_ENDPOINT_URL
+			const streamToken = process.env.CF_STREAM_TOKEN
+
+			const uploadLength = getVideoFileTusEndpointRequest.uploadLength
+			const uploadMetadata = getVideoFileTusEndpointRequest.uploadMetadata
+
+			if (!streamTusEndpointUrl && !streamToken) {
+				console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, streamTusEndpointUrl 和 streamToken 可能为空。请检查环境变量设置（CF_STREAM_TUS_ENDPOINT_URL, CF_STREAM_TOKEN）')
+				return undefined
+			}
+
+			// 创建 Axios 请求配置
+			const config = {
+				headers: {
+					Authorization: `Bearer ${streamToken}`,
+					'Tus-Resumable': '1.0.0',
+					'Upload-Length': uploadLength,
+					'Upload-Metadata': uploadMetadata,
+				},
+			}
+
+			try {
+				const videoTusEndpointResult = await axios.post(streamTusEndpointUrl, {}, config)
+				const videoTusEndpoint = videoTusEndpointResult.headers?.location
+				if (videoTusEndpoint) {
+					return videoTusEndpoint
+				} else {
+					console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 请求结果为空')
+					return undefined
+				}
+			} catch (error) {
+				console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 发送请求失败', error?.response?.data)
+				return undefined
+			}
+		} else {
+			console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 用户校验未通过', { uid })
+			return undefined
+		}
+	} catch (error) {
+		console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 未知错误：', error)
+		return undefined
+	}
+}
+
 /**
  * 检查上传的视频中的参数是否正确且无疏漏
  * @param uploadVideoRequest 上传视频请求携带的请求载荷
@@ -371,7 +414,6 @@ const checkUploadVideoRequest = (uploadVideoRequest: UploadVideoRequestDto) => {
 		uploadVideoRequest.videoPart && uploadVideoRequest.videoPart?.length > 0 && uploadVideoRequest.videoPart.every(checkVideoPartData)
 		&& uploadVideoRequest.title
 		&& uploadVideoRequest.image
-		&& uploadVideoRequest.uploader
 		&& uploadVideoRequest.uploaderId !== null && uploadVideoRequest.uploaderId !== undefined
 		&& uploadVideoRequest.duration
 	)

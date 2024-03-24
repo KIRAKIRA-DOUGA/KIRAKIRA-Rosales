@@ -1,6 +1,6 @@
-import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, searchVideoByKeywordService, updateVideoService } from '../service/VideoService.js'
+import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoFileTusEndpointService, searchVideoByKeywordService, updateVideoService } from '../service/VideoService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, SearchVideoByKeywordRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
 /**
  * 上传视频
@@ -14,7 +14,6 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		title: data.title || '',
 		videoPart: data.videoPart || [],
 		image: data.image || '',
-		uploader: data.uploader || '',
 		uploaderId: data.uploaderId ?? -1,
 		duration: data.duration ?? -1,
 		description: data.description || '',
@@ -86,6 +85,32 @@ export const searchVideoByKeywordController = async (ctx: koaCtx, next: koaNext)
 	const esClient = ctx.elasticsearchClient
 	const searchVideoByKeywordResponse = await searchVideoByKeywordService(searchVideoByKeywordRequest, esClient)
 	ctx.body = searchVideoByKeywordResponse
+	await next()
+}
+
+/**
+ * 获取视频文件 TUS 上传端点
+ * @param ctx context
+ * @param next context
+ * @returns 获取到的视频信息
+ */
+export const getVideoFileTusEndpointController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	const getVideoFileTusEndpointRequest: GetVideoFileTusEndpointRequestDto = {
+		uploadLength: parseInt(ctx.get('Upload-Length'), 10),
+		uploadMetadata: ctx.get('Upload-Metadata') || '',
+	}
+
+	const destination = await getVideoFileTusEndpointService(uid, token, getVideoFileTusEndpointRequest)
+	ctx.set({
+		'Access-Control-Expose-Headers': 'Location',
+		'Access-Control-Allow-Headers': '*',
+		'Access-Control-Allow-Origin': '*',
+		Location: destination,
+	})
+	ctx.body = destination ? 'true' : 'false'
 	await next()
 }
 

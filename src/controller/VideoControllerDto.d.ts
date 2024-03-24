@@ -32,8 +32,6 @@ export type UploadVideoRequestDto = {
 	title: string;
 	/** 封面图链接 */
 	image: string;
-	/** 视频作者 ID */
-	uploader: string;
 	/** 创作者 UID */
 	uploaderId: number;
 	/** 视频时长，单位 ms */
@@ -187,3 +185,14 @@ export type SearchVideoByKeywordRequestDto = {
  * 根据关键字搜索视频的响应结果
  */
 export type SearchVideoByKeywordResponseDto = ThumbVideoResponseDto & {}
+
+
+/**
+ * 获取视频文件 TUS 上传端点请求参数
+ */
+export type GetVideoFileTusEndpointRequestDto = {
+	/** 视频上传分片大小，Cloudflare 只支持 256KiB 的倍数，最小 5242880 子节，最大 209715200 子节，建议 52428800 子节 */
+	uploadLength: number;
+	/** 视频元数据 */
+	uploadMetadata: string;
+}

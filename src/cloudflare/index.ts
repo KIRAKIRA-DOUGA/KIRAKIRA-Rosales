@@ -1,6 +1,7 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import axios from 'axios'
+import { getCloudflareRFC3339ExpiryDateTime } from '../common/GetCloudflareRFC3339ExpiryDateTime.js'
 
 /**
  * 生成一个预签名 URL，该 URL 可以用于向 Cloudflare R2 存储上传数据
@@ -96,13 +97,13 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 		}
 
 		if (!imagesEndpointUrl && !imagesToken) {
-			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL： imagesEndpointUrl 和 imagesToken 可能为空。', { fileName, expiresIn, metaData })
+			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL： imagesEndpointUrl 和 imagesToken 可能为空。请检查环境变量设置（CF_IMAGES_ENDPOINT_URL, CF_IMAGES_TOKEN）', { fileName, expiresIn, metaData })
 			return undefined
 		}
 
 		// 创建 Axios 请求数据
 		const data: Record<string, string | Record<string, string> > = {}
-		data.expiry = (new Date((new Date()).getTime() + expiresIn * 1000)).toISOString().replace(/\.\d{3}/, '') // 生成的日期格式为：2024-03-17T13:47:28Z
+		data.expiry = getCloudflareRFC3339ExpiryDateTime(expiresIn) // 生成的日期格式为：2024-03-17T13:47:28Z
 		fileName && (data.id = fileName)
 		metaData && (data.metaData = metaData)
 

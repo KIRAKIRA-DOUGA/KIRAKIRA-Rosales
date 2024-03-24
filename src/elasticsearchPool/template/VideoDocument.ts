@@ -22,8 +22,6 @@ export const VideoDocument = {
 		title: { type: String, required: true as const },
 		/** 视频描述 */
 		description: { type: String, required: false as const },
-		/** 视频作者 - 非空 */
-		uploader: { type: String, required: true as const },
 		/** KVID 视频 ID - 非空 */
 		kvid: { type: Number, required: true as const },
 		/** 视频分区 - 非空 */
