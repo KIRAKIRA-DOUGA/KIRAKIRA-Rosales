@@ -42,6 +42,14 @@ export type UploadVideoRequestDto = {
 	videoCategory: string;
 	/** 视频版权 */
 	copyright: string;
+	/** 原作者 */
+	originalAuthor?: string;
+	/** 原视频链接 */
+	originalLink?: string;
+	/** 是否发布到动态 */
+	pushToFeed: boolean;
+	/** 声明为原创 */
+	ensureOriginal: boolean;
 	/** 视频 TAG */
 	videoTags: VideoTagDto[];
 }

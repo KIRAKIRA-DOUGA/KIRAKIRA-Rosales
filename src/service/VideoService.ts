@@ -49,6 +49,10 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					description,
 					videoCategory,
 					copyright: uploadVideoRequest.copyright,
+					originalAuthor: uploadVideoRequest.originalAuthor,
+					originalLink: uploadVideoRequest.originalLink,
+					pushToFeed: uploadVideoRequest.pushToFeed,
+					ensureOriginal: uploadVideoRequest.ensureOriginal,
 					videoTags: videoTags as Video['videoTags'], // TODO: Mongoose issue: #12420
 					editDateTime: nowDate,
 				}
@@ -410,12 +414,18 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
  */
 const checkUploadVideoRequest = (uploadVideoRequest: UploadVideoRequestDto) => {
 	// TODO // WARN 这里可能需要更安全的校验机制
+
+	const VIDEO_CATEGORY = ['anime', 'music', 'otomad', 'tech', 'design', 'game', 'misc']
 	return (
 		uploadVideoRequest.videoPart && uploadVideoRequest.videoPart?.length > 0 && uploadVideoRequest.videoPart.every(checkVideoPartData)
 		&& uploadVideoRequest.title
 		&& uploadVideoRequest.image
 		&& uploadVideoRequest.uploaderId !== null && uploadVideoRequest.uploaderId !== undefined
 		&& uploadVideoRequest.duration
+		&& VIDEO_CATEGORY.includes(uploadVideoRequest.videoCategory)
+		&& uploadVideoRequest.copyright
+		&& uploadVideoRequest.pushToFeed !== undefined && uploadVideoRequest.pushToFeed !== null
+		&& uploadVideoRequest.ensureOriginal !== undefined && uploadVideoRequest.ensureOriginal !== null
 	)
 }
 

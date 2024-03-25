@@ -56,6 +56,14 @@ class VideoSchemaFactory {
 		videoCategory: { type: String, required: true },
 		/** 视频版权 - 非空 */
 		copyright: { type: String, required: true },
+		/** 原作者 */
+		originalAuthor: { type: String, required: false },
+		/** 原视频链接 */
+		originalLink: { type: String, required: false },
+		/** 是否发布到动态 - 非空 */
+		pushToFeed: { type: Boolean, required: true },
+		/** 声明为原创 - 非空 */
+		ensureOriginal: { type: Boolean, required: true },
 		/** 视频 TAG - 非空 */
 		videoTags: { type: [VideoTagSchema], required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */

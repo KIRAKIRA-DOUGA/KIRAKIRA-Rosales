@@ -19,6 +19,10 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		description: data.description || '',
 		videoCategory: data.videoCategory || '',
 		copyright: data.copyright || '',
+		originalAuthor: data.originalAuthor,
+		originalLink: data.originalLink,
+		pushToFeed: data.pushToFeed,
+		ensureOriginal: data.ensureOriginal,
 		videoTags: data.videoTags || [],
 	}
 	const esClient = ctx.elasticsearchClient
