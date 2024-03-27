@@ -40,7 +40,6 @@ type PropertyType<T> = T extends { type: infer R } ? ConstructorTypeMapper<R> : 
  *
  * @example
  * // 示例：定义一个包含 schema 和 indexName 的 Elasticsearch Document 对象
- * // 使用这种方式定义的 schema 和 indexName ，能够建立关联关系，保证 schema 匹配到正确的 indexName（这与 Rust 的“Slice 类型”理念想要解决的问题有点像）
  * const fooDocument = {
  *   schema: {
  *     foo: { type: String },
@@ -76,20 +75,21 @@ export type EsSchema2TsType<T> = {
 }
 
 
+// /**
+//  * Elasticsearch 搜索时的数据类型映射
+//  */
+// type QueryTypeMapper<T> =
+// 	T extends Record<string, string> ? string :
+// 		T extends Record<string, number> ? number :
+// 			T extends Record<string, boolean> ? boolean :
+// 				T extends Record<string, QueryTypeMapper<T> > ? QueryTypeMapper<T> :
+// 					never
 
-type QueryTypeMapper<T> =
-	T extends Record<string, string> ? string :
-		T extends Record<string, number> ? number :
-			T extends Record<string, boolean> ? boolean :
-			// T extends Record<string, EsQueryType<T> > ? EsQueryType<T> :
-			T extends Record<string, QueryTypeMapper<T> > ? QueryTypeMapper<T> :
-					never
 
-
-/** Elasticsearch Query，相当于 SQL 中的 WHERE LIKE */
-export type EsQueryType<T> = {
-	[K in keyof T]?: QueryTypeMapper<T[K]>;
-}
+// /** Elasticsearch Query，相当于 SQL 中的 WHERE LIKE */
+// export type EsQueryType<T> = {
+// 	[K in keyof T]?: QueryTypeMapper<T[K]>;
+// }
 
 /** 去 Elasticsearch 执行操作的返回结果 */
 export type EsResultType<T> = {

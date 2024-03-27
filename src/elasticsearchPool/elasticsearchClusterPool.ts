@@ -1,7 +1,7 @@
 import { Client } from '@elastic/elasticsearch'
 import { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { EsQueryType, EsResultType, EsSchema2TsType } from './ElasticsearchClusterPoolTypes.js'
+import { EsResultType, EsSchema2TsType } from './ElasticsearchClusterPoolTypes.js'
 
 /**
  * 创建 Elasticsearch 连接，这个函数在整个应用的生命周期里应该只被调用一次（only in elasticsearchMiddleware.ts）
@@ -132,7 +132,7 @@ export const searchDataFromElasticsearchCluster = async <T>(client: Client, inde
 	try {
 		if (client && !isEmptyObject(client) && indexName && schema && !isEmptyObject(schema as object) && query && !isEmptyObject(query)) {
 			try {
-				const result = await client.search< EsQueryType<T> >({
+				const result = await client.search({
 					index: indexName,
 					query,
 				})
