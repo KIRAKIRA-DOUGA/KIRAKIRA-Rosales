@@ -1,6 +1,9 @@
 // 试验场
 
+import mongoose, { Schema } from 'mongoose'
 import { hashPasswordSync } from '../common/HashTool.js'
+import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
+import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { GlobalSingleton } from '../store/index.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 
@@ -9,8 +12,6 @@ const globalSingleton = GlobalSingleton.getInstance()
 
 export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {
 	const something = ctx.query.something
-
-	console.log('something: ', something)
 
 	// const aaa = hashPasswordSync(something as string)
 
@@ -24,7 +25,6 @@ export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {
 
 
 	// const aaa = await getNextSequenceValueEjectService('test', [-10, -208, -220, -222, -224, -223, -225, -226, -230, -232, -234, -235, -237, -238], -200, -2)
-	// console.log('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', aaa)
 
 	// ctx.body = `Hello World ${something}, oldNumber: ${oldTestNumber}, newNumber: ${newTestNumber}`
 

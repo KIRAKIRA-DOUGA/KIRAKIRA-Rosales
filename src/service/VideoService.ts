@@ -3,14 +3,15 @@ import axios from 'axios'
 import { InferSchemaType } from 'mongoose'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
-import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { DbPoolOptions, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
+import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
-import { checkUserTokenService, getUserInfoByUidService } from './UserService.js'
+import { checkUserTokenService } from './UserService.js'
 
 /**
  * 上传视频
@@ -104,8 +105,10 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
  */
 export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => {
 	try {
-		const { collectionName, schemaInstance } = VideoSchema
-		type Video = InferSchemaType<typeof schemaInstance>
+		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+		const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+		type Video = InferSchemaType<typeof videoSchemaInstance>
+		type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
 		const where: QueryType<Video> = {}
 		const select: SelectType<Video> = {
 			videoId: 1,
@@ -118,8 +121,20 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			description: 1,
 			editDateTime: 1,
 		}
+		const option: DbPoolOptions<Video, UserInfo> = {
+			virtual: {
+				name: 'uploader', // 虚拟属性名
+				options: {
+					ref: 'user-info', // 关联的子模型，注意结尾要加s
+					localField: 'uploaderId', // 父模型中用于关联的字段
+					foreignField: 'uid', // 子模型中用于关联的字段
+					justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
+				},
+			},
+			populate: 'uploader',
+		}
 		try {
-			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+			const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option)
 			const videoResult = result.result
 			if (result.success && videoResult) {
 				const videosCount = videoResult?.length
@@ -128,7 +143,16 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 						success: true,
 						message: '获取首页视频成功',
 						videosCount,
-						videos: videoResult,
+						videos: videoResult.map(video => {
+							if (video) {
+								const uploaderInfo = 'uploader' in video && video?.uploader as UserInfo
+								if (uploaderInfo) {
+									const uploader = uploaderInfo.userNickname ?? uploaderInfo.username
+									return { ...video, uploader }
+								}
+							}
+							return { ...video, uploader: undefined }
+						}),
 					}
 				} else {
 					console.error('ERROR', '获取到的视频数组长度小于等于 0')
@@ -156,8 +180,10 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvidRequestDto): Promise<GetVideoByKvidResponseDto> => {
 	try {
 		if (checkGetVideoByKvidRequest(getVideoByKvidRequest)) {
-			const { collectionName, schemaInstance } = VideoSchema
-			type Video = InferSchemaType<typeof schemaInstance>
+			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+			const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+			type Video = InferSchemaType<typeof videoSchemaInstance>
+			type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
 			const where: QueryType<Video> = {
 				videoId: getVideoByKvidRequest.videoId,
 			}
@@ -176,22 +202,37 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				copyright: 1,
 				videoTags: 1,
 			}
+
+			const option: DbPoolOptions<Video, UserInfo> = {
+				virtual: {
+					name: 'uploaderInfo', // 虚拟属性名
+					options: {
+						ref: userInfoCollectionName, // 关联的子模型，注意结尾要加s
+						localField: 'uploaderId', // 父模型中用于关联的字段
+						foreignField: 'uid', // 子模型中用于关联的字段
+						justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
+					},
+				},
+				populate: 'uploaderInfo',
+			}
 			try {
-				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+				const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option)
 				const videoResult = result.result
 				if (result.success && videoResult) {
 					const videosCount = result.result?.length
 					if (videosCount === 1) {
 						const video = videoResult?.[0] as GetVideoByKvidResponseDto['video']
 						if (video && video.uploaderId) {
-							const uploaderId = video.uploaderId
-							const getVideoByUidRequest: GetVideoByUidRequestDto = {
-								uid: uploaderId,
-							}
-							const userInfoResult = await getUserInfoByUidService(getVideoByUidRequest) // 通过视频的上传者 ID 获取上传者信息
-							const userInfo = userInfoResult.result
-							if (userInfoResult.success && userInfo && !isEmptyObject(userInfo)) { // 如果获取到的话，就将视频上传者信息附加到请求响应中
-								video.uploaderInfo = { uid: uploaderId, username: userInfo.username, avatar: userInfo.avatar, userBannerImage: userInfo.userBannerImage, signature: userInfo.signature }
+							const uploaderInfo = 'uploaderInfo' in video && video?.uploaderInfo as UserInfo
+							console.log('aaaaaaaaaa', uploaderInfo)
+							if (uploaderInfo) { // 如果获取到的话，就将视频上传者信息附加到请求响应中
+								const uid = uploaderInfo.uid
+								const username = uploaderInfo.username
+								const userNickname = uploaderInfo.userNickname
+								const avatar = uploaderInfo.avatar
+								const userBannerImage = uploaderInfo.userBannerImage
+								const signature = uploaderInfo.signature
+								video.uploaderInfo = { uid, username, userNickname, avatar, userBannerImage, signature }
 							}
 							return {
 								success: true,
@@ -251,7 +292,7 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 			}
 
 			try {
-				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+				const result = await selectDataFromMongoDB<Video>(where, select, schemaInstance, collectionName)
 				const videoResult = result.result
 				if (result.success && videoResult) {
 					const videoResultLength = videoResult?.length

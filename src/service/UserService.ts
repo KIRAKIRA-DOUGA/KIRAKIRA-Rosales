@@ -716,7 +716,7 @@ const checkUpdateOrCreateUserInfoRequest = (updateOrCreateUserInfoRequest: Updat
 		return false
 	}
 
-	if (updateOrCreateUserInfoRequest?.userLinkAccounts?.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
+	if (updateOrCreateUserInfoRequest?.userLinkAccounts?.some(account => !ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
 		return false
 	}
 
@@ -735,7 +735,7 @@ const checkUpdateOrCreateUserSettingsRequest = (updateOrCreateUserSettingsReques
 		return false
 	}
 
-	if (updateOrCreateUserSettingsRequest?.userLinkAccountsPrivacySetting?.every(account => ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
+	if (updateOrCreateUserSettingsRequest?.userLinkAccountsPrivacySetting?.some(account => !ALLOWED_ACCOUNT_TYPE.includes(account.accountType))) {
 		return false
 	}
 
