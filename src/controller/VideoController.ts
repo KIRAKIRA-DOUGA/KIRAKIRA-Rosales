@@ -33,6 +33,7 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 获取首页要显示的视频
+ * // TODO: 现在还只是获取全部视频，未来优化为推荐视频
  * @param ctx context
  * @param next context
  * @returns 获取首页要显示的视频
