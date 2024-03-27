@@ -121,17 +121,18 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			description: 1,
 			editDateTime: 1,
 		}
+		const uploaderInfoKey = 'uploaderInfo'
 		const option: DbPoolOptions<Video, UserInfo> = {
 			virtual: {
-				name: 'uploader', // 虚拟属性名
+				name: uploaderInfoKey, // 虚拟属性名
 				options: {
-					ref: 'user-info', // 关联的子模型，注意结尾要加s
+					ref: userInfoCollectionName, // 关联的子模型，注意结尾要加s
 					localField: 'uploaderId', // 父模型中用于关联的字段
 					foreignField: 'uid', // 子模型中用于关联的字段
 					justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
 				},
 			},
-			populate: 'uploader',
+			populate: uploaderInfoKey,
 		}
 		try {
 			const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option)
@@ -145,7 +146,7 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 						videosCount,
 						videos: videoResult.map(video => {
 							if (video) {
-								const uploaderInfo = 'uploader' in video && video?.uploader as UserInfo
+								const uploaderInfo = uploaderInfoKey in video && video?.[uploaderInfoKey] as UserInfo
 								if (uploaderInfo) {
 									const uploader = uploaderInfo.userNickname ?? uploaderInfo.username
 									return { ...video, uploader }
@@ -202,10 +203,10 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				copyright: 1,
 				videoTags: 1,
 			}
-
+			const uploaderInfoKey = 'uploaderInfo'
 			const option: DbPoolOptions<Video, UserInfo> = {
 				virtual: {
-					name: 'uploaderInfo', // 虚拟属性名
+					name: uploaderInfoKey, // 虚拟属性名
 					options: {
 						ref: userInfoCollectionName, // 关联的子模型，注意结尾要加s
 						localField: 'uploaderId', // 父模型中用于关联的字段
@@ -213,7 +214,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 						justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
 					},
 				},
-				populate: 'uploaderInfo',
+				populate: uploaderInfoKey,
 			}
 			try {
 				const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option)
@@ -223,8 +224,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					if (videosCount === 1) {
 						const video = videoResult?.[0] as GetVideoByKvidResponseDto['video']
 						if (video && video.uploaderId) {
-							const uploaderInfo = 'uploaderInfo' in video && video?.uploaderInfo as UserInfo
-							console.log('aaaaaaaaaa', uploaderInfo)
+							const uploaderInfo = uploaderInfoKey in video && video?.[uploaderInfoKey] as UserInfo
 							if (uploaderInfo) { // 如果获取到的话，就将视频上传者信息附加到请求响应中
 								const uid = uploaderInfo.uid
 								const username = uploaderInfo.username
