@@ -98,7 +98,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			// 比如说用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据
 			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
 
-			console.log('MongoDB Cluster Connect successfully!')
+			console.info('MongoDB Cluster Connect successfully!')
 		} catch (error) {
 			console.error('ERROR', '创建数据库连接失败：', error)
 			process.exit()
