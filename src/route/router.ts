@@ -3,7 +3,7 @@ import { emitDanmakuController, getDanmakuListByKvidController } from '../contro
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoFileTusEndpointController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
+import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
 
 const router = new Router()
 
@@ -154,7 +154,12 @@ router.get('/video/search', searchVideoByKeywordController) // 根据关键字�
 // https://localhost:9999/video/search?keyword=fate
 
 router.post('/video/tus', getVideoFileTusEndpointController) // 获取 TUS 上传 Endpoint
+// https://localhost:9999/video/tus
+// cookie: uid, token
 
+router.get('/video/cover/preUpload', getVideoCoverUploadSignedUrlController) // 获取用于上传视频封面图的预签名 URL
+// https://localhost:9999/video/cover/preUpload
+// cookie: uid, token
 
 
 

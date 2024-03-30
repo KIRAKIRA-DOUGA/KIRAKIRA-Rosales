@@ -1,8 +1,10 @@
 import { Client } from '@elastic/elasticsearch'
 import axios from 'axios'
 import { InferSchemaType } from 'mongoose'
+import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { generateSecureRandomString } from '../common/RandomTool.js'
+import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
@@ -400,7 +402,13 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 	}
 }
 
-
+/**
+ * 获取视频文件 TUS 上传端点
+ * @param uid 用户 UID
+ * @param token 用户 token
+ * @param getVideoFileTusEndpointRequest 获取视频文件 TUS 上传端点的请求载荷
+ * @returns 获取视频文件 TUS 上传端点地址
+ */
 export const getVideoFileTusEndpointService = async (uid: number, token: string, getVideoFileTusEndpointRequest: GetVideoFileTusEndpointRequestDto): Promise<string | undefined> => {
 	try {
 		if ((await checkUserTokenService(uid, token)).success) {
@@ -445,6 +453,36 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 	} catch (error) {
 		console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 未知错误：', error)
 		return undefined
+	}
+}
+
+/**
+ * 获取用于上传视频封面图的预签名 URL
+ * @param uid 用户 UID
+ * @param token 用户 token
+ * @returns GetVideoCoverUploadSignedUrlResponseDto 获取用于上传视频封面图的预签名 URL 响应结果
+ */
+export const getVideoCoverUploadSignedUrlService = async (uid: number, token: string): Promise<GetVideoCoverUploadSignedUrlResponseDto> => {
+	try {
+		if ((await checkUserTokenService(uid, token)).success) {
+			const now = new Date().getTime()
+			const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
+			try {
+				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 180)
+				if (signedUrl) {
+					return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: { fileName, signedUrl } }
+				}
+			} catch (error) {
+				console.error('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
+				return { success: false, message: '获取视频封面图上传预签名 URL 失败，请求失败' }
+			}
+		} else {
+			console.error('ERROR', '获取视频封面图上传预签名 URL 失败，用户校验未通过')
+			return { success: false, message: '获取视频封面图上传预签名 URL 失败，用户校验未通过' }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取视频封面图上传预签名 URL 失败：', error)
+		return { success: false, message: '获取视频封面图上传预签名 URL 失败，未知原因' }
 	}
 }
 

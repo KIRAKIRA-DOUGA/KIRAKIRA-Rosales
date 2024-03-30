@@ -265,7 +265,7 @@ export type UserLogoutResponseDto = {
 /**
  * 获取用于用户上传头像的预签名 URL, 上传限时 60 秒
  */
-export type GetUserAvatarUploadSignedUrlResultDto = {
+export type GetUserAvatarUploadSignedUrlResponseDto = {
 	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
 	/** 用于用户上传头像的预签名 URL */

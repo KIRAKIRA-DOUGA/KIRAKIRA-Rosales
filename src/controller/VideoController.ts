@@ -1,4 +1,4 @@
-import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoFileTusEndpointService, searchVideoByKeywordService, updateVideoService } from '../service/VideoService.js'
+import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, updateVideoService } from '../service/VideoService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
@@ -116,6 +116,20 @@ export const getVideoFileTusEndpointController = async (ctx: koaCtx, next: koaNe
 		Location: destination,
 	})
 	ctx.body = destination ? 'true' : 'false'
+	await next()
+}
+
+
+/**
+ * 获取用于上传视频封面图的预签名 URL
+ * @param ctx context
+ * @param next context
+ * @returns 用于上传视频封面图的预签名 URL
+ */
+export const getVideoCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	ctx.body = await getVideoCoverUploadSignedUrlService(uid, token)
 	await next()
 }
 
