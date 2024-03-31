@@ -85,7 +85,7 @@ npm run dev-hot
 本章将会循序渐进地、介绍如何对 KIRAKIRA-Rosales 进行二次开发，改进功能。
 ### 熟悉目录结构
 以下为项目目录结构简介
-<pre><code>▁
+<pre><code>◌
 ├ .github - GitHub 相关配置
 │  └ workflows - 存放 Github 工作流
 ├ .vscode - VSCode 相关配置
