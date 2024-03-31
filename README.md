@@ -46,7 +46,7 @@ npm run dev-hot
 
 ## 构建 / 自托管
 您可以构建 KIRAKIRA-Rosales, 然后在任何安装了 Node.js 的 AMD64 或 ARM64 实例中运行。  
-您也可以使用 docker 或 docker 兼容工具将其打包为容器镜像。
+也可以使用 Docker 或 Docker 兼容工具将其打包为容器镜像。
 
 #### 构建，然后在本地预览
 1.设置环境变量
