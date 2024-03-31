@@ -85,13 +85,14 @@ npm run dev-hot
 本章将会循序渐进地、介绍如何对 KIRAKIRA-Rosales 进行二次开发，改进功能。
 ### 熟悉目录结构
 以下为项目目录结构简介
-<pre><code>◌
+```
+◌
 ├ .github - GitHub 相关配置
 │  └ workflows - 存放 Github 工作流
 ├ .vscode - VSCode 相关配置
 ├ docs - 存放说明文档（本文档就存放于该目录下）
 ├ o̶l̶d̶ - 存放不舍得删除的旧代码
-<strong>├ src - 存放源代码
+├ src - 存放源代码
 │  ├ cloudflare - 存放了 Cloudflare 相关的共通代码
 │  ├ common - 存放了共通方法
 │  ├ controller - controller 层，用于处理接受的请求载荷数据和丰富请求响应数据
@@ -103,7 +104,7 @@ npm run dev-hot
 │  ├ ssl - SSL 相关配置
 │  ├ store - 存放了“状态管理”或“运行时全局变量”相关代码
 │  ├ type - 存放了共通的类型定义代码
-│  └ app.ts - 该文件为程序入口</strong>
+│  └ app.ts - 该文件为程序入口
 ├ .dockerignore - 该文件用于配置执行 docker build 命令时忽略的文件
 ├ .editorconfig - 该文件定义了编码风格
 ├ .env.powershell.temp - 该文件是环境变量模板及说明文档
@@ -118,6 +119,6 @@ npm run dev-hot
 ├ package.json - 该文件定义了元数据、脚本和依赖包列表
 ├ tsconfig.json - 该文件为 TypeScript 配置文件
 └ ɹəʌoɔ.svg - 该文件为封面图
-</code></pre>
+```
 
 ### 从 Hello World 开始
