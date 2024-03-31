@@ -6,7 +6,7 @@ KIRAKIRA-Rosales, 一个由 koa 编写的、RESTful 的后端 API.
 API 参考，请参阅 [API 一览](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 
 ## 贡献
-想要参与贡献？请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)
+想要参与贡献？请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 
 ## 开发
 KIRAKIRA-Rosales 提供了可以在本地运行的开发服务器。  
@@ -55,8 +55,8 @@ npm run dev-hot
 
 2.构建并预览
 > [!IMPORTANT]  
-> 默认会将代码打包至 `dist` 目录下  
-> 如有必要，您可以在 tsconfig.json 中修改打包路径。相应地，你也应该修改下方第三步启动服务器命令中的路径。
+> 默认会将代码打包至 `dist` 文件夹内  
+> 如有必要，您可以在 tsconfig.json 中修改打包路径。相应地，也要修改下方第三步启动服务器命令中的路径。
 ```sh
 # 1. 安装依赖
 npm install
@@ -71,3 +71,6 @@ node ./dist/app.js
 #### 打包为容器镜像（最佳实践）
 部署 KIRAKIRA-Rosales 的最佳实践是将其运行在 K8s 集群中。您正在使用的 KIRAKIRA-Rosales 服务便是如此。  
 关于如何在容器中部署，请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
+
+## License
+BSD-3-Clause license
