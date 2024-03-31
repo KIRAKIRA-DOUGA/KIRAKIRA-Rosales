@@ -2,7 +2,7 @@
 
 ## 一、前言
 
-KIRAKIRA-Rosales（下文简称：“Rosales” 或 “后端”）是一个由 Koa 编写的、RESTful 的后端 API.
+KIRAKIRA-Rosales（下文简称：“Rosales” 或 “后端”）是一个基于 Koa 框架的、RESTful 的后端 API.
 
 本文档主要内容如下：
 1. 如何针对现有代码进行二次开发。
@@ -81,4 +81,50 @@ npm run dev-hot
 
 在此基础上，您可以编写、贡献代码，参与 KIRAKIRA 项目开发。  
 
+## 三、开发
+本章将会循序渐进地、介绍如何对 KIRAKIRA-Rosales 进行二次开发，改进功能。
+### 熟悉目录结构
+以下为项目目录结构简介
+``` txt highlight=[1-4]
+▁
+├ .github - GitHub 相关配置
+│  └ workflows - 存放 Github 工作流
+├ .vscode - VSCode 相关配置
+├ docs - 存放说明文档（本文档就存放于该目录下）
+├ o̶l̶d̶ - 存放不舍得删除的旧代码
+├ src - 存放源代码
+│  ├ cloudflare - 存放了 Cloudflare 相关的共通代码
+│  ├ common - 存放了共通方法
+│  ├ controller - controller 层，用于处理接受的请求载荷数据和丰富请求响应数据
+│  ├ dbPool - 存放了 MongoDB 相关的共通代码
+│  ├ elasticsearchPool - 存放了 Elasticsearch 相关的共通代码
+│  ├ middleware - 存放了服务器中间件相关代码
+│  ├ route - 存放了路由代码
+│  ├ service - service 层，用于处理业务逻辑
+│  ├ ssl - SSL 相关配置
+│  ├ store - 存放了“状态管理”或“运行时全局变量”相关代码
+│  ├ type - 存放了共通的类型定义代码
+│  └ app.ts - 该文件为程序入口
+├ .dockerignore - 该文件用于配置执行 docker build 命令时忽略的文件
+├ .editorconfig - 该文件定义了编码风格
+├ .env.powershell.temp - 该文件是环境变量模板及说明文档
+├ .eslintignore - 该文件定义了 Eslint 忽略的内容
+├ .eslintrc.cjs - 该文件定义了 ESLint 配置
+├ .gitattributes - 该文件定义了 Git 相关配置
+├ .gitignore - 该文件定义了 Git 忽略的文件
+├ Dockerfile - 该文件描述了构建 Docker 容器镜像的过程
+├ LICENSE - 该文件许可证
+├ README.md - 该文件为自述文件
+├ package-lock.json - 该文件固定了 npm install 是安装的依赖包的版本
+├ package.json - 该文件定义了元数据、脚本和依赖包列表
+├ tsconfig.json - 该文件为 TypeScript 配置文件
+└ ɹəʌoɔ.svg - 该文件为封面图
+ 
+```
 
+<pre><code>function main() {
+		__config_bash
+		<strong>__config_xdg_dirs</strong>
+}</code></pre>
+
+### 从 Hello World 开始
