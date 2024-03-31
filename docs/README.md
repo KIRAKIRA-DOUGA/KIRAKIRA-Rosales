@@ -124,7 +124,7 @@ npm run dev-hot
 
 <pre><code>function main() {
 		__config_bash
-		<strong>__config_xdg_dirs</strong>
+		<strong style="background-color: yellow">__config_xdg_dirs</strong>
 }</code></pre>
 
 ### 从 Hello World 开始
