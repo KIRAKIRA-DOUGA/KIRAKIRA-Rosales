@@ -16,10 +16,10 @@ KIRAKIRA-Rosales 提供了可以在本地运行的开发服务器。
 
 1.设置环境变量
 > [!IMPORTANT]    
-> 下方的示例中并没有包含全部环境变量。  
+> 下方的示例代码中并没有包含全部环境变量。  
 > 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)，该文件中列出的大多数环境变量都是必需的。  
 ```powershell
-# 根据操作系统的不同，设置环境变量的方式也不同，以下为 Windows PowerShell 的示例
+# 对于不同操作系统，设置环境变量的方式也不同。以下为 Windows PowerShell 的示例
 $env:SERVER_PORT="9999"
 $env:SERVER_ENV="dev"
 $env:SERVER_ROOT_URL="kirakira.moe"

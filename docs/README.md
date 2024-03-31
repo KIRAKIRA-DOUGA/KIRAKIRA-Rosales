@@ -8,7 +8,7 @@ KIRAKIRA-Rosales（下文简称：“Rosales” 或 “后端”）是一个由 
 1. 如何针对现有代码进行二次开发。
 2. 与后端相关的基础设施的知识，例如数据库、搜索引擎和集群部署等。
 
-在正式开始向您介绍前，我假设您已经具有一定的编程知识，包括：理解 [JavaScript](https://developer.mozilla.org/docs/Web/JavaScript) & [TypeScript](https://www.typescriptlang.org/) 的基础语法、[网络请求（HTTP）](https://developer.mozilla.org/docs/Web/HTTP/Overview)工作原理，以及了解 [数据库](https://zh.wikipedia.org/wiki/%E6%95%B0%E6%8D%AE%E5%BA%93) 和 [NoSQL](https://zh.wikipedia.org/wiki/NoSQL) 概念。
+在正式开始向您介绍前，我假设您已经具有一定的编程知识，包括：掌握 [JavaScript](https://developer.mozilla.org/docs/Web/JavaScript) & [TypeScript](https://www.typescriptlang.org/) 的基础语法、理解 [HTTP](https://developer.mozilla.org/docs/Web/HTTP/Overview) 工作原理，并且了解 [数据库](https://zh.wikipedia.org/wiki/%E6%95%B0%E6%8D%AE%E5%BA%93) 和 [NoSQL](https://zh.wikipedia.org/wiki/NoSQL) 概念。
 
 
 
@@ -47,10 +47,10 @@ git clone https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales.git
 
 ### 2. 设置环境变量
 > [!IMPORTANT]    
-> 下方的示例中并没有包含全部环境变量。  
+> 下方的示例代码中并没有包含全部环境变量。  
 > 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)，该文件中列出的大多数环境变量都是必需的。  
 ```powershell
-# 根据操作系统的不同，设置环境变量的方式也不同，以下为 Windows PowerShell 的示例
+# 对于不同操作系统，设置环境变量的方式也不同。以下为 Windows PowerShell 的示例
 $env:SERVER_PORT="9999"
 $env:SERVER_ENV="dev"
 $env:SERVER_ROOT_URL="kirakira.moe"
@@ -58,7 +58,7 @@ $env:SERVER_ROOT_URL="kirakira.moe"
 ```
 在设置环境变量时有任何问题，请在 [议题](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/issues) 或 [讨论区](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/discussions) 中查找解答或提问。
 
-### 3.启动后端开发服务器
+### 3. 启动后端开发服务器
 > [!IMPORTANT]    
 > 以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。  
 ```sh
