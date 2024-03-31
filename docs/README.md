@@ -113,12 +113,66 @@ npm run dev-hot
 ├ .gitattributes - 该文件定义了 Git 相关配置
 ├ .gitignore - 该文件定义了 Git 忽略的文件
 ├ Dockerfile - 该文件描述了构建 Docker 容器镜像的过程
-├ LICENSE - 该文件许可证
+├ LICENSE - 许可证
 ├ README.md - 该文件为自述文件
 ├ package-lock.json - 该文件固定了 npm install 是安装的依赖包的版本
 ├ package.json - 该文件定义了元数据、脚本和依赖包列表
 ├ tsconfig.json - 该文件为 TypeScript 配置文件
 └ ɹəʌoɔ.svg - 该文件为封面图
 ```
-
 ### 从 Hello World 开始
+第一个程序总是从 Hello World 开始，KIRAKIRA-Rosales 也不例外。  
+在 `/src/controller` 目录中有一个特殊的名为 `HelloWorld.ts` 的文件。  
+该文件中有以下代码：
+``` TypeScript
+import { koaCtx, koaNext } from '../type/koaTypes.js'
+
+export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {
+	const something = ctx.query.something
+	ctx.body = `Hello World: ${something}`
+	await next()
+}
+```
+让我们一行一行的解析代码这段代码：  
+第一行
+``` TypeScript
+import { koaCtx, koaNext } from '../type/koaTypes.js'
+```
+它从 koaTypes.js（koaTypes.ts）文件中导入了两个类型，koaCtx 和 koaNext
+```TypeScript
+export type koaCtx = Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext, unknown> & {elasticsearchClient?: Client}
+export type koaNext = Koa.Next
+```
+这两个类型扩展自 Koa 提供的类型，koaCtx 是网络请求的上下文，koaNext 是一个可以被调用的异步方法。  
+koaCtx 类型要求对象应当包含请求头、请求体、响应头、响应体以及中间件为其添加的其他参数。  
+koaNext 类型要求一个异步方法，用于跳转至下一中间件，如果是最后一个，则将请求响应返回给客户端。
+
+目前，您不需要完全了解这两个类型，让我们接着往下看。
+``` TypeScript
+export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {...}
+```
+在这一行，我们导出了一个名为 `helloWorld` 的异步箭头函数，该函数接收两个参数，`ctx: koaCtx` 和 `next: koaNext` 并返回一个空 Promise.
+ctx 是 context 的缩写，代表上下文，其类型 koaCtx 说明见上文。  
+next 的类型是 koaNext，说明见上文。
+
+接下来两行代码：
+``` TypeScript
+const something = ctx.query.something
+ctx.body = `Hello ${something} World`
+```
+首先，从 `ctx` 上下文对象中匹配网络请求中名为 `something` 的“查询”参数，并赋值给 `something` 常量。然后将其与 "Hello World" 字符串拼接，并设置到 `ctx` 上下文对象的响应体中。
+
+最后一行代码：
+``` TypeScript
+await next()
+```
+等待下一个中间件执行完成，如果是最后一个，则完成请求并返回给客户端。
+
+以上，便是最简单的，通过 Koa 实现网络请求响应的流程。  
+打开您的浏览器，在地址栏输入`https://localhost:9999?something=Beautiful` 后回车，您将会在页面中看到 `Hello Beautiful World` 字样。🎉
+
+
+### 路由
+与前端的路由类似，后端也存在一个“路由”的概念。  
+前端通过路由匹配到正确的组件，而后端通过路由将网络请求导向到正确的 Controller 层并执行
+
