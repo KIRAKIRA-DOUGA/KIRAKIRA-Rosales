@@ -18,9 +18,9 @@ KIRAKIRA-Rosales（下文简称：“Rosales” 或 “后端”）是一个基�
 KIRAKIRA-Rosales 由 Koa 编写。Koa 是一种 Node.js 框架，提供了更好的异步和 HTTP 支持。  
 具体来说，后端使用的语言是 TypeScript, TypeScript 的类型检查能够很好地提高代码质量。  
 后端的生产环境部署在 AWS 的 EKS 集群中。  
-后端依赖于一个 MongoDB 数据库集群和一个 Elasticsearch 集群，他们同样部署在 AWS EKS 中。
+后端依赖于一个 MongoDB 数据库集群和一个 Elasticsearch 搜索引擎集群，它们同样部署在 AWS EKS 中。
 
-对于存储，MongoDB 和 Elasticsearch 产生的数据库被存储在 AWS EBS 磁盘中，图片和视频文件由 Cloudflare 的 Images 和 Stream 存储。
+对于存储，MongoDB 和 Elasticsearch 产生的数据被存储在 AWS EBS(Elastic Block Store) 块存储中，图片和视频文件则由 Cloudflare 的 R2、Images 和 Stream 存储。
 
 [![](https://img.shields.io/badge/-JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](https://tc39.es)
 [![](https://img.shields.io/badge/-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -43,7 +43,7 @@ cd <some-dir>
 # 克隆
 git clone https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales.git
 ```
-或者，你也可以使用具有图形化界面的 Github Desktop 或其他 Git 兼容工具来完成这一步骤。
+或者，你也可以使用具有图形化界面的 GitHub Desktop 或其他 Git 兼容工具来完成这一步骤。
 
 ### 2. 设置环境变量
 > [!IMPORTANT]    
@@ -121,8 +121,9 @@ npm run dev-hot
 └ ɹəʌoɔ.svg - 该文件为封面图
 ```
 ### 从 Hello World 开始
-第一个程序总是从 Hello World 开始，KIRAKIRA-Rosales 也不例外。  
-在 `/src/controller` 目录中有一个特殊的名为 `HelloWorld.ts` 的文件。  
+第一个程序总是从 Hello World 开始，KIRAKIRA-Rosales 也不例外。
+
+在 `/src/controller` 目录中有一个名为 `HelloWorld.ts` 的特殊文件。  
 该文件中有以下代码：
 ``` TypeScript
 import { koaCtx, koaNext } from '../type/koaTypes.js'
@@ -133,8 +134,8 @@ export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {
 	await next()
 }
 ```
-让我们一行一行的解析代码这段代码：  
-第一行
+让我们一行一行的分析这段代码：  
+首先，第一行
 ``` TypeScript
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 ```
@@ -145,30 +146,32 @@ export type koaNext = Koa.Next
 ```
 这两个类型扩展自 Koa 提供的类型，koaCtx 是网络请求的上下文，koaNext 是一个可以被调用的异步方法。  
 koaCtx 类型要求对象应当包含请求头、请求体、响应头、响应体以及中间件为其添加的其他参数。  
-koaNext 类型要求一个异步方法，用于跳转至下一中间件，如果是最后一个，则将请求响应返回给客户端。
+koaNext 类型要求一个异步方法，用于执行下一中间件，如果是最后一个，则完成请求并将响应返回给客户端。
 
 目前，您不需要完全了解这两个类型，让我们接着往下看。
 ``` TypeScript
 export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {...}
 ```
-在这一行，我们导出了一个名为 `helloWorld` 的异步箭头函数，该函数接收两个参数，`ctx: koaCtx` 和 `next: koaNext` 并返回一个空 Promise.
+在这一行，我们导出了一个名为 `helloWorld` 的异步箭头函数，该函数接收两个参数：`ctx: koaCtx` 和 `next: koaNext`, 并返回一个空的 Promise.  
 ctx 是 context 的缩写，代表上下文，其类型 koaCtx 说明见上文。  
 next 的类型是 koaNext，说明见上文。
 
-接下来两行代码：
+接下来的两行代码：
 ``` TypeScript
 const something = ctx.query.something
-ctx.body = `Hello ${something} World`
+ctx.body = something ? `Hello ${something} World` : 'Hello World'
 ```
-首先，从 `ctx` 上下文对象中匹配网络请求中名为 `something` 的“查询”参数，并赋值给 `something` 常量。然后将其与 "Hello World" 字符串拼接，并设置到 `ctx` 上下文对象的响应体中。
+这一部分用来存取网络请求上下文中的标头或 body（正文）。  
+首先，从 `ctx` 上下文对象中匹配网络请求中名为 `something` 的“查询”参数，并赋值给 `something` 常量。  
+紧接着是一个三元表达式，您可以将这个运算部分理解为“业务逻辑代码”。如果 `something` 不是假值，则将其与 "Hello World" 字符串拼接的结果作为三元表达式的运算结果，如果是假值，则直接将 'Hello World' 字符串作为三元表达式的运算结果。最后，将运算结果赋值到 `ctx` 请求上下文对象的响应体中。
 
 最后一行代码：
 ``` TypeScript
 await next()
 ```
-等待下一个中间件执行完成，如果是最后一个，则完成请求并返回给客户端。
+等待下一个中间件执行完成，如果没有下一个，则完成请求并返回给客户端。
 
-以上，便是最简单的，通过 Koa 实现网络请求响应的流程。  
+以上便是 KIRAKIRA-Rosales 通过 Koa 响应一个网络请求的最简单的流程。  
 打开您的浏览器，在地址栏输入`https://localhost:9999?something=Beautiful` 后回车，您将会在页面中看到 `Hello Beautiful World` 字样。🎉
 
 
@@ -176,3 +179,4 @@ await next()
 与前端的路由类似，后端也存在一个“路由”的概念。  
 前端通过路由匹配到正确的组件，而后端通过路由将网络请求导向到正确的 Controller 层并执行
 
+TODO

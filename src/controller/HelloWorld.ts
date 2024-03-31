@@ -28,7 +28,7 @@ export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {
 
 	// ctx.body = `Hello World ${something}, oldNumber: ${oldTestNumber}, newNumber: ${newTestNumber}`
 
-	ctx.body = `Hello ${something} World`
+	ctx.body = something ? `Hello ${something} World` : 'Hello World'
 
 	await next()
 }
