@@ -25,7 +25,7 @@ $env:SERVER_ROOT_URL="kirakira.moe"
 ```
 2.启动后端服务
 > [!IMPORTANT]    
-> 以开发模式启动的服务会将代码打包至项目根目录中的 .kirakira 文件夹内。  
+> 以开发模式启动的服务会将代码打包至项目根目录中的 `.kirakira` 文件夹内。  
 > 如有必要，您可以在 package.json 中修改打包路径。请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 ```sh
 # 安装依赖
