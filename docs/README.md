@@ -85,7 +85,7 @@ npm run dev-hot
 本章将会循序渐进地、介绍如何对 KIRAKIRA-Rosales 进行二次开发，改进功能。
 ### 熟悉目录结构
 以下为项目目录结构简介
-``` txt highlight=[1-4]
+<pre><code>
 ▁
 ├ .github - GitHub 相关配置
 │  └ workflows - 存放 Github 工作流
@@ -119,12 +119,6 @@ npm run dev-hot
 ├ package.json - 该文件定义了元数据、脚本和依赖包列表
 ├ tsconfig.json - 该文件为 TypeScript 配置文件
 └ ɹəʌoɔ.svg - 该文件为封面图
- 
-```
-
-<pre><code>function main() {
-		__config_bash
-		<strong style="background-color: yellow">__config_xdg_dirs</strong>
-}</code></pre>
+</code></pre>
 
 ### 从 Hello World 开始
