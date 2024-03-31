@@ -124,7 +124,7 @@ export const getVideoFileTusEndpointController = async (ctx: koaCtx, next: koaNe
  * 获取用于上传视频封面图的预签名 URL
  * @param ctx context
  * @param next context
- * @returns 用于上传视频封面图的预签名 URL
+ * @returns 用于上传视频封面图的预签名 URL 请求响应
  */
 export const getVideoCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = parseInt(ctx.cookies.get('uid'), 10)

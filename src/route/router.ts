@@ -24,7 +24,7 @@ router.post('/user/registering', userRegistrationController) // 用户注册
 // {
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-//  "passwordHint": "YYYYYYYYYYYYYYY"
+// 	"passwordHint": "YYYYYYYYYYYYYYY"
 // }
 
 router.post('/user/login', userLoginController) // 用户登录

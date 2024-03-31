@@ -1,8 +1,9 @@
 # Node modules
 node_modules/
 
-# dist
+# 忽略开发及生产构建
 dist/
+.kirakira/
 
 # ignore some local file
 local/

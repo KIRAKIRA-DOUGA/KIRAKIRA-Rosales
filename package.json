@@ -5,11 +5,11 @@
 	"main": "src/app.ts",
 	"type": "module",
 	"scripts": {
-		"start": "tsc && node ./dist/app.js",
+		"start": "tsc --noEmitOnError --sourceMap --outDir .kirakira && node ./.kirakira/app.js",
 		"dev": "npm start",
 		"serve": "npm start",
 		"dev-hot": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
-		"build": "tsc"
+		"build": "tsc --removeComments --declaration"
 	},
 	"author": "",
 	"license": "ISC",
