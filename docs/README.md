@@ -91,7 +91,7 @@ npm run dev-hot
 │  └ workflows - 存放 Github 工作流
 ├ .vscode - VSCode 相关配置
 ├ docs - 存放说明文档（本文档就存放于该目录下）
-├ o̶l̶d̶ - 存放不舍得删除的旧代码
+├ old - 存放不舍得删除的旧代码
 ├ src - 存放源代码
 │  ├ cloudflare - 存放了 Cloudflare 相关的共通代码
 │  ├ common - 存放了共通方法
