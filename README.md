@@ -25,7 +25,7 @@ $env:SERVER_ROOT_URL="kirakira.moe"
 ```
 2.启动后端服务
 > [!IMPORTANT]    
-> 以开发模式启动的服务会将代码打包至项目根目录中的 `.kirakira` 文件夹内。  
+> 以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。  
 > 如有必要，您可以在 package.json 中修改打包路径。请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 ```sh
 # 安装依赖
@@ -55,7 +55,7 @@ npm run dev-hot
 
 2.构建并预览
 > [!IMPORTANT]  
-> 默认会将代码打包至 `dist` 文件夹内  
+> 默认会将代码打包至项目根目录的 `dist` 目录内  
 > 如有必要，您可以在 tsconfig.json 中修改打包路径。相应地，也要修改下方第三步启动服务器命令中的路径。
 ```sh
 # 1. 安装依赖
