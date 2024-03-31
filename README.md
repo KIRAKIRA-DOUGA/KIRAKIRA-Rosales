@@ -1,12 +1,14 @@
 ![Cover](ɹəʌoɔ.svg)
 
 # KIRAKIRA-Rosales
-KIRAKIRA-Rosales, 一个由 koa 编写的、RESTful 的后端 API.
+KIRAKIRA-Rosales, 一个由 Koa 编写的、RESTful 的后端 API.
 
 API 参考，请参阅 [API 一览](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 
 ## 贡献
 想要参与贡献？请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
+
+遇到问题？您可以在 [此处](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/issues) 查找可能的解决方案或创建一个议题。
 
 ## 开发
 KIRAKIRA-Rosales 提供了可以在本地运行的开发服务器。  
@@ -23,6 +25,9 @@ $env:SERVER_ENV="dev"
 $env:SERVER_ROOT_URL="kirakira.moe"
 ...
 ```
+在设置环境变量时有任何问题，请在 [议题](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/issues) 或 [讨论区](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/discussions) 中查找解答或提问。
+
+
 2.启动后端服务
 > [!IMPORTANT]    
 > 以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。  
@@ -37,8 +42,8 @@ npm run dev
 # 或者,您可以以热重载方式启动开发服务器
 npm run dev-hot
 ```
-成功执行以上命令后，您应该获得一个监听 9999 端口的 KIRAKIRA-Rosales 开发服务器。🎉  
-在此基础上您可以编写、贡献代码，参与 KIRAKIRA 项目开发。  
+成功执行以上命令后，您应该会获得一个监听 9999 端口的 KIRAKIRA-Rosales 开发服务器。🎉  
+在此基础上，您可以编写、贡献代码，参与 KIRAKIRA 项目开发。  
 
 如何开发？请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 
