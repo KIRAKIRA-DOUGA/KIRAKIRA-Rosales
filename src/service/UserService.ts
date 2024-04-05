@@ -476,6 +476,7 @@ export const getUserSettingsService = async (uid: number, token: string): Promis
 				enableCookie: 1,
 				themeType: 1,
 				themeColor: 1,
+				themeColorCustom: 1,
 				wallpaper: 1,
 				coloredSideBar: 1,
 				dataSaverMode: 1,

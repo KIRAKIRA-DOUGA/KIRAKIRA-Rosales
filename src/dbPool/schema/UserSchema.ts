@@ -124,6 +124,8 @@ class UserSettingsSchemaFactory {
 		themeType: { type: String },
 		/** 主题颜色 - 字符串，颜色字符串 */
 		themeColor: { type: String },
+		/** 用户自定义主题颜色 - 字符串，HAX 颜色字符串，不包含井号 */
+		themeColorCustom: { type: String },
 		/** 壁纸（背景图 URL） - 字符串 */
 		wallpaper: { type: String },
 		/** 是否启用彩色导航栏 - 布尔 */
