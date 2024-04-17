@@ -1,15 +1,37 @@
+const VideoTagNameDocument = {
+	/** TAG 名称 - 非空 */
+	name: { type: String, required: true as const },
+	/** 是否为该语言默认名 - 非空 */
+	isDefault: { type: Boolean, required: true as const },
+	/** 是否为 TAG 原名 - 非空 */
+	isOriginalTagName: { type: Boolean, required: false as const },
+}
+
 /**
- * 视频 TAG 的数据
+ * 不同语言所对应的 TAG 名
  */
-const VideoTagSchema = {
-	/** 视频的 TAG ID - 非空 */
-	tagId: { type: Number, required: true as const },
-	/** 视频 TAG 的名称 - 非空 */
-	tag: { type: String, required: true as const },
-	/** TAG 描述 */
-	description: { type: String },
-	/** 系统专用字段-最后编辑时间 - 非空 */
-	editDateTime: { type: Number, required: true as const },
+const MultilingualVideoTagNameDocument = {
+	/** TAG 的语言 - 非空，原则上应该唯一 // WARN: 无法指定指定子文档的唯一索引，只能在业务上避免并做校验 */
+	lang: { type: String, required: true as const },
+	/** 不同语言所对应的 TAG 名 */
+	tagName: { type: [VideoTagNameDocument], required: true as const },
+}
+
+/**
+ * 视频 TAG 数据
+ */
+const VideoTagDocument = {
+	/** Elasticsearch 索引模板 */
+	schema: {
+		/** TAG ID - 非空，唯一 */
+		tagId: { type: Number, required: true as const },
+		/** 不同语言所对应的 TAG 名 */
+		tagNameList: { type: [MultilingualVideoTagNameDocument], required: true as const },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true as const },
+	},
+	/** Elasticsearch 索引名 */
+	indexName: 'search-kirakira-video-tag-elasticsearch',
 }
 
 /**
@@ -27,7 +49,7 @@ export const VideoDocument = {
 		/** 视频分区 - 非空 */
 		videoCategory: { type: String, required: true as const },
 		/** 视频 TAG - 非空 */
-		videoTags: { type: [VideoTagSchema], required: true as const },
+		videoTagList: { type: [VideoTagDocument], required: true as const },
 	},
 	/** Elasticsearch 索引名 */
 	indexName: 'search-kirakira-video-elasticsearch',

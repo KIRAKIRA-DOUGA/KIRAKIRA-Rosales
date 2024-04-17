@@ -23,7 +23,7 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		originalLink: data.originalLink,
 		pushToFeed: data.pushToFeed,
 		ensureOriginal: data.ensureOriginal,
-		videoTags: data.videoTags || [],
+		videoTagList: data.videoTagList || [],
 	}
 	const esClient = ctx.elasticsearchClient
 	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, esClient)

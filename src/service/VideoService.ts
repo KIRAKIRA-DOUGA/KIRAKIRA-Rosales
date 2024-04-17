@@ -24,17 +24,17 @@ import { checkUserTokenService } from './UserService.js'
 export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, esClient?: Client): Promise<UploadVideoResponseDto> => {
 	try {
 		if (checkUploadVideoRequest(uploadVideoRequest) && esClient && !isEmptyObject(esClient)) {
-			const __VIDEO_SEQUENCE_EJECT__ = [9, 42, 233, 404, 2233, 10388, 10492, 114514]
+			const __VIDEO_SEQUENCE_EJECT__ = [9, 42, 233, 404, 2233, 10388, 10492, 114514] // 生成 KVID 时要跳过的数字
 			const videoIdNextSequenceValueResult = await getNextSequenceValueEjectService('video', __VIDEO_SEQUENCE_EJECT__)
 			const videoId = videoIdNextSequenceValueResult.sequenceValue
 			if (videoIdNextSequenceValueResult?.success && videoId !== null && videoId !== undefined) {
-				// 准别视频数据
+				// 准备视频数据
 				const nowDate = new Date().getTime()
 				const title = uploadVideoRequest.title
 				const description = uploadVideoRequest.description
 				const videoCategory = uploadVideoRequest.videoCategory
 				const videoPart = uploadVideoRequest.videoPart.map(video => ({ ...video, editDateTime: nowDate }))
-				const videoTags = uploadVideoRequest.videoTags.map(tag => ({ ...tag, editDateTime: nowDate }))
+				const videoTagList = uploadVideoRequest.videoTagList.map(tag => ({ ...tag, editDateTime: nowDate }))
 
 				// 准备上传到 MongoDB 的数据
 				const { collectionName, schemaInstance } = VideoSchema
@@ -56,7 +56,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					originalLink: uploadVideoRequest.originalLink,
 					pushToFeed: uploadVideoRequest.pushToFeed,
 					ensureOriginal: uploadVideoRequest.ensureOriginal,
-					videoTags: videoTags as Video['videoTags'], // TODO: Mongoose issue: #12420
+					videoTagList: videoTagList as Video['videoTagList'], // TODO: Mongoose issue: #12420
 					editDateTime: nowDate,
 				}
 
@@ -67,7 +67,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					description,
 					kvid: videoId,
 					videoCategory,
-					videoTags,
+					videoTagList,
 				}
 
 				try {
@@ -203,7 +203,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				editDateTime: 1,
 				videoCategory: 1,
 				copyright: 1,
-				videoTags: 1,
+				videoTagList: 1,
 			}
 			const uploaderInfoKey = 'uploaderInfo'
 			const option: DbPoolOptions<Video, UserInfo> = {

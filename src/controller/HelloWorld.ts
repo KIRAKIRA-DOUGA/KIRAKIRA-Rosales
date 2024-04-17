@@ -1,9 +1,5 @@
 // 试验场
 
-import mongoose, { Schema } from 'mongoose'
-import { hashPasswordSync } from '../common/HashTool.js'
-import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
-import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { GlobalSingleton } from '../store/index.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 

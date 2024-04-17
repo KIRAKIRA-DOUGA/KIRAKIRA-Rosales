@@ -302,7 +302,7 @@ export type BasicUserSettingsDto = {
 	wallpaper?: string;
 	/** 是否启用彩色导航栏 - 布尔 */
 	coloredSideBar?: boolean;
-	/** 节流模式 - 字符串，{standard: 标准, limit: 节流模式, preview: 超前加载} */
+	/** 流量使用偏好 - 字符串，{standard: 标准, limit: 节省网络流量模式, preview: 超前加载}  */
 	dataSaverMode?: 'standard' | 'limit' | 'preview';
 	/** 禁用搜索推荐 - 布尔 */
 	noSearchRecommendations?: boolean;

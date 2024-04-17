@@ -46,10 +46,39 @@ export type UpdateResultType = {
 	};
 }
 
+/**
+ * MongoDB 可用的查询条件
+ */
+type MongoDBConditionsType<T> = {
+	$gt?: number; // 大于
+	$gte?: number; // 大于等于
+	$lt?: number; // 小于
+	$lte?: number; // 小于等于
+	$ne?: number; // 不等于
+
+	$and?: QueryType<T>[]; // 与
+	$or?: QueryType<T>[]; // 或
+	$not?: QueryType<T>; // 非
+
+	$exists?: boolean; // 属性是否存在，例： { 'phone.number': { $exists: true } } 查找所有包含 phone.number 的文档
+	$type?: string; // 匹配字段的类型，例： { age: { $type: 'number' } }
+
+	$in?: unknown[]; // 字段值匹配数组中的任何一个值，例： { status: { $in: ['A', 'B'] } }
+	$nin?: unknown[]; // 字段值不匹配数组中的任何一个值
+	$all?: unknown[]; //  数组字段包含所有指定的元素，例： { tags: { $all: ['tech', 'health'] } }
+	$size?: number; // 数组大小，例： { tags: { $size: 3 } }
+
+	$elemMatch?: MongoDBConditionsType<T>; // 确保数据库中的数组至少有一个元素匹配提供的条件
+
+	$regex?: RegExp; // 正则表达式
+
+
+}
+
 // 数据库 Query，相当于 SQL 中的 WHERE
 export type QueryType<T> = {
-	[K in keyof T]?: T[K];
-}
+	[K in keyof T]?: T[K] & MongoDBConditionsType<T>;
+} & Record< string, boolean | string | number | MongoDBConditionsType<T> >
 
 // 数据库 Update，相当于 SQL UPDATE 中的 SET
 export type UpdateType<T> = {

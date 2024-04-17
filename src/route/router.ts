@@ -4,6 +4,7 @@ import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
+import { createVideoTagController, searchVideoTagController } from '../controller/VideoTagController.js'
 
 const router = new Router()
 
@@ -206,7 +207,7 @@ router.post('/video/comment/upvote', emitVideoCommentUpvoteController) // 用户
 // }
 
 router.post('/video/comment/downvote', emitVideoCommentDownvoteController) // 用户为视频评论点踩
-// https://localhost:9999/video/comment/upvote
+// https://localhost:9999/video/comment/downvote
 // cookie: uid, token
 // {
 // 	"videoId": 13,
@@ -214,7 +215,7 @@ router.post('/video/comment/downvote', emitVideoCommentDownvoteController) // �
 // }
 
 router.delete('/video/comment/upvote/cancel', cancelVideoCommentUpvoteController) // 用户取消一个视频评论的点赞
-// https://localhost:9999/video/comment/upvote
+// https://localhost:9999/video/comment/upvote/cancel
 // cookie: uid, token
 // {
 // 	"videoId": 13,
@@ -222,12 +223,57 @@ router.delete('/video/comment/upvote/cancel', cancelVideoCommentUpvoteController
 // }
 
 router.delete('/video/comment/downvote/cancel', cancelVideoCommentDownvoteController) // 用户取消一个视频评论的点踩
-// https://localhost:9999/video/comment/upvote
+// https://localhost:9999/video/comment/downvote/cancel
 // cookie: uid, token
 // {
 // 	"videoId": 13,
 // 	"id": "65859fbfae7bd341a408fe42"
 // }
+
+
+
+
+
+router.post('/video/tag/create', createVideoTagController) // 用户创建视频 TAG
+// https://localhost:9999/video/tag/create
+// cookie: uid, token
+// {
+// 	"tagNameList": [
+// 		{
+// 			"lang": "en",
+// 			"tagName": [
+// 				{
+// 					"name": "StarCitizen",
+// 					"isDefault": true,
+// 					"isOriginalTagName": false
+// 				}, {
+// 					"name": "SC",
+// 					"isDefault": false,
+// 					"isOriginalTagName": false
+// 				}
+// 			]
+// 		}, {
+// 			"lang": "zhs",
+// 			"tagName": [
+// 				{
+// 					"name": "星际公民",
+// 					"isDefault": false,
+// 					"isOriginalTagName": false
+// 				}
+// 			]
+// 		}
+// 	]
+// }
+
+router.get('/video/tag/search', searchVideoTagController) // 根据关键词搜索视频 TAG
+// https://localhost:9999/video/tag/search?tagName=hello
+
+
+
+
+
+
+
 
 
 

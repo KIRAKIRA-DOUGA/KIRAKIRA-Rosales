@@ -1,8 +1,10 @@
 {
 	"typescript.tsdk": "node_modules\\typescript\\lib",
 	"editor.codeActionsOnSave": {
-		"source.fixAll": "explicit",
-		"source.sortImports": "explicit"
+		// "source.fixAll": "explicit",
+		// "source.sortImports": "explicit",
+		"source.fixAll.eslint": "explicit",
+		"source.sortImports.eslint": "explicit",
 	},
 
 	// TODO TREE

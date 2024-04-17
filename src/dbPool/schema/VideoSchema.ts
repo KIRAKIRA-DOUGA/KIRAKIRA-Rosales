@@ -1,4 +1,5 @@
 import { Schema } from 'mongoose'
+import { VideoTagSchema } from './videoTagSchema.js'
 
 /**
  * 分P 视频的数据
@@ -14,19 +15,6 @@ const VideoPartSchema = {
 	editDateTime: { type: Number, required: true },
 }
 
-/**
- * 视频 TAG 的数据
- */
-const VideoTagSchema = {
-	/** 视频的 TAG ID - 非空 */
-	tagId: { type: Number, required: true },
-	/** 视频 TAG 的名称 - 非空 */
-	tag: { type: String, required: true },
-	/** TAG 描述 */
-	description: String,
-	/** 系统专用字段-最后编辑时间 - 非空 */
-	editDateTime: { type: Number, required: true },
-}
 
 /**
  * 视频数据
@@ -65,7 +53,7 @@ class VideoSchemaFactory {
 		/** 声明为原创 - 非空 */
 		ensureOriginal: { type: Boolean, required: true },
 		/** 视频 TAG - 非空 */
-		videoTags: { type: [VideoTagSchema], required: true },
+		videoTagList: { type: [VideoTagSchema.schema], required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	}
