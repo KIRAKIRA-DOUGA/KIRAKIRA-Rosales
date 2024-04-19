@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose'
-import { VideoTagSchema } from './videoTagSchema.js'
+import { VideoTagSchema } from './VideoTagSchema.js'
 
 /**
  * 分P 视频的数据
