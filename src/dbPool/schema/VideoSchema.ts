@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose'
-import { VideoTagSchema } from './VideoTagSchema.js'
+import { MultilingualVideoTagNameSchema } from './VideoTagSchema.js'
 
 /**
  * 分P 视频的数据
@@ -15,6 +15,17 @@ const VideoPartSchema = {
 	editDateTime: { type: Number, required: true },
 }
 
+/**
+ * 视频 TAG 数据
+ */
+const VideoTagSchema = {
+	/** TAG ID - 非空，唯一 */
+	tagId: { type: Number, required: true },
+	/** 不同语言所对应的 TAG 名 */
+	tagNameList: { type: [MultilingualVideoTagNameSchema], required: true },
+	/** 系统专用字段-最后编辑时间 - 非空 */
+	editDateTime: { type: Number, required: true },
+}
 
 /**
  * 视频数据
@@ -53,7 +64,7 @@ class VideoSchemaFactory {
 		/** 声明为原创 - 非空 */
 		ensureOriginal: { type: Boolean, required: true },
 		/** 视频 TAG - 非空 */
-		videoTagList: { type: [VideoTagSchema.schema], required: true },
+		videoTagList: { type: [VideoTagSchema], required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	}

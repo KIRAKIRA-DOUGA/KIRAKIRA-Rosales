@@ -12,7 +12,7 @@ const VideoTagNameSchema = {
 /**
  * 不同语言所对应的 TAG 名
  */
-const MultilingualVideoTagNameSchema = {
+export const MultilingualVideoTagNameSchema = {
 	/** TAG 的语言 - 非空，原则上应该唯一 // WARN: 无法指定指定子文档的唯一索引，只能在业务上避免并做校验 */
 	lang: { type: String, required: true },
 	/** 不同语言所对应的 TAG 名 */
