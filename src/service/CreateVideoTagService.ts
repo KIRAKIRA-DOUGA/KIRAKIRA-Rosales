@@ -118,7 +118,7 @@ export const searchVideoTagService = async (searchVideoTagRequest: SearchVideoTa
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkCreateVideoTagRequest = (createVideoTagRequest: CreateVideoTagRequestDto): boolean => {
-	const isAllTagItemNotNull = createVideoTagRequest?.tagNameList?.every(tag => tag.lang && tag.tagName)
+	const isAllTagItemNotNull = createVideoTagRequest?.tagNameList?.every(tag => tag && tag.lang && tag.tagName?.length > 0 && tag.tagName.every(tagName => !!tagName.name))
 	return (
 		createVideoTagRequest && createVideoTagRequest?.tagNameList?.length > 0
 		&& isAllTagItemNotNull
