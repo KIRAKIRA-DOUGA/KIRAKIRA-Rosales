@@ -256,7 +256,7 @@ const data = ctx.request.body as { param1: string; param2: string }
 #### “隐式”传递数据
 
 您可以使用 [HTTP Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) “隐式”的传递数据。每次发送请求时，Cookie 也会被发送给后端。  
-KIRAKIRA 项目大量使用 Cookie 来存储用户 Token, 用户设置和用户样式等数据。在设置及发送 Cookie 时需要掌握其限制及技巧，在此处不展开说明，请自行参阅 [MDN HTTP Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) 文档，但有几点有必要说明：  
+KIRAKIRA 项目大量使用 Cookie 来存储用户 Token, 用户设置和用户样式等数据。在设置及发送 Cookie 时需要掌握其限制及技巧，本文档内不详细介绍，请自行参阅 [MDN HTTP Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) 文档，但有几点有必要说明：  
 * Cookie 可以被限制仅限 HTTPS
 * HttpOnly 的 Cookie 只能通过请求的 set-cookie 设置/删除，不能通过 JavaScript 访问
 * 目前很多浏览器仅支持第一方（同站点） Cookie，即 `SameSite=Strict`。
