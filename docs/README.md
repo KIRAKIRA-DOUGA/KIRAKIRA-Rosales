@@ -8,19 +8,19 @@ KIRAKIRA-Rosales（下文简称：“Rosales” 或 “后端”）是一个基�
 1. 如何针对现有代码进行二次开发。
 2. 与后端相关的基础设施的知识，例如数据库、搜索引擎和集群部署等。
 
-在正式开始向您介绍前，我假设您已经具有一定的编程知识，包括：掌握 [JavaScript](https://developer.mozilla.org/docs/Web/JavaScript) & [TypeScript](https://www.typescriptlang.org/) 的基础语法、理解 [HTTP](https://developer.mozilla.org/docs/Web/HTTP/Overview) 工作原理，并且了解 [数据库](https://zh.wikipedia.org/wiki/%E6%95%B0%E6%8D%AE%E5%BA%93) 和 [NoSQL](https://zh.wikipedia.org/wiki/NoSQL) 概念。
+在编写本文档时，我假设您已经具有一定的编程知识，包括：掌握 [JavaScript](https://developer.mozilla.org/docs/Web/JavaScript) & [TypeScript](https://www.typescriptlang.org/) 的基础语法、理解 [HTTP](https://developer.mozilla.org/docs/Web/HTTP/Overview) 工作原理，并且了解 [数据库](https://zh.wikipedia.org/wiki/%E6%95%B0%E6%8D%AE%E5%BA%93) 和 [NoSQL](https://zh.wikipedia.org/wiki/NoSQL) 概念。
 
 
 
 ### 技术栈
 在开始前，了解 KIRAKIRA-Rosales 及其相关基础设施的技术架构是非常有必要的。
 
-KIRAKIRA-Rosales 由 Koa 编写。Koa 是一种 Node.js 框架，提供了更好的异步和 HTTP 支持。  
-具体来说，后端使用的语言是 TypeScript, TypeScript 的类型检查能够很好地提高代码质量。  
+KIRAKIRA-Rosales 由 TypeScript 编写。因为 TypeScript 的类型检查能够很好地提高代码质量。  
+具体来说，后端使用了 Koa.js 框架，Koa.js 是一个 Node.js 框架，提供了更好的异步和 HTTP 支持。  
 后端的生产环境部署在 AWS 的 EKS 集群中。  
 后端依赖于一个 MongoDB 数据库集群和一个 Elasticsearch 搜索引擎集群，它们同样部署在 AWS EKS 中。
 
-对于存储，MongoDB 和 Elasticsearch 产生的数据被存储在 AWS EBS(Elastic Block Store) 块存储中，图片和视频文件则由 Cloudflare 的 R2、Images 和 Stream 存储。
+对于存储，MongoDB 和 Elasticsearch 产生的数据被存储在挂载在 AWS EKS 上的 AWS EBS(Elastic Block Store) 块存储中，图片和视频文件则由 Cloudflare 的 R2、Images 和 Stream 存储。
 
 [![](https://img.shields.io/badge/-JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](https://tc39.es)
 [![](https://img.shields.io/badge/-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -47,8 +47,8 @@ git clone https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales.git
 
 ### 2. 设置环境变量
 > [!IMPORTANT]    
-> 下方的示例代码中并没有包含全部环境变量。  
-> 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)，该文件中列出的大多数环境变量都是必需的。  
+> 下方的示例代码中并不包含全部环境变量，在实际使用时必须为每一个环境变量赋值。  
+> 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)。  
 ```powershell
 # 对于不同操作系统，设置环境变量的方式也不同。以下为 Windows PowerShell 的示例
 $env:SERVER_PORT="9999"
@@ -176,7 +176,97 @@ await next()
 
 
 ### 路由
-与前端的路由类似，后端也存在一个“路由”的概念。  
-前端通过路由匹配到正确的组件，而后端通过路由将网络请求导向到正确的 Controller 层并执行
+与前端的路由类似，后端也存在“路由”的概念。  
+前端通过路由匹配到正确的组件并渲染，而后端通过路由将网络请求发送（映射）到正确的 Controller 层并执行。  
+文件 `src\route\router.ts`  就是我们编写从 URL 到 TypeScript Controller 函数的映射的地方。  
+
+一个典型的 GET 请求路由看起来像：
+``` typescript
+//      请求的 URL  
+//          ↓
+router.get(URL, controller)
+//                   ↑
+//      这个 URL 对应的 Controller 函数
+```
+如果是 POST 请求，则需要将 `router.get` 改为 `router.post`
+``` typescript
+//      请求的 URL  
+//          ↓
+router.post(URL, controller)
+//                   ↑
+//      这个 URL 对应的 Controller 函数
+```
+以此类推，我们可以编写其他类型的请求，例如 PUT 请求或 DELETE 请求
+```
+router.put(URL, controller)
+router.delete(URL, controller)
+...
+```
+> [!IMPORTANT]    
+> 传入的 controller 应为 TypeScript Controller 函数本身，而非函数的调用（结果）。  
+> 触发一个请求时，koa-router 会自动将 (ctx: koaCtx, next: koaNext) 传入到 TypeScript Controller 函数中。  
+``` typescript
+router.get(URL, controller) // 正确用法
+
+router.get(URL, controller()) // ❌ 错误用法
+```
+
+### 请求参数（载荷）和返回结果
+在发送请求时，有时我们需要携带数据（被称为“请求参数”或“请求载荷”）给后端。当后端的程序执行结束后，应当将执行结果返回给请求者。    
+例如，用户登录时需要将用户输入的邮箱和密码发送给后端执行验证，如果验证通过，则将用户 Token 返回给客户端。  
+
+在传递数据时，可以选择“显式”的传递，也可以“隐式”的传递。  
+
+#### “显式”传递请求参数（载荷）
+HTTP 请求的 URL 中可以传递数据。  
+使用 URL 传递数据时，本项目倾向于使用 [Parameters (参数)](https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/What_is_a_URL#parameters) 而不是 [Path (路径)](https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/What_is_a_URL#path_to_resource)，因为 Path 需要动态路由匹配。  
+``` shell
+# 使用 curl 命令向一个带有 Parameters 的 URL 发送 GET 请求
+curl https://localhost:9999?something=Beautiful
+```
+
+> [!IMPORTANT]   
+> URL 不宜过长，传递的数据长度有限，一般用于请求某些数据时传递简单的查询参数。 
+
+在后端 TypeScript Controller 函数中，你可以从 ctx 对象中获取 something 所对应的值
+``` typescript
+const something = ctx.query.something
+```
+> [!IMPORTANT]    
+> something 的类型为 string | string[], 因为 URL Parameters 会将重名的多个参数合并为一个数组。  
+> 在继续之前，你需要判断是否是数组（推荐）或根据您的需求将其断言，然后执行进一步的数据校验。  
+
+
+除了 URL 的 Parameters 之外，还可以在 HTTP 请求的请求体中传递数据。  
+> [!IMPORTANT]    
+> 某些 HTTP 协议的实现不支持某些请求方法（例如 GET 请求）包含请求体，详情请参考 [MDN 上的 HTTP 参考文档](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods)   
+> 请求体中可以携带较多数据，但也并非无限制，上限取决于不同的 HTTP 实现。  
+
+``` shell
+# 使用 curl 命令向一个 URL 发送带有请求体的 POST 请求
+curl -d "param1=value1&param2=value2" -X POST https://localhost:9999/xxxxx
+```
+在后端 TypeScript Controller 函数中，你可以从 ctx 对象中获取请求体数据
+``` typescript
+const data = ctx.request.body as { param1: string; param2: string }
+```
+> [!IMPORTANT]     
+> 在继续之前，您需要将其断言为与发送请求时传递的数据类型一致的类型，然后执行进一步的数据校验。  
+
+#### “隐式”传递数据
+
+您可以使用 [HTTP Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) “隐式”的传递数据。每次发送请求时，Cookie 也会被发送给后端。  
+KIRAKIRA 项目大量使用 Cookie 来存储用户 Token, 用户设置和用户样式等数据。在设置及发送 Cookie 时需要掌握其限制及技巧，在此处不展开说明，请自行参阅 [MDN HTTP Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) 文档，但有几点有必要说明：  
+* Cookie 可以被限制仅限 HTTPS
+* HttpOnly 的 Cookie 只能通过请求的 set-cookie 设置/删除，不能通过 JavaScript 访问
+* 目前很多浏览器仅支持第一方（同站点） Cookie，即 `SameSite=Strict`。
+* fetch 方法使用 { credentials: "include" } 选项可以允许在发送跨源请求时包含 Cookie
+
+在后端 TypeScript Controller 函数中，你可以从 ctx 对象中获取 Cookie 数据
+``` typescript
+ctx.cookies.get(cookieKey) // 获取名字为 cookieKey 的 Cookie 对应的值。
+```
+> [!IMPORTANT]     
+> 在继续之前，不要忘了执行进一步的数据校验。  
 
 TODO
