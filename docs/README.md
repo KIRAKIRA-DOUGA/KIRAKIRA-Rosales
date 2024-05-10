@@ -33,7 +33,7 @@ KIRAKIRA-Rosales 由 TypeScript 编写。因为 TypeScript 的类型检查能够
 
 ## 二、安装和启动
 ### 1. 克隆存储库。
-在开始前，确保你安装了 [Git](https://git-scm.com/)，并且有权访问本存储库。
+确保你安装了 [Git](https://git-scm.com/)，并且有权访问本存储库。
 
 使用以下命令克隆本存储库
 ``` shell
