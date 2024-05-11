@@ -3,7 +3,7 @@
 # KIRAKIRA-Rosales
 KIRAKIRA-Rosales, 一个基于 Koa 框架的、RESTful 的后端 API.
 
-API 参考，请参阅 [API 参考](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/src/route/router.ts)。
+API 参考，请参阅 [路由](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/src/route/router.ts)。
 
 ## 贡献
 想要参与贡献？请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
