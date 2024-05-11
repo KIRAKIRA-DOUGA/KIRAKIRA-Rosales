@@ -395,6 +395,58 @@ try {
 ## 四、API 文档
 请参考路由文件 `src\route\router.ts`  
 
-## 五、开源规范与安全
+## 五、构建与部署
+您可以在本地测试运行本项目，或者简单的将其构建并部署在一个服务器实例中。  
+您可也可将其打包为容器镜像，然后在其他 Docker 兼容程序上运行。
+
+#### 构建，然后运行
+1.设置环境变量
+
+设置方法与 [上文描述](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop?tab=readme-ov-file#%E5%BC%80%E5%8F%91) 相同。  
+
+2.构建并预览
+> [!IMPORTANT]  
+> 默认会将代码打包至项目根目录的 `dist` 目录内  
+> 如有必要，您可以在 tsconfig.json 中修改打包路径。相应地，也要修改下方第三步启动服务器命令中的路径。
+```sh
+# 1. 安装依赖
+npm install
+
+# 2. 构建
+npm run build
+
+# 3. 运行
+node ./dist/app.js
+```
+
+#### 打包为容器镜像（最佳实践）
+部署 KIRAKIRA-Rosales 的最佳实践是将其运行在 K8s 集群中。您正在使用的 KIRAKIRA-Rosales 服务便是如此。  
+
+首先确保你安装并运行了 Docker，执行以下命令，您应该可以看到 Docker 的版本号
+```
+docker --version
+```
+使用 Docker 打包多平台容器镜像（以下示例为 AMD 架构的 Windows 平台，MacOS 与 Linux 平台可能不同）
+
+``` shell
+# 创建并启用新的 builder 实例（如果以前创建过，则跳过这步）
+docker buildx create --name mybuilder --use
+
+# 启动并检查 builder 实例
+docker buildx inspect --bootstrap
+
+# 构建并推送多平台镜像到 Docker Hub
+# 请确保安装 docekr 并且 docker 已经登录/连接了远程容器镜像存储库，这里使用 cfdxkk01/kirakira
+# 请替换 <tag> 为正确的版本号，例如：3.21.1
+#                                                                              注意这里有个点「.」，复制语句的时候别落下
+#                                                                                             ↓ 
+docker buildx build --platform linux/amd64,linux/arm64 -t <username>/<repo-name>:<tag> --push .
+```
+然后就可以部署该容器镜像到 K8s 或其他容器/集群环境中。
+
+> [!IMPORTANT]  
+> 生产环境及容器镜像环境也不要忘记配置环境变量！
+
+## 六、开源规范与安全
 * 本项目遵守 BSD-3-Clause license 开源协议。
 * 一般问题请创建 Issue，安全问题请前往 [Discord 频道](https://discord.gg/maveEWn6VP) 汇报
