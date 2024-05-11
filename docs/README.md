@@ -288,8 +288,58 @@ await next() // 假设已经是最后一个中间件
 在程序初始化时，会立即执行 `src\dbPool\DbClusterPool.ts` 文件中的 `connectMongoDBCluster` 函数，该函数首先会读取环境变量中的连接字符串和数据库账号密码，然后创建数据库连接池。创建的连接池是在 Mongoose 内部维护的，Mongoose 暴露一个 `mongoose` 实例用来执行数据库增删改查操作，用户无需关心连接池的具体实现及负载均衡等问题。
 
 > [!IMPORTANT]     
-> 对于副本集，写操作总是向主分片提交，随后再由主分片同步至副本分片。
+> 对于副本集，写操作总是向主分片提交，随后再由主分片同步至副本分片。  
 > 而读操作偏好则由用户设置，本程序默认的数据库读偏好为优先从副本中读取，但在某些情况下会覆盖这个设置，比如说使用事务时会优先从主读取。
+
+使用 Mongoose 暴露的 `mongoose` 实例，用户可以直接执行增删改查操作，本项目在 `src\dbPool\DbClusterPool.ts` 文件中也封装了带有类型约束的便捷函数来执行这些操作。
+
+以下是一个简单实例
+``` typescript
+import mongoose, { InferSchemaType } from 'mongoose'
+
+/**
+ * 用户数据
+ */
+class UserSchemaFactory {
+	schema = {
+		uid: { type: Number, unique: true, required: true }, // 用户的 UID
+		username: { type: String }, // 用户名
+		editDateTime: { type: Number, required: true }, // 系统专用字段-最后编辑时间
+	}
+	collectionName = 'user' // MongoDB 集合名
+	schemaInstance = new Schema(this.schema) // Mongoose Schema 实例
+}
+const { collectionName, schemaInstance } = new UserSchemaFactory() // 实例化并解构
+
+type User = InferSchemaType<typeof schemaInstance> // 使用 InferSchemaType 推到出用户数据的 TypeScript 类型
+
+const user: User = { // 构建用户数据
+	uid: 1,
+	username: 'foo',
+	editDateTime: new Date().getTime(),
+}
+
+try {
+	await insertData2MongoDB(user, schemaInstance, collectionName) // 插入数据
+} catch(error) {
+	console.error('ERROR', "插入数据出错：", error)
+}
+
+
+const userWhere: QueryType<User> = { uid: 1 } // 查询 UID 为 1 的用户数据
+const userSelect: SelectType<User> = { username: 1 } // 只查询 username 字段
+try {
+	const userResult = await selectDataFromMongoDB<UserAuth>(userWhere, userSelect, schemaInstance, collectionName) // 查询数据
+	console.oog('RESULT', useResult)
+} catch (error) {
+	console.error('ERROR', "查询数据出错：", error)
+}
+```
+> [!IMPORTANT]     
+> UserSchemaFactory 通常是单独存放在一个文件中，然后将其导出并在其他文件中使用。
+
+
+
 
 
 TODO
