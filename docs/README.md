@@ -390,8 +390,11 @@ try {
 } catch (error) {
 	console.error("ERROR", "搜索数据出错："，error)
 }
-
-
 ```
 
-TODO
+## 四、API 文档
+请参考路由文件 `src\route\router.ts`  
+
+## 五、开源规范与安全
+* 本项目遵守 BSD-3-Clause license 开源协议。
+* 一般问题请创建 Issue，安全问题请前往 [Discord 频道](https://discord.gg/maveEWn6VP) 汇报
