@@ -341,7 +341,57 @@ try {
 > UserSchemaFactory 和 UserSchema 通常是单独存放在一个文件中，然后将 UserSchema 导出并在其他文件中使用。
 
 
+#### Elasticsearch
+Elasticsearch 是一个搜索引擎，部署在 AWS EKS 上的 Elasticsearch 集群需要通过 HTTP 请求来操作。  
+官方提供了 SDK 来方便 Node.js 程序操作 Elasticsearch 而无需手动构建 HTTP 请求。
+
+同样的，程序在初始化时会执行 `src\elasticsearchPool\elasticsearchClusterPool.ts` 文件中的 `connectElasticSearchCluster` 函数，该函数会读取环境变量，然后创建与 Elasticsearch 集群的连接。在创建连接后，连接客户端实例会被添加至 Koa 的请求上下文 ctx 中。在 Controller 中，我们可以通过 `ctx.elasticsearchClient` 获取连接客户端，然后执行”增删改查“操作，本项目在 `src\elasticsearchPool\elasticsearchClusterPool.ts` 文件中也封装了带有类型约束的便捷函数来执行这些操作。  
+
+以下是一个简单的示例。
+``` typescript
+import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 
 
+const esClient = ctx.elasticsearchClient // 假设已经正确创建了连接
+
+/**
+ * 视频数据
+ */
+const VideoDocument = {
+	schema: {
+		title: { type: String, required: true as const }, // 视频标题
+		kvid: { type: Number, required: true as const }, // KVID 视频 ID
+	},
+	indexName: 'search-kirakira-video-elasticsearch', // Elasticsearch 索引名
+}
+
+const { indexName: esIndexName, schema: videoEsSchema } = VideoDocument // 解构
+
+const videoEsData: EsSchema2TsType<typeof videoEsSchema> = { // 构造视频数据
+	title: "foo bar baz",
+	kvid: 1,
+}
+try {
+	const refreshFlag = true // 是否立即刷新索引（刷新后该数据方能搜索，如果刷新过于频繁，可能会影响性能）
+	await insertData2ElasticsearchCluster(esClient, esIndexName, videoEsSchema, videoEsData, refreshFlag) // 插入数据
+} catch (error) {
+	console.error("ERROR", "索引数据出错："，error)
+}
+
+const esQuery = { // 构造搜索条件
+	query_string: {
+		query: 'foo',
+	},
+}
+
+try {
+	const esSearchResult = await searchDataFromElasticsearchCluster(esClient, esIndexName, videoEsSchema, esQuery) // 开始搜索数据
+	console.log('RESULT', esSearchResult)
+} catch (error) {
+	console.error("ERROR", "搜索数据出错："，error)
+}
+
+
+```
 
 TODO
