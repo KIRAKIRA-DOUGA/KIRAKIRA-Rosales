@@ -320,7 +320,7 @@ const user: User = { // 构建用户数据
 }
 
 try {
-	await insertData2MongoDB(user, schemaInstance, collectionName) // 插入数据
+	await insertData2MongoDB<User>(user, schemaInstance, collectionName) // 插入数据
 } catch(error) {
 	console.error('ERROR', "插入数据出错：", error)
 }
@@ -329,7 +329,7 @@ try {
 const userWhere: QueryType<User> = { uid: 1 } // 查询 UID 为 1 的用户数据
 const userSelect: SelectType<User> = { username: 1 } // 只查询 username 字段
 try {
-	const userResult = await selectDataFromMongoDB<UserAuth>(userWhere, userSelect, schemaInstance, collectionName) // 查询数据
+	const userResult = await selectDataFromMongoDB<User>(userWhere, userSelect, schemaInstance, collectionName) // 查询数据
 	console.oog('RESULT', useResult)
 } catch (error) {
 	console.error('ERROR', "查询数据出错：", error)
