@@ -309,7 +309,9 @@ class UserSchemaFactory {
 	collectionName = 'user' // MongoDB 集合名
 	schemaInstance = new Schema(this.schema) // Mongoose Schema 实例
 }
-const { collectionName, schemaInstance } = new UserSchemaFactory() // 实例化并解构
+
+const UserSchema =  new UserSchemaFactory() // 实例化
+const { collectionName, schemaInstance } = UserSchema // 解构出集合名和集合 Schema 实例
 
 type User = InferSchemaType<typeof schemaInstance> // 使用 InferSchemaType 推到出用户数据的 TypeScript 类型
 
@@ -336,7 +338,7 @@ try {
 }
 ```
 > [!IMPORTANT]     
-> UserSchemaFactory 通常是单独存放在一个文件中，然后将其导出并在其他文件中使用。
+> UserSchemaFactory 和 UserSchema 通常是单独存放在一个文件中，然后将 UserSchema 导出并在其他文件中使用。
 
 
 
