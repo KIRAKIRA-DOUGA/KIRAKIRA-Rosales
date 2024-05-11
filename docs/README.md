@@ -269,4 +269,27 @@ ctx.cookies.get(cookieKey) // 获取名字为 cookieKey 的 Cookie 对应的值�
 > [!IMPORTANT]     
 > 在继续之前，不要忘了执行进一步的数据校验。  
 
+#### 从服务端返回结果到客户端
+在后端逻辑执行完成之后，我们需要将结果返回给客户端。
+
+将结果赋值给 ctx 对象的 body 属性，然后执行下一步中间件，如果是最后一个中间件，则将 body 中的值返回给客户端。
+``` typescript
+ctx.body = results
+await next() // 假设已经是最后一个中间件
+```
+
+### 访问 MongoDB 数据库和 Elasticsearch 搜索引擎
+用户产生的数据通常会存储到 MongoDB 中，而需要能够被搜索的数据会存储到 Elasticsearch 搜索引擎中。  
+对数据库和搜索引擎的增删改查是后端代码的主要功能。
+
+#### MongoDB
+后端使用 Mongoose 连接 MongoDB 数据库。
+
+在程序初始化时，会立即执行 `src\dbPool\DbClusterPool.ts` 文件中的 `connectMongoDBCluster` 函数，该函数首先会读取环境变量中的连接字符串和数据库账号密码，然后创建数据库连接池。创建的连接池是在 Mongoose 内部维护的，Mongoose 暴露一个 `mongoose` 实例用来执行数据库增删改查操作，用户无需关心连接池的具体实现及负载均衡等问题。
+
+> [!IMPORTANT]     
+> 对于副本集，写操作总是向主分片提交，随后再由主分片同步至副本分片。
+> 而读操作偏好则由用户设置，本程序默认的数据库读偏好为优先从副本中读取，但在某些情况下会覆盖这个设置，比如说使用事务时会优先从主读取。
+
+
 TODO
