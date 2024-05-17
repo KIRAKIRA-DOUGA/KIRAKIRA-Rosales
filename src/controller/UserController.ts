@@ -83,13 +83,15 @@ export const userExistsCheckController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateUserEmailRequestDto>
-	const userRegistrationData: UpdateUserEmailRequestDto = {
+	const updateUserEmailRequest: UpdateUserEmailRequestDto = {
 		uid: data?.uid,
 		oldEmail: data?.oldEmail,
 		newEmail: data?.newEmail,
 		passwordHash: data?.passwordHash,
 	}
-	ctx.body = await updateUserEmailService(userRegistrationData)
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	ctx.body = await updateUserEmailService(updateUserEmailRequest, uid, token)
 	await next()
 }
 
@@ -197,7 +199,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 
 
 /**
- * 更新用户头像，并获取用于用户上传头像的预签名 URL, 上传限时 60 秒
+ * 获取用于用户上传头像的预签名 URL, 上传限时 60 秒
  * @param ctx context
  * @param next context
  */

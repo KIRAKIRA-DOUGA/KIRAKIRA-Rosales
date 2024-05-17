@@ -40,6 +40,7 @@ router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检
 
 router.post('/user/update/email', updateUserEmailController) // 更新用户邮箱
 // https://localhost:9999/user/update/email
+// cookie: uid, token
 // {
 // 	"uid": "XXXXXXXXX",
 // 	"oldEmail": "aaa@aaa.aaa",

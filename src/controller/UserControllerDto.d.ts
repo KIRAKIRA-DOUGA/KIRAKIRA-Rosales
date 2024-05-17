@@ -110,8 +110,6 @@ export type BeforeHashPasswordDataType = {
 	passwordHash: string;
 }
 
-
-
 /**
  * 用户的个人标签
  */
@@ -170,7 +168,6 @@ export type UpdateOrCreateUserInfoRequestDto = {
 	userWebsite?: UserWebsite;
 }
 
-
 /**
  * 更新或创建用户信息的请求结果
  */
@@ -182,8 +179,6 @@ export type UpdateOrCreateUserInfoResponseDto = {
 	/** 请求结果 */
 	result?: {} & UpdateOrCreateUserInfoRequestDto;
 }
-
-
 
 /**
  * 获取当前登录的用户信息的请求参数
@@ -302,7 +297,7 @@ export type BasicUserSettingsDto = {
 	wallpaper?: string;
 	/** 是否启用彩色导航栏 - 布尔 */
 	coloredSideBar?: boolean;
-	/** 流量使用偏好 - 字符串，{standard: 标准, limit: 节省网络流量模式, preview: 超前加载}  */
+	/** 流量使用偏好 - 字符串，{standard: 标准, limit: 节省网络流量模式, preview: 超前加载} */
 	dataSaverMode?: 'standard' | 'limit' | 'preview';
 	/** 禁用搜索推荐 - 布尔 */
 	noSearchRecommendations?: boolean;
@@ -350,7 +345,6 @@ export type GetUserSettingsResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
-
 
 /**
  * 更新或创建用户设定的请求参数

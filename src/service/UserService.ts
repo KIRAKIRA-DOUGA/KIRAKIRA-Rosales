@@ -182,74 +182,93 @@ export const userExistsCheckService = async (userExistsCheckRequest: UserExistsC
 /**
  * 修改用户的 email
  * @param updateUserEmailRequest 修改用户的 email 的请求参数
+ * @param uid 用户 ID
+ * @param token 用户 token
  * @returns 修改用户的 email 的请求响应
  */
-export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserEmailRequestDto): Promise<UpdateUserEmailResponseDto> => {
+export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserEmailRequestDto, uid: number, token: string): Promise<UpdateUserEmailResponseDto> => {
 	try {
-		if (checkUpdateUserEmailRequest(updateUserEmailRequest)) {
-			const { uid, oldEmail, newEmail, passwordHash } = updateUserEmailRequest
+		// TODO: 向旧邮箱发送邮件以验证
+		if (await checkUserToken(uid, token)) {
+			if (checkUpdateUserEmailRequest(updateUserEmailRequest)) {
+				const { uid, oldEmail, newEmail, passwordHash } = updateUserEmailRequest
 
-			const { collectionName, schemaInstance } = UserAuthSchema
-			type UserAuth = InferSchemaType<typeof schemaInstance>
+				const { collectionName, schemaInstance } = UserAuthSchema
+				type UserAuth = InferSchemaType<typeof schemaInstance>
 
-			const oldEmailLowerCase = oldEmail.toLowerCase()
+				const oldEmailLowerCase = oldEmail.toLowerCase()
 
-			// 启动事务
-			const session = await mongoose.startSession()
-			session.startTransaction()
+				// 启动事务
+				const session = await mongoose.startSession()
+				session.startTransaction()
 
-			const userAuthWhere: QueryType<UserAuth> = { emailLowerCase: oldEmailLowerCase }
-			const userAuthSelect: SelectType<UserAuth> = { passwordHashHash: 1 }
-			try {
-				const useAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
-				if (useAuthResult.result && useAuthResult.result.length >= 1) {
-					console.error('ERROR', '更新用户邮箱失败，用户密码错误', { uid, oldEmail })
+				const userAuthWhere: QueryType<UserAuth> = { uid, emailLowerCase: oldEmailLowerCase, token } // 使用 uid, emailLowerCase 和 token 确保用户更新的是自己的邮箱，而不是其他用户的
+				const userAuthSelect: SelectType<UserAuth> = { passwordHashHash: 1, emailLowerCase: 1 }
+				try {
+					const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
+					const userAuthData = userAuthResult.result
+					if (userAuthData) {
+						if (userAuthData.length !== 1) { // 确保只更新一个用户的邮箱
+							console.error('ERROR', '更新用户邮箱失败，匹配到多个用户', { uid, oldEmail })
+							session.abortTransaction()
+							session.endSession()
+							return { success: false, message: '更新用户邮箱失败，无法找到正确的用户' }
+						}
+
+						const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData[0].passwordHashHash) // 确保更新邮箱时输入的密码正确
+						if (!isCorrectPassword) {
+							console.error('ERROR', '更新用户邮箱失败，用户密码不正确', { uid, oldEmail })
+							session.abortTransaction()
+							session.endSession()
+							return { success: false, message: '更新用户邮箱失败，用户密码不正确' }
+						}
+					}
+				} catch (error) {
+					console.error('ERROR', '更新用户邮箱失败，校验用户密码时程序出现异常', error, { uid, oldEmail })
 					session.abortTransaction()
 					session.endSession()
-					return { success: false, message: '更新用户邮箱失败，用户密码错误' }
+					return { success: false, message: '用户注册失败：校验用户密码失败' }
 				}
-			} catch (error) {
-				console.error('ERROR', '更新用户邮箱失败，校验用户密码时程序出现异常', error, { uid, oldEmail })
-				session.abortTransaction()
-				session.endSession()
-				return { success: false, message: '用户注册失败：校验用户密码失败' }
-			}
 
-			const updateUserEmailWhere: QueryType<UserAuth> = {
-				uid,
-			}
-			const updateUserEmailUpdate: QueryType<UserAuth> = {
-				email: newEmail,
-				editDateTime: new Date().getTime(),
-			}
-			try {
-				const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
-				if (updateResult && updateResult.success && updateResult.result) {
-					if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
-						await session.commitTransaction()
-						session.endSession()
-						return { success: true, message: '用户邮箱更新成功' }
+				const updateUserEmailWhere: QueryType<UserAuth> = {
+					uid,
+				}
+				const updateUserEmailUpdate: QueryType<UserAuth> = {
+					email: newEmail,
+					editDateTime: new Date().getTime(),
+				}
+				try {
+					const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
+					if (updateResult && updateResult.success && updateResult.result) {
+						if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
+							await session.commitTransaction()
+							session.endSession()
+							return { success: true, message: '用户邮箱更新成功' }
+						} else {
+							console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail })
+							session.abortTransaction()
+							session.endSession()
+							return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
+						}
 					} else {
-						console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail, passwordHash })
+						console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail })
 						session.abortTransaction()
 						session.endSession()
 						return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
 					}
-				} else {
-					console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail, passwordHash })
+				} catch (error) {
+					console.error('ERROR', '更新用户邮箱出错', { uid, oldEmail, newEmail }, error)
 					session.abortTransaction()
 					session.endSession()
-					return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
+					return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
 				}
-			} catch (error) {
-				console.error('ERROR', '更新用户邮箱出错', { uid, oldEmail, newEmail, passwordHash }, error)
-				session.abortTransaction()
-				session.endSession()
-				return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
+			} else {
+				console.error('ERROR', '更新用户邮箱时失败，未获取到原始数据')
+				return { success: false, message: '用户邮箱更新失败，无法获取用户原始信息，数据可能为空' }
 			}
 		} else {
-			console.error('ERROR', '更新用户邮箱时失败，未获取到原始数据')
-			return { success: false, message: '用户邮箱更新失败，无法获取用户原始信息，数据可能为空' }
+			console.error('ERROR', '更新用户邮箱时失败，用户不合法')
+			return { success: false, message: '用户邮箱更新失败，用户不合法' }
 		}
 	} catch (error) {
 		console.error('ERROR', '修改用户邮箱失败，未知错误：', error)
@@ -422,31 +441,12 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 		if (await checkUserToken(uid, token)) {
 			const now = new Date().getTime()
 			const fileName = `avatar-${uid}-${generateSecureRandomString(32)}-${now}`
-
-			const { collectionName, schemaInstance } = UserInfoSchema
-			type UserInfo = InferSchemaType<typeof schemaInstance>
-			const updateUserInfoWhere: QueryType<UserInfo> = {
-				uid,
-			}
-			const updateUserInfoUpdate: UserInfo = {
-				uid,
-				avatar: fileName,
-				label: undefined,
-				userLinkAccounts: undefined,
-				editDateTime: now,
-			}
-			const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
-
-			if (updateResult.success) {
-				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 180)
-				if (signedUrl && fileName) {
-					return { success: true, message: '准备开始上传头像', userAvatarUploadSignedUrl: signedUrl, userAvatarFilename: fileName }
-				} else {
-					// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新头像链接替换数据库中的旧头像链接，而且当前图片没有加入审核流程
-					return { success: false, message: '上传失败，无法生成图片上传 URL，请重新上传头像' }
-				}
+			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 180)
+			if (signedUrl && fileName) {
+				return { success: true, message: '准备开始上传头像', userAvatarUploadSignedUrl: signedUrl, userAvatarFilename: fileName }
 			} else {
-				return { success: false, message: '上传失败，无法更新用户数据' }
+				// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新头像链接替换数据库中的旧头像链接，而且当前图片没有加入审核流程
+				return { success: false, message: '上传失败，无法生成图片上传 URL，请重新上传头像' }
 			}
 		} else {
 			console.error('ERROR', '获取上传图片用的预签名 URL 失败，用户不合法', { uid })
