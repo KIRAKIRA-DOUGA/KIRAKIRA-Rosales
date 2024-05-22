@@ -213,3 +213,21 @@ export type GetVideoCoverUploadSignedUrlResponseDto = {
 		fileName: string;
 	};
 }
+
+/**
+ * 根据视频 TAG ID 搜索视频的请求载荷
+ */
+export type SearchVideoByVideoTagIdRequestDto = {
+	/** TAG ID */
+	tagId: UploadVideoRequestDto['videoTagList'][number]['tagId'];
+}
+
+/** 通过视频 TAG ID 获取视频的请求响应 */
+export type SearchVideoByVideoTagIdResponseDto = {
+		/** 是否请求成功 */
+		success: boolean;
+		/** 附加的文本消息 */
+		message?: string;
+		/** 请求到的视频的数据 */
+		videoList?: GetVideoByKvidResponseDto['video'][];
+}

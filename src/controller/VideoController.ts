@@ -1,6 +1,6 @@
-import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, updateVideoService } from '../service/VideoService.js'
+import { getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService } from '../service/VideoService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
 /**
  * 上传视频
@@ -130,6 +130,23 @@ export const getVideoCoverUploadSignedUrlController = async (ctx: koaCtx, next: 
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
 	ctx.body = await getVideoCoverUploadSignedUrlService(uid, token)
+	await next()
+}
+
+
+/**
+ * 根据视频 TAG ID 搜索视频数据
+ * @param ctx context
+ * @param next context
+ * @returns 根据视频 TAG ID 搜索视频数据
+ */
+export const searchVideoByVideoTagIdController = async (ctx: koaCtx, next: koaNext) => {
+	console.log('aaaaaaaaaaaaa', ctx.query.tagId)
+	const searchVideoByVideoTagIdRequest: SearchVideoByVideoTagIdRequestDto = {
+		tagId: parseInt(`${ctx.query.tagId}`, 10),
+	}
+
+	ctx.body = await searchVideoByVideoTagIdService(searchVideoByVideoTagIdRequest)
 	await next()
 }
 

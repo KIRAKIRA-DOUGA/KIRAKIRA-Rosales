@@ -3,7 +3,7 @@ import { emitDanmakuController, getDanmakuListByKvidController } from '../contro
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, updateVideoController } from '../controller/VideoController.js'
+import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, searchVideoTagController } from '../controller/VideoTagController.js'
 
 const router = new Router()
@@ -154,6 +154,9 @@ router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户
 
 router.get('/video/search', searchVideoByKeywordController) // 根据关键字搜索视频
 // https://localhost:9999/video/search?keyword=fate
+
+router.get('/video/search/tag', searchVideoByVideoTagIdController) // 根据 TAG ID 来搜索视频
+// https://localhost:9999/video/search/tag?tagId=1
 
 router.post('/video/tus', getVideoFileTusEndpointController) // 获取 TUS 上传 Endpoint
 // https://localhost:9999/video/tus

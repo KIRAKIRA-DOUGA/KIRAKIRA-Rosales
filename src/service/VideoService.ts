@@ -4,7 +4,7 @@ import { InferSchemaType } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
-import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
@@ -487,6 +487,96 @@ export const getVideoCoverUploadSignedUrlService = async (uid: number, token: st
 }
 
 /**
+ * 根据视频 TAG ID 搜索视频数据
+ * @param searchVideoByVideoTagIdRequest 根据视频 TAG ID 搜索视频的请求载荷
+ * @returns 通过视频 TAG ID 获取视频的请求响应
+ */
+export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequest: SearchVideoByVideoTagIdRequestDto): Promise<SearchVideoByVideoTagIdResponseDto> => {
+	try {
+		if (checkSearchVideoByVideoTagIdRequest(searchVideoByVideoTagIdRequest)) {
+			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+			const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+			type Video = InferSchemaType<typeof videoSchemaInstance>
+			type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
+			// const regex = new RegExp(`${searchVideoByVideoTagIdRequest.tagId}`, 'i') // 忽略大小写
+			const where: QueryType<Video> = {
+				'videoTagList.tagId': searchVideoByVideoTagIdRequest.tagId,
+			}
+			const select: SelectType<Video> = {
+				videoId: 1,
+				videoPart: 1,
+				title: 1,
+				image: 1,
+				uploadDate: 1,
+				watchedCount: 1,
+				uploaderId: 1,
+				duration: 1,
+				description: 1,
+				editDateTime: 1,
+				videoCategory: 1,
+				copyright: 1,
+				videoTagList: 1,
+			}
+			const uploaderInfoKey = 'uploaderInfo'
+			const option: DbPoolOptions<Video, UserInfo> = {
+				virtual: {
+					name: uploaderInfoKey, // 虚拟属性名
+					options: {
+						ref: userInfoCollectionName, // 关联的子模型，注意结尾要加s
+						localField: 'uploaderId', // 父模型中用于关联的字段
+						foreignField: 'uid', // 子模型中用于关联的字段
+						justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
+					},
+				},
+				populate: uploaderInfoKey,
+			}
+			try {
+				const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option)
+				const videoResult = result.result
+				if (result.success && videoResult) {
+					const videoList = videoResult.map(video => {
+						const uploaderInfo = uploaderInfoKey in video && video?.[uploaderInfoKey] as UserInfo
+						if (uploaderInfo) { // 如果获取到的话，就将视频上传者信息附加到请求响应中
+							const uid = uploaderInfo.uid
+							const username = uploaderInfo.username
+							const userNickname = uploaderInfo.userNickname
+							const avatar = uploaderInfo.avatar
+							const userBannerImage = uploaderInfo.userBannerImage
+							const signature = uploaderInfo.signature
+							video.uploaderInfo = { uid, username, userNickname, avatar, userBannerImage, signature }
+						}
+						return { ...video, uploaderInfo } as SearchVideoByVideoTagIdResponseDto['videoList'][number]
+					})
+
+					if (videoList) {
+						if (videoList.length > 0) {
+							return { success: true, message: '通过 TAG ID 搜索视频成功', videoList }
+						} else {
+							return { success: true, message: '通过 TAG ID 搜索未找到视频', videoList: [] }
+						}
+					} else {
+						console.error('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
+						return { success: true, message: '通过 TAG ID 搜索时出错，整理后的搜索结果为空', videoList: [] }
+					}
+				} else {
+					console.error('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
+					return { success: false, message: '通过 TAG ID 搜索时出错，搜索结果为空' }
+				}
+			} catch (error) {
+				console.error('ERROR', '通过 TAG ID 搜索时出错，搜索视频出错：', error)
+				return { success: false, message: '通过 TAG ID 搜索时出错，搜索视频出错' }
+			}
+		} else {
+			console.error('ERROR', '无法通过 TAG ID 获取视频，请求参数不合法')
+			return { success: false, message: '无法通过 TAG ID 获取视频，请求参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '无法通过 TAG ID 获取视频，未知异常：', error)
+		return { success: false, message: '无法通过 TAG ID 获取视频，未知异常' }
+	}
+}
+
+/**
  * 检查上传的视频中的参数是否正确且无疏漏
  * @param uploadVideoRequest 上传视频请求携带的请求载荷
  * @returns 检查结果，合法返回 true，不合法返回 false
@@ -546,6 +636,15 @@ const checkGetVideoByUidRequest = (getVideoByUidRequest: GetVideoByUidRequestDto
  */
 const checkSearchVideoByKeywordRequest = (searchVideoByKeywordRequest: SearchVideoByKeywordRequestDto) => {
 	return (!!searchVideoByKeywordRequest.keyword)
+}
+
+/**
+ * 检查根据视频 TAG ID 搜索视频的请求载荷
+ * @param searchVideoByVideoTagIdRequest 根据视频 TAG ID 搜索视频的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkSearchVideoByVideoTagIdRequest = (searchVideoByVideoTagIdRequest: SearchVideoByVideoTagIdRequestDto): boolean => {
+	return (searchVideoByVideoTagIdRequest && searchVideoByVideoTagIdRequest.tagId !== undefined && searchVideoByVideoTagIdRequest.tagId !== null && searchVideoByVideoTagIdRequest.tagId > 0)
 }
 
 
