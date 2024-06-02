@@ -1,3 +1,5 @@
+import { Types } from 'mongoose'
+
 /**
  * 数据操作的结果（结果为对象数组）
  */
@@ -71,13 +73,12 @@ type MongoDBConditionsType<T> = {
 	$elemMatch?: MongoDBConditionsType<T>; // 确保数据库中的数组至少有一个元素匹配提供的条件
 
 	$regex?: RegExp; // 正则表达式
-
-
 }
 
 // 数据库 Query，相当于 SQL 中的 WHERE
 export type QueryType<T> = {
-	[K in keyof T]?: T[K] & MongoDBConditionsType<T>;
+	[K in keyof T]?: T[K] extends Types.DocumentArray<unknown> ? MongoDBConditionsType<T> : T[K];
+	// [K in keyof T]?: T extends Types.DocumentArray<unknown> ? string : number;
 } & Record< string, boolean | string | number | MongoDBConditionsType<T> >
 
 // 数据库 Update，相当于 SQL UPDATE 中的 SET

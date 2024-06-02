@@ -141,9 +141,9 @@ export const getVideoCoverUploadSignedUrlController = async (ctx: koaCtx, next: 
  * @returns 根据视频 TAG ID 搜索视频数据
  */
 export const searchVideoByVideoTagIdController = async (ctx: koaCtx, next: koaNext) => {
-	console.log('aaaaaaaaaaaaa', ctx.query.tagId)
+	const data = ctx.request.body as Partial<SearchVideoByVideoTagIdRequestDto>
 	const searchVideoByVideoTagIdRequest: SearchVideoByVideoTagIdRequestDto = {
-		tagId: parseInt(`${ctx.query.tagId}`, 10),
+		tagId: data.tagId ?? [],
 	}
 
 	ctx.body = await searchVideoByVideoTagIdService(searchVideoByVideoTagIdRequest)

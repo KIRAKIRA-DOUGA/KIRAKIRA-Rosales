@@ -155,8 +155,12 @@ router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户
 router.get('/video/search', searchVideoByKeywordController) // 根据关键字搜索视频
 // https://localhost:9999/video/search?keyword=fate
 
-router.get('/video/search/tag', searchVideoByVideoTagIdController) // 根据 TAG ID 来搜索视频
-// https://localhost:9999/video/search/tag?tagId=1
+router.post('/video/search/tag', searchVideoByVideoTagIdController) // 根据 TAG ID 来搜索视频
+// https://localhost:9999/video/search/tag
+// {
+// 	"tagId": [1, 2]
+// }
+
 
 router.post('/video/tus', getVideoFileTusEndpointController) // 获取 TUS 上传 Endpoint
 // https://localhost:9999/video/tus

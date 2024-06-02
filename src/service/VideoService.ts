@@ -498,9 +498,10 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
 			const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
 			type Video = InferSchemaType<typeof videoSchemaInstance>
 			type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
-			// const regex = new RegExp(`${searchVideoByVideoTagIdRequest.tagId}`, 'i') // 忽略大小写
 			const where: QueryType<Video> = {
-				'videoTagList.tagId': searchVideoByVideoTagIdRequest.tagId,
+				videoTagList: {
+					$all: searchVideoByVideoTagIdRequest.tagId.map(tagId => ({ $elemMatch: { tagId } })),
+				},
 			}
 			const select: SelectType<Video> = {
 				videoId: 1,
@@ -644,7 +645,7 @@ const checkSearchVideoByKeywordRequest = (searchVideoByKeywordRequest: SearchVid
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
 const checkSearchVideoByVideoTagIdRequest = (searchVideoByVideoTagIdRequest: SearchVideoByVideoTagIdRequestDto): boolean => {
-	return (searchVideoByVideoTagIdRequest && searchVideoByVideoTagIdRequest.tagId !== undefined && searchVideoByVideoTagIdRequest.tagId !== null && searchVideoByVideoTagIdRequest.tagId > 0)
+	return (searchVideoByVideoTagIdRequest && searchVideoByVideoTagIdRequest.tagId && searchVideoByVideoTagIdRequest.tagId.length > 0)
 }
 
 

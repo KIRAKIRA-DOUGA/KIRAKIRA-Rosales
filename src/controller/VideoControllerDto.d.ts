@@ -219,7 +219,7 @@ export type GetVideoCoverUploadSignedUrlResponseDto = {
  */
 export type SearchVideoByVideoTagIdRequestDto = {
 	/** TAG ID */
-	tagId: UploadVideoRequestDto['videoTagList'][number]['tagId'];
+	tagId: UploadVideoRequestDto['videoTagList'][number]['tagId'][];
 }
 
 /** 通过视频 TAG ID 获取视频的请求响应 */
