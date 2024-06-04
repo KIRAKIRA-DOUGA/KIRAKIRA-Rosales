@@ -4,7 +4,7 @@ import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
-import { createVideoTagController, searchVideoTagController } from '../controller/VideoTagController.js'
+import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 
 const router = new Router()
 
@@ -276,7 +276,11 @@ router.post('/video/tag/create', createVideoTagController) // 用户创建视频
 router.get('/video/tag/search', searchVideoTagController) // 根据关键词搜索视频 TAG
 // https://localhost:9999/video/tag/search?tagName=hello
 
-
+router.post('/video/tag/get', getVideoTagByTagIdController) // 根据 TAG ID 在数据库中匹配视频 TAG // WARN: 注意本接口为 POST 方法
+// https://localhost:9999/video/tag/get
+// {
+// 	"tagId": [1, 2]
+// }
 
 
 

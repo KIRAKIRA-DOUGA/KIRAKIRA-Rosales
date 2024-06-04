@@ -1,6 +1,6 @@
-import { createVideoTagService, searchVideoTagService } from '../service/CreateVideoTagService.js'
+import { createVideoTagService, getVideoTagByTagIdService, searchVideoTagService } from '../service/CreateVideoTagService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { CreateVideoTagRequestDto, SearchVideoTagRequestDto } from './VideoTagControllerDto.js'
+import { CreateVideoTagRequestDto, GetVideoTagByTagIdRequestDto, SearchVideoTagRequestDto } from './VideoTagControllerDto.js'
 
 /**
  * 用户创建视频 TAG
@@ -23,7 +23,7 @@ export const createVideoTagController = async (ctx: koaCtx, next: koaNext) => {
 
 
 /**
- * 在数据库中搜索视频 TAG
+ * 根据 TAG 名在数据库中搜索视频 TAG
  * @param ctx context
  * @param next context
  */
@@ -35,5 +35,21 @@ export const searchVideoTagController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const searchVideoTagResponse = await searchVideoTagService(searchVideoTagRequest)
 	ctx.body = searchVideoTagResponse
+	await next()
+}
+
+
+/**
+ * 根据 TAG ID 在数据库中匹配视频 TAG
+ * @param ctx context
+ * @param next context
+ */
+export const getVideoTagByTagIdController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<GetVideoTagByTagIdRequestDto>
+	const getVideoTagByTagIdRequest: GetVideoTagByTagIdRequestDto = {
+		tagId: data.tagId ?? [],
+	}
+	const getVideoTagByTagIdResponse = await getVideoTagByTagIdService(getVideoTagByTagIdRequest)
+	ctx.body = getVideoTagByTagIdResponse
 	await next()
 }

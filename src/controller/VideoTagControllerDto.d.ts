@@ -70,3 +70,14 @@ export type SearchVideoTagResponseDto = {
 	/** 如果成功，返回匹配到的 TAG 信息 */
 	result?: VideoTag[];
 }
+
+/**
+ * 根据视频 TAG ID 搜索视频的请求载荷
+ */
+export type GetVideoTagByTagIdRequestDto = {
+	/** TAG ID */
+	tagId: number[];
+}
+
+/** 通过视频 TAG ID 获取视频的请求响应 */
+export type GetVideoTagByTagIdResponseDto = SearchVideoTagResponseDto & {}

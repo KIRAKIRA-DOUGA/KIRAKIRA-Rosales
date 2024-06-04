@@ -173,7 +173,6 @@ export type GetVideoByUidRequestDto = {
  */
 export type GetVideoByUidResponseDto = ThumbVideoResponseDto & {}
 
-
 /**
  * 根据关键字搜索视频的请求参数
  */
@@ -185,7 +184,6 @@ export type SearchVideoByKeywordRequestDto = {
  * 根据关键字搜索视频的响应结果
  */
 export type SearchVideoByKeywordResponseDto = ThumbVideoResponseDto & {}
-
 
 /**
  * 获取视频文件 TUS 上传端点请求参数
@@ -223,11 +221,4 @@ export type SearchVideoByVideoTagIdRequestDto = {
 }
 
 /** 通过视频 TAG ID 获取视频的请求响应 */
-export type SearchVideoByVideoTagIdResponseDto = {
-		/** 是否请求成功 */
-		success: boolean;
-		/** 附加的文本消息 */
-		message?: string;
-		/** 请求到的视频的数据 */
-		videoList?: GetVideoByKvidResponseDto['video'][];
-}
+export type SearchVideoByVideoTagIdResponseDto = ThumbVideoResponseDto & {}

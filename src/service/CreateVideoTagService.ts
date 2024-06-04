@@ -1,4 +1,4 @@
-import { CreateVideoTagRequestDto, CreateVideoTagResponseDto, SearchVideoTagRequestDto, SearchVideoTagResponseDto } from '../controller/VideoTagControllerDto.js'
+import { CreateVideoTagRequestDto, CreateVideoTagResponseDto, GetVideoTagByTagIdRequestDto, GetVideoTagByTagIdResponseDto, SearchVideoTagRequestDto, SearchVideoTagResponseDto } from '../controller/VideoTagControllerDto.js'
 import { checkUserTokenService } from './UserService.js'
 import { Client } from '@elastic/elasticsearch'
 import { isEmptyObject } from '../common/ObjectTool.js'
@@ -113,6 +113,52 @@ export const searchVideoTagService = async (searchVideoTagRequest: SearchVideoTa
 }
 
 /**
+ * 根据 TAG ID 在数据库中匹配视频 TAG 的请求参数
+ * @param getVideoTagByTagIdRequest 根据 TAG ID 在数据库中匹配视频 TAG
+ * @returns 根据 TAG ID 在数据库中匹配视频 TAG 的请求响应
+ */
+export const getVideoTagByTagIdService = async (getVideoTagByTagIdRequest: GetVideoTagByTagIdRequestDto): Promise<GetVideoTagByTagIdResponseDto> => {
+	try {
+		if (checkGetVideoTagByTagIdRequest(getVideoTagByTagIdRequest)) {
+			const { collectionName, schemaInstance } = VideoTagSchema
+			type VideoTag = InferSchemaType<typeof schemaInstance>
+
+			const where: QueryType<VideoTag> = {
+				tagId: { $in: getVideoTagByTagIdRequest.tagId },
+			}
+			const select: SelectType<VideoTag> = {
+				tagId: 1,
+				tagNameList: 1,
+			}
+
+			try {
+				const searchVideoTagResult = await selectDataFromMongoDB<VideoTag>(where, select, schemaInstance, collectionName)
+				const result = searchVideoTagResult?.result as unknown as SearchVideoTagResponseDto['result']
+				if (searchVideoTagResult.success) {
+					if (result?.length > 0) {
+						return { success: true, message: '获取视频 TAG 成功', result }
+					} else {
+						return { success: true, message: '获取视频 TAG 的结果为空', result: [] }
+					}
+				} else {
+					console.error('ERROR', '获取视频 TAG 时出错，在 MongoDB 中查询数据失败')
+					return { success: false, message: '获取视频 TAG 失败，查询失败' }
+				}
+			} catch (error) {
+				console.error('ERROR', '获取视频 TAG 时出错，在 MongoDB 中查询数据出错：', error)
+				return { success: false, message: '获取视频 TAG 时出错，数据查询出错' }
+			}
+		} else {
+			console.error('ERROR', '获取视频 TAG 时出错，参数不合法')
+			return { success: false, message: '获取视频 TAG 时出错，参数错误' }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取视频 TAG 时出错，未知原因：', error)
+		return { success: false, message: '获取视频 TAG 时出错，未知原因' }
+	}
+}
+
+/**
  * 校验创建视频 TAG 的请求是否合法
  * @param createVideoTagRequest 创建视频 TAG 的请求
  * @returns 合法返回 true, 不合法返回 false
@@ -132,4 +178,13 @@ const checkCreateVideoTagRequest = (createVideoTagRequest: CreateVideoTagRequest
  */
 const checkSearchVideoTagRequest = (searchVideoTagRequest: SearchVideoTagRequestDto): boolean => {
 	return !!searchVideoTagRequest.tagNameSearchKey
+}
+
+/**
+ * 检查根据 TAG ID 在数据库中匹配视频 TAG 的请求参数是否合法
+ * @param getVideoTagByTagIdRequest 根据 TAG ID 在数据库中匹配视频 TAG 的请求参数
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkGetVideoTagByTagIdRequest = (getVideoTagByTagIdRequest: GetVideoTagByTagIdRequestDto): boolean => {
+	return !!getVideoTagByTagIdRequest && getVideoTagByTagIdRequest.tagId && getVideoTagByTagIdRequest.tagId.length > 0
 }

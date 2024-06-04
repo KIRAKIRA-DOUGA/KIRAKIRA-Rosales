@@ -546,34 +546,34 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
 							const signature = uploaderInfo.signature
 							video.uploaderInfo = { uid, username, userNickname, avatar, userBannerImage, signature }
 						}
-						return { ...video, uploaderInfo } as SearchVideoByVideoTagIdResponseDto['videoList'][number]
+						return { ...video, uploaderInfo } as SearchVideoByVideoTagIdResponseDto['videos'][number]
 					})
 
 					if (videoList) {
 						if (videoList.length > 0) {
-							return { success: true, message: '通过 TAG ID 搜索视频成功', videoList }
+							return { success: true, message: '通过 TAG ID 搜索视频成功', videosCount: videoList.length, videos: videoList }
 						} else {
-							return { success: true, message: '通过 TAG ID 搜索未找到视频', videoList: [] }
+							return { success: true, message: '通过 TAG ID 搜索未找到视频', videosCount: 0, videos: [] }
 						}
 					} else {
 						console.error('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
-						return { success: true, message: '通过 TAG ID 搜索时出错，整理后的搜索结果为空', videoList: [] }
+						return { success: true, message: '通过 TAG ID 搜索时出错，整理后的搜索结果为空', videosCount: 0, videos: [] }
 					}
 				} else {
 					console.error('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
-					return { success: false, message: '通过 TAG ID 搜索时出错，搜索结果为空' }
+					return { success: false, message: '通过 TAG ID 搜索时出错，搜索结果为空', videosCount: 0, videos: [] }
 				}
 			} catch (error) {
 				console.error('ERROR', '通过 TAG ID 搜索时出错，搜索视频出错：', error)
-				return { success: false, message: '通过 TAG ID 搜索时出错，搜索视频出错' }
+				return { success: false, message: '通过 TAG ID 搜索时出错，搜索视频出错', videosCount: 0, videos: [] }
 			}
 		} else {
 			console.error('ERROR', '无法通过 TAG ID 获取视频，请求参数不合法')
-			return { success: false, message: '无法通过 TAG ID 获取视频，请求参数不合法' }
+			return { success: false, message: '无法通过 TAG ID 获取视频，请求参数不合法', videosCount: 0, videos: [] }
 		}
 	} catch (error) {
 		console.error('ERROR', '无法通过 TAG ID 获取视频，未知异常：', error)
-		return { success: false, message: '无法通过 TAG ID 获取视频，未知异常' }
+		return { success: false, message: '无法通过 TAG ID 获取视频，未知异常', videosCount: 0, videos: [] }
 	}
 }
 

@@ -77,8 +77,7 @@ type MongoDBConditionsType<T> = {
 
 // 数据库 Query，相当于 SQL 中的 WHERE
 export type QueryType<T> = {
-	[K in keyof T]?: T[K] extends Types.DocumentArray<unknown> ? MongoDBConditionsType<T> : T[K];
-	// [K in keyof T]?: T extends Types.DocumentArray<unknown> ? string : number;
+	[K in keyof T]?: T[K] extends Types.DocumentArray<unknown> ? MongoDBConditionsType<T> : T[K] | MongoDBConditionsType<T>;
 } & Record< string, boolean | string | number | MongoDBConditionsType<T> >
 
 // 数据库 Update，相当于 SQL UPDATE 中的 SET
