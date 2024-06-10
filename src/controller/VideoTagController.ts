@@ -15,8 +15,7 @@ export const createVideoTagController = async (ctx: koaCtx, next: koaNext) => {
 		/** 不同语言所对应的 TAG 名 */
 		tagNameList: data.tagNameList,
 	}
-	const esClient = ctx.elasticsearchClient
-	const createVideoTagResponse = await createVideoTagService(createVideoTagRequest, uid, token, esClient)
+	const createVideoTagResponse = await createVideoTagService(createVideoTagRequest, uid, token)
 	ctx.body = createVideoTagResponse
 	await next()
 }

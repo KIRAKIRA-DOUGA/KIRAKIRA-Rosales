@@ -1,7 +1,5 @@
 import { CreateVideoTagRequestDto, CreateVideoTagResponseDto, GetVideoTagByTagIdRequestDto, GetVideoTagByTagIdResponseDto, SearchVideoTagRequestDto, SearchVideoTagResponseDto } from '../controller/VideoTagControllerDto.js'
 import { checkUserTokenService } from './UserService.js'
-import { Client } from '@elastic/elasticsearch'
-import { isEmptyObject } from '../common/ObjectTool.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
 import { VideoTagSchema } from '../dbPool/schema/VideoTagSchema.js'
 import { InferSchemaType } from 'mongoose'
@@ -9,16 +7,15 @@ import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPo
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 
 /**
- * 创建视频 TAG，向 Elasticsearch 搜索引擎插入一条 TAG 数据
+ * 创建视频 TAG
  * @param createVideoTagRequest 创建视频 TAG 的请求载荷，即 TAG 数据
  * @param uid 用户 ID
  * @param token 用户安全令牌
- * @param esClient Elasticsearch 搜索引擎客户端
  * @returns 创建视频 TAG 的响应结果
  */
-export const createVideoTagService = async (createVideoTagRequest: CreateVideoTagRequestDto, uid: number, token: string, esClient?: Client): Promise<CreateVideoTagResponseDto> => {
+export const createVideoTagService = async (createVideoTagRequest: CreateVideoTagRequestDto, uid: number, token: string): Promise<CreateVideoTagResponseDto> => {
 	try {
-		if (checkCreateVideoTagRequest(createVideoTagRequest) && esClient && !isEmptyObject(esClient)) {
+		if (checkCreateVideoTagRequest(createVideoTagRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
 				try {
 					const { collectionName, schemaInstance } = VideoTagSchema
@@ -30,17 +27,17 @@ export const createVideoTagService = async (createVideoTagRequest: CreateVideoTa
 					const tagNameList = createVideoTagRequest.tagNameList
 
 					if (tagId !== undefined && tagId !== null) {
-						// 准备上传到 Elasticsearch 的数据
+						// 准备上传到 MongoD 的数据
 						const videoTagListData: videoTagListType = {
 							tagId,
 							tagNameList: tagNameList as videoTagListType['tagNameList'], // TODO: Mongoose issue: #12420
 							editDateTime: nowDate,
 						}
-						const insert2ElasticsearchResult = await insertData2MongoDB(videoTagListData, schemaInstance, collectionName)
-						if (insert2ElasticsearchResult?.success) {
+						const insert2MongoDBResult = await insertData2MongoDB(videoTagListData, schemaInstance, collectionName)
+						if (insert2MongoDBResult?.success) {
 							return { success: true, message: '创建视频 TAG 成功', result: { tagId, tagNameList } }
 						} else {
-							console.error('ERROR', '创建视频 TAG 时出错，向 Elasticsearch 插入 TAG 数据失败')
+							console.error('ERROR', '创建视频 TAG 时出错，向 MongoDB 插入 TAG 数据失败')
 							return { success: false, message: '创建视频 TAG 时出错，数据插入失败' }
 						}
 					} else {

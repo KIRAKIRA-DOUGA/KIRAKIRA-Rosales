@@ -1,4 +1,5 @@
 import Router from 'koa-router'
+import { createUserBrowsingHistoryController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
@@ -282,6 +283,16 @@ router.post('/video/tag/get', getVideoTagByTagIdController) // 根据 TAG ID 在
 // 	"tagId": [1, 2]
 // }
 
+
+
+router.post('/history/create', createUserBrowsingHistoryController) // 创建用户浏览历史
+// https://localhost:9999/history/create
+// cookie: uid, token
+// {
+// 	"uid": 2,
+// 	"type": "video",
+// 	"id": "32"
+// }
 
 
 

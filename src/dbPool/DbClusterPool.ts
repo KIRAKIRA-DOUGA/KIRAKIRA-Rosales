@@ -1,5 +1,5 @@
 import { ReadPreferenceMode } from 'mongodb'
-import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, Schema } from 'mongoose'
+import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
 import { DbPoolResultsType, DbPoolResultType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema } from './schema/UserSchema.js'
@@ -191,6 +191,36 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 	} catch (error) {
 		console.error('ERROR', 'selectDataFromMongoDB 发生错误')
 		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
+	}
+}
+
+/**
+ * 在 MongoDB 数据库中使用 Aggregate 查找数据
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param props 聚合查询的步骤
+ * @returns 查询状态和结果
+ */
+export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, collectionName: string, props: PipelineStage[]): Promise< DbPoolResultsType<T> > => {
+	try {
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+
+		try {
+			const result = (await mongoModel.aggregate(props)).map(results => results.toObject({ virtuals: true }) as T)
+			return { success: true, message: '数据聚合查询成功', result }
+		} catch (error) {
+			console.error('ERROR', '数据聚合查询失败：', error)
+			throw { success: false, message: '数据聚合查询失败', error }
+		}
+	} catch (error) {
+		console.error('ERROR', 'selectDataByAggregateFromMongoDB 发生错误')
+		throw { success: false, message: '数据聚合查询失败，selectDataByAggregateFromMongoDB 中发生错误：', error }
 	}
 }
 
