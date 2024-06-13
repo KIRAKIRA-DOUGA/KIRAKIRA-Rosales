@@ -212,7 +212,7 @@ export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, col
 		}
 
 		try {
-			const result = (await mongoModel.aggregate(props)).map(results => results.toObject({ virtuals: true }) as T)
+			const result = (await mongoModel.aggregate(props)) as T[]
 			return { success: true, message: '数据聚合查询成功', result }
 		} catch (error) {
 			console.error('ERROR', '数据聚合查询失败：', error)
@@ -280,9 +280,10 @@ export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: 
  * @param schema MongoDB Schema 对象
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @param options 设置项
+ * @param upsert 如果没有找到，是否创建（默认会创建）
  * @returns 更新后的数据
  */
-export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultType<T> > => {
+export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>, upsert: boolean = true): Promise< DbPoolResultType<T> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -297,7 +298,7 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 			mongoModel = mongoose.model<T>(collectionName, schema)
 		}
 		try {
-			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: true, upsert: true, ...options })).toObject() as T
+			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: true, upsert, ...options })).toObject() as T
 
 			if (updateResult) {
 				return { success: true, message: '数据更新成功', result: updateResult }

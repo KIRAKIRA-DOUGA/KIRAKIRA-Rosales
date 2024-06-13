@@ -1,5 +1,5 @@
 import Router from 'koa-router'
-import { createUserBrowsingHistoryController } from '../controller/BrowsingHistoryController.js'
+import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkUserTokenController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
@@ -285,14 +285,19 @@ router.post('/video/tag/get', getVideoTagByTagIdController) // 根据 TAG ID 在
 
 
 
-router.post('/history/create', createUserBrowsingHistoryController) // 创建用户浏览历史
-// https://localhost:9999/history/create
+router.post('/history/merge', createOrUpdateUserBrowsingHistoryController) // 更新或创建用户浏览历史
+// https://localhost:9999/history/merge
 // cookie: uid, token
 // {
 // 	"uid": 2,
 // 	"type": "video",
 // 	"id": "32"
 // }
+
+router.get('/history/filter', getUserBrowsingHistoryWithFilterController) // 获取全部或过滤后的用户浏览历史，按对某一内容的最后访问时间降序排序
+// https://localhost:9999/history/filter?videoTitle=foo
+// cookie: uid, token
+// > 或者你可以不包含 URL 查询以获取当前用户全部浏览历史 -> https://localhost:9999/history/filter
 
 
 
