@@ -15,7 +15,7 @@ export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, n
 		/** 用户的 UID - 非空 */
 		uid: data.uid,
 		/** 浏览的内容的类型，比如说 video, photo 等 - 非空 */
-		type: data.type,
+		category: data.category,
 		/** 浏览的内容的唯一 ID - 非空 */
 		id: data.id,
 		/** 浏览的定位锚点，如果是视频就是播放时间，如果是相册可能是上次浏览到相册第n张图片，为了兼容性使用 String */
@@ -43,4 +43,3 @@ export const getUserBrowsingHistoryWithFilterController = async (ctx: koaCtx, ne
 	ctx.body = getUserBrowsingHistoryWithFilterResponse
 	await next()
 }
-

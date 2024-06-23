@@ -4,6 +4,7 @@ import { InferSchemaType } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
+import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
 import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
@@ -12,6 +13,7 @@ import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
+import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
 import { checkUserTokenService } from './UserService.js'
 
@@ -176,11 +178,11 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 }
 
 /**
- * 根据 kvid 获取视频详细信息
+ * 根据 kvid 获取视频详细信息（用户打开某个视频页面）
  * @param uploadVideoRequest 根据 kvid 获取视频的请求携带的请求载荷
  * @returns 视频数据
  */
-export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvidRequestDto): Promise<GetVideoByKvidResponseDto> => {
+export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvidRequestDto, uid?: number, token?: string): Promise<GetVideoByKvidResponseDto> => {
 	try {
 		if (checkGetVideoByKvidRequest(getVideoByKvidRequest)) {
 			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
@@ -226,6 +228,14 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					if (videosCount === 1) {
 						const video = videoResult?.[0] as GetVideoByKvidResponseDto['video']
 						if (video && video.uploaderId) {
+							if (uid !== null && uid !== undefined && token) { // if have uid and token, record the browsing history.
+								const createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto = {
+									uid,
+									category: 'video',
+									id: `${video.videoId}`,
+								}
+								await createOrUpdateBrowsingHistoryService(createOrUpdateBrowsingHistoryRequest, uid, token)
+							}
 							const uploaderInfo = uploaderInfoKey in video && video?.[uploaderInfoKey] as UserInfo
 							if (uploaderInfo) { // 如果获取到的话，就将视频上传者信息附加到请求响应中
 								const uid = uploaderInfo.uid

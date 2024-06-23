@@ -149,6 +149,7 @@ router.get('/video/home', getThumbVideoController) // 获取首页视频
 
 router.get('/video', getVideoByKvidController) // 根据视频 ID (KVID) 获取视频的数据
 // https://localhost:9999/video?videoId=1
+// cookie: uid, token (optional, if have it will try to record the video browsing history)
 
 router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户上传的视频
 // https://localhost:9999/video/user?uid=2
@@ -285,12 +286,12 @@ router.post('/video/tag/get', getVideoTagByTagIdController) // 根据 TAG ID 在
 
 
 
-router.post('/history/merge', createOrUpdateUserBrowsingHistoryController) // 更新或创建用户浏览历史
+router.post('/history/merge', createOrUpdateUserBrowsingHistoryController) // 更新或创建用户浏览历史 // DELETE: 该接口没必要暴露
 // https://localhost:9999/history/merge
 // cookie: uid, token
 // {
 // 	"uid": 2,
-// 	"type": "video",
+// 	"category": "video",
 // 	"id": "32"
 // }
 

@@ -51,11 +51,13 @@ export const getThumbVideoController = async (ctx: koaCtx, next: koaNext) => {
  * @returns 获取视频信息
  */
 export const getVideoByKvidController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
 	const videoId = ctx.query.videoId as string
 	const uploadVideoRequest: GetVideoByKvidRequestDto = {
 		videoId: videoId ? parseInt(videoId, 10) : -1, // WARN -1 means you can't find any video
 	}
-	const getVideoByKvidResponse = await getVideoByKvidService(uploadVideoRequest)
+	const getVideoByKvidResponse = await getVideoByKvidService(uploadVideoRequest, uid, token)
 	ctx.body = getVideoByKvidResponse
 	await next()
 }

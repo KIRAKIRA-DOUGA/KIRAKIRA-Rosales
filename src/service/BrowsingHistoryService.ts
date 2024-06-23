@@ -21,7 +21,7 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 					type BrowsingHistoryType = InferSchemaType<typeof schemaInstance>
 
 					const uid = createOrUpdateBrowsingHistoryRequest.uid
-					const type = createOrUpdateBrowsingHistoryRequest.type
+					const category = createOrUpdateBrowsingHistoryRequest.category
 					const id = createOrUpdateBrowsingHistoryRequest.id
 					const anchor = createOrUpdateBrowsingHistoryRequest.anchor
 					const nowDate = new Date().getTime()
@@ -29,14 +29,14 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 					// 搜索数据
 					const BrowsingHistoryWhere: QueryType<BrowsingHistoryType> = {
 						uid,
-						type,
+						category,
 						id,
 					}
 
 					// 准备上传到 MongoDB 的数据
 					const BrowsingHistoryData: BrowsingHistoryType = {
 						uid,
-						type,
+						category,
 						id,
 						anchor,
 						lastUpdateDateTime: nowDate,
@@ -88,7 +88,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 				const videoHistoryAggregateProps: PipelineStage[] = [
 					{
 						$match: {
-							type: 'video',
+							category: 'video',
 						},
 					},
 					{
@@ -131,7 +131,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 					{
 						$project: {
 							uid: 1,
-							type: 1,
+							category: 1,
 							id: '$id_number',
 							anchor: 1,
 							videoId: '$video_info.videoId',
@@ -143,6 +143,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 							uploaderId: '$uploader_info.uid',
 							duration: '$video_info.duration',
 							description: '$video_info.description',
+							lastUpdateDateTime: '$lastUpdateDateTime',
 						},
 					},
 				]
@@ -186,7 +187,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 const checkCreateOrUpdateBrowsingHistoryRequest = (createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto): boolean => {
 	return (
 		createOrUpdateBrowsingHistoryRequest.uid !== undefined && createOrUpdateBrowsingHistoryRequest.uid !== null && createOrUpdateBrowsingHistoryRequest.uid >= 0
-		&& (createOrUpdateBrowsingHistoryRequest.type === 'video' || createOrUpdateBrowsingHistoryRequest.type === 'photo' || createOrUpdateBrowsingHistoryRequest.type === 'comment')
+		&& (createOrUpdateBrowsingHistoryRequest.category === 'video' || createOrUpdateBrowsingHistoryRequest.category === 'photo' || createOrUpdateBrowsingHistoryRequest.category === 'comment')
 		&& !!createOrUpdateBrowsingHistoryRequest.id
 	)
 }
