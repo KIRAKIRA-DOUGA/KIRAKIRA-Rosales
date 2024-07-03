@@ -478,7 +478,7 @@ export const getVideoCoverUploadSignedUrlService = async (uid: number, token: st
 			const now = new Date().getTime()
 			const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
 			try {
-				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 180)
+				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
 				if (signedUrl) {
 					return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: { fileName, signedUrl } }
 				}

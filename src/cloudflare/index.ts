@@ -77,16 +77,16 @@ export const createCloudflareR2PutSignedUrl = async (bucketName: string, fileNam
 /**
  * 生成一个预签名 URL，该 URL 可以用于向 Cloudflare Images 上传图片
  * @param fileName 图片名字，注意：是文件上传到 R2 之后的名字，不是要上传的文件名字，不要求文件后缀名，建议文件名使用 URL 友好字符
- * @param expiresIn 预签名 URL 的有效期限，单位：秒。默认 180秒（3 分钟），最小 120（2 分钟），最大 21600（360 分钟，6 小时）
+ * @param expiresIn 预签名 URL 的有效期限，单位：秒。默认 660秒（11 分钟），最小 600（10 分钟），最大 21600（360 分钟，6 小时）
  * @param metaData 图片元数据
  * @returns 预签名 URL，该 URL 可以用于向 Cloudflare Images 上传图片
  */
-export const createCloudflareImageUploadSignedUrl = async (fileName?: string, expiresIn: number = 180, metaData?: Record<string, string>): Promise<string | undefined> => {
+export const createCloudflareImageUploadSignedUrl = async (fileName?: string, expiresIn: number = 660, metaData?: Record<string, string>): Promise<string | undefined> => {
 	try {
 		const imagesEndpointUrl = process.env.CF_IMAGES_ENDPOINT_URL
 		const imagesToken = process.env.CF_IMAGES_TOKEN
 
-		if (expiresIn < 120) {
+		if (expiresIn < 600) {
 			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL, 过期时间必须大于等于 120 秒 （2 分钟）', { fileName, expiresIn, metaData })
 			return undefined
 		}
@@ -111,10 +111,9 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 		const config = {
 			headers: {
 				Authorization: `Bearer ${imagesToken}`,
-				'Content-Type': 'multipart/form-data',
+				'Content-Type': 'multipart/form-data; boundary=---011000010111000001101001',
 			},
 		}
-
 		try {
 			const imageUploadSignedUrlResult = await axios.post(imagesEndpointUrl, data, config)
 			const imageUploadSignedUrl = imageUploadSignedUrlResult?.data?.result?.uploadURL
@@ -125,7 +124,7 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 				return undefined
 			}
 		} catch (error) {
-			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL：网络请求失败！', error, { fileName, expiresIn, metaData })
+			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL：网络请求失败！', { error, errorDetail: error?.response?.data?.errors }, { fileName, expiresIn, metaData })
 			return undefined
 		}
 	} catch (error) {

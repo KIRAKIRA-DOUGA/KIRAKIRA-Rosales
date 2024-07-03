@@ -441,7 +441,7 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 		if (await checkUserToken(uid, token)) {
 			const now = new Date().getTime()
 			const fileName = `avatar-${uid}-${generateSecureRandomString(32)}-${now}`
-			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 180)
+			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
 			if (signedUrl && fileName) {
 				return { success: true, message: '准备开始上传头像', userAvatarUploadSignedUrl: signedUrl, userAvatarFilename: fileName }
 			} else {
