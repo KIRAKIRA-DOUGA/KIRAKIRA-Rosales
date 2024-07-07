@@ -89,6 +89,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 					{
 						$match: {
 							category: 'video',
+							uid,
 						},
 					},
 					{
