@@ -1,7 +1,7 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -13,6 +13,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	const data = ctx.request.body as Partial<UserRegistrationRequestDto>
 	const userRegistrationData: UserRegistrationRequestDto = {
 		email: data?.email,
+		verificationCode: data?.verificationCode,
 		passwordHash: data?.passwordHash,
 		passwordHint: data?.passwordHint,
 	}
@@ -242,5 +243,22 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 	}
 
 	ctx.body = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uid, token)
+	await next()
+}
+
+/**
+ * 请求发送验证码，用于注册时验证用户邮箱
+ * @param ctx context
+ * @param next context
+ */
+export const requestSendVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+
+	const requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto = {
+		email: data.email || '',
+		clientLanguage: data.clientLanguage,
+	}
+
+	ctx.body = await RequestSendVerificationCodeService(requestSendVerificationCodeRequest)
 	await next()
 }

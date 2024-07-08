@@ -33,6 +33,7 @@
 		"@types/koa-bodyparser": "^4.3.10",
 		"axios": "^1.4.0",
 		"bcrypt": "^5.1.1",
+		"emailjs": "^4.0.3",
 		"greenlock": "^4.0.4",
 		"js-base64": "^3.7.5",
 		"koa": "^2.14.1",

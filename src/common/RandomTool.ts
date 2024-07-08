@@ -43,10 +43,10 @@ export const generateRandomString = (length: number): string => {
 		if (length && typeof length === 'number' && length > 0 && !!Number.isInteger(length)) {
 			let text = ''
 			const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-	
+
 			for (let i = 0; i < length; i++)
 				text += possible.charAt(Math.floor(Math.random() * possible.length))
-	
+
 			return text
 		} else {
 			console.error('something error in function generateSecureRandomString, required data length is empty or not > 0 or not Integer')
@@ -70,4 +70,14 @@ export const getRandomNumberInRange = (num1: number, num2: number): number => {
 		[num1, num2] = [num2, num1]
 	}
 	return Math.floor(Math.random() * (num2 - num1 + 1)) + num1
+}
+
+/**
+ * 生成不可预测的六位数字验证码
+ * @returns 不可预测的六位数字验证码
+ */
+export const generateSecureVerificationCode = () => {
+	const buffer = crypto.randomBytes(6) // 一次性生成6个随机字节
+	const code = Array.from(buffer, byte => (byte % 10).toString()).join('') // 从随机字节求模转化为数字
+	return code
 }

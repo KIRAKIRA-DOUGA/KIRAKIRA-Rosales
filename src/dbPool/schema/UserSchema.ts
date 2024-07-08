@@ -169,3 +169,27 @@ class UserSettingsSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserSettingsSchema = new UserSettingsSchemaFactory()
+
+/**
+ * 用户邮箱验证码
+ */
+class UserVerificationCodeSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的邮箱 - 非空 - 唯一 */
+		emailLowerCase: { type: String, unique: true, required: true },
+		/** 用户的验证码 - 非空 */
+		verificationCode: { type: String, required: true },
+		/** 用户的验证码过期时间 - 非空 */
+		overtimeAt: { type: Number, unique: true, required: true },
+		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
+		lastRequestDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-verification-code'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const UserVerificationCodeSchema = new UserVerificationCodeSchemaFactory()

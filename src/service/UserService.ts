@@ -1,13 +1,13 @@
 import mongoose, { InferSchemaType } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl, createCloudflareR2PutSignedUrl } from '../cloudflare/index.js'
-import { isInvalidEmail } from '../common/EmailTool.js'
+import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { generateSecureRandomString } from '../common/RandomTool.js'
-import { CheckUserTokenResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { generateSecureRandomString, generateSecureVerificationCode } from '../common/RandomTool.js'
+import { CheckUserTokenResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserInfoSchema, UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserInfoSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 
 /**
@@ -38,15 +38,49 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					const useAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
 					if (useAuthResult.result && useAuthResult.result.length >= 1) {
 						console.error('ERROR', '用户注册失败：用户邮箱重复：', { email, emailLowerCase })
-						session.abortTransaction()
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
 						session.endSession()
 						return { success: false, message: '用户注册失败：用户邮箱重复' }
 					}
 				} catch (error) {
 					console.error('ERROR', '用户注册失败：用户邮箱查重时出现异常：', error, { email, emailLowerCase })
-					session.abortTransaction()
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
 					session.endSession()
 					return { success: false, message: '用户注册失败：用户邮箱查重时出现异常' }
+				}
+
+				const { collectionName: userVerificationCodeCollectionName, schemaInstance: userVerificationCodeSchemaInstance } = UserVerificationCodeSchema
+				type UserVerificationCode = InferSchemaType<typeof userVerificationCodeSchemaInstance>
+				const verificationCodeWhere: QueryType<UserVerificationCode> = {
+					emailLowerCase,
+					verificationCode: userRegistrationRequest.verificationCode,
+				}
+
+				const verificationCodeSelect: SelectType<UserVerificationCode> = {
+					emailLowerCase: 1, // 用户邮箱
+				}
+
+				try {
+					const verificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(verificationCodeWhere, verificationCodeSelect, userVerificationCodeSchemaInstance, userVerificationCodeCollectionName, { session })
+					if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
+						console.error('ERROR', '用户注册失败：验证失败')
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						return { success: false, message: '用户注册失败：验证失败' }
+					}
+				} catch (error) {
+					console.error('ERROR', '用户注册失败：请求验证失败')
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					return { success: false, message: '用户注册失败：请求验证失败' }
 				}
 
 				const now = new Date().getTime()
@@ -65,7 +99,9 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					await insertData2MongoDB(user, schemaInstance, collectionName, { session })
 				} catch (error) {
 					console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
-					session.abortTransaction()
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
 					session.endSession()
 					return { success: false, message: '用户注册失败：无法保存用户资料' }
 				}
@@ -210,7 +246,9 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 					if (userAuthData) {
 						if (userAuthData.length !== 1) { // 确保只更新一个用户的邮箱
 							console.error('ERROR', '更新用户邮箱失败，匹配到多个用户', { uid, oldEmail })
-							session.abortTransaction()
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
 							session.endSession()
 							return { success: false, message: '更新用户邮箱失败，无法找到正确的用户' }
 						}
@@ -218,14 +256,18 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 						const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData[0].passwordHashHash) // 确保更新邮箱时输入的密码正确
 						if (!isCorrectPassword) {
 							console.error('ERROR', '更新用户邮箱失败，用户密码不正确', { uid, oldEmail })
-							session.abortTransaction()
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
 							session.endSession()
 							return { success: false, message: '更新用户邮箱失败，用户密码不正确' }
 						}
 					}
 				} catch (error) {
 					console.error('ERROR', '更新用户邮箱失败，校验用户密码时程序出现异常', error, { uid, oldEmail })
-					session.abortTransaction()
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
 					session.endSession()
 					return { success: false, message: '用户注册失败：校验用户密码失败' }
 				}
@@ -246,19 +288,25 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 							return { success: true, message: '用户邮箱更新成功' }
 						} else {
 							console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail })
-							session.abortTransaction()
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
 							session.endSession()
 							return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
 						}
 					} else {
 						console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail })
-						session.abortTransaction()
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
 						session.endSession()
 						return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
 					}
 				} catch (error) {
 					console.error('ERROR', '更新用户邮箱出错', { uid, oldEmail, newEmail }, error)
-					session.abortTransaction()
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
 					session.endSession()
 					return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
 				}
@@ -591,13 +639,130 @@ export const checkUserTokenService = async (uid: number, token: string): Promise
 }
 
 /**
+ * 请求发送验证码
+ * @param requestSendVerificationCodeRequest 请求发送验证码的请求载荷
+ * @returns 请求发送验证码的请求响应
+ */
+export const RequestSendVerificationCodeService = async (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): Promise<RequestSendVerificationCodeResponseDto> => {
+	try {
+		if (checkRequestSendVerificationCodeRequest(requestSendVerificationCodeRequest)) {
+			const { email, clientLanguage } = requestSendVerificationCodeRequest
+			const emailLowerCase = email.toLowerCase()
+			const nowTime = new Date().getTime()
+			const { collectionName, schemaInstance } = UserVerificationCodeSchema
+			type UserVerificationCode = InferSchemaType<typeof schemaInstance>
+			const requestSendVerificationCodeWhere: QueryType<UserVerificationCode> = {
+				emailLowerCase,
+			}
+
+			const requestSendVerificationCodeSelect: SelectType<UserVerificationCode> = {
+				emailLowerCase: 1, // 用户邮箱
+				lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
+			}
+
+			// 启动事务
+			const session = await mongoose.startSession()
+			session.startTransaction()
+
+			try {
+				const requestSendVerificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(requestSendVerificationCodeWhere, requestSendVerificationCodeSelect, schemaInstance, collectionName, { session })
+				if (requestSendVerificationCodeResult.success && (requestSendVerificationCodeResult.result.length === 0 || requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime + 60000 < nowTime)) {
+					const verificationCode = generateSecureVerificationCode() // 生成六位随机数验证码
+
+					const requestSendVerificationCodeUpdate: UserVerificationCode = {
+						emailLowerCase,
+						verificationCode,
+						overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
+						lastRequestDateTime: nowTime,
+						editDateTime: nowTime,
+					}
+					const updateResult = await findOneAndUpdateData4MongoDB(requestSendVerificationCodeWhere, requestSendVerificationCodeUpdate, schemaInstance, collectionName, { session })
+					if (updateResult.success) {
+						// TODO: 使用多语言 email title and text
+						try {
+							const mailTitleCHS = 'KIRAKIRA 注册验证码'
+							const mailTitleEN = 'KIRAKIRA Registration Verification Code'
+							const correctMailTitle = requestSendVerificationCodeRequest.clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
+
+							const mailHtmlCHS = `
+									<p>您的注册验证码是：<strong>${verificationCode}</strong></p>
+									欢迎来到 KIRAKIRA，使用这个验证码来注册你的账号吧！
+									<br>
+									验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
+								`
+							const mailHtmlEN = `
+									<p>Your registration verification code is: <strong>${verificationCode}</strong></p>
+									Welcome to KIRAKIRA. You can use this verification code to register your account.
+									<br>
+									Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
+									<br>
+									<br>
+									To stop receiving notifications, please contact the KIRAKIRA support team.
+								`
+							const correctMailHTML = requestSendVerificationCodeRequest.clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
+							const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
+							if (sendMailResult.success) {
+								await session.commitTransaction()
+								session.endSession()
+								return { success: true, isTimeout: true, message: '注册验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
+							} else {
+								console.error('ERROR', '请求发送验证码失败，邮件发送失败')
+								if (session.inTransaction()) {
+									await session.abortTransaction()
+								}
+								session.endSession()
+								return { success: false, isTimeout: false, message: '请求发送验证码失败，邮件发送失败' }
+							}
+						} catch (error) {
+							console.error('ERROR', '请求发送验证码失败，邮件发送时出错', error)
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
+							session.endSession()
+							return { success: false, isTimeout: false, message: '请求发送验证码失败，邮件发送时出错' }
+						}
+					} else {
+						console.error('ERROR', '请求发送验证码失败，更新或新增用户验证码失败')
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						return { success: false, isTimeout: false, message: '请求发送验证码失败，更新或新增用户验证码失败' }
+					}
+				} else {
+					console.warn('WARN', 'WARNING', '未超过邮件超时时间，请稍后再试')
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					return { success: true, isTimeout: false, message: '未超过邮件超时时间，请稍后再试' }
+				}
+			} catch (error) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.error('ERROR', '请求发送验证码失败，检查超时时间时出错', error)
+				return { success: false, isTimeout: false, message: '请求发送验证码失败，检查超时时间时出错' }
+			}
+		} else {
+			console.error('ERROR', '请求发送验证码失败，参数不合法')
+			return { success: false, isTimeout: false, message: '请求发送验证码失败，参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '请求发送验证码失败，未知错误', error)
+		return { success: false, isTimeout: false, message: '请求发送验证码失败，未知错误' }
+	}
+}
+
+/**
  * 校验用户注册信息
  * @param userRegistrationRequest
  * @returns boolean 如果合法则返回 true
  */
 const checkUserRegistrationData = (userRegistrationRequest: UserRegistrationRequestDto): boolean => {
 	// TODO // WARN 这里可能需要更安全的校验机制
-	return (!!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email && !isInvalidEmail(userRegistrationRequest.email))
+	return (!!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email && !isInvalidEmail(userRegistrationRequest.email) && !!userRegistrationRequest.verificationCode)
 }
 
 /**
@@ -741,4 +906,13 @@ const checkUpdateOrCreateUserSettingsRequest = (updateOrCreateUserSettingsReques
 	}
 
 	return true
+}
+
+/**
+ * 检查请求发送验证码的请求参数
+ * @param requestSendVerificationCodeRequest 请求发送验证码的请求参数
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkRequestSendVerificationCodeRequest = (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): boolean => {
+	return (!isInvalidEmail(requestSendVerificationCodeRequest.email))
 }
