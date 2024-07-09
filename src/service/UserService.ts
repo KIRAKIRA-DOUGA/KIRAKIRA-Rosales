@@ -398,7 +398,9 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 					const userInfoResult = await selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, schemaInstance, collectionName)
 					if (userInfoResult && userInfoResult.success) {
 						const result = userInfoResult?.result
-						if (result?.length === 1 && result?.[0]) {
+						if (result?.length === 0) {
+							return { success: true, message: '用户未填写用户信息', result: { uid } }
+						} else if (result?.length === 1 && result?.[0]) {
 							return { success: true, message: '获取用户信息成功', result: result[0] }
 						} else {
 							console.error('ERROR', '获取用户信息时失败，获取到的结果长度不为 1')
