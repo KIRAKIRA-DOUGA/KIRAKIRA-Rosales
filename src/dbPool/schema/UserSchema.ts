@@ -182,6 +182,8 @@ class UserVerificationCodeSchemaFactory {
 		verificationCode: { type: String, required: true },
 		/** 用户的验证码过期时间 - 非空 */
 		overtimeAt: { type: Number, unique: true, required: true },
+		/** 用户今日请求的次数，用于防止滥用 - 非空 */
+		attemptsTimes: { type: Number, required: true },
 		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
 		lastRequestDateTime: { type: Number, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */

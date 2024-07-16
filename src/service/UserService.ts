@@ -651,6 +651,9 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 			const { email, clientLanguage } = requestSendVerificationCodeRequest
 			const emailLowerCase = email.toLowerCase()
 			const nowTime = new Date().getTime()
+			const nowDate = new Date(nowTime)
+			const todayStart = new Date()
+			todayStart.setHours(0, 0, 0, 0)
 			const { collectionName, schemaInstance } = UserVerificationCodeSchema
 			type UserVerificationCode = InferSchemaType<typeof schemaInstance>
 			const requestSendVerificationCodeWhere: QueryType<UserVerificationCode> = {
@@ -659,6 +662,7 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 
 			const requestSendVerificationCodeSelect: SelectType<UserVerificationCode> = {
 				emailLowerCase: 1, // 用户邮箱
+				attemptsTimes: 1,
 				lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
 			}
 
@@ -668,76 +672,106 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 
 			try {
 				const requestSendVerificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(requestSendVerificationCodeWhere, requestSendVerificationCodeSelect, schemaInstance, collectionName, { session })
-				if (requestSendVerificationCodeResult.success && (requestSendVerificationCodeResult.result.length === 0 || requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime + 60000 < nowTime)) {
-					const verificationCode = generateSecureVerificationCode() // 生成六位随机数验证码
+				if (requestSendVerificationCodeResult.success) {
+					const lastRequestDateTime = requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
+					const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
+					if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
+						const lastRequestDate = new Date(lastRequestDateTime)
+						console.log('lastRequestDateTime + 60000 < nowTime', lastRequestDateTime + 60000 < nowTime, lastRequestDateTime + 60000, nowTime)
+						console.log('todayStart > lastRequestDate', todayStart > lastRequestDate, todayStart, lastRequestDate)
+						console.log('requestSendVerificationCodeResult.result?.[0]?.attemptsTimes', attemptsTimes)
+						if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 5) {
+							const verificationCode = generateSecureVerificationCode() // 生成六位随机数验证码
+							let newAttemptsTimes = attemptsTimes + 1
+							if (todayStart > lastRequestDate) {
+								newAttemptsTimes = 0
+							}
+							console.log('newAttemptsTimes', newAttemptsTimes)
 
-					const requestSendVerificationCodeUpdate: UserVerificationCode = {
-						emailLowerCase,
-						verificationCode,
-						overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
-						lastRequestDateTime: nowTime,
-						editDateTime: nowTime,
-					}
-					const updateResult = await findOneAndUpdateData4MongoDB(requestSendVerificationCodeWhere, requestSendVerificationCodeUpdate, schemaInstance, collectionName, { session })
-					if (updateResult.success) {
-						// TODO: 使用多语言 email title and text
-						try {
-							const mailTitleCHS = 'KIRAKIRA 注册验证码'
-							const mailTitleEN = 'KIRAKIRA Registration Verification Code'
-							const correctMailTitle = requestSendVerificationCodeRequest.clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
+							const requestSendVerificationCodeUpdate: UserVerificationCode = {
+								emailLowerCase,
+								verificationCode,
+								overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
+								attemptsTimes: newAttemptsTimes,
+								lastRequestDateTime: nowTime,
+								editDateTime: nowTime,
+							}
+							const updateResult = await findOneAndUpdateData4MongoDB(requestSendVerificationCodeWhere, requestSendVerificationCodeUpdate, schemaInstance, collectionName, { session })
+							if (updateResult.success) {
+								// TODO: 使用多语言 email title and text
+								try {
+									const mailTitleCHS = 'KIRAKIRA 注册验证码'
+									const mailTitleEN = 'KIRAKIRA Registration Verification Code'
+									const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
 
-							const mailHtmlCHS = `
-									<p>您的注册验证码是：<strong>${verificationCode}</strong></p>
-									欢迎来到 KIRAKIRA，使用这个验证码来注册你的账号吧！
-									<br>
-									验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
-								`
-							const mailHtmlEN = `
-									<p>Your registration verification code is: <strong>${verificationCode}</strong></p>
-									Welcome to KIRAKIRA. You can use this verification code to register your account.
-									<br>
-									Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
-									<br>
-									<br>
-									To stop receiving notifications, please contact the KIRAKIRA support team.
-								`
-							const correctMailHTML = requestSendVerificationCodeRequest.clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
-							const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
-							if (sendMailResult.success) {
-								await session.commitTransaction()
-								session.endSession()
-								return { success: true, isTimeout: true, message: '注册验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
+									const mailHtmlCHS = `
+											<p>你的注册验证码是：<strong>${verificationCode}</strong></p>
+											欢迎来到 KIRAKIRA，使用这个验证码来完成注册吧！
+											<br>
+											验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
+										`
+									const mailHtmlEN = `
+											<p>Your registration verification code is: <strong>${verificationCode}</strong></p>
+											Welcome to KIRAKIRA. You can use this verification code to register your account.
+											<br>
+											Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
+											<br>
+											<br>
+											To stop receiving notifications, please contact the KIRAKIRA support team.
+										`
+									const correctMailHTML = clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
+									const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
+									if (sendMailResult.success) {
+										await session.commitTransaction()
+										session.endSession()
+										return { success: true, isTimeout: false, message: '注册验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
+									} else {
+										if (session.inTransaction()) {
+											await session.abortTransaction()
+										}
+										session.endSession()
+										console.error('ERROR', '请求发送验证码失败，邮件发送失败')
+										return { success: false, isTimeout: true, message: '请求发送验证码失败，邮件发送失败' }
+									}
+								} catch (error) {
+									if (session.inTransaction()) {
+										await session.abortTransaction()
+									}
+									session.endSession()
+									console.error('ERROR', '请求发送验证码失败，邮件发送时出错', error)
+									return { success: false, isTimeout: true, message: '请求发送验证码失败，邮件发送时出错' }
+								}
 							} else {
-								console.error('ERROR', '请求发送验证码失败，邮件发送失败')
 								if (session.inTransaction()) {
 									await session.abortTransaction()
 								}
 								session.endSession()
-								return { success: false, isTimeout: false, message: '请求发送验证码失败，邮件发送失败' }
+								console.error('ERROR', '请求发送验证码失败，更新或新增用户验证码失败')
+								return { success: false, isTimeout: false, message: '请求发送验证码失败，更新或新增用户验证码失败' }
 							}
-						} catch (error) {
-							console.error('ERROR', '请求发送验证码失败，邮件发送时出错', error)
+						} else {
 							if (session.inTransaction()) {
 								await session.abortTransaction()
 							}
 							session.endSession()
-							return { success: false, isTimeout: false, message: '请求发送验证码失败，邮件发送时出错' }
+							console.warn('WARN', 'WARNING', '已达本日重复次数上限，请稍后再试')
+							return { success: true, isTimeout: true, message: '已达本日重复次数上限，请稍后再试' }
 						}
 					} else {
-						console.error('ERROR', '请求发送验证码失败，更新或新增用户验证码失败')
 						if (session.inTransaction()) {
 							await session.abortTransaction()
 						}
 						session.endSession()
-						return { success: false, isTimeout: false, message: '请求发送验证码失败，更新或新增用户验证码失败' }
+						console.warn('WARN', 'WARNING', '未超过邮件超时时间，请稍后再试')
+						return { success: true, isTimeout: true, message: '未超过邮件超时时间，请稍后再试' }
 					}
 				} else {
-					console.warn('WARN', 'WARNING', '未超过邮件超时时间，请稍后再试')
 					if (session.inTransaction()) {
 						await session.abortTransaction()
 					}
 					session.endSession()
-					return { success: true, isTimeout: false, message: '未超过邮件超时时间，请稍后再试' }
+					console.error('ERROR', '请求发送验证码失败，获取验证码失败')
+					return { success: false, isTimeout: false, message: '请求发送验证码失败，获取验证码失败' }
 				}
 			} catch (error) {
 				if (session.inTransaction()) {
