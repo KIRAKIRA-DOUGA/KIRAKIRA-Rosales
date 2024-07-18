@@ -73,11 +73,24 @@ export const getRandomNumberInRange = (num1: number, num2: number): number => {
 }
 
 /**
- * 生成不可预测的六位数字验证码
- * @returns 不可预测的六位数字验证码
+ * 生成不可预测的数字验证码
+ * @param 验证码的位数
+ * @returns 不可预测的数字验证码
  */
-export const generateSecureVerificationCode = () => {
-	const buffer = crypto.randomBytes(6) // 一次性生成6个随机字节
+export const generateSecureVerificationNumberCode = (length: number): string => {
+	const buffer = crypto.randomBytes(length) // 生成 n 个随机字节
 	const code = Array.from(buffer, byte => (byte % 10).toString()).join('') // 从随机字节求模转化为数字
+	return code
+}
+
+/**
+ * 根据传入的长度和字符集，生成不可预测的随机字符串
+ * @param length 随机字符串的位数
+ * @param charset 随机字符串的字符集
+ * @returns 不可预测的随机字符串
+ */
+export const generateSecureVerificationStringCode = (length: number, charset: string): string => {
+	const buffer = crypto.randomBytes(length) // 生成 n 个随机字节
+	const code = Array.from(buffer, byte => charset[byte % charset.length]).join('') // 从随机字节映射到字符集合
 	return code
 }

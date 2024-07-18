@@ -195,3 +195,33 @@ class UserVerificationCodeSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserVerificationCodeSchema = new UserVerificationCodeSchemaFactory()
+
+/**
+ * 用户邀请码
+ */
+class UserInvitationCodeSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 生成邀请码的用户 - 非空 */
+		creatorUid: { type: Number, required: true },
+		/** 邀请码 - 非空 - 唯一 */
+		invitationCode: { type: String, required: true, unique: true },
+		/** 生成邀请码的时间 - 非空 */
+		generationDateTime: { type: Number, required: true },
+		/** 邀请码被标记为等待使用中 - 非空 */
+		isPadding: { type: Boolean, required: true },
+		/** 使用这个邀请码的用户 */
+		assignee: { type: Number },
+		/** 邀请码被使用的时间 */
+		usedDateTime: { type: Number },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建时间 - 非空 */
+		createDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-invitation-code'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const UserInvitationCodeSchema = new UserInvitationCodeSchemaFactory()

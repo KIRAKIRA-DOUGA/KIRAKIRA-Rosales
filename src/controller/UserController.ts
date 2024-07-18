@@ -1,5 +1,5 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { checkUserTokenService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkUserTokenService, generationInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
@@ -16,6 +16,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 		verificationCode: data?.verificationCode,
 		passwordHash: data?.passwordHash,
 		passwordHint: data?.passwordHint,
+		invitationCode: data?.invitationCode,
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 
@@ -260,5 +261,31 @@ export const requestSendVerificationCodeController = async (ctx: koaCtx, next: k
 	}
 
 	ctx.body = await RequestSendVerificationCodeService(requestSendVerificationCodeRequest)
+	await next()
+}
+
+/**
+ * 生成邀请码
+ * @param ctx context
+ * @param next context
+ */
+export const generationInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	ctx.body = await generationInvitationCodeService(uid, token)
+	await next()
+}
+
+/**
+ * 获取某位用户的所有的邀请码
+ * @param ctx context
+ * @param next context
+ */
+export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	ctx.body = await getMyInvitationCodeService(uid, token)
 	await next()
 }

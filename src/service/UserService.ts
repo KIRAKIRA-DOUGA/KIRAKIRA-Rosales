@@ -3,11 +3,11 @@ import { createCloudflareImageUploadSignedUrl, createCloudflareR2PutSignedUrl } 
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { generateSecureRandomString, generateSecureVerificationCode } from '../common/RandomTool.js'
-import { CheckUserTokenResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
+import { CheckUserTokenResponseDto, GenerationInvitationCodeResponseDto, GetMyInvitationCodeServiceResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
-import { DbPoolResultsType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserInfoSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
+import { UserAuthSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 
 /**
@@ -29,6 +29,8 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				const session = await mongoose.startSession()
 				session.startTransaction()
 
+				const now = new Date().getTime()
+				const halfAHour = 1000 * 60 * 30 // 半小时的毫秒
 				const { collectionName, schemaInstance } = UserAuthSchema
 				type UserAuth = InferSchemaType<typeof schemaInstance>
 
@@ -58,6 +60,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				const verificationCodeWhere: QueryType<UserVerificationCode> = {
 					emailLowerCase,
 					verificationCode: userRegistrationRequest.verificationCode,
+					overtimeAt: { $gte: now },
 				}
 
 				const verificationCodeSelect: SelectType<UserVerificationCode> = {
@@ -83,7 +86,6 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					return { success: false, message: '用户注册失败：请求验证失败' }
 				}
 
-				const now = new Date().getTime()
 				const user: UserAuth = {
 					uid,
 					email,
@@ -96,18 +98,39 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				}
 
 				try {
-					await insertData2MongoDB(user, schemaInstance, collectionName, { session })
+					const saveUserAuthResult = await insertData2MongoDB(user, schemaInstance, collectionName, { session })
+					if (saveUserAuthResult.success) {
+						const invitationCode = userRegistrationRequest.invitationCode
+						if (invitationCode) {
+							const useInvitationCodeDto: UseInvitationCodeDto = { invitationCode, registrantUid: uid }
+							try {
+								const useInvitationCodeResult = await useInvitationCode(useInvitationCodeDto)
+								if (!useInvitationCodeResult.success) {
+									console.error('ERROR', '用户使用邀请码时出错：更新邀请码使用者失败')
+								}
+							} catch (error) {
+								console.error('ERROR', '用户使用邀请码时出错：更新邀请码使用者时出错：', error)
+							}
+						}
+						await session.commitTransaction()
+						session.endSession()
+						return { success: true, uid, token, message: '用户注册成功' }
+					} else {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						console.error('ERROR', '用户注册失败：向 MongoDB 插入数据失败：')
+						return { success: false, message: '用户注册失败：保存数据失败' }
+					}
 				} catch (error) {
-					console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
 					if (session.inTransaction()) {
 						await session.abortTransaction()
 					}
 					session.endSession()
+					console.error('ERROR', '用户注册失败：向 MongoDB 插入数据时出现异常：', error)
 					return { success: false, message: '用户注册失败：无法保存用户资料' }
 				}
-				await session.commitTransaction()
-				session.endSession()
-				return { success: true, uid, token, message: '用户注册成功' }
 			} else {
 				console.error('ERROR', '用户注册失败：email 或 emailLowerCase 或 passwordHashHash 或 token 或 uid 可能为空')
 				return { success: false, message: '用户注册失败：生成账户资料时失败' }
@@ -651,7 +674,6 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 			const { email, clientLanguage } = requestSendVerificationCodeRequest
 			const emailLowerCase = email.toLowerCase()
 			const nowTime = new Date().getTime()
-			const nowDate = new Date(nowTime)
 			const todayStart = new Date()
 			todayStart.setHours(0, 0, 0, 0)
 			const { collectionName, schemaInstance } = UserVerificationCodeSchema
@@ -677,16 +699,12 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 					const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
 					if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
 						const lastRequestDate = new Date(lastRequestDateTime)
-						console.log('lastRequestDateTime + 60000 < nowTime', lastRequestDateTime + 60000 < nowTime, lastRequestDateTime + 60000, nowTime)
-						console.log('todayStart > lastRequestDate', todayStart > lastRequestDate, todayStart, lastRequestDate)
-						console.log('requestSendVerificationCodeResult.result?.[0]?.attemptsTimes', attemptsTimes)
 						if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 5) {
-							const verificationCode = generateSecureVerificationCode() // 生成六位随机数验证码
+							const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
 							let newAttemptsTimes = attemptsTimes + 1
 							if (todayStart > lastRequestDate) {
 								newAttemptsTimes = 0
 							}
-							console.log('newAttemptsTimes', newAttemptsTimes)
 
 							const requestSendVerificationCodeUpdate: UserVerificationCode = {
 								emailLowerCase,
@@ -788,6 +806,197 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 	} catch (error) {
 		console.error('ERROR', '请求发送验证码失败，未知错误', error)
 		return { success: false, isTimeout: false, message: '请求发送验证码失败，未知错误' }
+	}
+}
+
+/**
+ * 生成邀请码
+ * @param uid 申请生成邀请码的用户
+ * @param token 申请生成邀请码的用户 token
+ * @returns 生成的验证码
+ */
+export const generationInvitationCodeService = async (uid: number, token: string): Promise<GenerationInvitationCodeResponseDto> => {
+	try {
+		if (await checkUserToken(uid, token)) {
+			const nowTime = new Date().getTime()
+			const sevenDaysInMillis = 7 * 24 * 60 * 60 * 1000 // 将七天的时间转换为毫秒
+			const { collectionName, schemaInstance } = UserInvitationCodeSchema
+			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
+			const userInvitationCodeWhere: QueryType<UserInvitationCode> = {
+				creatorUid: uid,
+				generationDateTime: { $gt: nowTime - sevenDaysInMillis },
+			}
+
+			const userInvitationCodeSelect: SelectType<UserInvitationCode> = {
+				creatorUid: 1,
+			}
+
+			try {
+				const userInvitationCodeSelectResult = await selectDataFromMongoDB<UserInvitationCode>(userInvitationCodeWhere, userInvitationCodeSelect, schemaInstance, collectionName)
+				if (userInvitationCodeSelectResult.success && userInvitationCodeSelectResult.result?.length === 0) {
+					try {
+						const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+						let finalInvitationCode = ''
+						while (true) { // 不断循环生成邀请码，直到生成一个不重复的邀请码
+							const invitationCodePart1 = generateSecureVerificationStringCode(4, charset)
+							const invitationCodePart2 = generateSecureVerificationStringCode(4, charset)
+							const newInvitationCode = `KIRA-${invitationCodePart1}-${invitationCodePart2}`
+
+							const userInvitationCodeDuplicationCheckWhere: QueryType<UserInvitationCode> = {
+								invitationCode: newInvitationCode,
+							}
+
+							const userInvitationCodeDuplicationCheckSelect: SelectType<UserInvitationCode> = {
+								creatorUid: 1,
+							}
+
+							const userInvitationCodeDuplicationCheckResult = await selectDataFromMongoDB<UserInvitationCode>(userInvitationCodeDuplicationCheckWhere, userInvitationCodeDuplicationCheckSelect, schemaInstance, collectionName)
+							const noSame = userInvitationCodeDuplicationCheckResult.result?.length === 0
+							if (noSame) {
+								finalInvitationCode = newInvitationCode
+								break
+							}
+						}
+
+						if (finalInvitationCode) {
+							const userInvitationCode: UserInvitationCode = {
+								creatorUid: uid,
+								isPadding: false,
+								invitationCode: finalInvitationCode,
+								generationDateTime: nowTime,
+								editDateTime: nowTime,
+								createDateTime: nowTime,
+							}
+
+							try {
+								const insertResult = await insertData2MongoDB(userInvitationCode, schemaInstance, collectionName)
+								if (insertResult.success) {
+									return { success: true, isOutOfTimeLimit: true, message: '生成邀请码成功', invitationCodeResult: userInvitationCode }
+								} else {
+									console.error('ERROR', '生成邀请码失败，存储邀请码失败', { uid })
+									return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，存储邀请码失败' }
+								}
+							} catch (error) {
+								console.error('ERROR', '生成邀请码失败，存储邀请码时出错', error, { uid })
+								return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，存储邀请码时出错' }
+							}
+						} else {
+							console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码失败', { uid })
+							return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，生成不重复的新邀请码失败' }
+						}
+					} catch (error) {
+						console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码时出错', error, { uid })
+						return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，生成不重复的新邀请码时出错' }
+					}
+				} else {
+					console.error('ERROR', '生成邀请码失败，未超出邀请码生成期限', { uid })
+					return { success: false, isOutOfTimeLimit: false, message: '生成邀请码失败，未超出邀请码生成期限' }
+				}
+			} catch (error) {
+				console.error('ERROR', '生成邀请码失败，查询是否超出邀请码生成期限时出错', error, { uid })
+				return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，查询是否超出邀请码生成期限出错' }
+			}
+		} else {
+			console.error('ERROR', '生成邀请码失败，非法用户！', { uid })
+			return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，非法用户！' }
+		}
+	} catch (error) {
+		console.error('ERROR', '生成邀请码失败，未知错误', error)
+		return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，未知错误' }
+	}
+}
+
+/**
+ * 获取自己的邀请码列表
+ * @param uid 用户 UID
+ * @param token 用户 token
+ * @returns 获取自己的邀请码列表的请求结果
+ */
+export const getMyInvitationCodeService = async (uid: number, token: string): Promise<GetMyInvitationCodeServiceResponseDto> => {
+	try {
+		if (await checkUserToken(uid, token)) {
+			const { collectionName, schemaInstance } = UserInvitationCodeSchema
+			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
+			const myInvitationCodeWhere: QueryType<UserInvitationCode> = {
+				creatorUid: uid,
+			}
+
+			const myInvitationCodeSelect: SelectType<UserInvitationCode> = {
+				creatorUid: 1,
+				invitationCode: 1,
+				generationDateTime: 1,
+				isPadding: 1,
+				assignee: 1,
+				usedDateTime: 1,
+			}
+
+			try {
+				const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(myInvitationCodeWhere, myInvitationCodeSelect, schemaInstance, collectionName)
+				if (myInvitationCodeResult.success) {
+					if (myInvitationCodeResult.result?.length >= 0) {
+						return { success: true, message: '自己的邀请码列表为空', invitationCodeResult: myInvitationCodeResult.result }
+					} else {
+						return { success: true, message: '自己的邀请码列表为空', invitationCodeResult: [] }
+					}
+				} else {
+					console.error('ERROR', '获取自己的邀请码失败，请求失败', { uid })
+					return { success: false, message: '获取自己的邀请码失败，请求失败！', invitationCodeResult: [] }
+				}
+			} catch (error) {
+				console.error('ERROR', '获取自己的邀请码失败，请求时出错', { uid, error })
+				return { success: false, message: '获取自己的邀请码失败，请求时出错！', invitationCodeResult: [] }
+			}
+		} else {
+			console.error('ERROR', '获取自己的邀请码失败，非法用户！', { uid })
+			return { success: false, message: '获取自己的邀请码失败，非法用户！', invitationCodeResult: [] }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取自己的邀请码失败，未知错误', error)
+		return { success: false, message: '获取自己的邀请码失败，未知错误', invitationCodeResult: [] }
+	}
+}
+
+/**
+ * 使用邀请码注册
+ * @param userInvitationCodeDto 使用邀请码注册的参数
+ * @returns 使用邀请码注册的结果
+ */
+const useInvitationCode = async (useInvitationCodeDto: UseInvitationCodeDto): Promise<UseInvitationCodeResultDto> => {
+	try {
+		if (checkUseInvitationCodeDto(useInvitationCodeDto)) {
+			const nowTime = new Date().getTime()
+			const { collectionName, schemaInstance } = UserInvitationCodeSchema
+			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
+
+			const useInvitationCodeWhere: QueryType<UserInvitationCode> = {
+				invitationCode: useInvitationCodeDto.invitationCode,
+				assignee: undefined,
+			}
+			const useInvitationCodeUpdate: UpdateType<UserInvitationCode> = {
+				assignee: useInvitationCodeDto.registrantUid,
+				usedDateTime: nowTime,
+				editDateTime: nowTime,
+			}
+
+			try {
+				const updateResult = await findOneAndUpdateData4MongoDB(useInvitationCodeWhere, useInvitationCodeUpdate, schemaInstance, collectionName)
+				if (updateResult.success) {
+					return { success: true, message: '已使用邀请码注册' }
+				} else {
+					console.error('ERROR', '使用邀请码注册，使用邀请码失败')
+					return { success: false, message: '使用邀请码注册，使用邀请码失败' }
+				}
+			} catch (error) {
+				console.error('ERROR', '使用邀请码注册，使用邀请码时出错', error)
+				return { success: false, message: '使用邀请码注册，使用邀请码时出错' }
+			}
+		} else {
+			console.error('ERROR', '使用邀请码注册，参数不合法')
+			return { success: false, message: '使用邀请码注册，参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '使用邀请码注册，未知错误', error)
+		return { success: false, message: '使用邀请码注册，未知错误' }
 	}
 }
 
@@ -951,4 +1160,16 @@ const checkUpdateOrCreateUserSettingsRequest = (updateOrCreateUserSettingsReques
  */
 const checkRequestSendVerificationCodeRequest = (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): boolean => {
 	return (!isInvalidEmail(requestSendVerificationCodeRequest.email))
+}
+
+/**
+ * 检查使用邀请码注册的参数
+ * @param useInvitationCodeDto 使用邀请码注册的参数
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkUseInvitationCodeDto = (useInvitationCodeDto: UseInvitationCodeDto): boolean => {
+	return (
+		useInvitationCodeDto.registrantUid !== null && useInvitationCodeDto.registrantUid !== undefined
+		&& !!useInvitationCodeDto.invitationCode
+	)
 }
