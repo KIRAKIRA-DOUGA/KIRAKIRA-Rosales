@@ -1,7 +1,7 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { checkUserTokenService, generationInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkInvitationCodeService, checkUserTokenService, generationInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { CheckInvitationCodeRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -287,5 +287,20 @@ export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) 
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await getMyInvitationCodeService(uid, token)
+	await next()
+}
+
+/**
+ * 检查一个邀请码是否可用
+ * @param ctx context
+ * @param next context
+ */
+export const checkInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<CheckInvitationCodeRequestDto>
+
+	const checkInvitationCodeRequestDto: CheckInvitationCodeRequestDto = {
+		invitationCode: data.invitationCode || '',
+	}
+	ctx.body = await checkInvitationCodeService(checkInvitationCodeRequestDto)
 	await next()
 }

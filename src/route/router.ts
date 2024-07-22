@@ -2,7 +2,7 @@ import Router from 'koa-router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkUserTokenController, generationInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { checkInvitationCodeController, checkUserTokenController, generationInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
@@ -139,6 +139,12 @@ router.post('/user/generationInvitationCode', generationInvitationCodeController
 router.get('/user/myInvitationCode', getMyInvitationCodeController) // 获取某位用户的所有的邀请码
 // https://localhost:9999/user/myInvitationCode
 // cookie: uid, token
+
+router.post('/user/checkInvitationCode', checkInvitationCodeController) // 检查一个邀请码是否可用
+// https://localhost:9999/user/checkInvitationCode
+// {
+// 	"invitationCode": "KIRA-XXXX-XXXX"
+// }
 
 
 

@@ -397,6 +397,8 @@ type InvitationCode = {
 	generationDateTime: number;
 	/** 邀请码被标记为等待使用中 - 非空 */
 	isPadding: boolean;
+	/** 邀请码被标记为无法使用 - 非空 */
+	disabled: boolean;
 	/** 使用这个邀请码的用户 */
 	assignee?: number;
 	/** 邀请码被使用的时间 */
@@ -420,7 +422,7 @@ export type GenerationInvitationCodeResponseDto = {
 /**
  * 获取自己的邀请码的请求响应
  */
-export type GetMyInvitationCodeServiceResponseDto = {
+export type GetMyInvitationCodeResponseDto = {
 	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
 	/** 附加的文本消息 */
@@ -445,6 +447,26 @@ export type UseInvitationCodeDto = {
 export type UseInvitationCodeResultDto = {
 	/** 是否成功使用验证码 */
 	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 检查一个邀请码是否可用的请求载荷
+ */
+export type CheckInvitationCodeRequestDto = {
+	/** 被使用的邀请码 */
+	invitationCode: string;
+}
+
+/**
+ * 检查一个邀请码是否可用的请求响应
+ */
+export type CheckInvitationCodeResponseDto = {
+	/** 是否成功使用验证码 */
+	success: boolean;
+	/** 是否是可用的邀请码 */
+	isAvailableInvitationCode: boolean;
 	/** 附加的文本消息 */
 	message?: string;
 }

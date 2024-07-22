@@ -4,7 +4,7 @@ import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
-import { CheckUserTokenResponseDto, GenerationInvitationCodeResponseDto, GetMyInvitationCodeServiceResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUserTokenResponseDto, GenerationInvitationCodeResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
@@ -18,6 +18,10 @@ import { getNextSequenceValueService } from './SequenceValueService.js'
 export const userRegistrationService = async (userRegistrationRequest: UserRegistrationRequestDto): Promise<UserRegistrationResponseDto> => {
 	try {
 		if (checkUserRegistrationData(userRegistrationRequest)) {
+			if (!(await checkInvitationCodeService({ invitationCode: userRegistrationRequest.invitationCode })).isAvailableInvitationCode) { // DELETEME 仅在 beta 测试中使用
+				console.error('ERROR', '用户注册失败：邀请码无效')
+				return { success: false, message: '用户注册失败：邀请码无效' }
+			}
 			const { email, passwordHash, passwordHint } = userRegistrationRequest
 			const emailLowerCase = email.toLowerCase()
 			const passwordHashHash = hashPasswordSync(passwordHash)
@@ -30,7 +34,6 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				session.startTransaction()
 
 				const now = new Date().getTime()
-				const halfAHour = 1000 * 60 * 30 // 半小时的毫秒
 				const { collectionName, schemaInstance } = UserAuthSchema
 				type UserAuth = InferSchemaType<typeof schemaInstance>
 
@@ -39,19 +42,19 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				try {
 					const useAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
 					if (useAuthResult.result && useAuthResult.result.length >= 1) {
-						console.error('ERROR', '用户注册失败：用户邮箱重复：', { email, emailLowerCase })
 						if (session.inTransaction()) {
 							await session.abortTransaction()
 						}
 						session.endSession()
+						console.error('ERROR', '用户注册失败：用户邮箱重复：', { email, emailLowerCase })
 						return { success: false, message: '用户注册失败：用户邮箱重复' }
 					}
 				} catch (error) {
-					console.error('ERROR', '用户注册失败：用户邮箱查重时出现异常：', error, { email, emailLowerCase })
 					if (session.inTransaction()) {
 						await session.abortTransaction()
 					}
 					session.endSession()
+					console.error('ERROR', '用户注册失败：用户邮箱查重时出现异常：', error, { email, emailLowerCase })
 					return { success: false, message: '用户注册失败：用户邮箱查重时出现异常' }
 				}
 
@@ -70,19 +73,19 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				try {
 					const verificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(verificationCodeWhere, verificationCodeSelect, userVerificationCodeSchemaInstance, userVerificationCodeCollectionName, { session })
 					if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
-						console.error('ERROR', '用户注册失败：验证失败')
 						if (session.inTransaction()) {
 							await session.abortTransaction()
 						}
 						session.endSession()
+						console.error('ERROR', '用户注册失败：验证失败')
 						return { success: false, message: '用户注册失败：验证失败' }
 					}
 				} catch (error) {
-					console.error('ERROR', '用户注册失败：请求验证失败')
 					if (session.inTransaction()) {
 						await session.abortTransaction()
 					}
 					session.endSession()
+					console.error('ERROR', '用户注册失败：请求验证失败')
 					return { success: false, message: '用户注册失败：请求验证失败' }
 				}
 
@@ -813,7 +816,7 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
  * 生成邀请码
  * @param uid 申请生成邀请码的用户
  * @param token 申请生成邀请码的用户 token
- * @returns 生成的验证码
+ * @returns 生成的邀请码
  */
 export const generationInvitationCodeService = async (uid: number, token: string): Promise<GenerationInvitationCodeResponseDto> => {
 	try {
@@ -862,6 +865,7 @@ export const generationInvitationCodeService = async (uid: number, token: string
 							const userInvitationCode: UserInvitationCode = {
 								creatorUid: uid,
 								isPadding: false,
+								disabled: false,
 								invitationCode: finalInvitationCode,
 								generationDateTime: nowTime,
 								editDateTime: nowTime,
@@ -912,7 +916,7 @@ export const generationInvitationCodeService = async (uid: number, token: string
  * @param token 用户 token
  * @returns 获取自己的邀请码列表的请求结果
  */
-export const getMyInvitationCodeService = async (uid: number, token: string): Promise<GetMyInvitationCodeServiceResponseDto> => {
+export const getMyInvitationCodeService = async (uid: number, token: string): Promise<GetMyInvitationCodeResponseDto> => {
 	try {
 		if (await checkUserToken(uid, token)) {
 			const { collectionName, schemaInstance } = UserInvitationCodeSchema
@@ -971,6 +975,7 @@ const useInvitationCode = async (useInvitationCodeDto: UseInvitationCodeDto): Pr
 			const useInvitationCodeWhere: QueryType<UserInvitationCode> = {
 				invitationCode: useInvitationCodeDto.invitationCode,
 				assignee: undefined,
+				disabled: false,
 			}
 			const useInvitationCodeUpdate: UpdateType<UserInvitationCode> = {
 				assignee: useInvitationCodeDto.registrantUid,
@@ -997,6 +1002,52 @@ const useInvitationCode = async (useInvitationCodeDto: UseInvitationCodeDto): Pr
 	} catch (error) {
 		console.error('ERROR', '使用邀请码注册，未知错误', error)
 		return { success: false, message: '使用邀请码注册，未知错误' }
+	}
+}
+
+/**
+ * 检查一个邀请码是否可用
+ * @param checkInvitationCodeRequestDto 检查一个邀请码是否可用的请求载荷
+ * @returns 检查一个邀请码是否可用的请求响应
+ */
+export const checkInvitationCodeService = async (checkInvitationCodeRequestDto: CheckInvitationCodeRequestDto): Promise<CheckInvitationCodeResponseDto> => {
+	try {
+		if (checkCheckInvitationCodeRequestDto(checkInvitationCodeRequestDto)) {
+			const { collectionName, schemaInstance } = UserInvitationCodeSchema
+			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
+			const checkInvitationCodeWhere: QueryType<UserInvitationCode> = {
+				invitationCode: checkInvitationCodeRequestDto.invitationCode,
+				assignee: undefined,
+				disabled: false,
+			}
+
+			const checkInvitationCodeSelect: SelectType<UserInvitationCode> = {
+				invitationCode: 1,
+			}
+
+			try {
+				const checkInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(checkInvitationCodeWhere, checkInvitationCodeSelect, schemaInstance, collectionName)
+				if (checkInvitationCodeResult.success) {
+					if (checkInvitationCodeResult.result?.length === 1) {
+						return { success: true, isAvailableInvitationCode: true, message: '邀请码检查通过' }
+					} else {
+						return { success: true, isAvailableInvitationCode: false, message: '邀请码检查未通过' }
+					}
+				} else {
+					console.error('ERROR', '检查邀请码可用性失败，请求失败')
+					return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，请求失败！' }
+				}
+			} catch (error) {
+				console.error('ERROR', '检查邀请码可用性失败，请求时出错')
+				return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，请求时出错！' }
+			}
+		} else {
+			console.error('ERROR', '检查邀请码可用性失败，参数不合法')
+			return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '检查邀请码可用性失败，未知错误', error)
+		return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，未知错误' }
 	}
 }
 
@@ -1172,4 +1223,14 @@ const checkUseInvitationCodeDto = (useInvitationCodeDto: UseInvitationCodeDto): 
 		useInvitationCodeDto.registrantUid !== null && useInvitationCodeDto.registrantUid !== undefined
 		&& !!useInvitationCodeDto.invitationCode
 	)
+}
+
+/**
+ * 检查检查一个邀请码是否可用的请求载荷
+ * @param checkInvitationCodeRequestDto 检查一个邀请码是否可用的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkCheckInvitationCodeRequestDto = (checkInvitationCodeRequestDto: CheckInvitationCodeRequestDto): boolean => {
+	const invitationCodeRegex = /^KIRA-[A-Z0-9]{4}-[A-Z0-9]{4}$/
+	return (!!checkInvitationCodeRequestDto.invitationCode && invitationCodeRegex.test(checkInvitationCodeRequestDto.invitationCode))
 }
