@@ -864,7 +864,7 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 						if (finalInvitationCode) {
 							const userInvitationCode: UserInvitationCode = {
 								creatorUid: uid,
-								isPadding: false,
+								isPending: false,
 								disabled: false,
 								invitationCode: finalInvitationCode,
 								generationDateTime: nowTime,
@@ -875,38 +875,38 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 							try {
 								const insertResult = await insertData2MongoDB(userInvitationCode, schemaInstance, collectionName)
 								if (insertResult.success) {
-									return { success: true, isOutOfTimeLimit: true, message: '生成邀请码成功', invitationCodeResult: userInvitationCode }
+									return { success: true, isCoolingDown: true, message: '生成邀请码成功', invitationCodeResult: userInvitationCode }
 								} else {
 									console.error('ERROR', '生成邀请码失败，存储邀请码失败', { uid })
-									return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，存储邀请码失败' }
+									return { success: false, isCoolingDown: true, message: '生成邀请码失败，存储邀请码失败' }
 								}
 							} catch (error) {
 								console.error('ERROR', '生成邀请码失败，存储邀请码时出错', error, { uid })
-								return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，存储邀请码时出错' }
+								return { success: false, isCoolingDown: true, message: '生成邀请码失败，存储邀请码时出错' }
 							}
 						} else {
 							console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码失败', { uid })
-							return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，生成不重复的新邀请码失败' }
+							return { success: false, isCoolingDown: true, message: '生成邀请码失败，生成不重复的新邀请码失败' }
 						}
 					} catch (error) {
 						console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码时出错', error, { uid })
-						return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，生成不重复的新邀请码时出错' }
+						return { success: false, isCoolingDown: true, message: '生成邀请码失败，生成不重复的新邀请码时出错' }
 					}
 				} else {
-					console.error('ERROR', '生成邀请码失败，未超出邀请码生成期限', { uid })
-					return { success: false, isOutOfTimeLimit: false, message: '生成邀请码失败，未超出邀请码生成期限' }
+					console.error('ERROR', '生成邀请码失败，未超出邀请码生成期限，正在冷却中', { uid })
+					return { success: false, isCoolingDown: false, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中' }
 				}
 			} catch (error) {
 				console.error('ERROR', '生成邀请码失败，查询是否超出邀请码生成期限时出错', error, { uid })
-				return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，查询是否超出邀请码生成期限出错' }
+				return { success: false, isCoolingDown: true, message: '生成邀请码失败，查询是否超出邀请码生成期限出错' }
 			}
 		} else {
 			console.error('ERROR', '生成邀请码失败，非法用户！', { uid })
-			return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，非法用户！' }
+			return { success: false, isCoolingDown: true, message: '生成邀请码失败，非法用户！' }
 		}
 	} catch (error) {
 		console.error('ERROR', '生成邀请码失败，未知错误', error)
-		return { success: false, isOutOfTimeLimit: true, message: '生成邀请码失败，未知错误' }
+		return { success: false, isCoolingDown: true, message: '生成邀请码失败，未知错误' }
 	}
 }
 
@@ -929,7 +929,7 @@ export const getMyInvitationCodeService = async (uid: number, token: string): Pr
 				creatorUid: 1,
 				invitationCode: 1,
 				generationDateTime: 1,
-				isPadding: 1,
+				isPending: 1,
 				assignee: 1,
 				usedDateTime: 1,
 			}

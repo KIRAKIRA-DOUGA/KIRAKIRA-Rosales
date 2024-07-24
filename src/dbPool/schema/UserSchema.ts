@@ -209,7 +209,7 @@ class UserInvitationCodeSchemaFactory {
 		/** 生成邀请码的时间 - 非空 */
 		generationDateTime: { type: Number, required: true },
 		/** 邀请码被标记为等待使用中 - 非空 */
-		isPadding: { type: Boolean, required: true },
+		isPending: { type: Boolean, required: true },
 		/** 邀请码被标记为无法使用 - 非空 */
 		disabled: { type: Boolean, required: true },
 		/** 使用这个邀请码的用户 */
