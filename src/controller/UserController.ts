@@ -1,7 +1,7 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { checkInvitationCodeService, checkUserTokenService, createInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { checkInvitationCodeService, checkUserTokenService, createInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, requestSendChangeEmailVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { CheckInvitationCodeRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { CheckInvitationCodeRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -90,6 +90,7 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 		oldEmail: data?.oldEmail,
 		newEmail: data?.newEmail,
 		passwordHash: data?.passwordHash,
+		verificationCode: data?.verificationCode,
 	}
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
@@ -302,5 +303,23 @@ export const checkInvitationCodeController = async (ctx: koaCtx, next: koaNext) 
 		invitationCode: data.invitationCode || '',
 	}
 	ctx.body = await checkInvitationCodeService(checkInvitationCodeRequestDto)
+	await next()
+}
+
+/**
+ * 请求发送验证码，用于修改邮箱
+ * @param ctx context
+ * @param next context
+ */
+export const requestSendChangeEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+
+	const requestSendChangeEmailVerificationCodeRequest: RequestSendChangeEmailVerificationCodeRequestDto = {
+		clientLanguage: data.clientLanguage,
+	}
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	ctx.body = await requestSendChangeEmailVerificationCodeService(requestSendChangeEmailVerificationCodeRequest, uid, token)
 	await next()
 }

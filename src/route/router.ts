@@ -2,7 +2,7 @@ import Router from 'koa-router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkInvitationCodeController, checkUserTokenController, createInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { checkInvitationCodeController, checkUserTokenController, createInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendChangeEmailVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
@@ -48,7 +48,8 @@ router.post('/user/update/email', updateUserEmailController) // 更新用户邮�
 // 	"uid": "XXXXXXXXX",
 // 	"oldEmail": "aaa@aaa.aaa",
 // 	"newEmail": "bbb@bbb.bbb",
-// 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+// 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// 	"verificationCode": "XXXXXX"
 // }
 
 router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或创建用户信息
@@ -144,6 +145,13 @@ router.post('/user/checkInvitationCode', checkInvitationCodeController) // 检�
 // https://localhost:9999/user/checkInvitationCode
 // {
 // 	"invitationCode": "KIRA-XXXX-XXXX"
+// }
+
+router.post('/user/requestSendChangeEmailVerificationCode', requestSendChangeEmailVerificationCodeController) // 请求发送验证码，用于修改邮箱
+// https://localhost:9999/user/requestSendChangeEmailVerificationCode
+// cookie: uid, token
+// {
+// 	"clientLanguage": "zh-Hans-CN"
 // }
 
 
