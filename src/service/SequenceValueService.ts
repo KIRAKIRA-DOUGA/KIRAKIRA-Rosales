@@ -1,4 +1,4 @@
-import { getNextSequenceValuePool } from '../dbPool/DbClusterPool.js';
+import { getNextSequenceValuePool } from '../dbPool/DbClusterPool.js'
 
 // NOTE 自增序列默认会跳过的值
 const __DEFAULT_SEQUENCE_EJECT__: number[] = [9, 42, 233, 404, 2233, 10388, 10492, 114514]
