@@ -4,10 +4,10 @@ import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
-import { CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserChangeEmailVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 
 /**
@@ -760,7 +760,7 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 					const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
 					if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
 						const lastRequestDate = new Date(lastRequestDateTime)
-						if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 5) {
+						if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 5) { // ! 每天五次机会
 							const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
 							let newAttemptsTimes = attemptsTimes + 1
 							if (todayStart > lastRequestDate) {
@@ -809,64 +809,64 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 											await session.abortTransaction()
 										}
 										session.endSession()
-										console.error('ERROR', '请求发送验证码失败，邮件发送失败')
-										return { success: false, isTimeout: true, message: '请求发送验证码失败，邮件发送失败' }
+										console.error('ERROR', '请求发送注册验证码失败，邮件发送失败')
+										return { success: false, isTimeout: true, message: '请求发送注册验证码失败，邮件发送失败' }
 									}
 								} catch (error) {
 									if (session.inTransaction()) {
 										await session.abortTransaction()
 									}
 									session.endSession()
-									console.error('ERROR', '请求发送验证码失败，邮件发送时出错', error)
-									return { success: false, isTimeout: true, message: '请求发送验证码失败，邮件发送时出错' }
+									console.error('ERROR', '请求发送注册验证码失败，邮件发送时出错', error)
+									return { success: false, isTimeout: true, message: '请求发送注册验证码失败，邮件发送时出错' }
 								}
 							} else {
 								if (session.inTransaction()) {
 									await session.abortTransaction()
 								}
 								session.endSession()
-								console.error('ERROR', '请求发送验证码失败，更新或新增用户验证码失败')
-								return { success: false, isTimeout: false, message: '请求发送验证码失败，更新或新增用户验证码失败' }
+								console.error('ERROR', '请求发送注册验证码失败，更新或新增用户验证码失败')
+								return { success: false, isTimeout: false, message: '请求发送注册验证码失败，更新或新增用户验证码失败' }
 							}
 						} else {
 							if (session.inTransaction()) {
 								await session.abortTransaction()
 							}
 							session.endSession()
-							console.warn('WARN', 'WARNING', '已达本日重复次数上限，请稍后再试')
-							return { success: true, isTimeout: true, message: '已达本日重复次数上限，请稍后再试' }
+							console.warn('WARN', 'WARNING', '请求发送注册验证码失败，已达本日重复次数上限，请稍后再试')
+							return { success: true, isTimeout: true, message: '请求发送注册验证码失败，已达本日重复次数上限，请稍后再试' }
 						}
 					} else {
 						if (session.inTransaction()) {
 							await session.abortTransaction()
 						}
 						session.endSession()
-						console.warn('WARN', 'WARNING', '未超过邮件超时时间，请稍后再试')
-						return { success: true, isTimeout: true, message: '未超过邮件超时时间，请稍后再试' }
+						console.warn('WARN', 'WARNING', '请求发送注册验证码失败，未超过邮件超时时间，请稍后再试')
+						return { success: true, isTimeout: true, message: '请求发送注册验证码失败，未超过邮件超时时间，请稍后再试' }
 					}
 				} else {
 					if (session.inTransaction()) {
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('ERROR', '请求发送验证码失败，获取验证码失败')
-					return { success: false, isTimeout: false, message: '请求发送验证码失败，获取验证码失败' }
+					console.error('ERROR', '请求发送注册验证码失败，获取验证码失败')
+					return { success: false, isTimeout: false, message: '请求发注册送验证码失败，获取验证码失败' }
 				}
 			} catch (error) {
 				if (session.inTransaction()) {
 					await session.abortTransaction()
 				}
 				session.endSession()
-				console.error('ERROR', '请求发送验证码失败，检查超时时间时出错', error)
-				return { success: false, isTimeout: false, message: '请求发送验证码失败，检查超时时间时出错' }
+				console.error('ERROR', '请求发送注册验证码失败，检查超时时间时出错', error)
+				return { success: false, isTimeout: false, message: '请求发送注册验证码失败，检查超时时间时出错' }
 			}
 		} else {
-			console.error('ERROR', '请求发送验证码失败，参数不合法')
-			return { success: false, isTimeout: false, message: '请求发送验证码失败，参数不合法' }
+			console.error('ERROR', '请求发送注册验证码失败，参数不合法')
+			return { success: false, isTimeout: false, message: '请求发送注册验证码失败，参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '请求发送验证码失败，未知错误', error)
-		return { success: false, isTimeout: false, message: '请求发送验证码失败，未知错误' }
+		console.error('ERROR', '请求发送注册验证码失败，未知错误', error)
+		return { success: false, isTimeout: false, message: '请求发送注册验证码失败，未知错误' }
 	}
 }
 
@@ -1156,7 +1156,7 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 								const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
 								if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
 									const lastRequestDate = new Date(lastRequestDateTime)
-									if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 10) {
+									if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 10) { // ! 每天十次机会
 										const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
 										let newAttemptsTimes = attemptsTimes + 1
 										if (todayStart > lastRequestDate) {
@@ -1227,16 +1227,16 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 											await session.abortTransaction()
 										}
 										session.endSession()
-										console.warn('WARN', 'WARNING', '已达本日重试次数上限，请稍后再试')
-										return { success: true, isCoolingDown: true, message: '已达本日重试次数上限，请稍后再试' }
+										console.warn('WARN', 'WARNING', '请求发送修改邮箱的验证码失败，已达本日重试次数上限，请稍后再试')
+										return { success: true, isCoolingDown: true, message: '请求发送修改邮箱的验证码失败，已达本日重试次数上限，请稍后再试' }
 									}
 								} else {
 									if (session.inTransaction()) {
 										await session.abortTransaction()
 									}
 									session.endSession()
-									console.warn('WARN', 'WARNING', '未超过邮件超时时间，请稍后再试')
-									return { success: true, isCoolingDown: true, message: '未超过邮件超时时间，请稍后再试' }
+									console.warn('WARN', 'WARNING', '请求发送修改邮箱的验证码失败，未超过邮件超时时间，请稍后再试')
+									return { success: true, isCoolingDown: true, message: '请求发送修改邮箱的验证码失败，未超过邮件超时时间，请稍后再试' }
 								}
 							} else {
 								if (session.inTransaction()) {
@@ -1273,6 +1273,313 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 	} catch (error) {
 		console.error('ERROR', '发送更新邮箱的验证码失败，未知错误', error)
 		return { success: false, isCoolingDown: false, message: '发送更新邮箱的验证码失败，未知错误' }
+	}
+}
+
+/**
+ * 请求发送修改密码的邮箱验证码
+ * @param requestSendChangePasswordVerificationCodeRequest 请求发送修改密码的邮箱验证码的请求载荷
+ * @param uid 用户 UID
+ * @param token 用户 token
+ * @returns 请求发送修改密码的邮箱验证码的请求响应
+ */
+export const requestSendChangePasswordVerificationCodeService = async (requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto, uid: number, token: string): Promise<RequestSendChangePasswordVerificationCodeResponseDto> => {
+	try {
+		if (await checkUserToken(uid, token)) {
+			if (checkRequestSendChangePasswordVerificationCodeRequest(requestSendChangePasswordVerificationCodeRequest)) {
+				const { clientLanguage } = requestSendChangePasswordVerificationCodeRequest
+				try {
+					const getSelfUserInfoRequest = {
+						uid,
+						token,
+					}
+					const selfUserInfoResult = await getSelfUserInfoService(getSelfUserInfoRequest)
+					const email = selfUserInfoResult.result.email
+					if (selfUserInfoResult.success && email) {
+						const emailLowerCase = email.toLowerCase()
+						const nowTime = new Date().getTime()
+						const todayStart = new Date()
+						todayStart.setHours(0, 0, 0, 0)
+						const { collectionName, schemaInstance } = UserChangePasswordVerificationCodeSchema
+						type UserChangePasswordVerificationCode = InferSchemaType<typeof schemaInstance>
+						const requestSendVerificationCodeWhere: QueryType<UserChangePasswordVerificationCode> = {
+							emailLowerCase,
+						}
+
+						const requestSendVerificationCodeSelect: SelectType<UserChangePasswordVerificationCode> = {
+							emailLowerCase: 1, // 用户邮箱
+							attemptsTimes: 1,
+							lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
+						}
+
+						// 启动事务
+						const session = await mongoose.startSession()
+						session.startTransaction()
+
+						try {
+							const requestSendVerificationCodeResult = await selectDataFromMongoDB<UserChangePasswordVerificationCode>(requestSendVerificationCodeWhere, requestSendVerificationCodeSelect, schemaInstance, collectionName, { session })
+							if (requestSendVerificationCodeResult.success) {
+								const lastRequestDateTime = requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
+								const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
+								if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
+									const lastRequestDate = new Date(lastRequestDateTime)
+									if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 3) { // ! 每天三次机会
+										const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
+										let newAttemptsTimes = attemptsTimes + 1
+										if (todayStart > lastRequestDate) {
+											newAttemptsTimes = 0
+										}
+
+										const requestSendVerificationCodeUpdate: UserChangePasswordVerificationCode = {
+											uid,
+											emailLowerCase,
+											verificationCode,
+											overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
+											attemptsTimes: newAttemptsTimes,
+											lastRequestDateTime: nowTime,
+											editDateTime: nowTime,
+										}
+										const updateResult = await findOneAndUpdateData4MongoDB(requestSendVerificationCodeWhere, requestSendVerificationCodeUpdate, schemaInstance, collectionName, { session })
+										if (updateResult.success) {
+											// TODO: 使用多语言 email title and text
+											try {
+												const mailTitleCHS = 'KIRAKIRA 更改密码验证码'
+												const mailTitleEN = 'KIRAKIRA Change Password Verification Code'
+												const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
+
+												const mailHtmlCHS = `
+														<p>你更改密码的验证码是：<strong>${verificationCode}</strong></p>
+														<br>
+														验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
+													`
+												const mailHtmlEN = `
+														<p>Your change password verification code is: <strong>${verificationCode}</strong></p>
+														<br>
+														Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
+														<br>
+														<br>
+														To stop receiving notifications, please contact the KIRAKIRA support team.
+													`
+												const correctMailHTML = clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
+												const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
+												if (sendMailResult.success) {
+													await session.commitTransaction()
+													session.endSession()
+													return { success: true, isCoolingDown: false, message: '修改密码的验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
+												} else {
+													if (session.inTransaction()) {
+														await session.abortTransaction()
+													}
+													session.endSession()
+													console.error('ERROR', '请求发送修改密码的验证码失败，邮件发送失败')
+													return { success: false, isCoolingDown: true, message: '请求发送修改密码的验证码失败，邮件发送失败' }
+												}
+											} catch (error) {
+												if (session.inTransaction()) {
+													await session.abortTransaction()
+												}
+												session.endSession()
+												console.error('ERROR', '请求发送修改密码的验证码失败，邮件发送时出错', error)
+												return { success: false, isCoolingDown: true, message: '请求发送修改密码的验证码失败，邮件发送时出错' }
+											}
+										} else {
+											if (session.inTransaction()) {
+												await session.abortTransaction()
+											}
+											session.endSession()
+											console.error('ERROR', '请求发送修改密码的验证码失败，更新或新增用户验证码失败')
+											return { success: false, isCoolingDown: false, message: '请求发送修改密码的验证码失败，更新或新增用户验证码失败' }
+										}
+									} else {
+										if (session.inTransaction()) {
+											await session.abortTransaction()
+										}
+										session.endSession()
+										console.warn('WARN', 'WARNING', '请求发送修改密码的验证码失败，已达本日重试次数上限，请稍后再试')
+										return { success: true, isCoolingDown: true, message: '请求发送修改密码的验证码失败，已达本日重试次数上限，请稍后再试' }
+									}
+								} else {
+									if (session.inTransaction()) {
+										await session.abortTransaction()
+									}
+									session.endSession()
+									console.warn('WARN', 'WARNING', '请求发送修改密码的验证码失败，未超过邮件超时时间，请稍后再试')
+									return { success: true, isCoolingDown: true, message: '请求发送修改密码的验证码失败，未超过邮件超时时间，请稍后再试' }
+								}
+							} else {
+								if (session.inTransaction()) {
+									await session.abortTransaction()
+								}
+								session.endSession()
+								console.error('ERROR', '请求发送修改密码的验证码失败，获取验证码失败')
+								return { success: false, isCoolingDown: false, message: '请求发送修改密码的验证码失败，获取验证码失败' }
+							}
+						} catch (error) {
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
+							session.endSession()
+							console.error('ERROR', '请求发送修改邮箱的验证码失败，检查超时时间时出错', error)
+							return { success: false, isCoolingDown: false, message: '请求发送修改邮箱的验证码失败，检查超时时间时出错' }
+						}
+					} else {
+						console.error('ERROR', '发送更新邮箱的验证码失败，获取用户旧邮箱失败', { uid })
+						return { success: false, isCoolingDown: false, message: '发送更新邮箱的验证码失败，获取用户旧邮箱失败' }
+					}
+				} catch (error) {
+					console.error('ERROR', '发送更新邮箱的验证码失败，获取用户旧邮箱时出错', { error, uid })
+					return { success: false, isCoolingDown: false, message: '发送更新邮箱的验证码失败，获取用户旧邮箱时出错' }
+				}
+			} else {
+				console.error('ERROR', '发送更新邮箱的验证码失败，参数不合法！', { uid })
+				return { success: false, isCoolingDown: false, message: '发送更新邮箱的验证码失败，参数不合法！' }
+			}
+		} else {
+			console.error('ERROR', '发送更新邮箱的验证码失败，非法用户！', { uid })
+			return { success: false, isCoolingDown: false, message: '发送更新邮箱的验证码失败，非法用户！' }
+		}
+	} catch (error) {
+		console.error('ERROR', '发送更新邮箱的验证码失败，未知错误', error)
+		return { success: false, isCoolingDown: false, message: '发送更新邮箱的验证码失败，未知错误' }
+	}
+}
+
+/**
+ * 更新密码
+ * @param updateUserPasswordRequest 更新密码的请求载荷
+ * @param uid 用户 UID
+ * @param token 用户 token
+ * @returns 更新密码的请求响应
+ */
+export const changePasswordService = async (updateUserPasswordRequest: UpdateUserPasswordRequestDto, uid: number, token: string): Promise<UpdateUserPasswordResponseDto> => {
+	try {
+		if (checkUpdateUserPasswordRequest(updateUserPasswordRequest)) {
+			if (await checkUserToken(uid, token)) {
+				const { oldPasswordHash, newPasswordHash, verificationCode } = updateUserPasswordRequest
+				const now = new Date().getTime()
+
+				const { collectionName: userChangePasswordVerificationCodeCollectionName, schemaInstance: userChangePasswordVerificationCodeInstance } = UserChangePasswordVerificationCodeSchema
+				type UserChangePasswordVerificationCode = InferSchemaType<typeof userChangePasswordVerificationCodeInstance>
+
+				const userChangePasswordVerificationCodeWhere: QueryType<UserChangePasswordVerificationCode> = {
+					uid,
+					verificationCode,
+					overtimeAt: { $gte: now },
+				}
+				const userChangePasswordVerificationCodeSelect: SelectType<UserChangePasswordVerificationCode> = {
+					emailLowerCase: 1, // 用户邮箱
+				}
+
+				// 启动事务
+				const session = await mongoose.startSession()
+				session.startTransaction()
+
+				try {
+					const verificationCodeResult = await selectDataFromMongoDB<UserChangePasswordVerificationCode>(userChangePasswordVerificationCodeWhere, userChangePasswordVerificationCodeSelect, userChangePasswordVerificationCodeInstance, userChangePasswordVerificationCodeCollectionName, { session })
+					if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						console.error('ERROR', '修改密码时出错，验证失败')
+						return { success: false, message: '修改密码时出错，验证失败' }
+					}
+				} catch (error) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('ERROR', '修改密码时出错，请求验证失败')
+					return { success: false, message: '修改密码时出错，请求验证失败' }
+				}
+
+				const { collectionName, schemaInstance } = UserAuthSchema
+				type UserAuth = InferSchemaType<typeof schemaInstance>
+
+				const changePasswordWhere: QueryType<UserAuth> = { uid }
+				const changePasswordSelect: SelectType<UserAuth> = {
+					email: 1,
+					uid: 1,
+					passwordHashHash: 1,
+				}
+
+				try {
+					const userAuthResult = await selectDataFromMongoDB<UserAuth>(changePasswordWhere, changePasswordSelect, schemaInstance, collectionName, { session })
+					if (userAuthResult?.result && userAuthResult.result?.length === 1) {
+						const userAuthInfo = userAuthResult.result[0]
+						const isCorrectPassword = comparePasswordSync(oldPasswordHash, userAuthInfo.passwordHashHash)
+						if (isCorrectPassword) {
+							const newPasswordHashHash = hashPasswordSync(newPasswordHash)
+							if (newPasswordHashHash) {
+								const changePasswordUpdate: UpdateType<UserAuth> = {
+									passwordHashHash: newPasswordHashHash,
+									editDateTime: now,
+								}
+								try {
+									const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
+									if (updateResult.success) {
+										await session.commitTransaction()
+										session.endSession()
+										return { success: true, message: '密码已更新！' }
+									} else {
+										if (session.inTransaction()) {
+											await session.abortTransaction()
+										}
+										session.endSession()
+										console.error('ERROR', '修改密码失败，更新密码失败', { uid })
+										return { success: false, message: '修改密码时出错，更新密码失败' }
+									}
+								} catch (error) {
+									if (session.inTransaction()) {
+										await session.abortTransaction()
+									}
+									session.endSession()
+									console.error('ERROR', '修改密码时出错，更新密码时出错', { uid, error })
+									return { success: false, message: '修改密码时出错，更新密码时出错' }
+								}
+							} else {
+								if (session.inTransaction()) {
+									await session.abortTransaction()
+								}
+								session.endSession()
+								console.error('ERROR', '修改密码失败，未能散列新密码', { uid })
+								return { success: false, message: '修改密码失败，未能散列新密码' }
+							}
+						} else {
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
+							session.endSession()
+							console.error('ERROR', '修改密码失败，密码校验未通过', { uid })
+							return { success: false, message: '修改密码失败，密码校验未通过' }
+						}
+					} else {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						console.error('ERROR', '修改密码失败，密码校验结果为空或不为一！', { uid })
+						return { success: false, message: '修改密码失败，密码校验结果不正确' }
+					}
+				} catch (error) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('ERROR', '修改密码时出错，密码校验时出错！', { uid, error })
+					return { success: false, message: '修改密码时出错，密码校验时出错！' }
+				}
+			} else {
+				console.error('ERROR', '修改密码失败，非法用户！', { uid })
+				return { success: false, message: '修改密码失败，非法用户！' }
+			}
+		} else {
+			console.error('ERROR', '修改密码失败，参数不合法！', { uid })
+			return { success: false, message: '修改密码失败，参数不合法！' }
+		}
+	} catch (error) {
+		console.error('ERROR', '修改密码时出错，未知错误', error)
+		return { success: false, message: '修改密码时出错，未知错误' }
 	}
 }
 
@@ -1463,9 +1770,32 @@ const checkCheckInvitationCodeRequestDto = (checkInvitationCodeRequestDto: Check
 
 /**
  * 验证请求发送修改邮箱的邮箱验证码的请求载荷
- * @param checkInvitationCodeRequestDto 请求发送修改邮箱的邮箱验证码的请求载荷
+ * @param requestSendChangeEmailVerificationCodeRequest 请求发送修改邮箱的邮箱验证码的请求载荷
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
 const checkRequestSendChangeEmailVerificationCodeRequest = (requestSendChangeEmailVerificationCodeRequest: RequestSendChangeEmailVerificationCodeRequestDto): boolean => {
 	return true
+}
+
+/**
+ * 验证请求发送修改密码的邮箱验证码的请求载荷
+ * @param requestSendChangePasswordVerificationCodeRequest 请求发送修改密码的邮箱验证码的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkRequestSendChangePasswordVerificationCodeRequest = (requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto): boolean => {
+	return true
+}
+
+/**
+ * 验证修改密码的请求载荷
+ * @param updateUserPasswordRequest 修改密码的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkUpdateUserPasswordRequest = (updateUserPasswordRequest: UpdateUserPasswordRequestDto): boolean => {
+	return (
+		true
+		&& !!updateUserPasswordRequest.newPasswordHash
+		&& !!updateUserPasswordRequest.oldPasswordHash
+		&& !!updateUserPasswordRequest.verificationCode && updateUserPasswordRequest.verificationCode.length === 6
+	)
 }

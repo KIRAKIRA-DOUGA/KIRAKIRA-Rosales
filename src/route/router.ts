@@ -3,7 +3,7 @@ import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWith
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkInvitationCodeController, checkUserTokenController, createInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendChangeEmailVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { checkInvitationCodeController, checkUserTokenController, createInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
@@ -103,7 +103,6 @@ router.get('/user/check', checkUserTokenController) // 根据 uid, token 校验�
 // https://localhost:9999/user/check
 // cookie: uid, token
 
-
 router.get('/user/logout', userLogoutController) // 清除浏览器中的 cookie（用户登出）
 // https://localhost:9999/user/logout
 
@@ -155,6 +154,21 @@ router.post('/user/requestSendChangeEmailVerificationCode', requestSendChangeEma
 // 	"clientLanguage": "zh-Hans-CN"
 // }
 
+router.post('/user/requestSendChangePasswordVerificationCode', requestSendChangePasswordVerificationCodeController) // 请求发送验证码，用于修改密码
+// https://localhost:9999/user/requestSendChangePasswordVerificationCode
+// cookie: uid, token
+// {
+// 	"clientLanguage": "zh-Hans-CN"
+// }
+
+router.post('/user/update/password', updateUserPasswordController) // 更新用户密码
+// https://localhost:9999/user/update/password
+// cookie: uid, token
+// {
+// 	"oldPasswordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// 	"newPasswordHash": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+// 	"verificationCode": "XXXXXX"
+// }
 
 
 router.post('/video/upload', updateVideoController) // 上传视频

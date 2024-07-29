@@ -1,7 +1,7 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { checkInvitationCodeService, checkUserTokenService, createInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, requestSendChangeEmailVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { changePasswordService, checkInvitationCodeService, checkUserTokenService, createInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { CheckInvitationCodeRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { CheckInvitationCodeRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -94,7 +94,20 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
-	ctx.body = await updateUserEmailService(updateUserEmailRequest, uid, token)
+
+	const updateUserEmailResponse = await updateUserEmailService(updateUserEmailRequest, uid, token)
+
+	const cookieOption = {
+		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+		secure: true,
+		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
+		domain: getCorrectCookieDomain(),
+	}
+	if (updateUserEmailResponse.success) {
+		ctx.cookies.set('email', data?.newEmail ?? '', cookieOption)
+	}
+	ctx.body = updateUserEmailResponse
 	await next()
 }
 
@@ -199,7 +212,6 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 
 	await next()
 }
-
 
 /**
  * 获取用于用户上传头像的预签名 URL, 上传限时 60 秒
@@ -321,5 +333,45 @@ export const requestSendChangeEmailVerificationCodeController = async (ctx: koaC
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await requestSendChangeEmailVerificationCodeService(requestSendChangeEmailVerificationCodeRequest, uid, token)
+	await next()
+}
+
+/**
+ * 请求发送验证码，用于修改密码
+ * @param ctx context
+ * @param next context
+ */
+export const requestSendChangePasswordVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+
+	const requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto = {
+		clientLanguage: data.clientLanguage,
+	}
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	ctx.body = await requestSendChangePasswordVerificationCodeService(requestSendChangePasswordVerificationCodeRequest, uid, token)
+	await next()
+}
+
+
+/**
+ * 更新用户密码
+ * @param ctx context
+ * @param next context
+ * @return UpdateUserPasswordResponseDto 更新结果，如果更新成功则 success: true，不成功则 success: false
+ */
+export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<UpdateUserPasswordRequestDto>
+	const updateUserPasswordRequest: UpdateUserPasswordRequestDto = {
+		oldPasswordHash: data?.oldPasswordHash ?? '',
+		newPasswordHash: data?.newPasswordHash ?? '',
+		verificationCode: data?.verificationCode ?? '',
+	}
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uid, token)
+	ctx.body = updateUserEmailResponse
 	await next()
 }

@@ -7,11 +7,11 @@ class UserAuthSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 用户的 UID - 非空 */
-		uid: { type: Number, unique: true, required: true },
+		uid: { type: Number, required: true, unique: true },
 		/** 用户邮箱 - 非空 */
-		email: { type: String, unique: true, required: true },
+		email: { type: String, required: true, unique: true },
 		/** 全小写的用户邮箱 - 非空 */
-		emailLowerCase: { type: String, unique: true, required: true },
+		emailLowerCase: { type: String, required: true, unique: true },
 		/** 被两次 Bcrypt Hash 的密码 - 非空 */
 		passwordHashHash: { type: String, required: true },
 		/** 用户的身分令牌 - 非空 */
@@ -67,7 +67,7 @@ class UserInfoSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 用户的 UID - 非空 - 唯一 */
-		uid: { type: Number, unique: true, required: true },
+		uid: { type: Number, required: true, unique: true },
 		/** 用户名 - 唯一 */
 		username: { type: String, unique: true },
 		/** 用户昵称 */
@@ -117,7 +117,7 @@ class UserSettingsSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 用户的 UID - 非空 - 唯一 */
-		uid: { type: Number, unique: true, required: true },
+		uid: { type: Number, required: true, unique: true },
 		/** 是否启用 Cookie - 布尔 */
 		enableCookie: { type: Boolean },
 		/** 主题外观设置（主题类型） - 可选的值：{light: 浅色, dark: 深色, system: 跟随系统} */
@@ -177,11 +177,11 @@ class UserVerificationCodeSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, unique: true, required: true },
+		emailLowerCase: { type: String, required: true, unique: true },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
 		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, unique: true, required: true },
+		overtimeAt: { type: Number, required: true, unique: true },
 		/** 用户今日请求的次数，用于防止滥用 - 非空 */
 		attemptsTimes: { type: Number, required: true },
 		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
@@ -235,11 +235,11 @@ class UserChangeEmailVerificationCodeSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, unique: true, required: true },
+		emailLowerCase: { type: String, required: true, unique: true },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
 		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, unique: true, required: true },
+		overtimeAt: { type: Number, required: true, unique: true },
 		/** 用户今日请求的次数，用于防止滥用 - 非空 */
 		attemptsTimes: { type: Number, required: true },
 		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
@@ -253,3 +253,32 @@ class UserChangeEmailVerificationCodeSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserChangeEmailVerificationCodeSchema = new UserChangeEmailVerificationCodeSchemaFactory()
+
+
+/**
+ * 用户更改密码的邮箱验证码
+ */
+class UserChangePasswordVerificationCodeSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户 ID - 非空 */
+		uid: { type: Number, required: true },
+		/** 用户的邮箱 - 非空 - 唯一 */
+		emailLowerCase: { type: String, required: true, unique: true },
+		/** 用户的验证码 - 非空 */
+		verificationCode: { type: String, required: true },
+		/** 用户的验证码过期时间 - 非空 */
+		overtimeAt: { type: Number, required: true, unique: true },
+		/** 用户今日请求的次数，用于防止滥用 - 非空 */
+		attemptsTimes: { type: Number, required: true },
+		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
+		lastRequestDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-change-password-verification-code'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const UserChangePasswordVerificationCodeSchema = new UserChangePasswordVerificationCodeSchemaFactory()
