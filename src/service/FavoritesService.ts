@@ -2,7 +2,7 @@ import { InferSchemaType } from 'mongoose'
 import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import { FavoritesSchema } from '../dbPool/schema/favoritesSchema.js'
+import { FavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenService } from './UserService.js'
 
