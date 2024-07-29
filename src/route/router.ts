@@ -1,6 +1,7 @@
 import Router from 'koa-router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
+import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkInvitationCodeController, checkUserTokenController, createInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendChangeEmailVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
@@ -330,6 +331,21 @@ router.get('/history/filter', getUserBrowsingHistoryWithFilterController) // 获
 // cookie: uid, token
 // > 或者你可以不包含 URL 查询以获取当前用户全部浏览历史 -> https://localhost:9999/history/filter
 
+
+
+router.post('/favorites/create', createFavoritesController) // 创建收藏夹
+// https://localhost:9999/favorites/create
+// cookie: uid, token
+// {
+// 	"favoritesTitle": "好康的视频",
+// 	"favoritesBio": "这里都是好康的视频捏",
+// 	"favoritesCover": "f907a7bd-3247-4415-1f5e-a67a5d3ea100",
+// 	"favoritesVisibility": 1
+// }
+
+router.get('/favorites', getFavoritesController) // 获取当前登录用户的收藏夹列表
+// https://localhost:9999/favorites
+// cookie: uid, token
 
 
 

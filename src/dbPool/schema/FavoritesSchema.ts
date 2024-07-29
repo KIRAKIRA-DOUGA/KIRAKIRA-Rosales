@@ -7,7 +7,7 @@ class FavoritesSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 收藏夹唯一 ID - 非空 - 唯一 */
-		favoritesListId: { type: Number, required: true, unique: true },
+		favoritesId: { type: Number, required: true, unique: true },
 		/** 收藏夹创建者 - 非空 */
 		creator: { type: Number, required: true },
 		/** 收藏夹其他维护者 */

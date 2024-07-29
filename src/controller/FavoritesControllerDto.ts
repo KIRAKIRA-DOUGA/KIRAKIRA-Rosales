@@ -8,7 +8,7 @@ export type BrowsingHistoryCategory = 'video' | 'photo' | 'comment'
  */
 type Favorites = {
 	/** 收藏夹唯一 ID - 非空 - 唯一 */
-	favoritesListId: number;
+	favoritesId: number;
 	/** 收藏夹创建者 - 非空 */
 	creator: number;
 	/** 收藏夹其他维护者 */
@@ -49,4 +49,16 @@ export type CreateFavoritesResponseDto = {
 	message?: string;
 	/** 如果成功，返回创建的这个收藏夹数据 */
 	result?: Favorites;
+}
+
+/**
+ * 获取某个用户的收藏夹
+ */
+export type GetFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回用户所有的收藏夹 */
+	result?: Favorites[];
 }

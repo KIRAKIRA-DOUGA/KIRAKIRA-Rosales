@@ -1,4 +1,4 @@
-import { createFavoritesService } from '../service/FavoritesService.js'
+import { createFavoritesService, getFavoritesService } from '../service/FavoritesService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { CreateFavoritesRequestDto } from './FavoritesControllerDto.js'
 
@@ -23,5 +23,18 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const createFavoritesResponse = await createFavoritesService(createFavoritesRequest, uid, token)
 	ctx.body = createFavoritesResponse
+	await next()
+}
+
+/**
+ * 获取当前登录用户的收藏夹列表
+ * @param ctx context
+ * @param next context
+ */
+export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	const getFavoritesResponse = await getFavoritesService(uid, token)
+	ctx.body = getFavoritesResponse
 	await next()
 }

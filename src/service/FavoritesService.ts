@@ -1,6 +1,7 @@
 import { InferSchemaType } from 'mongoose'
-import { CreateFavoritesRequestDto, CreateFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
-import { insertData2MongoDB } from '../dbPool/DbClusterPool.js'
+import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
+import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesSchema } from '../dbPool/schema/favoritesSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenService } from './UserService.js'
@@ -22,10 +23,10 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 
 				type FavoritesType = InferSchemaType<typeof schemaInstance>
 
-				const favoritesListId = (await getNextSequenceValueService('favorites'))?.sequenceValue
+				const favoritesId = (await getNextSequenceValueService('favorites'))?.sequenceValue
 
 				const createFavoritesData: FavoritesType = {
-					favoritesListId,
+					favoritesId,
 					creator: uid,
 					editor: [],
 					favoritesTitle,
@@ -60,6 +61,61 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 	} catch (error) {
 		console.error('ERROR', '创建收藏夹失败，未知原因：', error)
 		return { success: false, message: '创建收藏夹失败，未知原因' }
+	}
+}
+
+/**
+ * 获取当前登录用户的收藏夹列表
+ * @param uid 用户 ID
+ * @param token 用户安全令牌
+ * @returns 获取当前登录用户的收藏夹列表的请求响应
+ */
+export const getFavoritesService = async (uid: number, token: string): Promise<GetFavoritesResponseDto> => {
+	try {
+		if ((await checkUserTokenService(uid, token)).success) {
+			const { collectionName, schemaInstance } = FavoritesSchema
+
+			type FavoritesType = InferSchemaType<typeof schemaInstance>
+
+			const getFavoritesQuery: QueryType<FavoritesType> = {
+				creator: uid,
+			}
+
+			const getFavoritesSelect: SelectType<FavoritesType> = {
+				favoritesId: 1,
+				creator: 1,
+				editor: 1,
+				favoritesTitle: 1,
+				favoritesBio: 1,
+				favoritesCover: 1,
+				favoritesVisibility: 1,
+				favoritesCreateDateTime: 1,
+			}
+
+			try {
+				const getFavoritesResult = await selectDataFromMongoDB<FavoritesType>(getFavoritesQuery, getFavoritesSelect, schemaInstance, collectionName)
+				const favorites = getFavoritesResult?.result
+				if (getFavoritesResult.success && favorites) {
+					if (favorites?.length > 0) {
+						return { success: true, message: '获取收藏夹列表成功', result: favorites }
+					} else {
+						return { success: true, message: '收藏夹列表为空', result: [] }
+					}
+				} else {
+					console.error('ERROR', '获取收藏夹失败，请求收藏夹数据失败')
+					return { success: false, message: '获取收藏夹失败，请求收藏夹数据失败' }
+				}
+			} catch (error) {
+				console.error('ERROR', '获取收藏夹失败，请求收藏夹数据时出错', error)
+				return { success: false, message: '获取收藏夹失败，请求收藏夹数据时出错' }
+			}
+		} else {
+			console.error('ERROR', '获取收藏夹失败，用户校验失败')
+			return { success: false, message: '获取收藏夹失败，用户校验失败' }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取收藏夹失败，未知原因：', error)
+		return { success: false, message: '获取收藏夹失败，未知原因' }
 	}
 }
 
