@@ -91,5 +91,17 @@ class VideoSchemaFactory {
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema)
 }
-
 export const VideoSchema = new VideoSchemaFactory()
+
+/**
+ * 已删除的视频数据表
+ */
+class RemovedVideoSchemaFactory {
+	/** MongoDB Schema */
+	schema = VideoSchema.schema
+	/** MongoDB 集合名 */
+	collectionName = 'removed-video'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const RemovedVideoSchema = new RemovedVideoSchemaFactory()

@@ -96,6 +96,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					passwordHashHash,
 					token,
 					passwordHint,
+					role: 'user', // newbie will always be user role.
 					userCreateDateTime: now,
 					editDateTime: now,
 				}
@@ -450,6 +451,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 				const userAuthSelect: SelectType<UserAuth> = {
 					email: 1, // 用户邮箱
 					userCreateDateTime: 1, // 用户创建日期
+					role: 1, // 用户的角色
 				}
 
 				const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
@@ -474,9 +476,9 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 						const userAuth = userAuthResult?.result
 						const userInfo = userInfoResult?.result
 						if (userAuth?.length === 0 || userInfo?.length === 0) {
-							return { success: true, message: '用户未填写用户信息', result: { uid, email: userAuth?.[0]?.email, userCreateDateTime: userAuth[0].userCreateDateTime } }
+							return { success: true, message: '用户未填写用户信息', result: { uid, email: userAuth?.[0]?.email, userCreateDateTime: userAuth[0].userCreateDateTime, role: userAuth[0].role } }
 						} else if (userAuth?.length === 1 && userAuth?.[0] && userInfo?.length === 1 && userInfo?.[0]) {
-							return { success: true, message: '获取用户信息成功', result: { ...userInfo[0], email: userAuth[0].email, userCreateDateTime: userAuth[0].userCreateDateTime } }
+							return { success: true, message: '获取用户信息成功', result: { ...userInfo[0], email: userAuth[0].email, userCreateDateTime: userAuth[0].userCreateDateTime, role: userAuth[0].role } }
 						} else {
 							console.error('ERROR', '获取用户信息时失败，获取到的结果长度不为 1')
 							return { success: false, message: '获取用户信息时失败，结果异常' }
@@ -517,6 +519,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 			const userAuthWhere: QueryType<UserAuth> = { uid }
 			const userAuthSelect: SelectType<UserAuth> = {
 				userCreateDateTime: 1, // 用户创建日期
+				role: 1, // 用户的角色
 			}
 
 			const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
@@ -540,7 +543,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 					const userAuth = userAuthResult?.result
 					const userInfo = userInfoResult?.result
 					if (userInfo?.length === 1 && userInfo?.[0]) {
-						return { success: true, message: '获取用户信息成功', result: { ...userInfo[0], userCreateDateTime: userAuth[0].userCreateDateTime } }
+						return { success: true, message: '获取用户信息成功', result: { ...userInfo[0], userCreateDateTime: userAuth[0].userCreateDateTime, role: userAuth[0].role } }
 					} else {
 						console.error('ERROR', '获取用户信息时失败，获取到的结果长度不为 1')
 						return { success: false, message: '获取用户信息时失败，结果异常' }
@@ -1580,6 +1583,52 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 	} catch (error) {
 		console.error('ERROR', '修改密码时出错，未知错误', error)
 		return { success: false, message: '修改密码时出错，未知错误' }
+	}
+}
+
+/**
+ * 验证某个用户是否是某个角色
+ * @param uid 用户 ID, 为空时会导致校验失败
+ * @param role 用户的角色
+ * @returns 校验结果，如果用户是这个角色返回 true，否则返回 false
+ */
+export const checkUserRoleService = async (uid: number, role: string): Promise<boolean> => {
+	try {
+		if (uid !== undefined && uid !== null && role) {
+			const { collectionName, schemaInstance } = UserAuthSchema
+			type UserAuth = InferSchemaType<typeof schemaInstance>
+			const userTokenWhere: QueryType<UserAuth> = {
+				uid,
+				role,
+			}
+			const userTokenSelect: SelectType<UserAuth> = {
+				uid: 1,
+			}
+
+			try {
+				const checkUserRoleResult = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				if (checkUserRoleResult && checkUserRoleResult.success) {
+					if (checkUserRoleResult.result?.length === 1) {
+						return true
+					} else {
+						console.error('ERROR', `验证用户角色时，用户信息长度不为 1，用户uid：【${uid}】`)
+						return false
+					}
+				} else {
+					console.error('ERROR', `验证用户角色时未查询到用户信息，用户uid：【${uid}】`)
+					return false
+				}
+			} catch (error) {
+				console.error('ERROR', `验证用户角色时出错，用户uid：【${uid}】，错误信息：`, error)
+				return false
+			}
+		} else {
+			console.error('ERROR', `验证用户角色失败！用户 uid 或 role 不存在，用户 UID：${uid}`)
+			return false
+		}
+	} catch (error) {
+		console.error('ERROR', `验证用户角色失败！用户 UID：${uid}`, error)
+		return false
 	}
 }
 

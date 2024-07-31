@@ -147,6 +147,42 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 }
 
 /**
+ * 在 MongoDB 数据库中删除数据
+ * @param where 查询条件
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 删除数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param options 设置项
+ * @returns 删除状态和结果
+ */
+export const deleteDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultType<mongoose.mongo.DeleteResult> > => {
+	try {
+		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
+		if (options?.session) {
+			options.readPreference = 'primary'
+		}
+
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+
+		try {
+			const result = await mongoModel.deleteOne(where, options)
+			return { success: true, message: '数据查询成功', result }
+		} catch (error) {
+			console.error('ERROR', '数据查询失败：', error)
+			throw { success: false, message: '数据查询失败', error }
+		}
+	} catch (error) {
+		console.error('ERROR', 'selectDataFromMongoDB 发生错误')
+		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
+	}
+}
+
+/**
  * 在 MongoDB 数据库中查找数据
  * @param where 查询条件
  * @param select 投影（可以理解为 SQL 的 SELECT 子句）

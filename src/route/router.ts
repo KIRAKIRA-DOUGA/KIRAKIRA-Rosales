@@ -5,7 +5,7 @@ import { createFavoritesController, getFavoritesController } from '../controller
 import { helloWorld } from '../controller/HelloWorld.js'
 import { checkInvitationCodeController, checkUserTokenController, createInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
+import { deleteVideoByKvidController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 
 const router = new Router()
@@ -171,6 +171,7 @@ router.post('/user/update/password', updateUserPasswordController) // 更新用�
 // }
 
 
+
 router.post('/video/upload', updateVideoController) // 上传视频
 // https://localhost:9999/video/upload
 // {
@@ -208,7 +209,6 @@ router.post('/video/search/tag', searchVideoByVideoTagIdController) // 根据 TA
 // 	"tagId": [1, 2]
 // }
 
-
 router.post('/video/tus', getVideoFileTusEndpointController) // 获取 TUS 上传 Endpoint
 // https://localhost:9999/video/tus
 // cookie: uid, token
@@ -217,6 +217,12 @@ router.get('/video/cover/preUpload', getVideoCoverUploadSignedUrlController) // 
 // https://localhost:9999/video/cover/preUpload
 // cookie: uid, token
 
+router.delete('/video/delete', deleteVideoByKvidController) // 根据视频 ID 删除视频 // WARN: 高危操作
+// https://localhost:9999/video/delete
+// cookie: uid, token
+// {
+// 	"videoId": XXX
+// }
 
 
 

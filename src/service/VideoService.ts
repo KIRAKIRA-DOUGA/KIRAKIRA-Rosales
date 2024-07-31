@@ -1,21 +1,21 @@
 import { Client } from '@elastic/elasticsearch'
 import axios from 'axios'
-import { InferSchemaType } from 'mongoose'
+import mongoose, { InferSchemaType } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
-import { GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
-import { DbPoolOptions, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { DbPoolOptions, deleteDataFromMongoDB, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
-import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
+import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
-import { checkUserTokenService } from './UserService.js'
+import { checkUserRoleService, checkUserTokenService } from './UserService.js'
 
 /**
  * 上传视频
@@ -47,7 +47,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					videoPart: videoPart as Video['videoPart'], // TODO: Mongoose issue: #12420
 					title,
 					image: uploadVideoRequest.image,
-					uploadDate: new Date().getTime(),
+					uploadDate: nowDate,
 					watchedCount: 0,
 					uploaderId: uploadVideoRequest.uploaderId,
 					duration: uploadVideoRequest.duration,
@@ -206,6 +206,8 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				videoCategory: 1,
 				copyright: 1,
 				videoTagList: 1,
+				ensureOriginal: 1,
+				pushToFeed: 1,
 			}
 			const uploaderInfoKey = 'uploaderInfo'
 			const option: DbPoolOptions<Video, UserInfo> = {
@@ -588,6 +590,103 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
 }
 
 /**
+ * 删除一个视频
+ * @param deleteVideoRequest 删除一个视频的请求载荷
+ * @param uid 用户 UID
+ * @param token 用户 token
+ * @returns 删除一个视频的请求响应
+ */
+export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, uid: number, token: string): Promise<DeleteVideoResponseDto> => {
+	try {
+		if (checkDeleteVideoRequest(deleteVideoRequest)) {
+			if ((await checkUserTokenService(uid, token)).success) {
+				if (await checkUserRoleService(uid, 'admin')) { // must have admin role
+					const videoId = deleteVideoRequest.videoId
+					const nowDate = new Date().getTime()
+
+					const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+					type Video = InferSchemaType<typeof videoSchemaInstance>
+					const deleteWhere: QueryType<Video> = {
+						videoId,
+					}
+
+					const { collectionName: removedVideoCollectionName, schemaInstance: removedVideoSchemaInstance } = RemovedVideoSchema
+					type RemovedVideo = InferSchemaType<typeof removedVideoSchemaInstance>
+
+					// 启动事务
+					const session = await mongoose.startSession()
+					session.startTransaction()
+
+					const option = { session }
+					try {
+						const getVideoByKvidRequest: GetVideoByKvidRequestDto = {
+							videoId,
+						}
+						const videoResult = await getVideoByKvidService(getVideoByKvidRequest)
+						const videoData = videoResult.video
+						if (videoResult.success && videoData) {
+							const removedVideoData: RemovedVideo = {
+								...videoData as RemovedVideo, // TODO: Mongoose issue: #12420
+								editDateTime: nowDate,
+							}
+							const saveRemovedVideo = await insertData2MongoDB(removedVideoData, removedVideoSchemaInstance, removedVideoCollectionName, option)
+							if (saveRemovedVideo.success) {
+								const deleteResult = await deleteDataFromMongoDB<Video>(deleteWhere, videoSchemaInstance, videoCollectionName, option)
+								if (deleteResult.success) {
+									await session.commitTransaction()
+									session.endSession()
+									return { success: true, message: '删除视频成功' }
+								} else {
+									if (session.inTransaction()) {
+										await session.abortTransaction()
+									}
+									session.endSession()
+									console.error('ERROR', '删除一个视频失败，删除视频失败')
+									return { success: false, message: '删除一个视频失败，删除视频失败' }
+								}
+							} else {
+								if (session.inTransaction()) {
+									await session.abortTransaction()
+								}
+								session.endSession()
+								console.error('ERROR', '删除一个视频失败，保存副本失败')
+								return { success: false, message: '删除一个视频失败，保存副本失败' }
+							}
+						} else {
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
+							session.endSession()
+							console.error('ERROR', '删除一个视频失败，查询视频数据失败')
+							return { success: false, message: '删除一个视频失败，查询视频数据失败' }
+						}
+					} catch (error) {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						console.error('ERROR', '删除一个视频时出错，获取视频失败！')
+						return { success: false, message: '删除一个视频时出错，获取视频失败' }
+					}
+				} else {
+					console.error('ERROR', '删除一个视频失败，用户权限错误！')
+					return { success: false, message: '删除一个视频失败，用户权限错误！' }
+				}
+			} else {
+				console.error('ERROR', '删除一个视频失败，非法用户！')
+				return { success: false, message: '删除一个视频失败，非法用户！' }
+			}
+		} else {
+			console.error('ERROR', '删除一个视频失败，参数不合法')
+			return { success: false, message: '删除一个视频失败，参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '删除一个视频时出错，未知异常：', error)
+		return { success: false, message: '删除一个视频时出错，未知异常' }
+	}
+}
+
+/**
  * 检查上传的视频中的参数是否正确且无疏漏
  * @param uploadVideoRequest 上传视频请求携带的请求载荷
  * @returns 检查结果，合法返回 true，不合法返回 false
@@ -656,6 +755,15 @@ const checkSearchVideoByKeywordRequest = (searchVideoByKeywordRequest: SearchVid
  */
 const checkSearchVideoByVideoTagIdRequest = (searchVideoByVideoTagIdRequest: SearchVideoByVideoTagIdRequestDto): boolean => {
 	return (searchVideoByVideoTagIdRequest && searchVideoByVideoTagIdRequest.tagId && searchVideoByVideoTagIdRequest.tagId.length > 0)
+}
+
+/**
+ * 检查删除一个视频的请求载荷
+ * @param deleteVideoRequest 删除一个视频的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boolean => {
+	return (!!deleteVideoRequest.videoId && typeof deleteVideoRequest.videoId === 'number' && deleteVideoRequest.videoId >= 0)
 }
 
 

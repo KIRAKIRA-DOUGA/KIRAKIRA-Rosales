@@ -18,6 +18,8 @@ class UserAuthSchemaFactory {
 		token: { type: String, required: true },
 		/** 密码提示 */
 		passwordHint: String,
+		/** 用户的角色 */
+		role: { type: String, required: true },
 		/** 系统专用字段-创建时间 - 非空 */
 		userCreateDateTime: { type: Number, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */

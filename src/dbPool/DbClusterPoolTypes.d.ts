@@ -1,7 +1,7 @@
 import { Types } from 'mongoose'
 
 /**
- * 数据操作的结果（结果为对象数组）
+ * 数据操作的结果列表（结果为对象数组）
  */
 export type DbPoolResultsType<T> = {
 	/** 操作是否成功 */

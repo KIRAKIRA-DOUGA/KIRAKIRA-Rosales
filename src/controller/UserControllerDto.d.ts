@@ -201,14 +201,19 @@ export type GetSelfUserInfoResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 	/** 请求结果 */
-	result?: {
-		/** 用户 ID */
-		uid?: number;
-		/** 用户邮箱 */
-		email?: string;
-		/** 用户创建时间 */
-		userCreateDateTime?: number;
-	} & UpdateOrCreateUserInfoRequestDto;
+	result?: (
+		{
+			/** 用户 ID */
+			uid?: number;
+			/** 用户邮箱 */
+			email?: string;
+			/** 用户创建时间 */
+			userCreateDateTime?: number;
+			/** 用户的角色 */
+			role?: string;
+		}
+		& UpdateOrCreateUserInfoRequestDto
+	);
 }
 
 /**
@@ -243,6 +248,8 @@ export type GetUserInfoByUidResponseDto = {
 		label?: UserLabel[];
 		/** 用户创建时间 */
 		userCreateDateTime?: number;
+		/** 用户的角色 */
+		role?: string;
 	};
 }
 
