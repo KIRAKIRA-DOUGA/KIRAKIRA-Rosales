@@ -89,3 +89,8 @@ export type UpdateType<T> = {
 export type SelectType<T> = {
 	[K in keyof T]?: 1;
 }
+
+// 数据库排序，相当于 SQL 中的 ORDER BY
+export type OrderByType<T> = {
+	[K in keyof T]?: 1 | -1;
+}

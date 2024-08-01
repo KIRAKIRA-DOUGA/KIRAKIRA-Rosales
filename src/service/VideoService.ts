@@ -7,7 +7,7 @@ import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
 import { DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, deleteDataFromMongoDB, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
-import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
+import { OrderByType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
@@ -125,6 +125,9 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			description: 1,
 			editDateTime: 1,
 		}
+		const orderBy: OrderByType<Video> = {
+			editDateTime: -1,
+		}
 		const uploaderInfoKey = 'uploaderInfo'
 		const option: DbPoolOptions<Video, UserInfo> = {
 			virtual: {
@@ -139,7 +142,7 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			populate: uploaderInfoKey,
 		}
 		try {
-			const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option)
+			const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option, orderBy)
 			const videoResult = result.result
 			if (result.success && videoResult) {
 				const videosCount = videoResult?.length

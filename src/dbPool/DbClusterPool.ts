@@ -1,6 +1,6 @@
 import { ReadPreferenceMode } from 'mongodb'
 import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
-import { DbPoolResultsType, DbPoolResultType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
+import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema } from './schema/UserSchema.js'
 
@@ -191,7 +191,7 @@ export const deleteDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
  * @param options 设置项
  * @returns 查询状态和结果
  */
-export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultsType<T> > => {
+export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>, sort?: OrderByType<T>): Promise< DbPoolResultsType<T> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -215,9 +215,9 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 		try {
 			let result
 			if (options && 'populate' in options && options.populate) {
-				result = (await mongoModel.find(where, select, options).populate({ path: options.populate, strictPopulate: false })).map(results => results.toObject({ virtuals: true }) as T)
+				result = (await mongoModel.find(where, select, options).populate({ path: options.populate, strictPopulate: false }).sort(sort)).map(results => results.toObject({ virtuals: true }) as T)
 			} else {
-				result = (await mongoModel.find(where, select, options)).map(results => results.toObject() as T)
+				result = (await mongoModel.find(where, select, options).sort(sort)).map(results => results.toObject() as T)
 			}
 			return { success: true, message: '数据查询成功', result }
 		} catch (error) {
