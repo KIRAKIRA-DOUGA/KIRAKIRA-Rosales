@@ -1,7 +1,7 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { changePasswordService, checkInvitationCodeService, checkUserTokenService, createInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { CheckInvitationCodeRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -17,6 +17,8 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 		passwordHash: data?.passwordHash,
 		passwordHint: data?.passwordHint,
 		invitationCode: data?.invitationCode,
+		username: data?.username,
+		userNickname: data?.userNickname,
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 
@@ -354,7 +356,6 @@ export const requestSendChangePasswordVerificationCodeController = async (ctx: k
 	await next()
 }
 
-
 /**
  * 更新用户密码
  * @param ctx context
@@ -373,5 +374,22 @@ export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) =
 
 	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uid, token)
 	ctx.body = updateUserEmailResponse
+	await next()
+}
+
+/**
+ * 检查用户名是否可用
+ * @param ctx context
+ * @param next context
+ * @return checkUsernameResponse 检查用户名是否可用的请求响应
+ */
+export const checkUsernameController = async (ctx: koaCtx, next: koaNext) => {
+	const username = ctx.query.username as string
+	const checkUsernameRequest: CheckUsernameRequestDto = {
+		username,
+	}
+
+	const checkUsernameResponse = await checkUsernameService(checkUsernameRequest)
+	ctx.body = checkUsernameResponse
 	await next()
 }

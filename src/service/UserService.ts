@@ -4,7 +4,7 @@ import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
-import { CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUsernameRequestDto, CheckUsernameResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
@@ -22,7 +22,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				console.error('ERROR', '用户注册失败：邀请码无效')
 				return { success: false, message: '用户注册失败：邀请码无效' }
 			}
-			const { email, passwordHash, passwordHint, verificationCode } = userRegistrationRequest
+			const { email, passwordHash, passwordHint, verificationCode, username, userNickname } = userRegistrationRequest
 			const emailLowerCase = email.toLowerCase()
 			const passwordHashHash = hashPasswordSync(passwordHash)
 			const token = generateSecureRandomString(64)
@@ -89,7 +89,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					return { success: false, message: '用户注册失败：请求验证失败' }
 				}
 
-				const user: UserAuth = {
+				const userAuthData: UserAuth = {
 					uid,
 					email,
 					emailLowerCase,
@@ -101,9 +101,21 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					editDateTime: now,
 				}
 
+				const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+				type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
+				const userInfoData: UserInfo = {
+					uid,
+					username,
+					userNickname,
+					label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
+					userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
+					editDateTime: now,
+				}
+
 				try {
-					const saveUserAuthResult = await insertData2MongoDB(user, schemaInstance, collectionName, { session })
-					if (saveUserAuthResult.success) {
+					const saveUserAuthResult = await insertData2MongoDB(userAuthData, schemaInstance, collectionName, { session })
+					const saveUserInfoResult = await insertData2MongoDB(userInfoData, userInfoSchemaInstance, userInfoCollectionName, { session })
+					if (saveUserAuthResult.success && saveUserInfoResult.success) {
 						const invitationCode = userRegistrationRequest.invitationCode
 						if (invitationCode) {
 							const useInvitationCodeDto: UseInvitationCodeDto = { invitationCode, registrantUid: uid }
@@ -1633,13 +1645,61 @@ export const checkUserRoleService = async (uid: number, role: string): Promise<b
 }
 
 /**
+ * 检查用户名是否可用
+ * @param checkUsernameRequest 检查用户名是否可用的请求载荷
+ * @returns 检查用户名是否可用的请求响应
+ */
+export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRequestDto): Promise<CheckUsernameResponseDto> => {
+	try {
+		if (checkCheckUsernameRequest(checkUsernameRequest)) {
+			const { username } = checkUsernameRequest
+			const { collectionName, schemaInstance } = UserInfoSchema
+			type UserInfo = InferSchemaType<typeof schemaInstance>
+			const checkUsernameWhere: QueryType<UserInfo> = {
+				username,
+			}
+			const checkUsernameSelete: SelectType<UserInfo> = {
+				uid: 1,
+			}
+			try {
+				const checkUsername = await selectDataFromMongoDB(checkUsernameWhere, checkUsernameSelete, schemaInstance, collectionName)
+				if (checkUsername.success) {
+					if (checkUsername.result?.length === 0) {
+						return { success: true, message: '用户名可用', isAvailableUsername: true }
+					} else {
+						return { success: true, message: '用户名重复', isAvailableUsername: false }
+					}
+				} else {
+					console.error('ERROR', '检查用户名失败，请求用户数据失败')
+					return { success: false, message: '检查用户名失败，请求用户数据失败', isAvailableUsername: false }
+				}
+			} catch (error) {
+				console.error('ERROR', '检查用户名时出错，请求用户数据出错', error)
+				return { success: false, message: '检查用户名时出错，请求用户数据出错', isAvailableUsername: false }
+			}
+		} else {
+			console.error('ERROR', '检查用户名失败，参数不合法')
+			return { success: false, message: '检查用户名失败，参数不合法', isAvailableUsername: false }
+		}
+	} catch (error) {
+		console.error('ERROR', '检查用户名时出错，未知错误', error)
+		return { success: false, message: '检查用户名时出错，未知错误', isAvailableUsername: false }
+	}
+}
+
+/**
  * 校验用户注册信息
  * @param userRegistrationRequest
  * @returns boolean 如果合法则返回 true
  */
 const checkUserRegistrationData = (userRegistrationRequest: UserRegistrationRequestDto): boolean => {
 	// TODO // WARN 这里可能需要更安全的校验机制
-	return (!!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email && !isInvalidEmail(userRegistrationRequest.email) && !!userRegistrationRequest.verificationCode)
+	return (
+		true
+		&& !!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email && !isInvalidEmail(userRegistrationRequest.email)
+		&& !!userRegistrationRequest.verificationCode
+		&& !!userRegistrationRequest.username
+	)
 }
 
 /**
@@ -1847,4 +1907,13 @@ const checkUpdateUserPasswordRequest = (updateUserPasswordRequest: UpdateUserPas
 		&& !!updateUserPasswordRequest.oldPasswordHash
 		&& !!updateUserPasswordRequest.verificationCode && updateUserPasswordRequest.verificationCode.length === 6
 	)
+}
+
+/**
+ * 检查检查用户名失败的请求载荷
+ * @param checkUsernameRequest 检查用户名失败的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkCheckUsernameRequest = (checkUsernameRequest: CheckUsernameRequestDto): boolean => {
+	return (!!checkUsernameRequest.username && checkUsernameRequest.username?.length <= 200 && checkUsernameRequest.username?.length > 0)
 }
