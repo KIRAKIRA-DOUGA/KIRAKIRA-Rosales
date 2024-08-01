@@ -8,7 +8,7 @@ import { CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUse
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
-import { getNextSequenceValueService } from './SequenceValueService.js'
+import { getNextSequenceValueEjectService, getNextSequenceValueService } from './SequenceValueService.js'
 
 /**
  * 用户注册
@@ -88,7 +88,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 
 				const passwordHashHash = hashPasswordSync(passwordHash)
 				const token = generateSecureRandomString(64)
-				const uid = (await getNextSequenceValueService('user')).sequenceValue
+				const uid = (await getNextSequenceValueEjectService('user', [9])).sequenceValue
 
 				const userAuthData: UserAuth = {
 					uid,

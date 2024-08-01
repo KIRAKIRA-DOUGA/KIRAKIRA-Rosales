@@ -1,6 +1,6 @@
 import { CreateVideoTagRequestDto, CreateVideoTagResponseDto, GetVideoTagByTagIdRequestDto, GetVideoTagByTagIdResponseDto, SearchVideoTagRequestDto, SearchVideoTagResponseDto } from '../controller/VideoTagControllerDto.js'
 import { checkUserTokenService } from './UserService.js'
-import { getNextSequenceValueEjectService } from './SequenceValueService.js'
+import { getNextSequenceValueService } from './SequenceValueService.js'
 import { VideoTagSchema } from '../dbPool/schema/VideoTagSchema.js'
 import { InferSchemaType } from 'mongoose'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
@@ -21,7 +21,7 @@ export const createVideoTagService = async (createVideoTagRequest: CreateVideoTa
 					const { collectionName, schemaInstance } = VideoTagSchema
 					type videoTagListType = InferSchemaType<typeof schemaInstance>
 
-					const videoTagIdNextSequenceValueResult = await getNextSequenceValueEjectService('video-tag')
+					const videoTagIdNextSequenceValueResult = await getNextSequenceValueService('video-tag')
 					const tagId = videoTagIdNextSequenceValueResult.sequenceValue
 					const nowDate = new Date().getTime()
 					const tagNameList = createVideoTagRequest.tagNameList
