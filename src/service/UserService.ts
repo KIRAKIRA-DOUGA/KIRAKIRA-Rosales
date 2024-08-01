@@ -25,7 +25,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			const { email, passwordHash, passwordHint, verificationCode, username, userNickname } = userRegistrationRequest
 			const emailLowerCase = email.toLowerCase()
 
-			if (email && emailLowerCase && passwordHashHash && token && (uid !== null && uid !== undefined) && verificationCode) {
+			if (email && emailLowerCase && verificationCode) {
 				// 启动事务
 				const session = await mongoose.startSession()
 				session.startTransaction()
@@ -149,7 +149,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					return { success: false, message: '用户注册失败：无法保存用户资料' }
 				}
 			} else {
-				console.error('ERROR', '用户注册失败：email 或 emailLowerCase 或 passwordHashHash 或 token 或 uid 可能为空')
+				console.error('ERROR', '用户注册失败：email 或 emailLowerCase 或 verificationCode 可能为空')
 				return { success: false, message: '用户注册失败：生成账户资料时失败' }
 			}
 		} else {
