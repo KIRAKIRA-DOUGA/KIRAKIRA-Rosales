@@ -909,7 +909,8 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 
 			try {
 				const userInvitationCodeSelectResult = await selectDataFromMongoDB<UserInvitationCode>(userInvitationCodeWhere, userInvitationCodeSelect, schemaInstance, collectionName)
-				if (userInvitationCodeSelectResult.success && userInvitationCodeSelectResult.result?.length === 0) {
+				const isAdmin = await checkUserRoleService(uid, 'admin')
+				if (isAdmin || (userInvitationCodeSelectResult.success && userInvitationCodeSelectResult.result?.length === 0)) { // 是管理员或者没有找到一天内的邀请码，则可以生成邀请码。
 					try {
 						const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 						let finalInvitationCode = ''
