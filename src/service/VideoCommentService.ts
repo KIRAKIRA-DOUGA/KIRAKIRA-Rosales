@@ -18,7 +18,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 	try {
 		if (checkEmitVideoCommentRequest(emitVideoCommentRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
-				const getCommentIndexResult = await getNextSequenceValueService(`KVID-${emitVideoCommentRequest.videoId}`) // 以视频 ID 为键，获取下一个值，即评论楼层
+				const getCommentIndexResult = await getNextSequenceValueService(`KVID-${emitVideoCommentRequest.videoId}`, 1) // 以视频 ID 为键，获取下一个值，即评论楼层
 				const commentIndex = getCommentIndexResult.sequenceValue
 				if (getCommentIndexResult.success && commentIndex !== undefined && commentIndex !== null) {
 					const { collectionName, schemaInstance } = VideoCommentSchema

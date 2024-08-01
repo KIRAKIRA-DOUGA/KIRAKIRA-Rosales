@@ -23,7 +23,7 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 
 				type FavoritesType = InferSchemaType<typeof schemaInstance>
 
-				const favoritesId = (await getNextSequenceValueService('favorites'))?.sequenceValue
+				const favoritesId = (await getNextSequenceValueService('favorites', 1))?.sequenceValue
 
 				const createFavoritesData: FavoritesType = {
 					favoritesId,

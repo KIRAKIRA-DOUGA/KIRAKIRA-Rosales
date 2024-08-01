@@ -21,7 +21,7 @@ export const createVideoTagService = async (createVideoTagRequest: CreateVideoTa
 					const { collectionName, schemaInstance } = VideoTagSchema
 					type videoTagListType = InferSchemaType<typeof schemaInstance>
 
-					const videoTagIdNextSequenceValueResult = await getNextSequenceValueService('video-tag')
+					const videoTagIdNextSequenceValueResult = await getNextSequenceValueService('video-tag', 1)
 					const tagId = videoTagIdNextSequenceValueResult.sequenceValue
 					const nowDate = new Date().getTime()
 					const tagNameList = createVideoTagRequest.tagNameList
