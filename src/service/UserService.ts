@@ -24,9 +24,6 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			}
 			const { email, passwordHash, passwordHint, verificationCode, username, userNickname } = userRegistrationRequest
 			const emailLowerCase = email.toLowerCase()
-			const passwordHashHash = hashPasswordSync(passwordHash)
-			const token = generateSecureRandomString(64)
-			const uid = (await getNextSequenceValueService('user')).sequenceValue
 
 			if (email && emailLowerCase && passwordHashHash && token && (uid !== null && uid !== undefined) && verificationCode) {
 				// 启动事务
@@ -88,6 +85,10 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					console.error('ERROR', '用户注册失败：请求验证失败')
 					return { success: false, message: '用户注册失败：请求验证失败' }
 				}
+
+				const passwordHashHash = hashPasswordSync(passwordHash)
+				const token = generateSecureRandomString(64)
+				const uid = (await getNextSequenceValueService('user')).sequenceValue
 
 				const userAuthData: UserAuth = {
 					uid,
