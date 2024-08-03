@@ -34,7 +34,10 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				const { collectionName, schemaInstance } = UserAuthSchema
 				type UserAuth = InferSchemaType<typeof schemaInstance>
 
-				const userAuthWhere: QueryType<UserAuth> = { emailLowerCase }
+				const userAuthWhere: QueryType<UserAuth> = {
+					emailLowerCase,
+					username: { $regex: new RegExp(username, 'iu') },
+				}
 				const userAuthSelect: SelectType<UserAuth> = { emailLowerCase: 1 }
 				try {
 					const useAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
@@ -1668,7 +1671,7 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 			const { collectionName, schemaInstance } = UserInfoSchema
 			type UserInfo = InferSchemaType<typeof schemaInstance>
 			const checkUsernameWhere: QueryType<UserInfo> = {
-				username,
+				username: { $regex: new RegExp(username, 'iu') },
 			}
 			const checkUsernameSelete: SelectType<UserInfo> = {
 				uid: 1,
