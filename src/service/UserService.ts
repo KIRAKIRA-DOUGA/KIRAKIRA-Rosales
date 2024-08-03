@@ -419,6 +419,36 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 			if (checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
 				const { collectionName, schemaInstance } = UserInfoSchema
 				type UserInfo = InferSchemaType<typeof schemaInstance>
+				const username = updateOrCreateUserInfoRequest.username
+
+				if (username) {
+					const getUserInfoWhere: QueryType<UserInfo> = {
+						username: { $regex: new RegExp(updateOrCreateUserInfoRequest.username, 'iu') },
+					}
+					const getUserInfoSelect: SelectType<UserInfo> = {
+						uid: 1,
+						username: 1,
+					}
+					const verificationCodeResult = await selectDataFromMongoDB<UserInfo>(getUserInfoWhere, getUserInfoSelect, schemaInstance, collectionName)
+
+					let isSafeUsername = false
+					if (verificationCodeResult.success) {
+						if (verificationCodeResult.result.length === 0) {
+							isSafeUsername = true
+						}
+						if (verificationCodeResult.result.length === 1) {
+							if (verificationCodeResult.result[0].uid === uid) {
+								isSafeUsername = true
+							}
+						}
+					}
+
+					if (!isSafeUsername) {
+						console.error('ERROR', '更新用户信息失败，用户重名', { updateOrCreateUserInfoRequest, uid })
+						return { success: false, message: '更新用户信息失败，用户重名' }
+					}
+				}
+
 				const updateUserInfoWhere: QueryType<UserInfo> = {
 					uid,
 				}
