@@ -21,6 +21,13 @@ export const createVideoTagService = async (createVideoTagRequest: CreateVideoTa
 					console.error('ERROR', '创建视频 TAG 失败，用户已封禁')
 					return { success: false, message: '创建视频 TAG 失败，用户已封禁' }
 				}
+
+				// DELETE ME: 改验证应当移除
+				if (!await checkUserRoleService(uid, 'admin')) {
+					console.error('ERROR', '创建视频 TAG 失败, 仅限管理员')
+					return { success: false, message: '创建视频 TAG 失败, 仅限管理员' }
+				}
+
 				try {
 					const { collectionName, schemaInstance } = VideoTagSchema
 					type videoTagListType = InferSchemaType<typeof schemaInstance>

@@ -19,8 +19,8 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 		if (checkEmitVideoCommentRequest(emitVideoCommentRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
 				if (await checkUserRoleService(uid, 'blocked')) {
-					console.error('ERROR', '弹幕发送失败，用户已封禁')
-					return { success: false, message: '弹幕发送失败，用户已封禁' }
+					console.error('ERROR', '评论发送失败，用户已封禁')
+					return { success: false, message: '评论发送失败，用户已封禁' }
 				}
 
 				const getCommentIndexResult = await getNextSequenceValueService(`KVID-${emitVideoCommentRequest.videoId}`, 1) // 以视频 ID 为键，获取下一个值，即评论楼层

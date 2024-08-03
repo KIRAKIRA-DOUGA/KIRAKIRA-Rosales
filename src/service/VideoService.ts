@@ -41,6 +41,12 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '上传视频失败，用户已封禁' }
 			}
 
+			// DELETE ME: 改验证应当移除
+			if (!await checkUserRoleService(uid, 'admin')) {
+				console.error('ERROR', '上传视频失败，仅限管理员上传')
+				return { success: false, message: '上传视频失败，仅限管理员上传' }
+			}
+
 			const __VIDEO_SEQUENCE_EJECT__ = [9, 42, 233, 404, 2233, 10388, 10492, 114514] // 生成 KVID 时要跳过的数字
 			const videoIdNextSequenceValueResult = await getNextSequenceValueEjectService('video', __VIDEO_SEQUENCE_EJECT__, 1)
 			const videoId = videoIdNextSequenceValueResult.sequenceValue
@@ -446,6 +452,13 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 				console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 用户已封禁')
 				return undefined
 			}
+
+			// DELETE ME: 改验证应当移除
+			if (!await checkUserRoleService(uid, 'admin')) {
+				console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 仅限管理员上传')
+				return undefined
+			}
+
 			const streamTusEndpointUrl = process.env.CF_STREAM_TUS_ENDPOINT_URL
 			const streamToken = process.env.CF_STREAM_TOKEN
 
