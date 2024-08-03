@@ -36,7 +36,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 
 				const userAuthWhere: QueryType<UserAuth> = {
 					emailLowerCase,
-					username: { $regex: new RegExp(username, 'iu') },
+					username: { $regex: new RegExp(`\\b${username}\\b`, 'iu') },
 				}
 				const userAuthSelect: SelectType<UserAuth> = { emailLowerCase: 1 }
 				try {
@@ -423,7 +423,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 
 				if (username) {
 					const getUserInfoWhere: QueryType<UserInfo> = {
-						username: { $regex: new RegExp(updateOrCreateUserInfoRequest.username, 'iu') },
+						username: { $regex: new RegExp(`\\b${updateOrCreateUserInfoRequest.username}\\b`, 'iu') },
 					}
 					const getUserInfoSelect: SelectType<UserInfo> = {
 						uid: 1,
@@ -1701,7 +1701,7 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 			const { collectionName, schemaInstance } = UserInfoSchema
 			type UserInfo = InferSchemaType<typeof schemaInstance>
 			const checkUsernameWhere: QueryType<UserInfo> = {
-				username: { $regex: new RegExp(username, 'iu') },
+				username: { $regex: new RegExp(`\\b${username}\\b`, 'iu') },
 			}
 			const checkUsernameSelete: SelectType<UserInfo> = {
 				uid: 1,
