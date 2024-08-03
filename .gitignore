@@ -7,3 +7,7 @@ dist/
 
 # ignore some local file
 local/
+
+# macOS
+.DS_Store
+.envrc
