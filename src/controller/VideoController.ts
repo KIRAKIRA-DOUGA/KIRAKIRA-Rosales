@@ -9,6 +9,9 @@ import { DeleteVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDt
  * @returns 上传视频的结果
  */
 export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
 	const data = ctx.request.body as Partial<UploadVideoRequestDto>
 	const uploadVideoRequest: UploadVideoRequestDto = {
 		title: data.title || '',
@@ -26,7 +29,7 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		videoTagList: data.videoTagList || [],
 	}
 	const esClient = ctx.elasticsearchClient
-	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, esClient)
+	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, uid, token, esClient)
 	ctx.body = uploadVideoResponse
 	await next()
 }

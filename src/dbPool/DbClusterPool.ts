@@ -334,7 +334,7 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 			mongoModel = mongoose.model<T>(collectionName, schema)
 		}
 		try {
-			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: true, upsert, ...options })).toObject() as T
+			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: true, upsert, ...options }))?.toObject() as T
 
 			if (updateResult) {
 				return { success: true, message: '数据更新成功', result: updateResult }

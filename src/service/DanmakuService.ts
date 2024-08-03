@@ -3,7 +3,7 @@ import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidRequestD
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { DanmakuSchema } from '../dbPool/schema/DanmakuSchema.js'
-import { checkUserTokenService } from './UserService.js'
+import { checkUserRoleService, checkUserTokenService } from './UserService.js'
 
 /**
  * 用户发送弹幕
@@ -16,6 +16,11 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 	try {
 		if (checkEmitDanmakuRequest(emitDanmakuRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
+				if (await checkUserRoleService(uid, 'blocked')) {
+					console.error('ERROR', '弹幕发送失败，用户已封禁')
+					return { success: false, message: '弹幕发送失败，用户已封禁' }
+				}
+
 				const { collectionName, schemaInstance } = DanmakuSchema
 				type Danmaku = InferSchemaType<typeof schemaInstance>
 				const nowDate = new Date().getTime()

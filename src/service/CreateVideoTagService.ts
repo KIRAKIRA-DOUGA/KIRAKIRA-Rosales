@@ -1,5 +1,5 @@
 import { CreateVideoTagRequestDto, CreateVideoTagResponseDto, GetVideoTagByTagIdRequestDto, GetVideoTagByTagIdResponseDto, SearchVideoTagRequestDto, SearchVideoTagResponseDto } from '../controller/VideoTagControllerDto.js'
-import { checkUserTokenService } from './UserService.js'
+import { checkUserRoleService, checkUserTokenService } from './UserService.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { VideoTagSchema } from '../dbPool/schema/VideoTagSchema.js'
 import { InferSchemaType } from 'mongoose'
@@ -17,6 +17,10 @@ export const createVideoTagService = async (createVideoTagRequest: CreateVideoTa
 	try {
 		if (checkCreateVideoTagRequest(createVideoTagRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
+				if (await checkUserRoleService(uid, 'blocked')) {
+					console.error('ERROR', '创建视频 TAG 失败，用户已封禁')
+					return { success: false, message: '创建视频 TAG 失败，用户已封禁' }
+				}
 				try {
 					const { collectionName, schemaInstance } = VideoTagSchema
 					type videoTagListType = InferSchemaType<typeof schemaInstance>

@@ -3,7 +3,7 @@ import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWith
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
+import { blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { deleteVideoByKvidController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
@@ -173,6 +173,23 @@ router.post('/user/update/password', updateUserPasswordController) // 更新用�
 router.get('/user/checkUsername', checkUsernameController) // 检查用户名是否可用
 // https://localhost:9999/user/checkUsername?username=xxxxxxxx
 
+router.post('/user/blockUser', blockUserByUIDController) // 根据 UID 封禁一个用户 // WARN: 高危操作
+// https://localhost:9999/user/blockUser
+// cookie: uid, token
+// {
+// 	"criminalUid": XXXX
+// }
+
+router.post('/user/reactivateUser', reactivateUserByUIDController) // 根据 UID 重新激活一个用户 // WARN: 高危操作
+// https://localhost:9999/user/reactivateUser
+// cookie: uid, token
+// {
+// 	"uid": XXXX
+// }
+
+router.get('/user/blocked/info', getBlockedUserController) // 获取所有被封禁用户的信息 // WARN: 高危操作
+// https://localhost:9999/user/blocked/info
+// cookie: uid, token
 
 
 router.post('/video/upload', updateVideoController) // 上传视频

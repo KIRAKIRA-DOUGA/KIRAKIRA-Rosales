@@ -23,9 +23,24 @@ import { checkUserRoleService, checkUserTokenService } from './UserService.js'
  * @param esClient Elasticsearch 客户端连接
  * @returns 上传视频的结果
  */
-export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, esClient?: Client): Promise<UploadVideoResponseDto> => {
+export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uid: number, token: string, esClient?: Client): Promise<UploadVideoResponseDto> => {
 	try {
 		if (checkUploadVideoRequest(uploadVideoRequest) && esClient && !isEmptyObject(esClient)) {
+			if ((await checkUserTokenService(uid, token)).success) {
+				console.error('ERROR', '上传视频失败，用户校验未通过')
+				return { success: false, message: '上传视频失败，用户校验未通过' }
+			}
+
+			if (uploadVideoRequest.uploaderId !== uid) {
+				console.error('ERROR', '上传视频失败, UID 与 cookie 不相符')
+				return { success: false, message: '上传视频失败, 账户未对齐' }
+			}
+
+			if (await checkUserRoleService(uid, 'blocked')) {
+				console.error('ERROR', '上传视频失败，用户已封禁')
+				return { success: false, message: '上传视频失败，用户已封禁' }
+			}
+
 			const __VIDEO_SEQUENCE_EJECT__ = [9, 42, 233, 404, 2233, 10388, 10492, 114514] // 生成 KVID 时要跳过的数字
 			const videoIdNextSequenceValueResult = await getNextSequenceValueEjectService('video', __VIDEO_SEQUENCE_EJECT__, 1)
 			const videoId = videoIdNextSequenceValueResult.sequenceValue
@@ -133,7 +148,7 @@ export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => 
 			virtual: {
 				name: uploaderInfoKey, // 虚拟属性名
 				options: {
-					ref: userInfoCollectionName, // 关联的子模型，注意结尾要加s
+					ref: userInfoCollectionName, // 关联的子模型
 					localField: 'uploaderId', // 父模型中用于关联的字段
 					foreignField: 'uid', // 子模型中用于关联的字段
 					justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
@@ -427,6 +442,10 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 export const getVideoFileTusEndpointService = async (uid: number, token: string, getVideoFileTusEndpointRequest: GetVideoFileTusEndpointRequestDto): Promise<string | undefined> => {
 	try {
 		if ((await checkUserTokenService(uid, token)).success) {
+			if (await checkUserRoleService(uid, 'blocked')) {
+				console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 用户已封禁')
+				return undefined
+			}
 			const streamTusEndpointUrl = process.env.CF_STREAM_TUS_ENDPOINT_URL
 			const streamToken = process.env.CF_STREAM_TOKEN
 
@@ -595,15 +614,15 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
 /**
  * 删除一个视频
  * @param deleteVideoRequest 删除一个视频的请求载荷
- * @param uid 用户 UID
- * @param token 用户 token
+ * @param adminUid 管理员 UID
+ * @param adminToken 管理员 token
  * @returns 删除一个视频的请求响应
  */
-export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, uid: number, token: string): Promise<DeleteVideoResponseDto> => {
+export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, adminUid: number, adminToken: string): Promise<DeleteVideoResponseDto> => {
 	try {
 		if (checkDeleteVideoRequest(deleteVideoRequest)) {
-			if ((await checkUserTokenService(uid, token)).success) {
-				if (await checkUserRoleService(uid, 'admin')) { // must have admin role
+			if ((await checkUserTokenService(adminUid, adminToken)).success) {
+				if (await checkUserRoleService(adminUid, 'admin')) { // must have admin role
 					const videoId = deleteVideoRequest.videoId
 					const nowDate = new Date().getTime()
 

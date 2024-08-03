@@ -1,11 +1,11 @@
-import mongoose, { InferSchemaType } from 'mongoose'
+import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl, createCloudflareR2PutSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
-import { CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUsernameRequestDto, CheckUsernameResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
-import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
+import { BlockUserByUIDRequestDto, BlockUserByUIDResponseDto, CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUsernameRequestDto, CheckUsernameResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetBlockedUserResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, ReactivateUserByUIDRequestDto, ReactivateUserByUIDResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueEjectService, getNextSequenceValueService } from './SequenceValueService.js'
@@ -1013,7 +1013,7 @@ export const getMyInvitationCodeService = async (uid: number, token: string): Pr
 				const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(myInvitationCodeWhere, myInvitationCodeSelect, schemaInstance, collectionName)
 				if (myInvitationCodeResult.success) {
 					if (myInvitationCodeResult.result?.length >= 0) {
-						return { success: true, message: '自己的邀请码列表为空', invitationCodeResult: myInvitationCodeResult.result }
+						return { success: true, message: '已成功获取邀请码列表', invitationCodeResult: myInvitationCodeResult.result }
 					} else {
 						return { success: true, message: '自己的邀请码列表为空', invitationCodeResult: [] }
 					}
@@ -1606,14 +1606,24 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
  * @param role 用户的角色
  * @returns 校验结果，如果用户是这个角色返回 true，否则返回 false
  */
-export const checkUserRoleService = async (uid: number, role: string): Promise<boolean> => {
+export const checkUserRoleService = async (uid: number, role: string | string[]): Promise<boolean> => {
 	try {
 		if (uid !== undefined && uid !== null && role) {
 			const { collectionName, schemaInstance } = UserAuthSchema
 			type UserAuth = InferSchemaType<typeof schemaInstance>
-			const userTokenWhere: QueryType<UserAuth> = {
-				uid,
-				role,
+			let userTokenWhere: QueryType<UserAuth> = {
+				uid: -1,
+			}
+			if (typeof role === 'string') {
+				userTokenWhere = {
+					uid,
+					role,
+				}
+			} else {
+				userTokenWhere = {
+					uid,
+					role: { $in: role },
+				}
 			}
 			const userTokenSelect: SelectType<UserAuth> = {
 				uid: 1,
@@ -1688,6 +1698,201 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 		return { success: false, message: '检查用户名时出错，未知错误', isAvailableUsername: false }
 	}
 }
+
+/**
+ * 根据 UID 封禁一个用户
+ * @param blockUserByUIDRequest 封禁用户的请求载荷
+ * @param adminUid 管理员的 UID
+ * @param adminToken 管理员的 Token
+ * @returns 封禁用户的请求响应
+ */
+export const blockUserByUIDService = async (blockUserByUIDRequest: BlockUserByUIDRequestDto, adminUid: number, adminToken: string): Promise<BlockUserByUIDResponseDto> => {
+	try {
+		if (checkBlockUserByUIDRequest(blockUserByUIDRequest)) {
+			if (await checkUserToken(adminUid, adminToken)) {
+				const isAdmin = await checkUserRoleService(adminUid, 'admin')
+				if (isAdmin) {
+					const { criminalUid } = blockUserByUIDRequest
+					const { collectionName, schemaInstance } = UserAuthSchema
+					type UserAuth = InferSchemaType<typeof schemaInstance>
+
+					const blockUserByUIDWhere: QueryType<UserAuth> = {
+						uid: criminalUid,
+						role: 'user',
+					}
+
+					const blockUserByUIDUpdate: UpdateType<UserAuth> = {
+						role: 'blocked',
+					}
+					try {
+						const updateResult = await findOneAndUpdateData4MongoDB<UserAuth>(blockUserByUIDWhere, blockUserByUIDUpdate, schemaInstance, collectionName, undefined, false)
+						if (updateResult.success && updateResult.result) {
+							return { success: true, message: '封禁用户成功' }
+						} else {
+							console.error('ERROR', '封禁用户失败，返回结果失败或结果为空')
+							return { success: false, message: '封禁用户失败，返回结果失败或结果为空' }
+						}
+					} catch (error) {
+						console.error('ERROR', '封禁用户时出错，更新数据时出错', error)
+						return { success: false, message: '封禁用户时出错，更新数据出错' }
+					}
+				} else {
+					console.error('ERROR', '封禁用户失败，用户权限不足')
+					return { success: false, message: '封禁用户失败，用户权限不足' }
+				}
+			} else {
+				console.error('ERROR', '封禁用户失败，用户校验未通过')
+				return { success: false, message: '封禁用户失败，用户校验未通过' }
+			}
+		} else {
+			console.error('ERROR', '封禁用户失败，参数不合法')
+			return { success: false, message: '封禁用户失败，参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '封禁用户时出错，未知错误', error)
+		return { success: false, message: '封禁用户时出错，未知错误' }
+	}
+}
+
+/**
+ * 根据 UID 重新激活一个用户
+ * @param reactivateUserByUIDRequest 重新激活用户的请求载荷
+ * @param adminUid 管理员的 UID
+ * @param adminToken 管理员的 Token
+ * @returns 重新激活用户的请求响应
+ */
+export const reactivateUserByUIDService = async (reactivateUserByUIDRequest: ReactivateUserByUIDRequestDto, adminUid: number, adminToken: string): Promise<ReactivateUserByUIDResponseDto> => {
+	try {
+		if (checkReactivateUserByUIDRequest(reactivateUserByUIDRequest)) {
+			if (await checkUserToken(adminUid, adminToken)) {
+				const isAdmin = await checkUserRoleService(adminUid, 'admin')
+				if (isAdmin) {
+					const { uid } = reactivateUserByUIDRequest
+					const { collectionName, schemaInstance } = UserAuthSchema
+					type UserAuth = InferSchemaType<typeof schemaInstance>
+
+					const reactivateUserByUIDWhere: QueryType<UserAuth> = {
+						uid,
+						role: 'blocked',
+					}
+
+					const reactivateUserByUIDUpdate: UpdateType<UserAuth> = {
+						role: 'user',
+					}
+					try {
+						const updateResult = await findOneAndUpdateData4MongoDB<UserAuth>(reactivateUserByUIDWhere, reactivateUserByUIDUpdate, schemaInstance, collectionName, undefined, false)
+						if (updateResult.success && updateResult.result) {
+							return { success: true, message: '重新激活用户成功' }
+						} else {
+							console.error('ERROR', '重新激活用户失败，返回结果失败或结果为空')
+							return { success: false, message: '重新激活用户失败，返回结果失败或结果为空' }
+						}
+					} catch (error) {
+						console.error('ERROR', '重新激活用户时出错，更新数据时出错', error)
+						return { success: false, message: '重新激活用户时出错，更新数据出错' }
+					}
+				} else {
+					console.error('ERROR', '重新激活用户失败，用户权限不足')
+					return { success: false, message: '重新激活用户失败，用户权限不足' }
+				}
+			} else {
+				console.error('ERROR', '重新激活用户失败，用户校验未通过')
+				return { success: false, message: '重新激活用户失败，用户校验未通过' }
+			}
+		} else {
+			console.error('ERROR', '重新激活用户失败，参数不合法')
+			return { success: false, message: '重新激活用户失败，参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '重新激活用户时出错，未知错误', error)
+		return { success: false, message: '重新激活用户时出错，未知错误' }
+	}
+}
+
+
+/**
+ * 获取所有被封禁用户的信息
+ * @param adminUid 管理员的 UID
+ * @param adminToken 管理员的 Token
+ * @returns 获取所有被封禁用户的信息的请求响应
+ */
+export const getBlockedUserService = async (adminUid: number, adminToken: string): Promise<GetBlockedUserResponseDto> => {
+	try {
+		if (await checkUserToken(adminUid, adminToken)) {
+			const isAdmin = await checkUserRoleService(adminUid, 'admin')
+			if (isAdmin) {
+				const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+				const { collectionName: userInfoCollectionName } = UserInfoSchema
+
+				// TODO: 下方这个 Aggregate 只适用于被封禁用户的搜索
+				const blockedUserAggregateProps: PipelineStage[] = [
+					{
+						$match: {
+							role: 'blocked',
+						},
+					},
+					{
+						$lookup: {
+							from: 'user-infos', // WARN: 别忘了加复数
+							localField: 'uid',
+							foreignField: 'uid',
+							as: 'user_info_data',
+						},
+					},
+					{
+						$unwind: {
+							path: '$user_info_data',
+							preserveNullAndEmptyArrays: true, // 保留空数组和null值
+						},
+					},
+					{
+						$project: {
+							uid: 1,
+							userCreateDateTime: 1, // 用户创建日期
+							role: 1, // 用户的角色
+							username: '$user_info_data.username', // 用户名
+							userNickname: '$user_info_data.userNickname', // 用户昵称
+							avatar: '$user_info_data.avatar', // 用户头像
+							userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
+							signature: '$user_info_data.signature', // 用户的个性签名
+							gender: '$user_info_data.gender', // 用户的性别
+						},
+					},
+				]
+
+				try {
+					const userResult = await selectDataByAggregateFromMongoDB(userAuthSchemaInstance, userAuthCollectionName, blockedUserAggregateProps)
+					if (userResult && userResult.success) {
+						const userInfo = userResult?.result
+						if (userInfo?.length > 0) {
+							return { success: true, message: '获取封禁用户信息成功',
+								result: userInfo,
+							}
+						} else {
+							return { success: true, message: '没有被封禁用户', result: [] }
+						}
+					} else {
+						console.error('ERROR', '获取所有被封禁用户的信息失败，获取到的结果为空')
+						return { success: false, message: '获取所有被封禁用户的信息失败，结果为空' }
+					}
+				} catch (error) {
+					console.error('ERROR', '获取所有被封禁用户的信息失败，查询数据时出错：0', error)
+					return { success: false, message: '获取所有被封禁用户的信息失败，查询数据时出错' }
+				}
+			} else {
+				console.error('ERROR', '获取所有被封禁用户的信息失败，用户权限不足')
+				return { success: false, message: '获取所有被封禁用户的信息失败，用户权限不足' }
+			}
+		} else {
+			console.error('ERROR', '获取所有被封禁用户的信息失败，用户校验失败')
+			return { success: false, message: '获取所有被封禁用户的信息失败，用户校验失败' }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取所有被封禁用户的信息时出错，未知错误：', error)
+		return { success: false, message: '获取所有被封禁用户的信息时出错，未知错误' }
+	}
+}
+
 
 /**
  * 校验用户注册信息
@@ -1918,4 +2123,22 @@ const checkUpdateUserPasswordRequest = (updateUserPasswordRequest: UpdateUserPas
  */
 const checkCheckUsernameRequest = (checkUsernameRequest: CheckUsernameRequestDto): boolean => {
 	return (!!checkUsernameRequest.username && checkUsernameRequest.username?.length <= 200 && checkUsernameRequest.username?.length > 0)
+}
+
+/**
+ * 检查封禁用户的请求载荷
+ * @param blockUserByUIDRequest 封禁用户的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkBlockUserByUIDRequest = (blockUserByUIDRequest: BlockUserByUIDRequestDto): boolean => {
+	return (blockUserByUIDRequest.criminalUid !== null && blockUserByUIDRequest.criminalUid !== undefined)
+}
+
+/**
+ * 检查重新激活用户的请求载荷
+ * @param blockUserByUIDRequest 重新激活用户的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkReactivateUserByUIDRequest = (reactivateUserByUIDRequest: ReactivateUserByUIDRequestDto): boolean => {
+	return (reactivateUserByUIDRequest.uid !== null && reactivateUserByUIDRequest.uid !== undefined)
 }

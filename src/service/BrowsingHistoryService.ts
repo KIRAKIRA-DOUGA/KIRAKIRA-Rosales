@@ -84,7 +84,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 			if ((await checkUserTokenService(uid, token)).success) {
 				const { collectionName, schemaInstance } = BrowsingHistorySchema
 
-				// TODO: 下方这个 Aggregate 只适用于视频例是记录的搜索
+				// TODO: 下方这个 Aggregate 只适用于视频历史记录的搜索
 				const videoHistoryAggregateProps: PipelineStage[] = [
 					{
 						$match: {
