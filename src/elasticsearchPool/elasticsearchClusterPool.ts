@@ -69,6 +69,53 @@ export const connectElasticSearchCluster = async (): Promise<Client> => {
 }
 
 /**
+ * 从数据库集群中删除文档
+ * @param client Elasticsearch 连接，应存放在 ctx 中
+ * @param indexName 索引的名字，该字段应当与 schema 存放于同一个对象中（这样 schema 和 indexName 构成了绑定关系）
+ * @param conditions 删除数据的条件
+ * @returns 删除数据的结果，成功返回 true，失败返回 false
+ */
+export const deleteDataFromElasticsearchCluster = async (client: Client, indexName: string, conditions: Record<string, string | number>): Promise<boolean> => {
+	try {
+		// 构建 bool 查询条件
+		const mustConditions = Object.keys(conditions).map(field => ({
+			match: { [field]: conditions[field] },
+		}))
+
+		// 搜索满足条件的文档
+		const searchResponse = await client.search({
+			index: indexName,
+			body: {
+				query: {
+					bool: {
+						must: mustConditions,
+					},
+				},
+			},
+		})
+
+		// 确保响应中包含 hits
+		if (searchResponse.hits && searchResponse.hits.hits) {
+			// 遍历搜索结果并删除每个文档
+			const hits = searchResponse.hits.hits
+			for (const hit of hits) {
+				await client.delete({
+					index: indexName,
+					id: hit._id,
+				})
+			}
+			return true
+		} else {
+			console.error('ERROR', 'No documents found matching the conditions.')
+			return false
+		}
+	} catch (error) {
+		console.error('ERROR', '在搜索引擎中删除数据时出错，未知原因', error)
+		return false
+	}
+}
+
+/**
  * 向 Elasticsearch 集群插入数据，并刷新（如果 refreshFlag 为 true 则立即刷新，但默认为 false，等待集群自动刷新）
  * @param client Elasticsearch 连接，应存放在 ctx 中
  * @param indexName 索引的名字，该字段应当与 schema 存放于同一个对象中（这样 schema 和 indexName 构成了绑定关系）

@@ -10,7 +10,7 @@ import { DbPoolOptions, deleteDataFromMongoDB, insertData2MongoDB, selectDataFro
 import { OrderByType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
-import { insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
+import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
@@ -629,11 +629,12 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
  * @param deleteVideoRequest 删除一个视频的请求载荷
  * @param adminUid 管理员 UID
  * @param adminToken 管理员 token
+ * @param esClient Elasticsearch 客户端连接
  * @returns 删除一个视频的请求响应
  */
-export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, adminUid: number, adminToken: string): Promise<DeleteVideoResponseDto> => {
+export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, adminUid: number, adminToken: string, esClient: Client): Promise<DeleteVideoResponseDto> => {
 	try {
-		if (checkDeleteVideoRequest(deleteVideoRequest)) {
+		if (checkDeleteVideoRequest(deleteVideoRequest) && esClient && !isEmptyObject(esClient)) {
 			if ((await checkUserTokenService(adminUid, adminToken)).success) {
 				if (await checkUserRoleService(adminUid, 'admin')) { // must have admin role
 					const videoId = deleteVideoRequest.videoId
@@ -643,6 +644,11 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 					type Video = InferSchemaType<typeof videoSchemaInstance>
 					const deleteWhere: QueryType<Video> = {
 						videoId,
+					}
+
+					const { indexName: esIndexName } = VideoDocument
+					const conditions = {
+						kvid: videoId,
 					}
 
 					const { collectionName: removedVideoCollectionName, schemaInstance: removedVideoSchemaInstance } = RemovedVideoSchema
@@ -667,7 +673,8 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 							const saveRemovedVideo = await insertData2MongoDB(removedVideoData, removedVideoSchemaInstance, removedVideoCollectionName, option)
 							if (saveRemovedVideo.success) {
 								const deleteResult = await deleteDataFromMongoDB<Video>(deleteWhere, videoSchemaInstance, videoCollectionName, option)
-								if (deleteResult.success) {
+								const deleteFromElasticsearchResult = await deleteDataFromElasticsearchCluster(esClient, esIndexName, conditions)
+								if (deleteResult.success && deleteFromElasticsearchResult) {
 									await session.commitTransaction()
 									session.endSession()
 									return { success: true, message: '删除视频成功' }

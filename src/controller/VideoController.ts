@@ -170,6 +170,7 @@ export const deleteVideoByKvidController = async (ctx: koaCtx, next: koaNext) =>
 		videoId: data.videoId ?? -1,
 	}
 
-	ctx.body = await deleteVideoByKvidService(deleteVideoRequest, uid, token)
+	const esClient = ctx.elasticsearchClient
+	ctx.body = await deleteVideoByKvidService(deleteVideoRequest, uid, token, esClient)
 	await next()
 }
