@@ -944,6 +944,24 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 			try {
 				const userInvitationCodeSelectResult = await selectDataFromMongoDB<UserInvitationCode>(userInvitationCodeWhere, userInvitationCodeSelect, schemaInstance, collectionName)
 				const isAdmin = await checkUserRoleService(uid, 'admin')
+
+				/** 如果不是管理员，而且用户创建时间不在七天前 */
+				if (!isAdmin) {
+					try {
+						const getSelfUserInfoRequest: GetSelfUserInfoRequestDto = {
+							uid,
+							token,
+						}
+						const selfUserInfo = await getSelfUserInfoService(getSelfUserInfoRequest)
+						if (!selfUserInfo.success || selfUserInfo.result.userCreateDateTime > nowTime - sevenDaysInMillis) {
+							console.warn('WARN', 'WARNING', '生成邀请码失败，未超出邀请码生成期限，正在冷却中', { uid })
+							return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中' }
+						}
+					} catch (error) {
+						console.warn('WARN', 'WARNING', '生成邀请码时出错，查询用户信息出错', { error, uid })
+						return { success: false, isCoolingDown: false, message: '生成邀请码时出错，查询用户信息出错' }
+					}
+				}
 				if (isAdmin || (userInvitationCodeSelectResult.success && userInvitationCodeSelectResult.result?.length === 0)) { // 是管理员或者没有找到一天内的邀请码，则可以生成邀请码。
 					try {
 						const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -983,26 +1001,26 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 							try {
 								const insertResult = await insertData2MongoDB(userInvitationCode, schemaInstance, collectionName)
 								if (insertResult.success) {
-									return { success: true, isCoolingDown: true, message: '生成邀请码成功', invitationCodeResult: userInvitationCode }
+									return { success: true, isCoolingDown: false, message: '生成邀请码成功', invitationCodeResult: userInvitationCode }
 								} else {
 									console.error('ERROR', '生成邀请码失败，存储邀请码失败', { uid })
-									return { success: false, isCoolingDown: true, message: '生成邀请码失败，存储邀请码失败' }
+									return { success: false, isCoolingDown: false, message: '生成邀请码失败，存储邀请码失败' }
 								}
 							} catch (error) {
 								console.error('ERROR', '生成邀请码失败，存储邀请码时出错', error, { uid })
-								return { success: false, isCoolingDown: true, message: '生成邀请码失败，存储邀请码时出错' }
+								return { success: false, isCoolingDown: false, message: '生成邀请码失败，存储邀请码时出错' }
 							}
 						} else {
 							console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码失败', { uid })
-							return { success: false, isCoolingDown: true, message: '生成邀请码失败，生成不重复的新邀请码失败' }
+							return { success: false, isCoolingDown: false, message: '生成邀请码失败，生成不重复的新邀请码失败' }
 						}
 					} catch (error) {
 						console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码时出错', error, { uid })
-						return { success: false, isCoolingDown: true, message: '生成邀请码失败，生成不重复的新邀请码时出错' }
+						return { success: false, isCoolingDown: false, message: '生成邀请码失败，生成不重复的新邀请码时出错' }
 					}
 				} else {
 					console.warn('WARN', 'WARNING', '生成邀请码失败，未超出邀请码生成期限，正在冷却中', { uid })
-					return { success: true, isCoolingDown: false, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中' }
+					return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中' }
 				}
 			} catch (error) {
 				console.error('ERROR', '生成邀请码失败，查询是否超出邀请码生成期限时出错', error, { uid })
@@ -1010,11 +1028,11 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 			}
 		} else {
 			console.error('ERROR', '生成邀请码失败，非法用户！', { uid })
-			return { success: false, isCoolingDown: true, message: '生成邀请码失败，非法用户！' }
+			return { success: false, isCoolingDown: false, message: '生成邀请码失败，非法用户！' }
 		}
 	} catch (error) {
 		console.error('ERROR', '生成邀请码失败，未知错误', error)
-		return { success: false, isCoolingDown: true, message: '生成邀请码失败，未知错误' }
+		return { success: false, isCoolingDown: false, message: '生成邀请码失败，未知错误' }
 	}
 }
 
