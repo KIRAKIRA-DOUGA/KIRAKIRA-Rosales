@@ -83,6 +83,8 @@ class VideoSchemaFactory {
 		ensureOriginal: { type: Boolean, required: true },
 		/** 视频 TAG - 非空 */
 		videoTagList: { type: [VideoTagSchema], required: true },
+		/** 是否待审核 - 非空 */
+		pendingReview: { type: Boolean, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	}

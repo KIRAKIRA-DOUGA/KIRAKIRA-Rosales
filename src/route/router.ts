@@ -5,7 +5,7 @@ import { createFavoritesController, getFavoritesController } from '../controller
 import { helloWorld } from '../controller/HelloWorld.js'
 import { blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { deleteVideoByKvidController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
+import { approvePendingReviewVideoController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 
 const router = new Router()
@@ -244,6 +244,20 @@ router.delete('/video/delete', deleteVideoByKvidController) // 根据视频 ID �
 // 	"videoId": XXX
 // }
 
+router.get('/video/pending', getPendingReviewVideoController) // 获取待审核视频列表
+// https://localhost:9999/video/pending
+// cookie: uid, token
+
+router.post('/video/pending/approved', approvePendingReviewVideoController) // 通过一个待审核视频
+// https://localhost:9999/video/pending/approved
+// cookie: uid, token
+
+
+
+
+
+
+
 
 
 router.post('/video/danmaku/emit', emitDanmakuController) // 发送弹幕的接口
@@ -319,7 +333,7 @@ router.delete('/video/comment/deleteSelfComment', deleteSelfVideoCommentControll
 // 	"commentRoute": "13.10"
 // }
 
-router.delete('/video/comment/adminDeleteComment', adminDeleteVideoCommentController) // 管理员删除一条视频评论
+router.delete('/video/comment/adminDeleteComment', adminDeleteVideoCommentController) // 管理员删除一条视频评论 // WARN: 高危操作
 // https://localhost:9999/video/comment/adminDeleteComment
 // cookie: uid, token
 // {

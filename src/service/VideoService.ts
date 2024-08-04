@@ -5,9 +5,9 @@ import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
-import { DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
-import { DbPoolOptions, deleteDataFromMongoDB, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
-import { OrderByType, QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
+import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { DbPoolOptions, deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
@@ -80,6 +80,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					pushToFeed: uploadVideoRequest.pushToFeed,
 					ensureOriginal: uploadVideoRequest.ensureOriginal,
 					videoTagList: videoTagList as Video['videoTagList'], // TODO: Mongoose issue: #12420
+					pendingReview: true,
 					editDateTime: nowDate,
 				}
 
@@ -125,8 +126,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 
 /**
  * 获取主页视频 // TODO 应该使用推荐算法，而不是获取全部视频
- * @param uploadVideoRequest 上传视频请求携带的请求载荷
- * @returns 上传视频的结果
+ * @returns 获取主页视频的请求响应
  */
 export const getThumbVideoService = async (): Promise<ThumbVideoResponseDto> => {
 	try {
@@ -668,6 +668,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 						if (videoResult.success && videoData) {
 							const removedVideoData: RemovedVideo = {
 								...videoData as Video, // TODO: Mongoose issue: #12420
+								pendingReview: false, // 已删除的视频就不需要审核了...
 								_operatorUid_: adminUid,
 								editDateTime: nowDate,
 							}
@@ -724,8 +725,153 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 			return { success: false, message: '删除一个视频失败，参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '删除一个视频时出错，未知异常：', error)
-		return { success: false, message: '删除一个视频时出错，未知异常' }
+		console.error('ERROR', '删除一个视频时出错，未知错误：', error)
+		return { success: false, message: '删除一个视频时出错，未知错误' }
+	}
+}
+
+
+/**
+ * 获取待审核视频列表
+ * @param adminUid 管理员 UID
+ * @param adminToken 管理员 token
+ * @returns 获取待审核视频列表的请求响应
+ */
+export const getPendingReviewVideoService = async (adminUid: number, adminToken: string): Promise<PendingReviewVideoResponseDto> => {
+	try {
+		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+			console.error('ERROR', '获取待审核视频列表失败，用户校验失败！')
+			return { success: false, message: '获取待审核视频列表失败，用户校验失败！', videosCount: 0, videos: [] }
+		}
+
+		if (!(await checkUserRoleService(adminUid, 'admin'))) {
+			console.error('ERROR', '获取待审核视频列表失败，用户权限不足！')
+			return { success: false, message: '获取待审核视频列表失败，用户权限不足！', videosCount: 0, videos: [] }
+		}
+
+		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+		const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+		type Video = InferSchemaType<typeof videoSchemaInstance>
+		type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
+		const where: QueryType<Video> = {}
+		const select: SelectType<Video> = {
+			videoId: 1,
+			title: 1,
+			image: 1,
+			uploadDate: 1,
+			watchedCount: 1,
+			uploaderId: 1,
+			duration: 1,
+			description: 1,
+			editDateTime: 1,
+		}
+		const orderBy: OrderByType<Video> = {
+			editDateTime: -1,
+		}
+		const uploaderInfoKey = 'uploaderInfo'
+		const option: DbPoolOptions<Video, UserInfo> = {
+			virtual: {
+				name: uploaderInfoKey, // 虚拟属性名
+				options: {
+					ref: userInfoCollectionName, // 关联的子模型
+					localField: 'uploaderId', // 父模型中用于关联的字段
+					foreignField: 'uid', // 子模型中用于关联的字段
+					justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
+				},
+			},
+			populate: uploaderInfoKey,
+		}
+		try {
+			const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option, orderBy)
+			const videoResult = result.result
+			if (result.success && videoResult) {
+				const videosCount = videoResult?.length
+				if (videosCount && videosCount > 0) {
+					return {
+						success: true,
+						message: '获取待审核视频成功',
+						videosCount,
+						videos: videoResult.map(video => {
+							if (video) {
+								const uploaderInfo = uploaderInfoKey in video && video?.[uploaderInfoKey] as UserInfo
+								if (uploaderInfo) {
+									const uploader = uploaderInfo.userNickname ?? uploaderInfo.username
+									return { ...video, uploader }
+								}
+							}
+							return { ...video, uploader: undefined }
+						}),
+					}
+				} else {
+					console.error('ERROR', '获取待审核视频列表失败，获取到的视频数组长度小于等于 0')
+					return { success: false, message: '获取待审核视频列表失败，视频数量为 0', videosCount: 0, videos: [] }
+				}
+			} else {
+				console.error('ERROR', '获取待审核视频列表失败，获取到的视频结果或视频数组为空')
+				return { success: false, message: '获取待审核视频列表失败，未获取到视频', videosCount: 0, videos: [] }
+			}
+		} catch (error) {
+			console.error('ERROR', '获取待审核视频列表时出错，获取视频时出现异常，查询失败：', error)
+			return { success: false, message: '获取待审核视频列表时出错，查询失败', videosCount: 0, videos: [] }
+		}
+	} catch (error) {
+		console.error('ERROR', '获取待审核视频列表时出错，获取视频出错：', error)
+		return { success: false, message: '获取待审核视频列表时出错，获取视频出错', videosCount: 0, videos: [] }
+	}
+}
+
+/**
+ * 通过一个待审核视频
+ * @param approvePendingReviewVideoRequest 通过一个待审核视频的请求载荷
+ * @param adminUid 管理员 UID
+ * @param adminToken 管理员 token
+ * @returns 通过一个待审核视频的请求响应
+ */
+export const approvePendingReviewVideoService = async (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto, adminUid: number, adminToken: string): Promise<ApprovePendingReviewVideoResponseDto> => {
+	try {
+		if (!checkApprovePendingReviewVideoRequest(approvePendingReviewVideoRequest)) {
+			console.error('ERROR', '通过一个待审核视频失败，参数校验失败')
+			return { success: false, message: '通过一个待审核视频失败，参数校验失败' }
+		}
+
+		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+			console.error('ERROR', '通过一个待审核视频失败，用户校验失败！')
+			return { success: false, message: '通过一个待审核视频失败，用户校验失败！' }
+		}
+
+		if (!(await checkUserRoleService(adminUid, 'admin'))) {
+			console.error('ERROR', '通过一个待审核视频失败，用户权限不足！')
+			return { success: false, message: '通过一个待审核视频失败，用户权限不足！' }
+		}
+
+
+		try {
+			const { videoId } = approvePendingReviewVideoRequest
+			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+			type Video = InferSchemaType<typeof videoSchemaInstance>
+			const updatePendingReviewVideoWhere: QueryType<Video> = {
+				videoId,
+			}
+
+			const updatePendingReviewVideoUpdate: UpdateType<Video> = {
+				pendingReview: false,
+			}
+			const updatePendingReviewVideoResult = await findOneAndUpdateData4MongoDB(updatePendingReviewVideoWhere, updatePendingReviewVideoUpdate, videoSchemaInstance, videoCollectionName)
+
+			if (!updatePendingReviewVideoResult.success) {
+				console.error('ERROR', '通过一个待审核视频失败，更新失败')
+				return { success: false, message: '通过一个待审核视频失败，更新失败' }
+			}
+
+
+			return { success: true, message: '通过待审核视频成功' }
+		} catch (error) {
+			console.error('ERROR', '通过一个待审核视频时出错，请求更新时出错：', error)
+			return { success: false, message: '通过一个待审核视频时出错，请求更新时出错' }
+		}
+	} catch (error) {
+		console.error('ERROR', '通过一个待审核视频时出错，未知错误：', error)
+		return { success: false, message: '通过一个待审核视频时出错，未知错误' }
 	}
 }
 
@@ -809,4 +955,12 @@ const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boo
 	return (!!deleteVideoRequest.videoId && typeof deleteVideoRequest.videoId === 'number' && deleteVideoRequest.videoId >= 0)
 }
 
+/**
+ * 检查通过一个待审核视频的请求载荷
+ * @param approvePendingReviewVideoRequest 通过一个待审核视频的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkApprovePendingReviewVideoRequest = (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto) => {
+	return (!!approvePendingReviewVideoRequest.videoId && typeof approvePendingReviewVideoRequest.videoId === 'number' && approvePendingReviewVideoRequest.videoId >= 0)
+}
 

@@ -954,8 +954,8 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 						}
 						const selfUserInfo = await getSelfUserInfoService(getSelfUserInfoRequest)
 						if (!selfUserInfo.success || selfUserInfo.result.userCreateDateTime > nowTime - sevenDaysInMillis) {
-							console.warn('WARN', 'WARNING', '生成邀请码失败，未超出邀请码生成期限，正在冷却中', { uid })
-							return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中' }
+							console.warn('WARN', 'WARNING', '生成邀请码失败，未超出邀请码生成期限，正在冷却中（第一次）', { uid })
+							return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中（第一次）' }
 						}
 					} catch (error) {
 						console.warn('WARN', 'WARNING', '生成邀请码时出错，查询用户信息出错', { error, uid })

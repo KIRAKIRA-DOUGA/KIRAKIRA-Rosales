@@ -1,6 +1,6 @@
-import { deleteVideoByKvidService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService } from '../service/VideoService.js'
+import { approvePendingReviewVideoService, deleteVideoByKvidService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService } from '../service/VideoService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { DeleteVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
+import { ApprovePendingReviewVideoRequestDto, DeleteVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
 /**
  * 上传视频
@@ -174,3 +174,37 @@ export const deleteVideoByKvidController = async (ctx: koaCtx, next: koaNext) =>
 	ctx.body = await deleteVideoByKvidService(deleteVideoRequest, uid, token, esClient)
 	await next()
 }
+
+/**
+ * 获取待审核视频列表
+ * @param ctx context
+ * @param next context
+ * @returns 获取待审核视频列表的请求响应
+ */
+export const getPendingReviewVideoController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	ctx.body = await getPendingReviewVideoService(uid, token)
+	await next()
+}
+
+/**
+ * 通过一个待审核视频
+ * @param ctx context
+ * @param next context
+ * @returns 通过一个待审核视频的请求响应
+ */
+export const approvePendingReviewVideoController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	const data = ctx.request.body as Partial<ApprovePendingReviewVideoRequestDto>
+	const approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto = {
+		videoId: data.videoId ?? -1,
+	}
+
+	ctx.body = await approvePendingReviewVideoService(approvePendingReviewVideoRequest, uid, token)
+	await next()
+}
+
