@@ -667,7 +667,8 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 						const videoData = videoResult.video
 						if (videoResult.success && videoData) {
 							const removedVideoData: RemovedVideo = {
-								...videoData as RemovedVideo, // TODO: Mongoose issue: #12420
+								...videoData as Video, // TODO: Mongoose issue: #12420
+								_operatorUid_: adminUid,
 								editDateTime: nowDate,
 							}
 							const saveRemovedVideo = await insertData2MongoDB(removedVideoData, removedVideoSchemaInstance, removedVideoCollectionName, option)

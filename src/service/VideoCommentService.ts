@@ -1,9 +1,9 @@
-import { InferSchemaType } from 'mongoose'
+import mongoose, { InferSchemaType } from 'mongoose'
 import { GetUserInfoByUidRequestDto } from '../controller/UserControllerDto.js'
-import { CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, GetVideoCommentDownvotePropsDto, GetVideoCommentDownvoteResultDto, GetVideoCommentUpvotePropsDto, GetVideoCommentUpvoteResultDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
-import { findOneAndPlusByMongodbId, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
+import { AdminDeleteVideoCommentRequestDto, AdminDeleteVideoCommentResponseDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, DeleteSelfVideoCommentRequestDto, DeleteSelfVideoCommentResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, GetVideoCommentDownvotePropsDto, GetVideoCommentDownvoteResultDto, GetVideoCommentUpvotePropsDto, GetVideoCommentUpvoteResultDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
+import { findOneAndPlusByMongodbId, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import { VideoCommentDownvoteSchema, VideoCommentSchema, VideoCommentUpvoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
+import { RemovedVideoCommentSchema, VideoCommentDownvoteSchema, VideoCommentSchema, VideoCommentUpvoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserRoleService, checkUserTokenService, getUserInfoByUidService } from './UserService.js'
 
@@ -773,7 +773,231 @@ const checkUserHasDownvoted = async (commentId: string, uid: number): Promise<bo
 	}
 }
 
+/**
+ * 删除一条自己发布的视频评论
+ * @param deleteSelfVideoCommentRequest 删除一条自己发布的视频评论请求载荷
+ * @param uid 用户 UID
+ * @param token 用户 UID 对应的 token
+ * @returns 删除一条自己发布的视频评论请求响应
+ */
+export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentRequest: DeleteSelfVideoCommentRequestDto, uid: number, token: string): Promise<DeleteSelfVideoCommentResponseDto> => {
+	try {
+		if (!checkDeleteSelfVideoCommentRequest(deleteSelfVideoCommentRequest)) {
+			console.error('删除视频评论失败，参数不合法')
+			return { success: false, message: '删除视频评论失败，参数不合法' }
+		}
 
+		if (!(await checkUserTokenService(uid, token)).success) {
+			console.error('删除视频评论失败，用户校验未通过')
+			return { success: false, message: '删除视频评论失败，用户校验未通过' }
+		}
+
+		const { commentRoute, videoId } = deleteSelfVideoCommentRequest
+		const now = new Date().getTime()
+		const { collectionName: videoCommentSchemaName, schemaInstance: videoCommentSchemaInstance } = VideoCommentSchema
+		const { collectionName: removedVideoCommentSchemaName, schemaInstance: removedVideoCommentSchemaInstance } = RemovedVideoCommentSchema
+		type VideoComment = InferSchemaType<typeof videoCommentSchemaInstance>
+		type RemovedVideoComment = InferSchemaType<typeof removedVideoCommentSchemaInstance>
+
+		const deleteSelfVideoCommentWhere: QueryType<VideoComment> | QueryType<RemovedVideoComment> = {
+			commentRoute,
+			videoId,
+		}
+
+		const deleteSelfVideoCommentSelect: SelectType<VideoComment> = {
+			commentRoute: 1,
+			videoId: 1,
+			uid: 1,
+			emitTime: 1,
+			text: 1,
+			upvoteCount: 1,
+			downvoteCount: 1,
+			commentIndex: 1,
+			subComments: 1,
+			subCommentsCount: 1,
+			editDateTime: 1,
+		}
+
+		try {
+			const deleteSelfVideoCommentSelectResult = await selectDataFromMongoDB<VideoComment>(deleteSelfVideoCommentWhere, deleteSelfVideoCommentSelect, videoCommentSchemaInstance, videoCommentSchemaName)
+
+			if (!deleteSelfVideoCommentSelectResult.success || !deleteSelfVideoCommentSelectResult.result || deleteSelfVideoCommentSelectResult.result.length !== 1) {
+				console.error('删除视频评论失败，检索视频评论结果为空或长度超过限制')
+				return { success: false, message: '删除视频评论失败，检索视频评论结果为空或长度超过限制' }
+			}
+
+			const videoData = deleteSelfVideoCommentSelectResult.result[0]
+
+			if (videoData.uid !== uid) {
+				console.error('删除视频评论失败，只能删除自己的评论')
+				return { success: false, message: '删除视频评论失败，只能删除自己的评论' }
+			}
+
+			// 启动事务
+			const session = await mongoose.startSession()
+			session.startTransaction()
+
+			const removedVideoData: RemovedVideoComment = {
+				...deleteSelfVideoCommentSelectResult.result[0],
+				_operatorUid_: uid,
+				editDateTime: now,
+			}
+
+			try {
+				const deleteSelfVideoCommentSaveResult = await insertData2MongoDB<VideoComment>(removedVideoData, removedVideoCommentSchemaInstance, removedVideoCommentSchemaName, { session })
+
+				if (!deleteSelfVideoCommentSaveResult.success) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('删除视频评论失败，保存已删除视频评论失败')
+					return { success: false, message: '删除视频评论失败，记录失败' }
+				}
+
+				const deleteSelfVideoCommentDeleteResult = await deleteDataFromMongoDB<VideoComment>(deleteSelfVideoCommentWhere, videoCommentSchemaInstance, videoCommentSchemaName, { session })
+
+				if (!deleteSelfVideoCommentDeleteResult.success) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('删除视频评论失败，删除失败')
+					return { success: false, message: '删除视频评论失败，删除失败' }
+				}
+
+				await session.commitTransaction()
+				session.endSession()
+				return { success: true, message: '删除视频评论成功' }
+			} catch (error) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.error('删除视频评论时出错：保存已删除视频评论出错', error)
+				return { success: false, message: '删除视频评论时出错：无法存储记录' }
+			}
+		} catch (error) {
+			console.error('删除视频评论时出错：检索视频评论出错', error)
+			return { success: false, message: '删除视频评论时出错：检索视频评论出错' }
+		}
+	} catch (error) {
+		console.error('删除视频评论时出错：未知错误', error)
+		return { success: false, message: '删除视频评论时出错：未知错误' }
+	}
+}
+
+/**
+ * 管理员删除一条视频评论
+ * @param adminDeleteVideoCommentRequest 管理员删除一个视频评论的请求载荷
+ * @param adminUid 管理员 UID
+ * @param adminToken 管理员 token
+ * @returns 管理员删除一个视频评论的请求响应
+ */
+export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequest: AdminDeleteVideoCommentRequestDto, adminUid: number, adminToken: string): Promise<AdminDeleteVideoCommentResponseDto> => {
+	try {
+		if (!checkAdminDeleteVideoCommentRequest(adminDeleteVideoCommentRequest)) {
+			console.error('管理员删除视频评论失败，参数不合法')
+			return { success: false, message: '管理员删除视频评论失败，参数不合法' }
+		}
+
+		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+			console.error('管理员删除视频评论失败，用户校验未通过')
+			return { success: false, message: '管理员删除视频评论失败，用户校验未通过' }
+		}
+
+		if (!(await checkUserRoleService(adminUid, 'admin'))) {
+			console.error('管理员删除视频评论失败，用户权限不足')
+			return { success: false, message: '管理员删除视频评论失败，用户权限不足' }
+		}
+
+		const { commentRoute, videoId } = adminDeleteVideoCommentRequest
+		const now = new Date().getTime()
+		const { collectionName: videoCommentSchemaName, schemaInstance: videoCommentSchemaInstance } = VideoCommentSchema
+		const { collectionName: removedVideoCommentSchemaName, schemaInstance: removedVideoCommentSchemaInstance } = RemovedVideoCommentSchema
+		type VideoComment = InferSchemaType<typeof videoCommentSchemaInstance>
+		type RemovedVideoComment = InferSchemaType<typeof removedVideoCommentSchemaInstance>
+
+		const deleteSelfVideoCommentWhere: QueryType<VideoComment> | QueryType<RemovedVideoComment> = {
+			commentRoute,
+			videoId,
+		}
+
+		const deleteSelfVideoCommentSelect: SelectType<VideoComment> = {
+			commentRoute: 1,
+			videoId: 1,
+			uid: 1,
+			emitTime: 1,
+			text: 1,
+			upvoteCount: 1,
+			downvoteCount: 1,
+			commentIndex: 1,
+			subComments: 1,
+			subCommentsCount: 1,
+			editDateTime: 1,
+		}
+
+		try {
+			const deleteSelfVideoCommentSelectResult = await selectDataFromMongoDB<VideoComment>(deleteSelfVideoCommentWhere, deleteSelfVideoCommentSelect, videoCommentSchemaInstance, videoCommentSchemaName)
+
+			if (!deleteSelfVideoCommentSelectResult.success || !deleteSelfVideoCommentSelectResult.result || deleteSelfVideoCommentSelectResult.result.length !== 1) {
+				console.error('管理员删除视频评论失败，检索视频评论结果为空或长度超过限制')
+				return { success: false, message: '管理员删除视频评论失败，检索视频评论结果为空或长度超过限制' }
+			}
+
+			// 启动事务
+			const session = await mongoose.startSession()
+			session.startTransaction()
+
+			const removedVideoData: RemovedVideoComment = {
+				...deleteSelfVideoCommentSelectResult.result[0],
+				_operatorUid_: adminUid,
+				editDateTime: now,
+			}
+
+			try {
+				const deleteSelfVideoCommentSaveResult = await insertData2MongoDB<VideoComment>(removedVideoData, removedVideoCommentSchemaInstance, removedVideoCommentSchemaName, { session })
+
+				if (!deleteSelfVideoCommentSaveResult.success) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('管理员删除视频评论失败，保存已删除视频评论失败')
+					return { success: false, message: '管理员删除视频评论失败，记录失败' }
+				}
+
+				const deleteSelfVideoCommentDeleteResult = await deleteDataFromMongoDB<VideoComment>(deleteSelfVideoCommentWhere, videoCommentSchemaInstance, videoCommentSchemaName, { session })
+
+				if (!deleteSelfVideoCommentDeleteResult.success) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('管理员删除视频评论失败，删除失败')
+					return { success: false, message: '管理员删除视频评论失败，删除失败' }
+				}
+
+				await session.commitTransaction()
+				session.endSession()
+				return { success: true, message: '管理员删除视频评论成功' }
+			} catch (error) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.error('管理员删除视频评论时出错：保存已删除视频评论出错', error)
+				return { success: false, message: '管理员删除视频评论时出错：无法存储记录' }
+			}
+		} catch (error) {
+			console.error('管理员删除视频评论时出错：检索视频评论出错', error)
+			return { success: false, message: '管理员删除视频评论时出错：检索视频评论出错' }
+		}
+	} catch (error) {
+		console.error('管理员删除视频评论时出错：未知错误', error)
+		return { success: false, message: '管理员删除视频评论时出错：未知错误' }
+	}
+}
 
 
 /**
@@ -867,5 +1091,29 @@ const checkCancelVideoCommentDownvoteRequest = (cancelVideoCommentDownvoteReques
 	return (
 		cancelVideoCommentDownvoteRequest.videoId !== undefined && cancelVideoCommentDownvoteRequest.videoId !== null
 		&& !!cancelVideoCommentDownvoteRequest.id
+	)
+}
+
+/**
+ * 检查删除视频评论的请求载荷
+ * @param deleteSelfVideoCommentRequest 删除视频评论的请求载荷
+ * @returns 校验结果，合法返回 true，不合法返回 false
+ */
+const checkDeleteSelfVideoCommentRequest = (deleteSelfVideoCommentRequest: DeleteSelfVideoCommentRequestDto): boolean => {
+	return (
+		deleteSelfVideoCommentRequest.videoId !== undefined && deleteSelfVideoCommentRequest.videoId !== null
+		&& !!deleteSelfVideoCommentRequest.commentRoute
+	)
+}
+
+/**
+ * 检查管理员删除一个视频评论的请求载荷
+ * @param adminDeleteVideoCommentRequest 管理员删除一个视频评论的请求载荷
+ * @returns 校验结果，合法返回 true，不合法返回 false
+ */
+const checkAdminDeleteVideoCommentRequest = (adminDeleteVideoCommentRequest: AdminDeleteVideoCommentRequestDto): boolean => {
+	return (
+		adminDeleteVideoCommentRequest.videoId !== undefined && adminDeleteVideoCommentRequest.videoId !== null
+		&& !!adminDeleteVideoCommentRequest.commentRoute
 	)
 }

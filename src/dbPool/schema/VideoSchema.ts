@@ -98,7 +98,12 @@ export const VideoSchema = new VideoSchemaFactory()
  */
 class RemovedVideoSchemaFactory {
 	/** MongoDB Schema */
-	schema = VideoSchema.schema
+	schema = {
+		/** 原来的视频数据集合 */
+		...VideoSchema.schema,
+		/** 操作者 UID - 非空 */
+		_operatorUid_: { type: Number, required: true },
+	}
 	/** MongoDB 集合名 */
 	collectionName = 'removed-video'
 	/** Mongoose Schema 实例 */

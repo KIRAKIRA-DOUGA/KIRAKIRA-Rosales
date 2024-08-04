@@ -1,6 +1,6 @@
-import { cancelVideoCommentDownvoteService, cancelVideoCommentUpvoteService, emitVideoCommentDownvoteService, emitVideoCommentService, emitVideoCommentUpvoteService, getVideoCommentListByKvidService } from '../service/VideoCommentService.js'
+import { adminDeleteVideoCommentService, cancelVideoCommentDownvoteService, cancelVideoCommentUpvoteService, deleteSelfVideoCommentService, emitVideoCommentDownvoteService, emitVideoCommentService, emitVideoCommentUpvoteService, getVideoCommentListByKvidService } from '../service/VideoCommentService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { CancelVideoCommentDownvoteRequestDto, CancelVideoCommentUpvoteRequestDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentRequestDto, EmitVideoCommentUpvoteRequestDto, GetVideoCommentByKvidRequestDto } from './VideoCommentControllerDto.js'
+import { AdminDeleteVideoCommentRequestDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentUpvoteRequestDto, DeleteSelfVideoCommentRequestDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentRequestDto, EmitVideoCommentUpvoteRequestDto, GetVideoCommentByKvidRequestDto } from './VideoCommentControllerDto.js'
 
 /**
  * 用户发送视频评论
@@ -117,5 +117,45 @@ export const cancelVideoCommentDownvoteController = async (ctx: koaCtx, next: ko
 	}
 	const emitVideoCommentResponse = await cancelVideoCommentDownvoteService(cancelVideoCommentDownvoteRequest, uid, token)
 	ctx.body = emitVideoCommentResponse
+	await next()
+}
+
+/**
+ * 删除一条自己发布的视频评论
+ * @param ctx context
+ * @param next context
+ */
+export const deleteSelfVideoCommentController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<DeleteSelfVideoCommentRequestDto>
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	const deleteSelfVideoCommentRequest: DeleteSelfVideoCommentRequestDto = {
+		/** KVID 视频 ID */
+		videoId: data.videoId,
+		/** 评论的路由 */
+		commentRoute: data.commentRoute,
+	}
+	const deleteSelfVideoCommentResponse = await deleteSelfVideoCommentService(deleteSelfVideoCommentRequest, uid, token)
+	ctx.body = deleteSelfVideoCommentResponse
+	await next()
+}
+
+/**
+ * 管理员删除一条视频评论
+ * @param ctx context
+ * @param next context
+ */
+export const adminDeleteVideoCommentController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<AdminDeleteVideoCommentRequestDto>
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+	const adminDeleteVideoCommentRequest: AdminDeleteVideoCommentRequestDto = {
+		/** KVID 视频 ID */
+		videoId: data.videoId,
+		/** 评论的路由 */
+		commentRoute: data.commentRoute,
+	}
+	const adminDeleteVideoCommentResponse = await adminDeleteVideoCommentService(adminDeleteVideoCommentRequest, uid, token)
+	ctx.body = adminDeleteVideoCommentResponse
 	await next()
 }

@@ -96,7 +96,7 @@ export type GetVideoCommentByKvidRequestDto = {
 }
 
 type VideoCommentIdDto = {
-	/** 评论的路由 */ /** 如：1.2.3（视频的第一个评论的第二个回复的第三个回复） */
+	/** 评论的路由 */ /** 如：1.2.3（第一号视频的第二个评论的第三个子回复） */
 	commentRoute: string;
 	/** 评论 ID */
 	upvoteCount: string;
@@ -126,7 +126,7 @@ type CommentSenderUserInfo = {
 export type VideoCommentResult = {
 	/** MongoDB 生成的唯一 ID */
 	_id: string;
-	/** 评论的路由 */ /** 如：1.2.3（视频的第一个评论的第二个回复的第三个回复） */
+	/** 评论的路由 */ /** 如：1.2.3（第一号视频的第二个评论的第三个子回复） */
 	commentRoute: string;
 	/** KVID 视频 ID */
 	videoId: number;
@@ -190,7 +190,6 @@ export type EmitVideoCommentUpvoteResponseDto = {
 	message?: string;
 }
 
-
 /**
  * 为视频评论点赞的请求的请求参数
  */
@@ -210,7 +209,6 @@ export type CancelVideoCommentUpvoteResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
-
 
 /**
  * 为视频评论点踩的请求的请求参数
@@ -246,6 +244,46 @@ export type CancelVideoCommentDownvoteRequestDto = {
 * 取消视频评论点踩的请求的响应结果
 */
 export type CancelVideoCommentDownvoteResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 删除一个自己的视频评论的请求载荷
+ */
+export type DeleteSelfVideoCommentRequestDto = {
+	/** 评论的路由 */
+	commentRoute: string;
+	/** KVID 视频 ID */
+	videoId: number;
+}
+
+/**
+ * 删除一个自己的视频评论的请求响应
+ */
+export type DeleteSelfVideoCommentResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 管理员删除一个视频评论的请求载荷
+ */
+export type AdminDeleteVideoCommentRequestDto = {
+	/** 评论的路由 */
+	commentRoute: string;
+	/** KVID 视频 ID */
+	videoId: number;
+}
+
+/**
+ * 管理员删除一个视频评论的请求响应
+ */
+export type AdminDeleteVideoCommentResponseDto = {
 	/** 是否请求成功 */
 	success: boolean;
 	/** 附加的文本消息 */

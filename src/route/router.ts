@@ -4,7 +4,7 @@ import { emitDanmakuController, getDanmakuListByKvidController } from '../contro
 import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import { blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController } from '../controller/UserController.js'
-import { cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
+import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { deleteVideoByKvidController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 
@@ -309,6 +309,22 @@ router.delete('/video/comment/downvote/cancel', cancelVideoCommentDownvoteContro
 // {
 // 	"videoId": 13,
 // 	"id": "65859fbfae7bd341a408fe42"
+// }
+
+router.delete('/video/comment/deleteSelfComment', deleteSelfVideoCommentController) // 删除一条自己发布的视频评论
+// https://localhost:9999/video/comment/deleteSelfComment
+// cookie: uid, token
+// {
+// 	"videoId": 13,
+// 	"commentRoute": "13.10"
+// }
+
+router.delete('/video/comment/adminDeleteComment', adminDeleteVideoCommentController) // 管理员删除一条视频评论
+// https://localhost:9999/video/comment/adminDeleteComment
+// cookie: uid, token
+// {
+// 	"videoId": 13,
+// 	"commentRoute": "13.10"
 // }
 
 
