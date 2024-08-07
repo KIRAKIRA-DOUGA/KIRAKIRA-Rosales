@@ -26,7 +26,7 @@ import { checkUserRoleService, checkUserTokenService } from './UserService.js'
 export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uid: number, token: string, esClient?: Client): Promise<UploadVideoResponseDto> => {
 	try {
 		if (checkUploadVideoRequest(uploadVideoRequest) && esClient && !isEmptyObject(esClient)) {
-			if ((await checkUserTokenService(uid, token)).success) {
+			if (!(await checkUserTokenService(uid, token)).success) {
 				console.error('ERROR', '上传视频失败，用户校验未通过')
 				return { success: false, message: '上传视频失败，用户校验未通过' }
 			}
@@ -41,7 +41,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '上传视频失败，用户已封禁' }
 			}
 
-			// DELETE ME: 改验证应当移除
+			// DELETE ME: 该验证应当移除
 			if (!await checkUserRoleService(uid, 'admin')) {
 				console.error('ERROR', '上传视频失败，仅限管理员上传')
 				return { success: false, message: '上传视频失败，仅限管理员上传' }
