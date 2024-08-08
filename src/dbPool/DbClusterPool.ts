@@ -379,7 +379,7 @@ export const getNextSequenceValuePool = async (sequenceId: string, sequenceDefau
 			mongoModel = mongoose.model(collectionName, schemaInstance)
 		}
 		try {
-			let sequenceDocument = await mongoModel.findOne({ _id: sequenceId }, options)
+			let sequenceDocument = await mongoModel.findOne({ _id: sequenceId })
 			if (!sequenceDocument) {
 				sequenceDocument = await mongoModel.findOneAndUpdate(
 					{ _id: sequenceId },

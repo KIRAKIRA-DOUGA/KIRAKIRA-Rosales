@@ -91,7 +91,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 
 				const passwordHashHash = hashPasswordSync(passwordHash)
 				const token = generateSecureRandomString(64)
-				const uid = (await getNextSequenceValueEjectService('user', [9], 1)).sequenceValue
+				const uid = (await getNextSequenceValueService('user', 1, 1, session)).sequenceValue
 
 				const userAuthData: UserAuth = {
 					uid,

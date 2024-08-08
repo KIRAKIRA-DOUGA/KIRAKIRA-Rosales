@@ -1,4 +1,4 @@
-import { createVideoTagService, getVideoTagByTagIdService, searchVideoTagService } from '../service/CreateVideoTagService.js'
+import { createVideoTagService, getVideoTagByTagIdService, searchVideoTagService } from '../service/VideoTagService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { CreateVideoTagRequestDto, GetVideoTagByTagIdRequestDto, SearchVideoTagRequestDto } from './VideoTagControllerDto.js'
 

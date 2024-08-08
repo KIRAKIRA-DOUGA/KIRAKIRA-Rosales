@@ -47,8 +47,12 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '上传视频失败，仅限管理员上传' }
 			}
 
+			// 启动事务
+			const session = await mongoose.startSession()
+			session.startTransaction()
+
 			const __VIDEO_SEQUENCE_EJECT__ = [9, 42, 233, 404, 2233, 10388, 10492, 114514] // 生成 KVID 时要跳过的数字
-			const videoIdNextSequenceValueResult = await getNextSequenceValueEjectService('video', __VIDEO_SEQUENCE_EJECT__, 1)
+			const videoIdNextSequenceValueResult = await getNextSequenceValueEjectService('video', __VIDEO_SEQUENCE_EJECT__, 1, 1, session)
 			const videoId = videoIdNextSequenceValueResult.sequenceValue
 			if (videoIdNextSequenceValueResult?.success && videoId !== null && videoId !== undefined) {
 				// 准备视频数据
@@ -95,22 +99,36 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				}
 
 				try {
-					const insert2MongoDBPromise = insertData2MongoDB(video, schemaInstance, collectionName)
+					const insert2MongoDBPromise = insertData2MongoDB(video, schemaInstance, collectionName, { session })
 					const refreshFlag = true
 					const insert2ElasticsearchPromise = insertData2ElasticsearchCluster(esClient, esIndexName, videoEsSchema, videoEsData, refreshFlag)
 					const [insert2MongoDBResult, insert2ElasticsearchResult] = await Promise.all([insert2MongoDBPromise, insert2ElasticsearchPromise])
 
 					if (insert2MongoDBResult.success && insert2ElasticsearchResult.success) {
+						await session.commitTransaction()
+						session.endSession()
 						return { success: true, videoId, message: '视频上传成功' }
 					} else {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
 						console.error('ERROR', '视频上传失败，数据无法导入数据库或搜索引擎')
 						return { success: false, message: '视频上传失败，数据无法导入数据库或搜索引擎' }
 					}
 				} catch (error) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
 					console.error('ERROR', '视频上传失败，数据无法导入数据库，错误：', error)
 					return { success: false, message: '视频上传失败，无法记录视频信息' }
 				}
 			} else {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
 				console.error('ERROR', '获取视频自增 ID 失败', uploadVideoRequest)
 				return { success: false, message: '视频上传失败，获取视频 ID 失败' }
 			}

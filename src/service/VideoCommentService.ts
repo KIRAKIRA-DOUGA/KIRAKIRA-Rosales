@@ -23,7 +23,11 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 					return { success: false, message: '评论发送失败，用户已封禁' }
 				}
 
-				const getCommentIndexResult = await getNextSequenceValueService(`KVID-${emitVideoCommentRequest.videoId}`, 1) // 以视频 ID 为键，获取下一个值，即评论楼层
+				// 启动事务
+				const session = await mongoose.startSession()
+				session.startTransaction()
+
+				const getCommentIndexResult = await getNextSequenceValueService(`KVID-${emitVideoCommentRequest.videoId}`, 1, 1, session) // 以视频 ID 为键，获取下一个值，即评论楼层
 				const commentIndex = getCommentIndexResult.sequenceValue
 				if (getCommentIndexResult.success && commentIndex !== undefined && commentIndex !== null) {
 					const { collectionName, schemaInstance } = VideoCommentSchema
@@ -42,7 +46,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 						editDateTime: nowDate,
 					}
 					try {
-						const insertData2MongoDBResult = await insertData2MongoDB(videoComment, schemaInstance, collectionName)
+						const insertData2MongoDBResult = await insertData2MongoDB(videoComment, schemaInstance, collectionName, { session })
 						if (insertData2MongoDBResult && insertData2MongoDBResult.success) {
 							const getUserInfoByUidRequest: GetUserInfoByUidRequestDto = { uid: videoComment.uid }
 							try {
@@ -62,21 +66,46 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 										isUpvote: false,
 										isDownvote: false,
 									}
+									await session.commitTransaction()
+									session.endSession()
 									return { success: true, message: '视频评论发送成功！', videoComment: videoCommentResult }
 								} else {
+									if (session.inTransaction()) {
+										await session.abortTransaction()
+									}
+									session.endSession()
 									console.warn('WARN', 'WARNING', '视频评论发送成功，但是获取回显数据为空', { videoId: emitVideoCommentRequest.videoId, uid })
 									return { success: false, message: '视频评论发送成功，请尝试刷新页面' }
 								}
 							} catch (error) {
+								if (session.inTransaction()) {
+									await session.abortTransaction()
+								}
+								session.endSession()
 								console.warn('WARN', 'WARNING', '视频评论发送成功，但是获取回显数据失败', error, { videoId: emitVideoCommentRequest.videoId, uid })
 								return { success: false, message: '视频评论发送成功，请刷新页面' }
 							}
+						} else {
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
+							session.endSession()
+							console.error('ERROR', '视频评论发送失败，未返回结果', { videoId: emitVideoCommentRequest.videoId, uid })
+							return { success: false, message: '视频评论发送失败，存储视频评论数据失败' }
 						}
 					} catch (error) {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
 						console.error('ERROR', '视频评论发送失败，无法存储到 MongoDB', error, { videoId: emitVideoCommentRequest.videoId, uid })
 						return { success: false, message: '视频评论发送失败，存储视频评论数据失败' }
 					}
 				} else {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
 					console.error('ERROR', '视频评论发送失败，获取楼层数据失败，无法根据视频 ID 获取序列下一个值', { videoId: emitVideoCommentRequest.videoId, uid })
 					return { success: false, message: '视频评论发送失败，获取楼层数据失败' }
 				}

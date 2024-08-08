@@ -1,4 +1,4 @@
-import { InferSchemaType } from 'mongoose'
+import mongoose, { InferSchemaType } from 'mongoose'
 import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
@@ -23,7 +23,11 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 
 				type FavoritesType = InferSchemaType<typeof schemaInstance>
 
-				const favoritesId = (await getNextSequenceValueService('favorites', 1))?.sequenceValue
+				// 启动事务
+				const session = await mongoose.startSession()
+				session.startTransaction()
+
+				const favoritesId = (await getNextSequenceValueService('favorites', 1, 1, session))?.sequenceValue
 
 				const createFavoritesData: FavoritesType = {
 					favoritesId,
@@ -41,12 +45,22 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 				try {
 					const createFavoritesResult = await insertData2MongoDB<FavoritesType>(createFavoritesData, schemaInstance, collectionName)
 					if (createFavoritesResult.success && createFavoritesResult.result?.length === 1 && createFavoritesResult.result?.[0]) {
+						await session.commitTransaction()
+						session.endSession()
 						return { success: true, message: '创建收藏夹成功', result: createFavoritesResult.result[0] }
 					} else {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
 						console.error('ERROR', '创建收藏夹失败，数据存储失败')
 						return { success: false, message: '创建收藏夹失败，数据存储失败' }
 					}
 				} catch (error) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
 					console.error('ERROR', '创建收藏夹失败，数据存储时出错：', error)
 					return { success: false, message: '创建收藏夹失败，数据存储时出错' }
 				}
