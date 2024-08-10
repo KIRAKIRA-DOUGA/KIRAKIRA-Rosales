@@ -172,6 +172,8 @@ class UserSettingsSchemaFactory {
 		userLinkAccountsPrivacySetting: { type: [UserLinkAccountsPrivacySettingSchema] },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建时间 - 非空 */
+		createDateTime: { type: Number, required: true },
 	}
 	/** MongoDB 集合名 // WARN 不要使用单词的复数形式，Mongoose 会自动添加！ */
 	collectionName = 'user-setting'

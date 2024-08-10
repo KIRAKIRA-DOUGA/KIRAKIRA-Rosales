@@ -107,22 +107,35 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					editDateTime: now,
 				}
 
+				const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+				type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
+				const userInfoData: UserInfo = {
+					UUID: uuid,
+					uid,
+					username,
+					userNickname,
+					label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
+					userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
+					editDateTime: now,
+					createDateTime: now,
+				}
+
+
+				const { collectionName: userSettingsCollectionName, schemaInstance: userSettingsSchemaInstance } = UserSettingsSchema
+				type UserSettings = InferSchemaType<typeof userSettingsSchemaInstance>
+				const userSettingsData: UserSettings = {
+					UUID: uuid,
+					uid,
+					userLinkAccountsPrivacySetting: [] as UserSettings['userLinkAccountsPrivacySetting'], // TODO: Mongoose issue: #12420
+					editDateTime: now,
+					createDateTime: now,
+				}
+
 				try {
 					const saveUserAuthResult = await insertData2MongoDB(userAuthData, schemaInstance, collectionName, { session })
-					const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
-					type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
-					const userInfoData: UserInfo = {
-						UUID: uuid,
-						uid,
-						username,
-						userNickname,
-						label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
-						userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
-						editDateTime: now,
-						createDateTime: now,
-					}
 					const saveUserInfoResult = await insertData2MongoDB(userInfoData, userInfoSchemaInstance, userInfoCollectionName, { session })
-					if (saveUserAuthResult.success && saveUserInfoResult.success) {
+					const saveUserSettingsResult = await insertData2MongoDB(userSettingsData, userSettingsSchemaInstance, userSettingsCollectionName, { session })
+					if (saveUserAuthResult.success && saveUserInfoResult.success && saveUserSettingsResult.success) {
 						const invitationCode = userRegistrationRequest.invitationCode
 						if (invitationCode) {
 							const useInvitationCodeDto: UseInvitationCodeDto = {
