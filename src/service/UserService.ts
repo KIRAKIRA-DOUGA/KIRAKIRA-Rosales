@@ -114,6 +114,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
 					userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
 					editDateTime: now,
+					createDateTime: now,
 				}
 
 				try {
@@ -452,7 +453,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 				const updateUserInfoWhere: QueryType<UserInfo> = {
 					uid,
 				}
-				const updateUserInfoUpdate: UserInfo = {
+				const updateUserInfoUpdate: UpdateType<UserInfo> = {
 					uid,
 					...updateOrCreateUserInfoRequest,
 					label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
@@ -807,7 +808,7 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 				if (requestSendVerificationCodeResult.success) {
 					const lastRequestDateTime = requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
 					const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
-					if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
+					if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 55000 < nowTime) { // 前端 60 秒，后端 55 秒
 						const lastRequestDate = new Date(lastRequestDateTime)
 						if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 5) { // ! 每天五次机会
 							const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
@@ -1222,7 +1223,7 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 							if (requestSendVerificationCodeResult.success) {
 								const lastRequestDateTime = requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
 								const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
-								if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
+								if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 55000 < nowTime) { // 前端 60 秒，后端 55 秒
 									const lastRequestDate = new Date(lastRequestDateTime)
 									if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 10) { // ! 每天十次机会
 										const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
@@ -1389,7 +1390,7 @@ export const requestSendChangePasswordVerificationCodeService = async (requestSe
 							if (requestSendVerificationCodeResult.success) {
 								const lastRequestDateTime = requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
 								const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
-								if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 60000 < nowTime) {
+								if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 55000 < nowTime) { // 前端 60 秒，后端 55 秒
 									const lastRequestDate = new Date(lastRequestDateTime)
 									if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 3) { // ! 每天三次机会
 										const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码

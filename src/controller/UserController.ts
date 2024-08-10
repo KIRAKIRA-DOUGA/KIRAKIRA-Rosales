@@ -156,8 +156,22 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 		uid,
 		token,
 	}
+	const selfUserInfo = await getSelfUserInfoService(getSelfUserInfoRequest)
+	if (!selfUserInfo.success) {
+		const cookieOption = {
+			httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+			secure: true,
+			sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+			maxAge: 0, // 立即过期
+			expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
+			domain: getCorrectCookieDomain(),
+		}
 
-	ctx.body = await getSelfUserInfoService(getSelfUserInfoRequest)
+		ctx.cookies.set('token', '', cookieOption)
+		ctx.cookies.set('email', '', cookieOption)
+		ctx.cookies.set('uid', '', cookieOption)
+	}
+	ctx.body = selfUserInfo
 	await next()
 }
 
