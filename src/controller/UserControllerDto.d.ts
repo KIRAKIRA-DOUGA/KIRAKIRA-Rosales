@@ -24,6 +24,8 @@ export type UserRegistrationRequestDto = {
 export type UserRegistrationResponseDto = {
 	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
+	/** 用户的 UUID */
+	UUID?: string;
 	/** 用户 ID */
 	uid?: number;
 	/** 如果注册成功，则返回一个 token，如果注册失败，则 token 是一个假值（undefined、null 或 ""） */
@@ -50,6 +52,8 @@ export type UserLoginResponseDto = {
 	success: boolean;
 	/** 用户邮箱 */
 	email?: string;
+	/** 用户的 UUID */
+	UUID?: string;
 	/** 用户 ID */
 	uid?: number;
 	/** 如果登录成功，则返回一个 token，如果登录失败，则 token 是一个假值（undefined、null 或 ""） */

@@ -154,7 +154,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 						}
 						await session.commitTransaction()
 						session.endSession()
-						return { success: true, uid, token, message: '用户注册成功' }
+						return { success: true, uid, token, UUID: uuid, message: '用户注册成功' }
 					} else {
 						if (session.inTransaction()) {
 							await session.abortTransaction()
@@ -203,6 +203,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 
 			const userLoginSelect: SelectType<UserAuth> = {
 				email: 1,
+				UUID: 1,
 				uid: 1,
 				token: 1,
 				passwordHint: 1,
@@ -215,7 +216,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 					const userAuthInfo = userAuthResult.result[0]
 					const isCorrectPassword = comparePasswordSync(passwordHash, userAuthInfo.passwordHashHash)
 					if (isCorrectPassword && userAuthInfo.email && userAuthInfo.token && userAuthInfo.uid !== undefined && userAuthInfo.uid !== null) {
-						return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, message: '用户登录成功' }
+						return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
 					} else {
 						return { success: false, email, passwordHint: userAuthInfo.passwordHint, message: '用户密码错误' }
 					}

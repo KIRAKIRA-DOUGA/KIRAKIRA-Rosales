@@ -32,6 +32,7 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	ctx.cookies.set('token', userRegistrationResult.token, cookieOption)
 	ctx.cookies.set('email', data?.email, cookieOption)
 	ctx.cookies.set('uid', `${userRegistrationResult.uid}`, cookieOption)
+	ctx.cookies.set('uuid', `${userRegistrationResult.UUID}`, cookieOption)
 	ctx.body = userRegistrationResult
 	await next()
 }
@@ -60,6 +61,7 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.cookies.set('token', userLoginResult.token, cookieOption)
 	ctx.cookies.set('email', userLoginResult.email, cookieOption)
 	ctx.cookies.set('uid', `${userLoginResult.uid}`, cookieOption)
+	ctx.cookies.set('uuid', `${userLoginResult.UUID}`, cookieOption)
 	ctx.body = userLoginResult
 	await next()
 }
@@ -170,6 +172,7 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 		ctx.cookies.set('token', '', cookieOption)
 		ctx.cookies.set('email', '', cookieOption)
 		ctx.cookies.set('uid', '', cookieOption)
+		ctx.cookies.set('uuid', '', cookieOption)
 	}
 	ctx.body = selfUserInfo
 	await next()
@@ -223,6 +226,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.cookies.set('token', '', cookieOption)
 	ctx.cookies.set('email', '', cookieOption)
 	ctx.cookies.set('uid', '', cookieOption)
+	ctx.cookies.set('uuid', '', cookieOption)
 
 	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
 
