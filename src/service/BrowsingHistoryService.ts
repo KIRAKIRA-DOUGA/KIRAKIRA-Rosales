@@ -3,7 +3,7 @@ import { CreateOrUpdateBrowsingHistoryRequestDto, CreateOrUpdateBrowsingHistoryR
 import { selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType } from '../dbPool/DbClusterPoolTypes.js'
 import { BrowsingHistorySchema } from '../dbPool/schema/BrowsingHistorySchema.js'
-import { checkUserTokenService } from './UserService.js'
+import { checkUserTokenService, getUserUuid } from './UserService.js'
 
 /**
  * 更新或创建用户浏览历史
@@ -17,6 +17,12 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 		if (checkCreateOrUpdateBrowsingHistoryRequest(createOrUpdateBrowsingHistoryRequest)) {
 			if (createOrUpdateBrowsingHistoryRequest.uid === uid) {
 				if ((await checkUserTokenService(uid, token)).success) {
+					const UUID = await getUserUuid(createOrUpdateBrowsingHistoryRequest.uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+					if (!UUID) {
+						console.error('ERROR', '删除一条自己发布的视频评论失败，UUID 不存在', { uid: createOrUpdateBrowsingHistoryRequest.uid })
+						return { success: false, message: '删除一条自己发布的视频评论失败，UUID 不存在' }
+					}
+
 					const { collectionName, schemaInstance } = BrowsingHistorySchema
 					type BrowsingHistoryType = InferSchemaType<typeof schemaInstance>
 
@@ -35,6 +41,7 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 
 					// 准备上传到 MongoDB 的数据
 					const BrowsingHistoryData: BrowsingHistoryType = {
+						UUID,
 						uid,
 						category,
 						id,

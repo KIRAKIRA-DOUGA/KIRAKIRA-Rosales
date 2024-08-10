@@ -6,6 +6,8 @@ import { Schema } from 'mongoose'
 class UserAuthSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 - 唯一 */
+		UUID: { type: String, required: true, unique: true },
 		/** 用户的 UID - 非空 */
 		uid: { type: Number, required: true, unique: true },
 		/** 用户邮箱 - 非空 */
@@ -68,6 +70,8 @@ const UserWebsiteSchema = {
 class UserInfoSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 - 唯一 */
+		UUID: { type: String, required: true, unique: true },
 		/** 用户的 UID - 非空 - 唯一 */
 		uid: { type: Number, required: true, unique: true },
 		/** 用户名 - 唯一 */
@@ -120,6 +124,8 @@ const UserLinkAccountsPrivacySettingSchema = {
 class UserSettingsSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 - 唯一 */
+		UUID: { type: String, required: true, unique: true },
 		/** 用户的 UID - 非空 - 唯一 */
 		uid: { type: Number, required: true, unique: true },
 		/** 是否启用 Cookie - 布尔 */
@@ -206,6 +212,8 @@ export const UserVerificationCodeSchema = new UserVerificationCodeSchemaFactory(
 class UserInvitationCodeSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
+		/** 生成邀请码的用户 UUID，关联用户安全集合的 UUID - 非空 */
+		creatorUUID: { type: String, required: true },
 		/** 生成邀请码的用户 - 非空 */
 		creatorUid: { type: Number, required: true },
 		/** 邀请码 - 非空 - 唯一 */
@@ -216,6 +224,8 @@ class UserInvitationCodeSchemaFactory {
 		isPending: { type: Boolean, required: true },
 		/** 邀请码被标记为无法使用 - 非空 */
 		disabled: { type: Boolean, required: true },
+		/** 使用这个邀请码的用户 UUID */
+		assigneeUUID: { type: String },
 		/** 使用这个邀请码的用户 */
 		assignee: { type: Number },
 		/** 邀请码被使用的时间 */
@@ -265,6 +275,8 @@ export const UserChangeEmailVerificationCodeSchema = new UserChangeEmailVerifica
 class UserChangePasswordVerificationCodeSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
 		/** 用户 ID - 非空 */
 		uid: { type: Number, required: true },
 		/** 用户的邮箱 - 非空 - 唯一 */

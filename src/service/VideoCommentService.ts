@@ -5,7 +5,7 @@ import { findOneAndPlusByMongodbId, insertData2MongoDB, selectDataFromMongoDB, u
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { RemovedVideoCommentSchema, VideoCommentDownvoteSchema, VideoCommentSchema, VideoCommentUpvoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-import { checkUserRoleService, checkUserTokenService, getUserInfoByUidService } from './UserService.js'
+import { checkUserRoleService, checkUserTokenService, getUserInfoByUidService, getUserUuid } from './UserService.js'
 
 /**
  * 用户发送视频评论
@@ -23,6 +23,12 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 					return { success: false, message: '评论发送失败，用户已封禁' }
 				}
 
+				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				if (!UUID) {
+					console.error('ERROR', '评论发送失败，UUID 不存在', { uid })
+					return { success: false, message: '评论发送失败，UUID 不存在' }
+				}
+
 				// 启动事务
 				const session = await mongoose.startSession()
 				session.startTransaction()
@@ -35,6 +41,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 					const nowDate = new Date().getTime()
 					const videoComment: VideoComment = {
 						...emitVideoCommentRequest,
+						UUID,
 						uid,
 						commentRoute: `${emitVideoCommentRequest.videoId}.${commentIndex}`,
 						commentIndex,
@@ -413,6 +420,12 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 	try {
 		if (checkEmitVideoCommentUpvoteRequestData(emitVideoCommentUpvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点赞
+				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				if (!UUID) {
+					console.error('ERROR', '评论点赞失败，UUID 不存在', { uid })
+					return { success: false, message: '评论点赞失败，UUID 不存在' }
+				}
+
 				const { collectionName: videoCommentUpvoteCollectionName, schemaInstance: correctVideoCommentUpvoteSchema } = VideoCommentUpvoteSchema
 				type VideoCommentUpvote = InferSchemaType<typeof correctVideoCommentUpvoteSchema>
 				const videoId = emitVideoCommentUpvoteRequest.videoId
@@ -421,6 +434,7 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 				const videoCommentUpvote: VideoCommentUpvote = {
 					videoId,
 					commentId,
+					UUID,
 					uid,
 					invalidFlag: false,
 					deleteFlag: false,
@@ -565,6 +579,7 @@ const checkUserHasUpvoted = async (commentId: string, uid: number): Promise<bool
 			const { collectionName, schemaInstance } = VideoCommentUpvoteSchema
 			type VideoCommentUpvote = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<VideoCommentUpvote> = {
+				uid,
 				commentId,
 				invalidFlag: false,
 			}
@@ -614,6 +629,12 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
 	try {
 		if (checkEmitVideoCommentDownvoteRequestData(emitVideoCommentDownvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点踩
+				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				if (!UUID) {
+					console.error('ERROR', '评论点踩失败，UUID 不存在', { uid })
+					return { success: false, message: '评论点踩失败，UUID 不存在' }
+				}
+
 				const { collectionName: videoCommentDownvoteCollectionName, schemaInstance: correctVideoCommentDownvoteSchema } = VideoCommentDownvoteSchema
 
 				type VideoCommentDownvote = InferSchemaType<typeof correctVideoCommentDownvoteSchema>
@@ -623,6 +644,7 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
 				const videoCommentDownvote: VideoCommentDownvote = {
 					videoId,
 					commentId,
+					UUID,
 					uid,
 					invalidFlag: false,
 					deleteFlag: false,
@@ -767,6 +789,7 @@ const checkUserHasDownvoted = async (commentId: string, uid: number): Promise<bo
 			const { collectionName, schemaInstance } = VideoCommentDownvoteSchema
 			type VideoCommentDownvote = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<VideoCommentDownvote> = {
+				uid,
 				commentId,
 				invalidFlag: false,
 			}
@@ -821,6 +844,12 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 			return { success: false, message: '删除视频评论失败，用户校验未通过' }
 		}
 
+		const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+		if (!UUID) {
+			console.error('ERROR', '删除一条自己发布的视频评论失败，UUID 不存在', { uid })
+			return { success: false, message: '删除一条自己发布的视频评论失败，UUID 不存在' }
+		}
+
 		const { commentRoute, videoId } = deleteSelfVideoCommentRequest
 		const now = new Date().getTime()
 		const { collectionName: videoCommentSchemaName, schemaInstance: videoCommentSchemaInstance } = VideoCommentSchema
@@ -836,6 +865,7 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 		const deleteSelfVideoCommentSelect: SelectType<VideoComment> = {
 			commentRoute: 1,
 			videoId: 1,
+			UUID: 1,
 			uid: 1,
 			emitTime: 1,
 			text: 1,
@@ -866,14 +896,15 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 			const session = await mongoose.startSession()
 			session.startTransaction()
 
-			const removedVideoData: RemovedVideoComment = {
+			const removedVideoCommentData: RemovedVideoComment = {
 				...deleteSelfVideoCommentSelectResult.result[0],
+				_operatorUUID_: UUID,
 				_operatorUid_: uid,
 				editDateTime: now,
 			}
 
 			try {
-				const deleteSelfVideoCommentSaveResult = await insertData2MongoDB<VideoComment>(removedVideoData, removedVideoCommentSchemaInstance, removedVideoCommentSchemaName, { session })
+				const deleteSelfVideoCommentSaveResult = await insertData2MongoDB<RemovedVideoComment>(removedVideoCommentData, removedVideoCommentSchemaInstance, removedVideoCommentSchemaName, { session })
 
 				if (!deleteSelfVideoCommentSaveResult.success) {
 					if (session.inTransaction()) {
@@ -940,6 +971,12 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 			return { success: false, message: '管理员删除视频评论失败，用户权限不足' }
 		}
 
+		const adminUUID = await getUserUuid(adminUid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+		if (!adminUUID) {
+			console.error('ERROR', '管理员删除一条视频评论失败，adminUUID 不存在', { adminUid })
+			return { success: false, message: '管理员删除一条视频评论失败，adminUUID 不存在' }
+		}
+
 		const { commentRoute, videoId } = adminDeleteVideoCommentRequest
 		const now = new Date().getTime()
 		const { collectionName: videoCommentSchemaName, schemaInstance: videoCommentSchemaInstance } = VideoCommentSchema
@@ -955,6 +992,7 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 		const deleteSelfVideoCommentSelect: SelectType<VideoComment> = {
 			commentRoute: 1,
 			videoId: 1,
+			UUID: 1,
 			uid: 1,
 			emitTime: 1,
 			text: 1,
@@ -978,16 +1016,17 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 			const session = await mongoose.startSession()
 			session.startTransaction()
 
-			const removedVideoData: RemovedVideoComment = {
+			const adminRemovedVideoCommentData: RemovedVideoComment = {
 				...deleteSelfVideoCommentSelectResult.result[0],
+				_operatorUUID_: adminUUID,
 				_operatorUid_: adminUid,
 				editDateTime: now,
 			}
 
 			try {
-				const deleteSelfVideoCommentSaveResult = await insertData2MongoDB<VideoComment>(removedVideoData, removedVideoCommentSchemaInstance, removedVideoCommentSchemaName, { session })
+				const adminDeleteVideoCommentSaveResult = await insertData2MongoDB<VideoComment>(adminRemovedVideoCommentData, removedVideoCommentSchemaInstance, removedVideoCommentSchemaName, { session })
 
-				if (!deleteSelfVideoCommentSaveResult.success) {
+				if (!adminDeleteVideoCommentSaveResult.success) {
 					if (session.inTransaction()) {
 						await session.abortTransaction()
 					}

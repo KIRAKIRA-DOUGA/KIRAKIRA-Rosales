@@ -63,6 +63,8 @@ class VideoSchemaFactory {
 		uploadDate: { type: Number, required: true },
 		/** 视频播放量 - 非空 */
 		watchedCount: { type: Number, required: true },
+		/** 创作者 UUID - 非空 */
+		uploaderUUID: { type: String, required: true },
 		/** 创作者 UID - 非空 */
 		uploaderId: { type: Number, required: true },
 		/** 视频时长，单位 ms - 非空 */
@@ -103,6 +105,8 @@ class RemovedVideoSchemaFactory {
 	schema = {
 		/** 原来的视频数据集合 */
 		...VideoSchema.schema,
+		/** 操作者 UUID - 非空 */
+		_operatorUUID_: { type: String, required: true },
 		/** 操作者 UID - 非空 */
 		_operatorUid_: { type: Number, required: true },
 	}

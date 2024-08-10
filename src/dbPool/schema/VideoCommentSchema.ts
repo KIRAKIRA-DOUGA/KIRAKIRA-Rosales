@@ -57,7 +57,9 @@ class VideoCommentSchemaFactory {
 		commentRoute: { type: String, required: true, unique: true },
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true },
-		/** 评论发送者的用户的 UID - 非空 */
+		/** 评论发送者的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 评论发送者的 UID - 非空 */
 		uid: { type: Number, required: true },
 		/** 发送评论的时间 - 非空 */
 		emitTime: { type: Number, required: true },
@@ -91,6 +93,8 @@ class RemovedVideoCommentSchemaFactory {
 	schema = {
 		/** 原来的视频评论数据集合 */
 		...VideoCommentSchema.schema,
+		/** 操作者 UUID - 非空 */
+		_operatorUUID_: { type: String, required: true },
 		/** 操作者 UID - 非空 */
 		_operatorUid_: { type: Number, required: true },
 	}
@@ -111,7 +115,9 @@ class VideoCommentUpvoteSchemaFactory {
 		videoId: { type: Number, required: true },
 		/** 评论的ID - 非空 */
 		commentId: { type: String, required: true },
-		/** 评论点赞者的用户的 UID - 非空 */
+		/** 评论点赞者的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 评论点赞者的 UID - 非空 */
 		uid: { type: Number, required: true },
 		/** 评论点赞无效化标识（用户取消点赞） */
 		invalidFlag: { type: Boolean, required: true },
@@ -138,6 +144,8 @@ class VideoCommentDownvoteSchemaFactory {
 		videoId: { type: Number, required: true },
 		/** 评论的ID - 非空 */
 		commentId: { type: String, required: true },
+		/** 评论点踩者的 UUID - 非空 */
+		UUID: { type: String, required: true },
 		/** 评论点踩者的用户的 UID - 非空 */
 		uid: { type: Number, required: true },
 		/** 评论点踩无效化标识（用户取消点踩） */

@@ -3,7 +3,7 @@ import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidRequestD
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { DanmakuSchema } from '../dbPool/schema/DanmakuSchema.js'
-import { checkUserRoleService, checkUserTokenService } from './UserService.js'
+import { checkUserRoleService, checkUserTokenService, getUserUuid } from './UserService.js'
 
 /**
  * 用户发送弹幕
@@ -16,6 +16,12 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 	try {
 		if (checkEmitDanmakuRequest(emitDanmakuRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
+				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				if (!UUID) {
+					console.error('ERROR', '发送弹幕失败，UUID 不存在', { uid })
+					return { success: false, message: '发送弹幕失败，UUID 不存在' }
+				}
+
 				if (await checkUserRoleService(uid, 'blocked')) {
 					console.error('ERROR', '弹幕发送失败，用户已封禁')
 					return { success: false, message: '弹幕发送失败，用户已封禁' }
@@ -25,6 +31,7 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 				type Danmaku = InferSchemaType<typeof schemaInstance>
 				const nowDate = new Date().getTime()
 				const danmaku: Danmaku = {
+					UUID,
 					uid,
 					...emitDanmakuRequest,
 					editDateTime: nowDate,

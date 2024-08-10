@@ -3,7 +3,7 @@ import { createCloudflareImageUploadSignedUrl, createCloudflareR2PutSignedUrl } 
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
+import { generateRandomString, generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
 import { BlockUserByUIDRequestDto, BlockUserByUIDResponseDto, CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUsernameRequestDto, CheckUsernameResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetBlockedUserResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, ReactivateUserByUIDRequestDto, ReactivateUserByUIDResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
@@ -92,8 +92,10 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				const passwordHashHash = hashPasswordSync(passwordHash)
 				const token = generateSecureRandomString(64)
 				const uid = (await getNextSequenceValueService('user', 1, 1, session)).sequenceValue
+				const uuid = generateRandomString(24)
 
 				const userAuthData: UserAuth = {
+					UUID: uuid,
 					uid,
 					email,
 					emailLowerCase,
@@ -105,25 +107,29 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					editDateTime: now,
 				}
 
-				const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
-				type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
-				const userInfoData: UserInfo = {
-					uid,
-					username,
-					userNickname,
-					label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
-					userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
-					editDateTime: now,
-					createDateTime: now,
-				}
-
 				try {
 					const saveUserAuthResult = await insertData2MongoDB(userAuthData, schemaInstance, collectionName, { session })
+					const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+					type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
+					const userInfoData: UserInfo = {
+						UUID: uuid,
+						uid,
+						username,
+						userNickname,
+						label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
+						userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
+						editDateTime: now,
+						createDateTime: now,
+					}
 					const saveUserInfoResult = await insertData2MongoDB(userInfoData, userInfoSchemaInstance, userInfoCollectionName, { session })
 					if (saveUserAuthResult.success && saveUserInfoResult.success) {
 						const invitationCode = userRegistrationRequest.invitationCode
 						if (invitationCode) {
-							const useInvitationCodeDto: UseInvitationCodeDto = { invitationCode, registrantUid: uid }
+							const useInvitationCodeDto: UseInvitationCodeDto = {
+								invitationCode,
+								registrantUid: uid,
+								registrantUUID: uuid,
+							}
 							try {
 								const useInvitationCodeResult = await useInvitationCode(useInvitationCodeDto)
 								if (!useInvitationCodeResult.success) {
@@ -454,7 +460,6 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 					uid,
 				}
 				const updateUserInfoUpdate: UpdateType<UserInfo> = {
-					uid,
 					...updateOrCreateUserInfoRequest,
 					label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
 					userLinkAccounts: updateOrCreateUserInfoRequest.userLinkAccounts as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
@@ -703,7 +708,6 @@ export const getUserSettingsService = async (uid: number, token: string): Promis
 	}
 }
 
-
 /**
  * 根据 UID 更新或创建用户设置
  * @param updateOrCreateUserSettingsRequest 更新或创建用户设置时的请求参数
@@ -714,14 +718,19 @@ export const getUserSettingsService = async (uid: number, token: string): Promis
 export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettingsRequest: UpdateOrCreateUserSettingsRequestDto, uid: number, token: string): Promise<UpdateOrCreateUserSettingsResponseDto> => {
 	try {
 		if (await checkUserToken(uid, token)) {
+			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			if (!UUID) {
+				console.error('ERROR', '更新或创建用户设置失败，UUID 不存在', { updateOrCreateUserSettingsRequest, uid })
+				return { success: false, message: '更新或创建用户设置失败，UUID 不存在' }
+			}
+
 			if (checkUpdateOrCreateUserSettingsRequest(updateOrCreateUserSettingsRequest)) {
 				const { collectionName, schemaInstance } = UserSettingsSchema
 				type UserSettings = InferSchemaType<typeof schemaInstance>
 				const updateOrCreateUserSettingsWhere: QueryType<UserSettings> = {
 					uid,
 				}
-				const updateOrCreateUserSettingsUpdate: UserSettings = {
-					uid,
+				const updateOrCreateUserSettingsUpdate: UpdateType<UserSettings> = {
 					...updateOrCreateUserSettingsRequest,
 					userLinkAccountsPrivacySetting: updateOrCreateUserSettingsRequest.userLinkAccountsPrivacySetting as UserSettings['userLinkAccountsPrivacySetting'], // TODO: Mongoose issue: #12420
 					editDateTime: new Date().getTime(),
@@ -929,6 +938,12 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 export const createInvitationCodeService = async (uid: number, token: string): Promise<CreateInvitationCodeResponseDto> => {
 	try {
 		if (await checkUserToken(uid, token)) {
+			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			if (!UUID) {
+				console.error('ERROR', '生成邀请码失败，UUID 不存在', { uid })
+				return { success: false, isCoolingDown: false, message: '生成邀请码失败，UUID 不存在' }
+			}
+
 			const nowTime = new Date().getTime()
 			const sevenDaysInMillis = 7 * 24 * 60 * 60 * 1000 // 将七天的时间转换为毫秒
 			const { collectionName, schemaInstance } = UserInvitationCodeSchema
@@ -990,6 +1005,7 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 
 						if (finalInvitationCode) {
 							const userInvitationCode: UserInvitationCode = {
+								creatorUUID: UUID,
 								creatorUid: uid,
 								isPending: false,
 								disabled: false,
@@ -1106,6 +1122,7 @@ const useInvitationCode = async (useInvitationCodeDto: UseInvitationCodeDto): Pr
 			}
 			const useInvitationCodeUpdate: UpdateType<UserInvitationCode> = {
 				assignee: useInvitationCodeDto.registrantUid,
+				assigneeUUID: useInvitationCodeDto.registrantUUID,
 				usedDateTime: nowTime,
 				editDateTime: nowTime,
 			}
@@ -1355,6 +1372,12 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 export const requestSendChangePasswordVerificationCodeService = async (requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto, uid: number, token: string): Promise<RequestSendChangePasswordVerificationCodeResponseDto> => {
 	try {
 		if (await checkUserToken(uid, token)) {
+			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			if (!UUID) {
+				console.error('ERROR', '请求发送修改密码的邮箱验证码失败，UUID 不存在', { uid })
+				return { success: false, isCoolingDown: false, message: '请求发送修改密码的邮箱验证码失败，UUID 不存在' }
+			}
+
 			if (checkRequestSendChangePasswordVerificationCodeRequest(requestSendChangePasswordVerificationCodeRequest)) {
 				const { clientLanguage } = requestSendChangePasswordVerificationCodeRequest
 				try {
@@ -1400,6 +1423,7 @@ export const requestSendChangePasswordVerificationCodeService = async (requestSe
 										}
 
 										const requestSendVerificationCodeUpdate: UserChangePasswordVerificationCode = {
+											UUID,
 											uid,
 											emailLowerCase,
 											verificationCode,
@@ -1945,6 +1969,41 @@ export const getBlockedUserService = async (adminUid: number, adminToken: string
 	}
 }
 
+
+/**
+ * 根据 UID 获取 UUID
+ * // DELETE ME 这是一个临时的解决方案，以后 Cookie 中直接存储 UUID
+ * @param uid 用户 UID
+ * @returns UUID
+ */
+export const getUserUuid = async (uid: number): Promise<string | void> => {
+	try {
+		if (uid === undefined || uid === null || uid <= 0) {
+			console.error('ERROR', '通过 UID 获取 UUID 失败，UID 不合法')
+			return
+		}
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaSchemaInstance>
+
+		const getUuidWhere: QueryType<UserAuth> = {
+			uid,
+		}
+
+		const getUuidSelect: SelectType<UserAuth> = {
+			UUID: 1,
+		}
+
+		const getUuidResult = await selectDataFromMongoDB(getUuidWhere, getUuidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
+		if (getUuidResult.success && getUuidResult.result?.length === 1) {
+			return getUuidResult.result[0].UUID
+		} else {
+			console.error('ERROR', '通过 UID 获取 UUID 失败，UUID 不存在或结果长度不为 1')
+		}
+	} catch (error) {
+		console.error('ERROR', '通过 UID 获取 UUID 时出错：', error)
+		return
+	}
+}
 
 /**
  * 校验用户注册信息

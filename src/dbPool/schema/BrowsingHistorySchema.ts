@@ -6,6 +6,8 @@ import { Schema } from 'mongoose'
 class BrowsingHistorySchemaFactory {
 	/** MongoDB Schema */
 	schema = {
+		/** 用户的 UUID - 非空 */
+		UUID: { type: String, required: true },
 		/** 用户的 UID - 非空 */
 		uid: { type: Number, required: true },
 		/** 浏览的内容的类型，比如说 video, photo 等 - 非空 */

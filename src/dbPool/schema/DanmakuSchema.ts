@@ -8,7 +8,9 @@ class DanmakuSchemaFactory {
 	schema = {
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true },
-		/** 弹幕发送者的用户的 UID - 非空 */
+		/** 弹幕发送者的的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 弹幕发送者的 UID - 非空 */
 		uid: { type: Number, required: true },
 		/** 弹幕发送的时机，单位：秒（支持小数） - 非空  */
 		time: { type: Number, required: true },

@@ -15,7 +15,7 @@ import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTy
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
-import { checkUserRoleService, checkUserTokenService } from './UserService.js'
+import { checkUserRoleService, checkUserTokenService, getUserUuid } from './UserService.js'
 
 /**
  * 上传视频
@@ -47,6 +47,13 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '上传视频失败，仅限管理员上传' }
 			}
 
+
+			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			if (!UUID) {
+				console.error('ERROR', '上传视频失败，UUID 不存在', { uid })
+				return { success: false, message: '上传视频失败，UUID 不存在' }
+			}
+
 			// 启动事务
 			const session = await mongoose.startSession()
 			session.startTransaction()
@@ -74,6 +81,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					image: uploadVideoRequest.image,
 					uploadDate: nowDate,
 					watchedCount: 0,
+					uploaderUUID: UUID,
 					uploaderId: uploadVideoRequest.uploaderId,
 					duration: uploadVideoRequest.duration,
 					description,
@@ -241,6 +249,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				image: 1,
 				uploadDate: 1,
 				watchedCount: 1,
+				uploaderUUID: 1,
 				uploaderId: 1,
 				duration: 1,
 				description: 1,
@@ -654,6 +663,12 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 	try {
 		if (checkDeleteVideoRequest(deleteVideoRequest) && esClient && !isEmptyObject(esClient)) {
 			if ((await checkUserTokenService(adminUid, adminToken)).success) {
+				const adminUUID = await getUserUuid(adminUid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				if (!adminUUID) {
+					console.error('ERROR', '删除一个视频失败，adminUUID 不存在', { adminUid })
+					return { success: false, message: '删除一个视频失败，adminUUID 不存在' }
+				}
+
 				if (await checkUserRoleService(adminUid, 'admin')) { // must have admin role
 					const videoId = deleteVideoRequest.videoId
 					const nowDate = new Date().getTime()
@@ -687,6 +702,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 							const removedVideoData: RemovedVideo = {
 								...videoData as Video, // TODO: Mongoose issue: #12420
 								pendingReview: false, // 已删除的视频就不需要审核了...
+								_operatorUUID_: adminUUID,
 								_operatorUid_: adminUid,
 								editDateTime: nowDate,
 							}
@@ -871,10 +887,10 @@ export const approvePendingReviewVideoService = async (approvePendingReviewVideo
 				videoId,
 			}
 
-			const updatePendingReviewVideoUpdate: UpdateType<Video> = {
+			const updatePendingReviewVideoData: UpdateType<Video> = {
 				pendingReview: false,
 			}
-			const updatePendingReviewVideoResult = await findOneAndUpdateData4MongoDB(updatePendingReviewVideoWhere, updatePendingReviewVideoUpdate, videoSchemaInstance, videoCollectionName)
+			const updatePendingReviewVideoResult = await findOneAndUpdateData4MongoDB(updatePendingReviewVideoWhere, updatePendingReviewVideoData, videoSchemaInstance, videoCollectionName)
 
 			if (!updatePendingReviewVideoResult.success) {
 				console.error('ERROR', '通过一个待审核视频失败，更新失败')

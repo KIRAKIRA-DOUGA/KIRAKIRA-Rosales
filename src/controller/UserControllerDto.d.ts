@@ -463,6 +463,8 @@ export type UseInvitationCodeDto = {
 	invitationCode: string;
 	/** 注册者 UID */
 	registrantUid: number;
+	/** 注册者 UUID */
+	registrantUUID: string;
 }
 
 /**
