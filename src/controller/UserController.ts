@@ -1,5 +1,5 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminClearUserInfoRequestDto, AdminGetUserInfoRequestDto, ApproveUserInfoRequestDto, BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
@@ -324,6 +324,19 @@ export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) 
 }
 
 /**
+ * 获取用户注册时使用的邀请码
+ * @param ctx context
+ * @param next context
+ */
+export const getUserInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const token = ctx.cookies.get('token')
+
+	ctx.body = await getUserInvitationCodeService(uid, token)
+	await next()
+}
+
+/**
  * 检查一个邀请码是否可用
  * @param ctx context
  * @param next context
@@ -337,6 +350,7 @@ export const checkInvitationCodeController = async (ctx: koaCtx, next: koaNext) 
 	ctx.body = await checkInvitationCodeService(checkInvitationCodeRequestDto)
 	await next()
 }
+
 
 /**
  * 请求发送验证码，用于修改邮箱
