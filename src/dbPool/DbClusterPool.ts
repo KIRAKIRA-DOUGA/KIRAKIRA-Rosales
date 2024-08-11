@@ -51,9 +51,9 @@ export type DbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> =
 		BaseDbPoolOptions
 	:
 		BaseDbPoolOptions & {
-			/** 虚拟属性，用于关联查询 // WARN 不要设置，除非你知道你在作什么！ */
+			/** 虚拟属性，用于关联查询 // WARN 不要设置，除非你知道你在做什么！ */
 			virtual?: MongoDBVirtualSettingType<T, P>;
-			/** populate 方法中关联的虚拟属性名，用于关联查询 // WARN 不要设置，除非你知道你在作什么！ */
+			/** populate 方法中关联的虚拟属性名，用于关联查询 // WARN 不要设置，除非你知道你在做什么！ */
 			populate?: MongoDBVirtualSettingType<T, P>['name'];
 		}
 
@@ -191,7 +191,14 @@ export const deleteDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
  * @param options 设置项
  * @returns 查询状态和结果
  */
-export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>, sort?: OrderByType<T>): Promise< DbPoolResultsType<T> > => {
+/** 分页查询 */
+type Pagination = {
+	/** 当前在第几页 */
+	page: number;
+	/** 一页显示多少条 */
+	pageSize: number;
+}
+export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>, sort?: OrderByType<T>, pagination?: Pagination): Promise< DbPoolResultsType<T> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -212,12 +219,19 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 			mongoModel = mongoose.model<T>(collectionName, schema)
 		}
 
+		let pageSize = undefined
+		let skip = 0
+		if (pagination && pagination.page > 0 && pagination.pageSize > 0) {
+			skip = (pagination.page - 1) * pagination.pageSize
+			pageSize = pagination.pageSize
+		}
+
 		try {
 			let result
 			if (options && 'populate' in options && options.populate) {
-				result = (await mongoModel.find(where, select, options).populate({ path: options.populate, strictPopulate: false }).sort(sort)).map(results => results.toObject({ virtuals: true }) as T)
+				result = (await mongoModel.find(where, select, options).populate({ path: options.populate, strictPopulate: false }).sort(sort).skip(skip).limit(pageSize)).map(results => results.toObject({ virtuals: true }) as T)
 			} else {
-				result = (await mongoModel.find(where, select, options).sort(sort)).map(results => results.toObject() as T)
+				result = (await mongoModel.find(where, select, options).sort(sort).skip(skip).limit(pageSize)).map(results => results.toObject() as T)
 			}
 			return { success: true, message: '数据查询成功', result }
 		} catch (error) {

@@ -1,14 +1,27 @@
 import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
-import { createCloudflareImageUploadSignedUrl, createCloudflareR2PutSignedUrl } from '../cloudflare/index.js'
+import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateRandomString, generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
-import { BlockUserByUIDRequestDto, BlockUserByUIDResponseDto, CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto, CheckUsernameRequestDto, CheckUsernameResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto, GetBlockedUserResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto, GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto, ReactivateUserByUIDRequestDto, ReactivateUserByUIDResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto, UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto, UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto, UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto } from '../controller/UserControllerDto.js'
+import {
+	AdminClearUserInfoRequestDto, AdminClearUserInfoResponseDto,
+	AdminGetUserInfoRequestDto, AdminGetUserInfoResponseDto, ApproveUserInfoRequestDto, ApproveUserInfoResponseDto,
+	BlockUserByUIDRequestDto, BlockUserByUIDResponseDto, CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto,
+	CheckUsernameRequestDto, CheckUsernameResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto,
+	GetBlockedUserResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto,
+	GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto,
+	ReactivateUserByUIDRequestDto, ReactivateUserByUIDResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto,
+	RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto,
+	UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto,
+	UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto,
+	UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto,
+	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto,
+} from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
-import { getNextSequenceValueEjectService, getNextSequenceValueService } from './SequenceValueService.js'
+import { getNextSequenceValueService } from './SequenceValueService.js'
 
 /**
  * 用户注册
@@ -116,6 +129,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					userNickname,
 					label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
 					userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
+					isUpdatedAfterReview: true,
 					editDateTime: now,
 					createDateTime: now,
 				}
@@ -436,6 +450,11 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
  */
 export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto, uid: number, token: string): Promise<UpdateOrCreateUserInfoResponseDto> => {
 	try {
+		if (await checkUserRoleService(uid, 'blocked')) {
+			console.error('ERROR', '更新或创建用户信息失败，用户已封禁')
+			return { success: false, message: '更新或创建用户信息失败，用户已封禁' }
+		}
+
 		if (await checkUserToken(uid, token)) {
 			if (checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
 				const { collectionName, schemaInstance } = UserInfoSchema
@@ -477,6 +496,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 					...updateOrCreateUserInfoRequest,
 					label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
 					userLinkAccounts: updateOrCreateUserInfoRequest.userLinkAccounts as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
+					isUpdatedAfterReview: true,
 					editDateTime: new Date().getTime(),
 				}
 				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
@@ -1691,7 +1711,9 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 }
 
 /**
- * 验证某个用户是否是某个角色
+ * // TODO: 计划中删除
+ * // DELETE ME 这是一个临时的解决方案，以后 Cookie 中直接存储 UUID
+ * 根据 UID 验证某个用户是否是某个角色
  * @param uid 用户 ID, 为空时会导致校验失败
  * @param role 用户的角色
  * @returns 校验结果，如果用户是这个角色返回 true，否则返回 false
@@ -1742,6 +1764,62 @@ export const checkUserRoleService = async (uid: number, role: string | string[])
 		}
 	} catch (error) {
 		console.error('ERROR', `验证用户角色失败！用户 UID：${uid}`, error)
+		return false
+	}
+}
+
+/**
+ * 验证某个用户是否是某个角色
+ * @param UUID 用户 UUID, 为空时会导致校验失败
+ * @param role 用户的角色
+ * @returns 校验结果，如果用户是这个角色返回 true，否则返回 false
+ */
+export const checkUserRoleByUUIDService = async (UUID: string, role: string | string[]): Promise<boolean> => {
+	try {
+		if (UUID !== undefined && UUID !== null && role) {
+			const { collectionName, schemaInstance } = UserAuthSchema
+			type UserAuth = InferSchemaType<typeof schemaInstance>
+			let userTokenWhere: QueryType<UserAuth> = {
+				uid: -1,
+			}
+			if (typeof role === 'string') {
+				userTokenWhere = {
+					UUID,
+					role,
+				}
+			} else {
+				userTokenWhere = {
+					UUID,
+					role: { $in: role },
+				}
+			}
+			const userTokenSelect: SelectType<UserAuth> = {
+				uid: 1,
+			}
+
+			try {
+				const checkUserRoleResult = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				if (checkUserRoleResult && checkUserRoleResult.success) {
+					if (checkUserRoleResult.result?.length === 1) {
+						return true
+					} else {
+						console.error('ERROR', `验证用户角色时，用户信息长度不为 1，用户 UUID: ${UUID}`)
+						return false
+					}
+				} else {
+					console.error('ERROR', `验证用户角色时未查询到用户信息，用户 UUID:${UUID}`)
+					return false
+				}
+			} catch (error) {
+				console.error('ERROR', `验证用户角色时出错，用户 UUID:${UUID}，错误信息：`, error)
+				return false
+			}
+		} else {
+			console.error('ERROR', `验证用户角色失败！用户 UUID 或 role 不存在，用户 UUID: ${UUID}`)
+			return false
+		}
+	} catch (error) {
+		console.error('ERROR', `验证用户角色失败！用户 UUID: ${UUID}`, error)
 		return false
 	}
 }
@@ -1912,7 +1990,6 @@ export const getBlockedUserService = async (adminUid: number, adminToken: string
 			const isAdmin = await checkUserRoleService(adminUid, 'admin')
 			if (isAdmin) {
 				const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
-				const { collectionName: userInfoCollectionName } = UserInfoSchema
 
 				// TODO: 下方这个 Aggregate 只适用于被封禁用户的搜索
 				const blockedUserAggregateProps: PipelineStage[] = [
@@ -1938,6 +2015,7 @@ export const getBlockedUserService = async (adminUid: number, adminToken: string
 					{
 						$project: {
 							uid: 1,
+							UUID: 1,
 							userCreateDateTime: 1, // 用户创建日期
 							role: 1, // 用户的角色
 							username: '$user_info_data.username', // 用户名
@@ -1983,6 +2061,249 @@ export const getBlockedUserService = async (adminUid: number, adminToken: string
 	}
 }
 
+/**
+ * 管理员获取用户信息
+ * @param adminGetUserInfoServiceRequest 管理员获取用户信息的请求载荷
+ * @param adminUUID 管理员的 UUID
+ * @param adminToken 管理员的 Token
+ * @returns 管理员获取用户信息的请求响应
+ */
+export const adminGetUserInfoService = async (adminGetUserInfoRequest: AdminGetUserInfoRequestDto, adminUUID: string, adminToken: string): Promise<AdminGetUserInfoResponseDto> => {
+	try {
+		if (!checkAdminGetUserInfoRequest(adminGetUserInfoRequest)) {
+			console.error('ERROR', '管理员获取用户信息失败，请求参数不合法')
+			return { success: false, message: '管理员获取用户信息失败，请求参数不合法', totalCount: 0 }
+		}
+
+		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
+			console.error('ERROR', '管理员获取用户信息失败，用户校验未通过')
+			return { success: false, message: '管理员获取用户信息失败，用户校验未通过', totalCount: 0 }
+		}
+
+		if (!await checkUserRoleByUUIDService(adminUUID, 'admin')) {
+			console.error('ERROR', '管理员获取用户信息失败，用户权限不足')
+			return { success: false, message: '管理员获取用户信息失败，用户权限不足', totalCount: 0 }
+		}
+
+		let pageSize = undefined
+		let skip = 0
+		if (adminGetUserInfoRequest.pagination && adminGetUserInfoRequest.pagination.page > 0 && adminGetUserInfoRequest.pagination.pageSize > 0) {
+			skip = (adminGetUserInfoRequest.pagination.page - 1) * adminGetUserInfoRequest.pagination.pageSize
+			pageSize = adminGetUserInfoRequest.pagination.pageSize
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		const adminGetUserInfoCountPipeline: PipelineStage[] = [
+			{
+				$lookup: {
+					from: 'user-infos', // WARN: 别忘了加复数
+					localField: 'UUID',
+					foreignField: 'UUID',
+					as: 'user_info_data',
+				},
+			},
+			{
+				$unwind: {
+					path: '$user_info_data',
+					preserveNullAndEmptyArrays: true, // 保留空数组和null值
+				},
+			},
+		]
+
+		const adminGetUserInfoPipeline: PipelineStage[] = [
+			{
+				$lookup: {
+					from: 'user-infos', // WARN: 别忘了加复数
+					localField: 'UUID',
+					foreignField: 'UUID',
+					as: 'user_info_data',
+				},
+			},
+			{
+				$unwind: {
+					path: '$user_info_data',
+					preserveNullAndEmptyArrays: true, // 保留空数组和null值
+				},
+			},
+			{ $sort: { 'user_info_data.editDateTime': -1 } }, // 按最后编辑时间降序排序
+			{ $skip: skip }, // 跳过指定数量的文档
+			{ $limit: pageSize }, // 限制返回的文档数量
+		]
+
+		if (adminGetUserInfoRequest.isOnlyShowUserInfoUpdatedAfterReview) {
+			const userInfoFilter = {
+				$match: {
+					'user_info_data.isUpdatedAfterReview': true,
+				},
+			}
+			adminGetUserInfoCountPipeline.push(userInfoFilter)
+			adminGetUserInfoPipeline.push(userInfoFilter)
+		}
+
+		const projectStep = {
+			$project: {
+				uid: 1,
+				UUID: 1,
+				userCreateDateTime: 1, // 用户创建日期
+				role: 1, // 用户的角色
+				username: '$user_info_data.username', // 用户名
+				userNickname: '$user_info_data.userNickname', // 用户昵称
+				avatar: '$user_info_data.avatar', // 用户头像
+				userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
+				signature: '$user_info_data.signature', // 用户的个性签名
+				gender: '$user_info_data.gender', // 用户的性别
+				totalCount: 1, // 总文档数
+			},
+		}
+		adminGetUserInfoPipeline.push(projectStep)
+
+		const countStep = {
+			$count: 'totalCount', // 统计总文档数
+		}
+		adminGetUserInfoCountPipeline.push(countStep)
+
+		try {
+			const userCountResult = await selectDataByAggregateFromMongoDB(userAuthSchemaInstance, userAuthCollectionName, adminGetUserInfoCountPipeline)
+			const userResult = await selectDataByAggregateFromMongoDB(userAuthSchemaInstance, userAuthCollectionName, adminGetUserInfoPipeline)
+			if (!userResult.success) {
+				console.error('ERROR', '管理员获取用户信息失败，查询数据失败')
+				return { success: false, message: '管理员获取用户信息失败，查询数据失败', totalCount: 0 }
+			}
+
+			return { success: true, message: '管理员获取用户信息成功', result: userResult.result, totalCount: userCountResult.result?.[0]?.totalCount ?? 0 }
+		} catch (error) {
+			console.error('ERROR', '管理员获取用户信息时出错，查询数据时出错：', error)
+			return { success: false, message: '管理员获取用户信息时出错，查询数据时出错', totalCount: 0 }
+		}
+	} catch (error) {
+		console.error('ERROR', '管理员获取用户信息时出错，未知错误：', error)
+		return { success: false, message: '管理员获取用户信息时出错，未知错误', totalCount: 0 }
+	}
+}
+
+/**
+ * 管理员通过用户信息审核
+ * @param approveUserInfoRequest 管理员通过用户信息审核的请求载荷
+ * @param adminUUID 管理员的 UUID
+ * @param adminToken 管理员的 Token
+ * @returns 管理员通过用户信息审核的请求响应
+ */
+export const approveUserInfoService = async (approveUserInfoRequest: ApproveUserInfoRequestDto, adminUUID: string, adminToken: string): Promise<ApproveUserInfoResponseDto> => {
+	try {
+		if (!checkApproveUserInfoRequest(approveUserInfoRequest)) {
+			console.error('ERROR', '管理员通过用户信息审核失败，参数不合法')
+			return { success: false, message: '管理员通过用户信息审核失败，参数不合法' }
+		}
+
+		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
+			console.error('ERROR', '管理员通过用户信息审核失败，用户校验未通过')
+			return { success: false, message: '管理员通过用户信息审核失败，用户校验未通过' }
+		}
+
+		if (!await checkUserRoleByUUIDService(adminUUID, 'admin')) {
+			console.error('ERROR', '管理员通过用户信息审核失败，用户权限不足')
+			return { success: false, message: '管理员通过用户信息审核失败，用户权限不足' }
+		}
+
+		const UUID = approveUserInfoRequest.UUID
+		const { collectionName, schemaInstance } = UserInfoSchema
+		type UserInfo = InferSchemaType<typeof schemaInstance>
+
+		const approveUserInfoWhere: QueryType<UserInfo> = {
+			UUID,
+		}
+		const approveUserInfoUpdate: UpdateType<UserInfo> = {
+			isUpdatedAfterReview: false,
+			editDateTime: new Date().getTime(),
+		}
+		try {
+			const updateResult = await findOneAndUpdateData4MongoDB(approveUserInfoWhere, approveUserInfoUpdate, schemaInstance, collectionName)
+			if (!updateResult.success) {
+				console.error('ERROR', '管理员通过用户信息审核失败，向数据库更新数据失败')
+				return { success: false, message: '管理员通过用户信息审核失败，向数据库更新数据失败' }
+			}
+
+			return { success: true, message: '管理员通过用户信息审核成功' }
+		} catch (error) {
+			console.error('ERROR', '管理员通过用户信息审核时出错，向数据库更新数据时出错：', error)
+			return { success: false, message: '管理员通过用户信息审核时出错，向数据库更新数据时出错' }
+		}
+	} catch (error) {
+		console.error('ERROR', '管理员通过用户信息审核时出错，未知错误：', error)
+		return { success: false, message: '管理员通过用户信息审核时出错，未知错误' }
+	}
+}
+
+/**
+ * 管理员清空某个用户的信息
+ * @param approveUserInfoRequest 管理员清空某个用户的信息的请求载荷
+ * @param adminUUID 管理员的 UUID
+ * @param adminToken 管理员的 Token
+ * @returns 管理员清空某个用户的信息请求响应
+ */
+export const adminClearUserInfoService = async (adminClearUserInfoRequest: AdminClearUserInfoRequestDto, adminUUID: string, adminToken: string): Promise<AdminClearUserInfoResponseDto> => {
+	try {
+		if (!checkAdminClearUserInfoRequest(adminClearUserInfoRequest)) {
+			console.error('ERROR', '管理员清空某个用户的信息失败，参数不合法')
+			return { success: false, message: '管理员清空某个用户的信息失败，参数不合法' }
+		}
+
+		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
+			console.error('ERROR', '管理员清空某个用户的信息失败，用户校验未通过')
+			return { success: false, message: '管理员清空某个用户的信息失败，用户校验未通过' }
+		}
+
+		if (!await checkUserRoleByUUIDService(adminUUID, 'admin')) {
+			console.error('ERROR', '管理员清空某个用户的信息失败，用户权限不足')
+			return { success: false, message: '管理员清空某个用户的信息失败，用户权限不足' }
+		}
+
+		const uid = adminClearUserInfoRequest.uid
+		const UUID = await getUserUuid(uid)
+		if (!UUID) {
+			console.error('ERROR', '管理员清空某个用户的信息失败，UUID 不存在', { uid })
+			return { success: false, message: '管理员清空某个用户的信息失败，UUID 不存在' }
+		}
+
+		const { collectionName, schemaInstance } = UserInfoSchema
+		type UserInfo = InferSchemaType<typeof schemaInstance>
+
+		const adminClearUserInfoWhere: QueryType<UserInfo> = {
+			uid, // TODO: 也许可以删掉
+			UUID,
+		}
+		const adminClearUserInfoUpdate: UpdateType<UserInfo> = {
+			username: `${UUID}`,
+			userNickname: '[cleaned]',
+			avatar: '',
+			userBannerImage: '',
+			signature: '',
+			gender: '',
+			label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
+			userBirthday: -1,
+			userProfileMarkdown: '',
+			userLinkAccounts: [] as UserInfo['userLinkAccounts'], // TODO: Mongoose issue: #12420
+			userWebsite: { websiteName: '', websiteUrl: '' },
+			isUpdatedAfterReview: false, // 清除信息的直接设为 false
+			editDateTime: new Date().getTime(),
+		}
+		try {
+			const updateResult = await findOneAndUpdateData4MongoDB(adminClearUserInfoWhere, adminClearUserInfoUpdate, schemaInstance, collectionName)
+			if (!updateResult.success) {
+				console.error('ERROR', '管理员清空某个用户的信息失败，向数据库更新数据失败')
+				return { success: false, message: '管理员清空某个用户的信息失败，向数据库更新数据失败' }
+			}
+
+			return { success: true, message: '管理员清空某个用户的信息成功' }
+		} catch (error) {
+			console.error('ERROR', '管理员清空某个用户的信息时出错，向数据库更新数据时出错：', error)
+			return { success: false, message: '管理员清空某个用户的信息时出错，向数据库更新数据时出错' }
+		}
+	} catch (error) {
+		console.error('ERROR', '管理员清空某个用户的信息时出错，未知错误：', error)
+		return { success: false, message: '管理员清空某个用户的信息时出错，未知错误' }
+	}
+}
 
 /**
  * 根据 UID 获取 UUID
@@ -2072,6 +2393,7 @@ const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequ
 
 /**
  * 检查用户 Token，检查 Token 和用户 id 是否吻合，判断用户是否已注册
+ * // DELETE ME 这是一个临时的解决方案，以后 Cookie 中直接存储 UUID
  * @param uid 用户 ID
  * @param token 用户 Token
  * @returns boolean 如果验证通过则为 true，不通过为 false
@@ -2107,6 +2429,52 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 			}
 		} else {
 			console.error('ERROR', `查询用户 Token 时出错，必要的参数 uid 或 token为空：【${uid}】`)
+			return false
+		}
+	} catch (error) {
+		console.error('ERROR', '查询用户 Token 时出错，未知错误：', error)
+		return false
+	}
+}
+
+
+/**
+ * 检查用户 Token，检查 Token 和用户 id 是否吻合，判断用户是否已注册
+ * @param UUID 用户 UUID
+ * @param token 用户 Token
+ * @returns boolean 如果验证通过则为 true，不通过为 false
+ */
+const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolean> => {
+	try {
+		if (UUID !== null && !Number.isNaN(UUID) && UUID !== undefined && token) {
+			const { collectionName, schemaInstance } = UserAuthSchema
+			type UserAuth = InferSchemaType<typeof schemaInstance>
+			const userTokenWhere: QueryType<UserAuth> = {
+				UUID,
+				token,
+			}
+			const userTokenSelect: SelectType<UserAuth> = {
+				uid: 1,
+			}
+			try {
+				const userInfo = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				if (userInfo && userInfo.success) {
+					if (userInfo.result?.length === 1) {
+						return true
+					} else {
+						console.error('ERROR', `查询用户 Token 时，用户信息长度不为 1，用户 UUID: ${UUID}`)
+						return false
+					}
+				} else {
+					console.error('ERROR', `查询用户 Token 时未查询到用户信息，用户 UUID: ${UUID}，错误描述：${userInfo.message}，错误信息：${userInfo.error}`)
+					return false
+				}
+			} catch (error) {
+				console.error('ERROR', `查询用户 Token 时出错，用户 UUID: ${UUID}，错误信息：`, error)
+				return false
+			}
+		} else {
+			console.error('ERROR', `查询用户 Token 时出错，必要的参数 uid 或 token为空 UUID: ${UUID}`)
 			return false
 		}
 	} catch (error) {
@@ -2215,6 +2583,7 @@ const checkCheckInvitationCodeRequestDto = (checkInvitationCodeRequestDto: Check
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
 const checkRequestSendChangeEmailVerificationCodeRequest = (requestSendChangeEmailVerificationCodeRequest: RequestSendChangeEmailVerificationCodeRequestDto): boolean => {
+	requestSendChangeEmailVerificationCodeRequest // TODO
 	return true
 }
 
@@ -2224,6 +2593,7 @@ const checkRequestSendChangeEmailVerificationCodeRequest = (requestSendChangeEma
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
 const checkRequestSendChangePasswordVerificationCodeRequest = (requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto): boolean => {
+	requestSendChangePasswordVerificationCodeRequest // TODO
 	return true
 }
 
@@ -2266,4 +2636,36 @@ const checkBlockUserByUIDRequest = (blockUserByUIDRequest: BlockUserByUIDRequest
  */
 const checkReactivateUserByUIDRequest = (reactivateUserByUIDRequest: ReactivateUserByUIDRequestDto): boolean => {
 	return (reactivateUserByUIDRequest.uid !== null && reactivateUserByUIDRequest.uid !== undefined)
+}
+
+/**
+ * 检查管理员获取用户信息的请求载荷
+ * @param adminGetUserInfoRequest 管理员获取用户信息的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkAdminGetUserInfoRequest = (adminGetUserInfoRequest: AdminGetUserInfoRequestDto): boolean => {
+	return (
+		adminGetUserInfoRequest.isOnlyShowUserInfoUpdatedAfterReview !== undefined && adminGetUserInfoRequest.isOnlyShowUserInfoUpdatedAfterReview !== null
+		&& !!adminGetUserInfoRequest.pagination && adminGetUserInfoRequest.pagination.page > 0 && adminGetUserInfoRequest.pagination.pageSize > 0
+	)
+}
+
+/**
+ * 检查管理员通过用户信息审核的请求载荷
+ * @param approveUserInfoRequest 管理员通过用户信息审核的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkApproveUserInfoRequest = (approveUserInfoRequest: ApproveUserInfoRequestDto): boolean => {
+	return (!!approveUserInfoRequest.UUID)
+}
+
+/**
+ * 检查管理员清空某个用户的信息的请求载荷
+ * @param adminClearUserInfoRequest 管理员清空某个用户的信息的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkAdminClearUserInfoRequest = (adminClearUserInfoRequest: AdminClearUserInfoRequestDto): boolean => {
+	return (
+		adminClearUserInfoRequest.uid !== undefined && adminClearUserInfoRequest.uid !== null && typeof adminClearUserInfoRequest.uid === 'number' && adminClearUserInfoRequest.uid > 0
+	)
 }

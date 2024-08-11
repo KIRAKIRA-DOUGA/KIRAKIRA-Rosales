@@ -1,7 +1,7 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
+import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { AdminClearUserInfoRequestDto, AdminGetUserInfoRequestDto, ApproveUserInfoRequestDto, BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -464,3 +464,75 @@ export const getBlockedUserController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.body = reactivateUserByUIDResponse
 	await next()
 }
+
+/**
+ * 管理员获取用户信息
+ * @param ctx context
+ * @param next context
+ * @return 管理员获取用户信息的请求响应
+ */
+export const adminGetUserInfoController = async (ctx: koaCtx, next: koaNext) => {
+	const adminUUID = ctx.cookies.get('uuid')
+	const adminToken = ctx.cookies.get('token')
+
+	const isOnlyShowUserInfoUpdatedAfterReviewString = ctx.query.isOnlyShowUserInfoUpdatedAfterReview as string
+	const page = ctx.query.page as string
+	const pageSize = ctx.query.pageSize as string
+
+	const adminGetUserInfoRequest: AdminGetUserInfoRequestDto = {
+		isOnlyShowUserInfoUpdatedAfterReview: typeof isOnlyShowUserInfoUpdatedAfterReviewString === 'string' && isOnlyShowUserInfoUpdatedAfterReviewString === 'true',
+		pagination: {
+			page: parseInt(page, 10) ?? 0,
+			pageSize: parseInt(pageSize, 10) ?? Infinity,
+		},
+	}
+
+	const adminGetUserInfoResponse = await adminGetUserInfoService(adminGetUserInfoRequest, adminUUID, adminToken)
+	ctx.body = adminGetUserInfoResponse
+	await next()
+}
+
+/**
+ * 管理员通过用户信息审核
+ * @param ctx context
+ * @param next context
+ * @return 管理员通过用户信息审核的请求响应
+ */
+export const approveUserInfoController = async (ctx: koaCtx, next: koaNext) => {
+	const adminUUID = ctx.cookies.get('uuid')
+	const adminToken = ctx.cookies.get('token')
+
+	const data = ctx.request.body as Partial<ApproveUserInfoRequestDto>
+
+	const approveUserInfoRequest: ApproveUserInfoRequestDto = {
+		UUID: data.UUID ?? '',
+	}
+
+	const approveUserInfoResponse = await approveUserInfoService(approveUserInfoRequest, adminUUID, adminToken)
+	ctx.body = approveUserInfoResponse
+	await next()
+}
+
+/**
+ * 管理员清空某个用户的信息
+ * @param ctx context
+ * @param next context
+ * @return 管理员清空某个用户的信息的请求响应
+ */
+export const adminClearUserInfoController = async (ctx: koaCtx, next: koaNext) => {
+	const adminUUID = ctx.cookies.get('uuid')
+	const adminToken = ctx.cookies.get('token')
+
+	const data = ctx.request.body as Partial<AdminClearUserInfoRequestDto>
+
+	const adminClearUserInfoRequest: AdminClearUserInfoRequestDto = {
+		uid: data.uid ?? -1,
+	}
+
+	const adminClearUserInfoResponse = await adminClearUserInfoService(adminClearUserInfoRequest, adminUUID, adminToken)
+	ctx.body = adminClearUserInfoResponse
+	await next()
+}
+
+
+
