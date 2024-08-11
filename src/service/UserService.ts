@@ -1036,6 +1036,55 @@ export const getMyInvitationCodeService = async (uid: number, token: string): Pr
 }
 
 /**
+ * 获取用户注册时使用的邀请码
+ * @param uid 用户 UID
+ * @param token 用户 token
+ * @returns 返回用户注册时使用的邀请码
+ */
+export const getUserInvitationCodeService = async (uid: number, token: string): Promise<{ success: boolean; message: string; invitationCode?: string }> => {
+    try {
+        if (await checkUserToken(uid, token)) {
+            const { collectionName, schemaInstance } = UserInvitationCodeSchema;
+            type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
+
+            // 查询条件：确保 assignee 字段等于传入的 uid
+            const InvitationCodeWhere: QueryType<UserInvitationCode> = {
+                assignee: uid,
+            };
+
+            const InvitationCodeSelect: SelectType<UserInvitationCode> = {
+                invitationCode: 1,
+            };
+
+            try {
+                const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
+                if (myInvitationCodeResult.success) {
+                    if (myInvitationCodeResult.result?.length > 0) {
+                        // 提取并返回第一个匹配的邀请码
+                        const invitationCode = myInvitationCodeResult.result[0].invitationCode;
+                        return { success: true, message: '获取邀请码成功', invitationCode };
+                    } else {
+                        return { success: true, message: '邀请码为空' };
+                    }
+                } else {
+                    console.error('ERROR', '获取邀请码失败，请求失败', { uid });
+                    return { success: false, message: '获取邀请码失败，请求失败！' };
+                }
+            } catch (error) {
+                console.error('ERROR', '获取邀请码失败，请求时出错', { uid, error });
+                return { success: false, message: '获取邀请码失败，请求时出错！' };
+            }
+        } else {
+            console.error('ERROR', '获取邀请码失败，非法用户！', { uid });
+            return { success: false, message: '获取邀请码失败，非法用户！' };
+        }
+    } catch (error) {
+        console.error('ERROR', '获取邀请码失败，未知错误', error);
+        return { success: false, message: '获取邀请码失败，未知错误' };
+    }
+};
+
+/**
  * 使用邀请码注册
  * @param userInvitationCodeDto 使用邀请码注册的参数
  * @returns 使用邀请码注册的结果
