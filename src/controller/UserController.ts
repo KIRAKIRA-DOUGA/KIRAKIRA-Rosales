@@ -329,10 +329,9 @@ export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) 
  * @param next context
  */
 export const getUserInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-
-	ctx.body = await getUserInvitationCodeService(uid, token)
+	ctx.body = await getUserInvitationCodeService(uuid, token)
 	await next()
 }
 
