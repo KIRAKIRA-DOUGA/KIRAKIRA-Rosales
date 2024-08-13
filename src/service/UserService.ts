@@ -16,7 +16,7 @@ import {
 	UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto,
 	UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto,
 	UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto,
-	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto,
+	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
@@ -1235,37 +1235,42 @@ export const checkInvitationCodeService = async (checkInvitationCodeRequestDto: 
  * @param token 用户 token
  * @returns 返回用户注册时使用的邀请码
  */
-export const getUserInvitationCodeService = async (uuid: string, token: string): Promise<{ success: boolean; message: string; invitationCode?: string }> => {
+export const getUserInvitationCodeService = async (uuid: string, token: string): Promise<GetUserInvitationCodeResponseDto> => {
     try {
-        const { collectionName, schemaInstance } = UserInvitationCodeSchema;
-        type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
+        if (await checkUserTokenByUUID(uuid, token)) {
+            const { collectionName, schemaInstance } = UserInvitationCodeSchema;
+            type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
 
-        // 查询条件：确保 assigneeUUID 字段等于传入的 uuid
-        const InvitationCodeWhere: QueryType<UserInvitationCode> = {
-            assigneeUUID: uuid,
-        };
+            // 查询条件：确保 assignee 字段等于传入的 uid
+            const InvitationCodeWhere: QueryType<UserInvitationCode> = {
+                assigneeUUID: uuid,
+            };
 
-        const InvitationCodeSelect: SelectType<UserInvitationCode> = {
-            invitationCode: 1,
-        };
+            const InvitationCodeSelect: SelectType<UserInvitationCode> = {
+                invitationCode: 1,
+            };
 
-        try {
-            const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
-            if (myInvitationCodeResult.success) {
-                if (myInvitationCodeResult.result?.length > 0) {
-                    // 提取并返回第一个匹配的邀请码
-                    const invitationCode = myInvitationCodeResult.result[0].invitationCode;
-                    return { success: true, message: '获取邀请码成功', invitationCode };
+            try {
+                const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
+                if (myInvitationCodeResult.success) {
+                    if (myInvitationCodeResult.result?.length > 0) {
+                        // 提取并返回第一个匹配的邀请码
+                        const invitationCode = myInvitationCodeResult.result[0].invitationCode;
+                        return { success: true, message: '获取邀请码成功', invitationCode };
+                    } else {
+                        return { success: true, message: '邀请码为空' };
+                    }
                 } else {
-                    return { success: true, message: '邀请码为空' };
+                    console.error('ERROR', '获取邀请码失败，请求失败', { uuid });
+                    return { success: false, message: '获取邀请码失败，请求失败！' };
                 }
-            } else {
-                console.error('ERROR', '获取邀请码失败，请求失败', { uuid });
-                return { success: false, message: '获取邀请码失败，请求失败！' };
+            } catch (error) {
+                console.error('ERROR', '获取邀请码失败，请求时出错', { uuid, error });
+                return { success: false, message: '获取邀请码失败，请求时出错！' };
             }
-        } catch (error) {
-            console.error('ERROR', '获取邀请码失败，请求时出错', { uuid, error });
-            return { success: false, message: '获取邀请码失败，请求时出错！' };
+        } else {
+            console.error('ERROR', '获取邀请码失败，非法用户！', { uuid });
+            return { success: false, message: '获取邀请码失败，非法用户！' };
         }
     } catch (error) {
         console.error('ERROR', '获取邀请码失败，未知错误', error);

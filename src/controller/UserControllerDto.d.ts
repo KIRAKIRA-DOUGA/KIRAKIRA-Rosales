@@ -462,13 +462,13 @@ export type GetMyInvitationCodeResponseDto = {
 /**
  * 获取用户自己注册的邀请码的请求响应
  */
-export type getUserInvitationCodeResponseDto = {
+export type GetUserInvitationCodeResponseDto = {
 	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
 	/** 附加的文本消息 */
 	message?: string;
 	/** 注册时使用的邀请码 */
-	invitationCodeResult: InvitationCode[];
+	invitationCode?: string;
 }
 
 /**
