@@ -16,7 +16,7 @@ import {
 	UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto,
 	UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto,
 	UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto,
-	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto,
+	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
@@ -1227,6 +1227,55 @@ export const checkInvitationCodeService = async (checkInvitationCodeRequestDto: 
 		console.error('ERROR', '检查邀请码可用性失败，未知错误', error)
 		return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，未知错误' }
 	}
+}
+
+/**
+ * 获取用户注册时使用的邀请码
+ * @param uuid 用户 UUID
+ * @param token 用户 token
+ * @returns 返回用户注册时使用的邀请码
+ */
+export const getUserInvitationCodeService = async (uuid: string, token: string): Promise<GetUserInvitationCodeResponseDto> => {
+    try {
+        if (await checkUserTokenByUUID(uuid, token)) {
+            const { collectionName, schemaInstance } = UserInvitationCodeSchema;
+            type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
+
+            // 查询条件：确保 assignee 字段等于传入的 uid
+            const InvitationCodeWhere: QueryType<UserInvitationCode> = {
+                assigneeUUID: uuid,
+            };
+
+            const InvitationCodeSelect: SelectType<UserInvitationCode> = {
+                invitationCode: 1,
+            };
+
+            try {
+                const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
+                if (myInvitationCodeResult.success) {
+                    if (myInvitationCodeResult.result?.length > 0) {
+                        // 提取并返回第一个匹配的邀请码
+                        const invitationCode = myInvitationCodeResult.result[0].invitationCode;
+                        return { success: true, message: '获取邀请码成功', invitationCode };
+                    } else {
+                        return { success: true, message: '邀请码为空' };
+                    }
+                } else {
+                    console.error('ERROR', '获取邀请码失败，请求失败', { uuid });
+                    return { success: false, message: '获取邀请码失败，请求失败！' };
+                }
+            } catch (error) {
+                console.error('ERROR', '获取邀请码失败，请求时出错', { uuid, error });
+                return { success: false, message: '获取邀请码失败，请求时出错！' };
+            }
+        } else {
+            console.error('ERROR', '获取邀请码失败，非法用户！', { uuid });
+            return { success: false, message: '获取邀请码失败，非法用户！' };
+        }
+    } catch (error) {
+        console.error('ERROR', '获取邀请码失败，未知错误', error);
+        return { success: false, message: '获取邀请码失败，未知错误' };
+    }
 }
 
 /**
