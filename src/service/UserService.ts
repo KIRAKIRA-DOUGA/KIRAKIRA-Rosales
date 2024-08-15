@@ -230,9 +230,32 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
 				if (userAuthResult?.result && userAuthResult.result?.length === 1) {
 					const userAuthInfo = userAuthResult.result[0]
+					const uuid = userAuthInfo.UUID
+					const otp = userLoginRequest.otp
 					const isCorrectPassword = comparePasswordSync(passwordHash, userAuthInfo.passwordHashHash)
 					if (isCorrectPassword && userAuthInfo.email && userAuthInfo.token && userAuthInfo.uid !== undefined && userAuthInfo.uid !== null) {
-						return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
+						const authenticator = checkUserAuthenticator(uuid)
+						if (!authenticator){
+							return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
+						}else{
+							const currentotp = await getCurrentOtpForUser(uuid)			
+							if (otp.length === 0){
+								return { success: false, message:" 启用了身份验证器但未进行二次验证 ", authenticator:true }
+							}
+							else{
+								if (currentotp.success){
+									if (currentotp.otp == otp){
+										return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
+									}else{
+										return { success: false, message: '验证码错误', authenticator:true }
+									}
+								}else{
+									console.error('ERROR', `查询验证码错误'`)
+									return { success: false, message: '查询验证码错误', authenticator:true }
+								}
+							}
+							
+						}
 					} else {
 						return { success: false, email, passwordHint: userAuthInfo.passwordHint, message: '用户密码错误' }
 					}
@@ -2540,15 +2563,8 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  * @param token 用户的 token
  * @returns 用户当前的一次性验证码
  */
-const getCurrentOtpForUser = async (uuid: string, token: string): Promise<{success: boolean, message?: string, otp?: string}> => {
+const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, message?: string, otp?: string}> => {
     try {
-        // 验证用户的 token 是否有效
-        const isValidUser = await checkUserTokenByUUID(uuid, token);
-        if (!isValidUser) {
-            console.error('获取验证码失败，非法用户', { uuid });
-            return { success: false, message: '获取验证码失败，非法用户' };
-        }
-
         // 检查用户是否已有身份验证器
         const hasAuthenticator = await checkUserAuthenticator(uuid);
         if (!hasAuthenticator) {

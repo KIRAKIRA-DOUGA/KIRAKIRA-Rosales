@@ -45,6 +45,7 @@ router.post('/user/login', userLoginController) // 用户登录
 // {
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+//  ”otp“: "XXXXXX" //非必须
 // }
 
 router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检查用户是否存在

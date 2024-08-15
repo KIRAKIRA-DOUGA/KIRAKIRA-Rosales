@@ -42,6 +42,8 @@ export type UserLoginRequestDto = {
 	email: string;
 	/** 在前端已经 Hash 过一次的的密码 */
 	passwordHash: string;
+	/** 一次性验证码 */
+	otp?: string;
 }
 
 /**
@@ -62,6 +64,8 @@ export type UserLoginResponseDto = {
 	passwordHint?: string;
 	/** 附加的文本消息 */
 	message?: string;
+	/** 是否启用身份验证器 */
+	authenticator?: boolean;
 }
 
 /**
