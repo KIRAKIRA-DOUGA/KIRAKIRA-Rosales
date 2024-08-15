@@ -16,7 +16,7 @@ import {
 	UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto,
 	UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto,
 	UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto,
-	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto, UserCreateAuthenticatorResponseDto, UserCurrentOTPResponseDto, UserDeleteAuthenticatorResponseDto
+	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto, UserCreateAuthenticatorResponseDto, UserDeleteAuthenticatorResponseDto
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
@@ -2540,7 +2540,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  * @param token 用户的 token
  * @returns 用户当前的一次性验证码
  */
-export const getCurrentOtpForUser = async (uuid: string, token: string): Promise<UserCurrentOTPResponseDto> => {
+const getCurrentOtpForUser = async (uuid: string, token: string): Promise<{success: boolean, message?: string, otp?: string}> => {
     try {
         // 验证用户的 token 是否有效
         const isValidUser = await checkUserTokenByUUID(uuid, token);
