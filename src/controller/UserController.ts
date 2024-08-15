@@ -1,5 +1,5 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService, CreateUserAuthenticatorService, getCurrentOtpForUser } from '../service/UserService.js'
+import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService, CreateUserAuthenticatorService, getCurrentOtpForUser, deleteUserAuthenticatorService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminClearUserInfoRequestDto, AdminGetUserInfoRequestDto, ApproveUserInfoRequestDto, BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
@@ -77,6 +77,20 @@ export const userCreateAuthenticatorController = async (ctx: koaCtx, next: koaNe
 	const token = ctx.cookies.get('token')
 	const result = await CreateUserAuthenticatorService(uuid, token)
 	ctx.body = result
+	await next()
+}
+
+/**
+ * 删除身份验证器的控制器
+ * @param ctx context
+ * @param next next
+ * @returns deleteUserAuthenticatorController 删除结果
+ */
+export const deleteUserAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
+    const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const result = await deleteUserAuthenticatorService(uuid, token);
+    ctx.body = result;
 	await next()
 }
 

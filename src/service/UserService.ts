@@ -16,9 +16,9 @@ import {
 	UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto,
 	UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto,
 	UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto,
-	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto, UserCreateAuthenticatorResponseDto, UserCurrentOTPResponseDto
+	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto, UserCreateAuthenticatorResponseDto, UserCurrentOTPResponseDto, UserDeleteAuthenticatorResponseDto
 } from '../controller/UserControllerDto.js'
-import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserAuthSchema, UserAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
@@ -2581,6 +2581,37 @@ export const getCurrentOtpForUser = async (uuid: string, token: string): Promise
     } catch (error) {
         console.error('获取验证码失败，未知错误', error);
         return { success: false, message: '获取验证码失败，未知错误' };
+    }
+};
+
+/**
+ * 删除用户的身份验证器
+ * @param uuid 用户的 UUID
+ * @returns 删除操作的结果
+ */
+export const deleteUserAuthenticatorService = async (uuid: string, token: string): Promise<UserDeleteAuthenticatorResponseDto> => {
+    try {
+        // 鉴权检查
+        const isValidUser = await checkUserTokenByUUID(uuid, token);
+        if (!isValidUser) {
+            return { success: false, message: '删除身份验证器失败，非法用户' };
+        }
+
+        const { collectionName, schemaInstance } = UserAuthenticatorSchema;
+        type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+        const where: QueryType<UserAuthenticator> = { UUID: uuid };
+
+        // 调用删除函数
+        const deleteResult = await deleteDataFromMongoDB(where, schemaInstance, collectionName);
+
+        if (deleteResult.success && deleteResult.result.deletedCount > 0) {
+            return { success: true, message: '删除身份验证器成功' };
+        } else {
+            return { success: false, message: '删除身份验证器失败，未找到匹配的数据' };
+        }
+    } catch (error) {
+        console.error('删除身份验证器失败', error);
+        return { success: false, message: '删除身份验证器失败，发生未知错误' };
     }
 };
 

@@ -746,7 +746,7 @@ export type UserCreateAuthenticatorResponseDto = {
 }
 
 /**
- * 获取用户当前的一次性验证码
+ * 获取用户当前的一次性验证码的请求响应
  */
 export type UserCurrentOTPResponseDto = {
 	/** 执行结果 */
@@ -755,4 +755,14 @@ export type UserCurrentOTPResponseDto = {
 	message?: string;
 	/** 当前的验证码 */
 	otp?: string
+}
+
+/**
+ * 删除用户的身份验证器的请求响应
+ */
+export type UserDeleteAuthenticatorResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
 }
