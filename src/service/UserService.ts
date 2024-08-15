@@ -2634,8 +2634,19 @@ export const CreateUserAuthenticatorService = async (uuid: string, token: string
 			console.error('创建身份验证器失败，已经存在一个验证器了', { uuid });
 			return { success: false, message: '创建身份验证器失败，已经存在一个验证器了' };
 		}
+		const { collectionName, schemaInstance } = UserAuthSchema;
+        type UserEmail = InferSchemaType<typeof schemaInstance>;
 
-		return await CreateUserAuthenticator(uuid, token);
+        // 查询条件：确保 assignee 字段等于传入的 uid
+        const InvitationCodeWhere: QueryType<UserEmail> = {
+            assigneeUUID: uuid,
+        };
+        const InvitationCodeSelect: SelectType<UserEmail> = {
+            email: 1,
+        };
+		const EmailResult = await selectDataFromMongoDB<UserEmail>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
+		const email =  EmailResult.result[0].email
+		return await CreateUserAuthenticator(uuid, token, email);
 	} catch (error) {
 		console.error('创建身份验证器失败，未知错误', error);
 		return { success: false, message: '创建身份验证器失败，未知错误' };
@@ -2664,7 +2675,7 @@ const checkUserAuthenticator = async (uuid: string): Promise<boolean> => {
  * @param uuid 用户的 UUID
  * @returns 创建身份验证器的结果
  */
-const CreateUserAuthenticator = async (uuid: string, token: string): Promise<UserCreateAuthenticatorResponseDto> => {
+const CreateUserAuthenticator = async (uuid: string, token: string, email: string): Promise<UserCreateAuthenticatorResponseDto> => {
 	// 创建一个数据库会话并启动事务
 	const session = await mongoose.startSession();
 	session.startTransaction();
@@ -2677,7 +2688,7 @@ const CreateUserAuthenticator = async (uuid: string, token: string): Promise<Use
 			const now = new Date().getTime();
 			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			const secret = authenticator.generateSecret();
-			const otpauth = authenticator.keyuri(uuid, 'Kirakira', secret);
+			const otpauth = authenticator.keyuri(email, 'KIRAKIRA', secret);
 			const qrCodeBase64 = await QRCode.toDataURL(otpauth);
 			const backupcode = generateSecureVerificationStringCode(4, charset);
 
