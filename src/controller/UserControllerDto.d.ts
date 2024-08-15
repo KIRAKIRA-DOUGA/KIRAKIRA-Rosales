@@ -758,3 +758,10 @@ export type UserDeleteAuthenticatorResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+
+export type GetUserAuthenticatorResponseDto = {
+	/** 执行结果 */
+	isvaild: boolean;
+	/** 当存在创建时间 */
+	time?: string;
+}
