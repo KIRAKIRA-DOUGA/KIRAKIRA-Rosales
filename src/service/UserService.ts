@@ -16,12 +16,14 @@ import {
 	UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto,
 	UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto,
 	UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto,
-	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto
+	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto, UserCreateAuthenticatorResponseDto, UserCurrentOTPResponseDto
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
+import { authenticator } from 'otplib'
+import QRCode from 'qrcode';
 
 /**
  * 用户注册
@@ -2532,6 +2534,157 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 	}
 }
 
+/**
+ * 获取用户当前的一次性验证码
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 用户当前的一次性验证码
+ */
+export const getCurrentOtpForUser = async (uuid: string, token: string): Promise<UserCurrentOTPResponseDto> => {
+    try {
+        // 验证用户的 token 是否有效
+        const isValidUser = await checkUserTokenByUUID(uuid, token);
+        if (!isValidUser) {
+            console.error('获取验证码失败，非法用户', { uuid });
+            return { success: false, message: '获取验证码失败，非法用户' };
+        }
+
+        // 检查用户是否已有身份验证器
+        const hasAuthenticator = await checkUserAuthenticator(uuid);
+        if (!hasAuthenticator) {
+            console.error('获取验证码失败，用户没有身份验证器', { uuid });
+            return { success: false, message: '获取验证码失败，用户没有身份验证器' };
+        }
+
+        // 从数据库中检索用户的验证码
+        const { collectionName, schemaInstance } = UserAuthenticatorSchema;
+        type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+        const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
+        const userStatusSelect: SelectType<UserAuthenticator> = { Secret: 1 };
+
+        const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
+        const user = userInfo?.result?.[0];
+        if (!user) {
+            console.error('获取验证码失败，未找到用户信息', { uuid });
+            return { success: false, message: '获取验证码失败，未找到用户信息' };
+        }
+
+        const secret = user.Secret;
+        if (!secret) {
+            console.error('获取验证码失败，未找到用户的 secret', { uuid });
+            return { success: false, message: '获取验证码失败，未找到用户的 secret' };
+        }
+
+        // 生成一次性验证码
+        const otp = authenticator.generate(secret);
+        return { success: true, message: '获取验证码成功', otp };
+    } catch (error) {
+        console.error('获取验证码失败，未知错误', error);
+        return { success: false, message: '获取验证码失败，未知错误' };
+    }
+};
+
+/**
+ * 用户创建身份验证器服务
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 用户创建身份验证器的请求响应
+ */
+export const CreateUserAuthenticatorService = async (uuid: string, token: string): Promise<UserCreateAuthenticatorResponseDto> => {
+	try {
+		const isValidUser = await checkUserTokenByUUID(uuid, token);
+		if (!isValidUser) {
+			console.error('创建身份验证器失败，非法用户', { uuid });
+			return { success: false, message: '创建身份验证器失败，非法用户' };
+		}
+
+		const hasAuthenticator = await checkUserAuthenticator(uuid);
+		if (hasAuthenticator) {
+			console.error('创建身份验证器失败，已经存在一个验证器了', { uuid });
+			return { success: false, message: '创建身份验证器失败，已经存在一个验证器了' };
+		}
+
+		return await CreateUserAuthenticator(uuid, token);
+	} catch (error) {
+		console.error('创建身份验证器失败，未知错误', error);
+		return { success: false, message: '创建身份验证器失败，未知错误' };
+	}
+};
+
+/**
+ * 检查用户是否已有身份验证器
+ * @param uuid 用户的 UUID
+ * @returns 如果已有验证器，返回验证器信息，否则返回 null
+ */
+const checkUserAuthenticator = async (uuid: string): Promise<boolean> => {
+	const { collectionName, schemaInstance } = UserAuthenticatorSchema;
+	type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+	const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
+	const userStatusSelect: SelectType<UserAuthenticator> = { Authenticator: 1 };
+
+	// 查询数据库中用户的验证器状态
+	const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
+	return userInfo?.result?.[0]?.Authenticator ?? false;
+};
+
+
+/**
+ * 为用户创建身份验证器
+ * @param uuid 用户的 UUID
+ * @returns 创建身份验证器的结果
+ */
+const CreateUserAuthenticator = async (uuid: string, token: string): Promise<UserCreateAuthenticatorResponseDto> => {
+	// 创建一个数据库会话并启动事务
+	const session = await mongoose.startSession();
+	session.startTransaction();
+	try {
+		const IsVaildUser = await checkUserTokenByUUID(uuid, token)
+		const { schemaInstance } = UserAuthenticatorSchema;
+		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+		if (IsVaildUser){
+			
+			const now = new Date().getTime();
+			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+			const secret = authenticator.generateSecret();
+			const otpauth = authenticator.keyuri(uuid, 'Kirakira', secret);
+			const qrCodeBase64 = await QRCode.toDataURL(otpauth);
+			const backupcode = generateSecureVerificationStringCode(4, charset);
+
+			// 准备要插入的身份验证器数据
+			const userAuthenticatorData: UserAuthenticator = {
+				UUID: uuid,
+				Authenticator: true,
+				Secret: secret,
+				backupCodes: backupcode,
+				qrcode: qrCodeBase64,
+				createDateTime: now,
+				editDateTime: now
+			};
+
+			// 插入数据到数据库
+			const { collectionName, schemaInstance } = UserAuthenticatorSchema;
+			const saveAuthenticatorResult = await insertData2MongoDB(userAuthenticatorData, schemaInstance, collectionName, { session });
+
+			if (saveAuthenticatorResult.success) {
+				await session.commitTransaction();
+				return { success: true, message: '创建身份验证器成功', secret: secret, qrcode: qrCodeBase64, backupcode: backupcode };
+			} else {
+				await session.abortTransaction();
+				console.error('创建身份验证器失败，保存数据失败', { uuid });
+				return { success: false, message: '创建身份验证器失败，保存数据失败' };
+			}
+		}else{
+			console.error('创建身份验证器失败，非法用户', { uuid });
+			return { success: false, message: '创建身份验证器失败，非法用户' };
+		}
+	} catch (error) {
+		await session.abortTransaction();
+		console.error('创建身份验证器失败，插入数据时出现异常', error);
+		return { success: false, message: '创建身份验证器失败，插入数据时出现异常' };
+	} finally {
+		session.endSession();
+	}
+};
 
 // WARN // TODO 或许这些数据放到环境变量里更好？
 const ALLOWED_ACCOUNT_TYPE = [

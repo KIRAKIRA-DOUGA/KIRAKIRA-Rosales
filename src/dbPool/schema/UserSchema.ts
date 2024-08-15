@@ -302,3 +302,31 @@ class UserChangePasswordVerificationCodeSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserChangePasswordVerificationCodeSchema = new UserChangePasswordVerificationCodeSchemaFactory()
+
+/**
+ * 用户身份验证器
+ */
+class UserAuthenticatorSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 是否启用身份验证器 */
+		Authenticator: { type: Boolean, required: true, default: false },
+		/** 验证器密钥 */
+		Secret: { type: String },
+		/** 备份码 */
+		backupCodes: { type: String },
+		/** QRcode */
+		qrcode: { type: String },
+		/** 系统专用字段-创建时间 - 非空 */
+		createDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-authenticator'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const UserAuthenticatorSchema = new UserAuthenticatorSchemaFactory()

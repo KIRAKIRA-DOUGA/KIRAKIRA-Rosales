@@ -3,7 +3,7 @@ import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWith
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { adminClearUserInfoController, adminGetUserInfoController, approveUserInfoController, blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController, getUserInvitationCodeController } from '../controller/UserController.js'
+import { adminClearUserInfoController, adminGetUserInfoController, approveUserInfoController, blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController, getUserInvitationCodeController, userCreateAuthenticatorController, getUserCurrentOTPController } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
@@ -31,6 +31,14 @@ router.post('/user/registering', userRegistrationController) // 用户注册
 // 	"verificationCode": "ZZZZZZ",
 // 	"invitationCode": "KIRA-XXXX-XXXX"
 // }
+
+router.post('/user/createAuthenticator', userCreateAuthenticatorController) // 用户创建身份验证器
+// https://localhost:9999/user/createAuthenticator
+// cookie: uuid, token 
+
+router.get('/user/getUserCurrentOTP', getUserCurrentOTPController)
+// https://localhost:9999/user/getUserCurrentOTP
+// cookie: uuid, token
 
 router.post('/user/login', userLoginController) // 用户登录
 // https://localhost:9999/user/login

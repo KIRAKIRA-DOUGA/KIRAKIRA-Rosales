@@ -716,3 +716,43 @@ export type AdminClearUserInfoResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+
+/**
+ * 用户创建身份验证器的请求载荷
+ */
+export type UserCreateAuthenticatorRequestDto = {
+	uuid: string,
+	Authenticator: true,
+	Secret: string,
+	backupCodes: string,
+}
+
+/**
+ * 用户创建身份验证器的请求响应
+ */
+export type UserCreateAuthenticatorResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 验证器状态 */
+	Authenticator?: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 验证器的密钥 */
+	secret?: string;
+	/** 验证器的二维码 */
+	qrcode?: string;
+	/** 备份码 */
+	backupcode?: string;
+}
+
+/**
+ * 获取用户当前的一次性验证码
+ */
+export type UserCurrentOTPResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 当前的验证码 */
+	otp?: string
+}
