@@ -318,7 +318,7 @@ class UserAuthenticatorSchemaFactory {
 		/** 备份码 */
 		backupCodes: { type: String },
 		/** QRcode */
-		qrcode: { type: String },
+		otpauth: { type: String },
 		/** 系统专用字段-创建时间 - 非空 */
 		createDateTime: { type: Number, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */

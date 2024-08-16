@@ -23,8 +23,6 @@ import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/
 import { UserAuthSchema, UserAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { authenticator } from 'otplib'
-import QRCode from 'qrcode';
-import { isValid } from 'js-base64'
 
 /**
  * 用户注册
@@ -2724,7 +2722,6 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			const secret = authenticator.generateSecret();
 			const otpauth = authenticator.keyuri(email, 'KIRAKIRA', secret);
-			const qrCodeBase64 = await QRCode.toDataURL(otpauth);
 			const backupcode = generateSecureVerificationStringCode(4, charset);
 
 			// 准备要插入的身份验证器数据
@@ -2732,8 +2729,8 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 				UUID: uuid,
 				Authenticator: true,
 				Secret: secret,
+				otpauth: otpauth,
 				backupCodes: backupcode,
-				qrcode: qrCodeBase64,
 				createDateTime: now,
 				editDateTime: now
 			};
@@ -2744,7 +2741,7 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 
 			if (saveAuthenticatorResult.success) {
 				await session.commitTransaction();
-				return { success: true, message: '创建身份验证器成功', secret: secret, qrcode: qrCodeBase64, backupcode: backupcode };
+				return { success: true, message: '创建身份验证器成功', secret: secret, otpauth: otpauth, backupcode: backupcode };
 			} else {
 				await session.abortTransaction();
 				console.error('创建身份验证器失败，保存数据失败', { uuid });

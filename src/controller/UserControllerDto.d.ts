@@ -725,10 +725,10 @@ export type AdminClearUserInfoResponseDto = {
  * 用户创建身份验证器的请求载荷
  */
 export type UserCreateAuthenticatorRequestDto = {
+	/** 用户的 UUID */
 	uuid: string,
-	Authenticator: true,
-	Secret: string,
-	backupCodes: string,
+	/** 用户的 token */
+	token: string,
 }
 
 /**
@@ -744,7 +744,7 @@ export type UserCreateAuthenticatorResponseDto = {
 	/** 验证器的密钥 */
 	secret?: string;
 	/** 验证器的二维码 */
-	qrcode?: string;
+	otpauth?: string;
 	/** 备份码 */
 	backupcode?: string;
 }
