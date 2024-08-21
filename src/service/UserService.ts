@@ -1319,16 +1319,10 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 	try {
 		if (await checkUserToken(uid, token)) {
 			if (checkRequestSendChangeEmailVerificationCodeRequest(requestSendChangeEmailVerificationCodeRequest)) {
-				const { clientLanguage } = requestSendChangeEmailVerificationCodeRequest
+				const { clientLanguage, newEmail } = requestSendChangeEmailVerificationCodeRequest
 				try {
-					const getSelfUserInfoRequest = {
-						uid,
-						token,
-					}
-					const selfUserInfoResult = await getSelfUserInfoService(getSelfUserInfoRequest)
-					const email = selfUserInfoResult.result.email
-					if (selfUserInfoResult.success && email) {
-						const emailLowerCase = email.toLowerCase()
+					if (newEmail) {
+						const emailLowerCase = newEmail.toLowerCase()
 						const nowTime = new Date().getTime()
 						const todayStart = new Date()
 						todayStart.setHours(0, 0, 0, 0)
@@ -1392,7 +1386,7 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 														To stop receiving notifications, please contact the KIRAKIRA support team.
 													`
 												const correctMailHTML = clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
-												const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
+												const sendMailResult = await sendMail(newEmail, correctMailTitle, { html: correctMailHTML })
 												if (sendMailResult.success) {
 													await session.commitTransaction()
 													session.endSession()
