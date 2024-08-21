@@ -1,5 +1,5 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService } from '../service/UserService.js'
+import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService, getUserUuid } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminClearUserInfoRequestDto, AdminGetUserInfoRequestDto, ApproveUserInfoRequestDto, BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
@@ -197,12 +197,33 @@ export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => 
  * 校验用户 token
  * @param ctx context
  * @param next context
- * @return CheckUserTokenResponseDto 通过 token 中的 uid 和 token 校验用户，如果校验成功则 success: true 并且 userTokenOk: true，不成功则 success: false 或 userTokenOk: false
+ * @return CheckUserTokenResponseDto 通过 token 中的 uid 和 token 校验用户，如果校验成功则 success 和 userTokenOk 的值都为 true，不成功则 success 或 userTokenOk 的值为 false
  */
 export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uidString = ctx.cookies.get('uid')
+	const uid = parseInt(uidString, 10)
 	const token = ctx.cookies.get('token')
-	ctx.body = await checkUserTokenService(uid, token)
+
+	const checkUserTokenResponse = await checkUserTokenService(uid, token)
+
+	// DELETE ME: 对于 Cookie 中没有 UUID 的早期注册用户，强制向 Cookie 中推送 UUID。该逻辑不应当一直存在，一段时间之后差不多都推送完了，就应该删掉了。
+	if (checkUserTokenResponse.success && checkUserTokenResponse.userTokenOk) {
+		const uuid = await getUserUuid(uid)
+		if (uuid) {
+			const cookieOption = {
+				httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+				secure: true,
+				sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+				maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
+				domain: getCorrectCookieDomain(),
+			}
+			ctx.cookies.set('uuid', uuid, cookieOption)
+			ctx.cookies.set('uid', uidString, cookieOption)
+			ctx.cookies.set('token', token, cookieOption)
+		}
+	}
+
+	ctx.body = checkUserTokenResponse
 	await next()
 }
 

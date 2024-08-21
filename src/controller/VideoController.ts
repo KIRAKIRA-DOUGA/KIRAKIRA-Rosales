@@ -37,7 +37,7 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 }
 
 /**
- * 获取首页要显示的视频 
+ * 获取首页要显示的视频
  * // DELETE: 顺便给用户加上UUID
  * // TODO: 现在还只是获取全部视频，未来优化为推荐视频
  * @param ctx context
@@ -57,25 +57,7 @@ export const getThumbVideoController = async (ctx: koaCtx, next: koaNext) => {
  * @returns 获取视频信息
  */
 export const getVideoByKvidController = async (ctx: koaCtx, next: koaNext) => {
-    // 检查cookie中是否传递了uid
-    const uid = parseInt(ctx.cookies.get('uid'), 10)
-	const uuid = ctx.cookies.get('uuid')
-    if (uid) {
-        const cookieOption = {
-            httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-            secure: true,
-            sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-            maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-            domain: getCorrectCookieDomain(),
-        }
-        const adduuid = await getUserUuid(uid)
-        if (!uuid) { // 检查 uuid 是否存在
-			if (adduuid){
-				console.log("添加UUID", adduuid)
-				ctx.cookies.set('uuid', adduuid, cookieOption)
-			}
-		}
-    }
+	const uid = parseInt(ctx.cookies.get('uid'), 10)
 	const token = ctx.cookies.get('token')
 	const videoId = ctx.query.videoId as string
 	const uploadVideoRequest: GetVideoByKvidRequestDto = {
