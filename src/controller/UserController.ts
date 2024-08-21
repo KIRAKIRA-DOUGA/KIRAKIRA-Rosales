@@ -357,9 +357,10 @@ export const checkInvitationCodeController = async (ctx: koaCtx, next: koaNext) 
  * @param next context
  */
 export const requestSendChangeEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+	const data = ctx.request.body as Partial<RequestSendChangeEmailVerificationCodeRequestDto>
 
 	const requestSendChangeEmailVerificationCodeRequest: RequestSendChangeEmailVerificationCodeRequestDto = {
+		newEmail: data.newEmail,
 		clientLanguage: data.clientLanguage,
 	}
 	const uid = parseInt(ctx.cookies.get('uid'), 10)
@@ -375,7 +376,7 @@ export const requestSendChangeEmailVerificationCodeController = async (ctx: koaC
  * @param next context
  */
 export const requestSendChangePasswordVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+	const data = ctx.request.body as Partial<RequestSendChangePasswordVerificationCodeRequestDto>
 
 	const requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto = {
 		clientLanguage: data.clientLanguage,

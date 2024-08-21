@@ -519,6 +519,8 @@ export type CheckInvitationCodeResponseDto = {
 export type RequestSendChangeEmailVerificationCodeRequestDto = {
 	/** 用户客户端使用的语言 */
 	clientLanguage: string;
+	/** 用户的新邮箱 */
+	newEmail: string;
 }
 
 /**
