@@ -45,12 +45,12 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
  */
 export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UserLoginRequestDto>
-	const userRegistrationData: UserLoginRequestDto = {
+	const userLoginRequest: UserLoginRequestDto = {
 		email: data?.email,
 		passwordHash: data?.passwordHash,
 		otp: data?.otp
 	}
-	const userLoginResult = await userLoginService(userRegistrationData)
+	const userLoginResult = await userLoginService(userLoginRequest)
 
 	const cookieOption = {
 		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
@@ -88,10 +88,10 @@ export const userCreateAuthenticatorController = async (ctx: koaCtx, next: koaNe
  * @returns UserDeleteAuthenticatorResponseDto 删除结果
  */
 export const deleteUserAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
-    const uuid = ctx.cookies.get('uuid')
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const result = await deleteUserAuthenticatorService(uuid, token);
-    ctx.body = result;
+	ctx.body = result;
 	await next()
 }
 
@@ -102,9 +102,9 @@ export const deleteUserAuthenticatorController = async (ctx: koaCtx, next: koaNe
  * @returns GetUserAuthenticatorResponseDto 检查结果
  */
 export const checkUserAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
-    const uuid = ctx.cookies.get('uuid')
+	const uuid = ctx.cookies.get('uuid')
 	const result = await checkUserAuthenticatorService(uuid);
-    ctx.body = result;
+	ctx.body = result;
 	await next()
 }
 

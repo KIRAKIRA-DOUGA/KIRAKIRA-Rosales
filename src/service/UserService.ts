@@ -243,23 +243,24 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			}
 
 			if (userAuthInfo.email && userAuthInfo.token && userAuthInfo.uid != null) {
-				const authenticator = Boolean((await checkUserAuthenticatorService(uuid)).isvaild)
-				
-				if (!authenticator) {
-					return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
-				}
+				const checkUserAuthenticatorResult = await checkUserAuthenticatorService(uuid)
 
-				if ( otp == "" ) {
-					console.log('启用了身份验证器但未进行二次验证', authenticator )
-					return { success: false, message:"启用了身份验证器但未进行二次验证", authenticator:true }
+				// 如果用户没有开启 2FA 则直接登陆成功
+				if (checkUserAuthenticatorResult.success && !checkUserAuthenticatorResult.isValid) {
+					return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
 				} else {
+					if ( otp == "" ) {
+						console.error('启用了身份验证器但未进行二次验证', authenticator )
+						return { success: false, message:"启用了身份验证器但未进行二次验证", authenticator: true }
+					}
+
 					try {
 						const currentOtpResult = await getCurrentOtpForUser(uuid)
 						if (!currentOtpResult.success) {
 							console.error('ERROR', '查询验证码错误')
 							return { success: false, message: '查询验证码错误', authenticator: true }
 						}
-	
+
 						if (currentOtpResult.otp == otp) {
 							return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
 						} else {
@@ -271,6 +272,9 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 						return { success: false, message: '查询验证码时出现异常', authenticator: true }
 					}
 				}
+			} else {
+				console.error('ERROR', `登陆失败，未能获取用户安全信息`)
+				return { success: false, message: '登陆失败，未能获取用户安全信息' }
 			}
 		} catch (error) {
 			console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，错误信息：`, error)
@@ -2566,7 +2570,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, me
     try {
         // 检查用户是否已有身份验证器
         const hasAuthenticator = await checkUserAuthenticatorService(uuid);
-        if (!hasAuthenticator) {
+        if (!hasAuthenticator.success || !hasAuthenticator.isValid) {
             console.error('获取验证码失败，用户没有身份验证器', { uuid });
             return { success: false, message: '获取验证码失败，用户没有身份验证器' };
         }
@@ -2644,8 +2648,8 @@ export const CreateUserAuthenticatorService = async (uuid: string, token: string
 			return { success: false, message: '创建身份验证器失败，非法用户' };
 		}
 
-		const hasAuthenticator = (await (checkUserAuthenticatorService(uuid))).isvaild;
-		if (hasAuthenticator) {
+		const checkUserAuthenticatorResult = await checkUserAuthenticatorService(uuid)
+		if (checkUserAuthenticatorResult.success && checkUserAuthenticatorResult.isValid) {
 			console.error('创建身份验证器失败，已经存在一个验证器了', { uuid });
 			return { success: false, message: '创建身份验证器失败，已经存在一个验证器了' };
 		}
@@ -2684,15 +2688,11 @@ export const checkUserAuthenticatorService = async (uuid: string): Promise<GetUs
 		const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
 		const status = !!userInfo?.result?.[0]?.Authenticator
 		const time = userInfo?.result?.[0]?.createDateTime
-		if (!status){
-			return { isvaild: false };
-		} else {
-			return { isvaild: status, time: time};
-		}
-		
+		return { success: true, isValid: status, createdTime: time };
+
 	} catch (error) {
 		console.error('ERROR', '检查用户身份验证器时出现异常：', error);
-		return { isvaild: false };
+		return { success: false, isValid: false, message: '检查用户身份验证器时出现异常' };
 	}
 };
 
@@ -2711,12 +2711,12 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 		const { schemaInstance } = UserAuthenticatorSchema;
 		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
 		if (IsVaildUser){
-			
+
 			const now = new Date().getTime();
 			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			const secret = authenticator.generateSecret();
 			const otpauth = authenticator.keyuri(email, 'KIRAKIRA', secret);
-			const backupcode = generateSecureVerificationStringCode(4, charset);
+			const backupCodes = generateSecureVerificationStringCode(4, charset);
 
 			// 准备要插入的身份验证器数据
 			const userAuthenticatorData: UserAuthenticator = {
@@ -2724,7 +2724,7 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 				Authenticator: true,
 				Secret: secret,
 				otpauth: otpauth,
-				backupCodes: backupcode,
+				backupCodes,
 				createDateTime: now,
 				editDateTime: now
 			};
@@ -2735,7 +2735,7 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 
 			if (saveAuthenticatorResult.success) {
 				await session.commitTransaction();
-				return { success: true, message: '创建身份验证器成功', secret: secret, otpauth: otpauth, backupcode: backupcode };
+				return { success: true, message: '创建身份验证器成功', secret: secret, otpauth: otpauth, backupCodes };
 			} else {
 				await session.abortTransaction();
 				console.error('创建身份验证器失败，保存数据失败', { uuid });

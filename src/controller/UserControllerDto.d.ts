@@ -748,7 +748,7 @@ export type UserCreateAuthenticatorResponseDto = {
 	/** 验证器的二维码 */
 	otpauth?: string;
 	/** 备份码 */
-	backupcode?: string;
+	backupCodes?: string;
 }
 
 /**
@@ -761,9 +761,16 @@ export type UserDeleteAuthenticatorResponseDto = {
 	message?: string;
 }
 
+/**
+ * 检查身份验证器功能是否开启的请求响应
+ */
 export type GetUserAuthenticatorResponseDto = {
 	/** 执行结果 */
-	isvaild: boolean;
-	/** 当存在创建时间 */
-	time?: string;
+	success: boolean;
+	/** 是否存在身份验证器 */
+	isValid: boolean;
+	/** 如果存在，则返回创建时间 */
+	createdTime?: string;
+	/** 附加的文本消息 */
+	message?: string;
 }
