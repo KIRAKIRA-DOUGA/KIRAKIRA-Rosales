@@ -1270,46 +1270,46 @@ export const checkInvitationCodeService = async (checkInvitationCodeRequestDto: 
  * @returns 返回用户注册时使用的邀请码
  */
 export const getUserInvitationCodeService = async (uuid: string, token: string): Promise<GetUserInvitationCodeResponseDto> => {
-    try {
-        if (await checkUserTokenByUUID(uuid, token)) {
-            const { collectionName, schemaInstance } = UserInvitationCodeSchema;
-            type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
+	try {
+		if (await checkUserTokenByUUID(uuid, token)) {
+			const { collectionName, schemaInstance } = UserInvitationCodeSchema;
+			type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
 
-            // 查询条件：确保 assignee 字段等于传入的 uid
-            const InvitationCodeWhere: QueryType<UserInvitationCode> = {
-                assigneeUUID: uuid,
-            };
+			// 查询条件：确保 assignee 字段等于传入的 uid
+			const InvitationCodeWhere: QueryType<UserInvitationCode> = {
+				assigneeUUID: uuid,
+			};
 
-            const InvitationCodeSelect: SelectType<UserInvitationCode> = {
-                invitationCode: 1,
-            };
+			const InvitationCodeSelect: SelectType<UserInvitationCode> = {
+				invitationCode: 1,
+			};
 
-            try {
-                const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
-                if (myInvitationCodeResult.success) {
-                    if (myInvitationCodeResult.result?.length > 0) {
-                        // 提取并返回第一个匹配的邀请码
-                        const invitationCode = myInvitationCodeResult.result[0].invitationCode;
-                        return { success: true, message: '获取邀请码成功', invitationCode };
-                    } else {
-                        return { success: true, message: '邀请码为空' };
-                    }
-                } else {
-                    console.error('ERROR', '获取邀请码失败，请求失败', { uuid });
-                    return { success: false, message: '获取邀请码失败，请求失败！' };
-                }
-            } catch (error) {
-                console.error('ERROR', '获取邀请码失败，请求时出错', { uuid, error });
-                return { success: false, message: '获取邀请码失败，请求时出错！' };
-            }
-        } else {
-            console.error('ERROR', '获取邀请码失败，非法用户！', { uuid });
-            return { success: false, message: '获取邀请码失败，非法用户！' };
-        }
-    } catch (error) {
-        console.error('ERROR', '获取邀请码失败，未知错误', error);
-        return { success: false, message: '获取邀请码失败，未知错误' };
-    }
+			try {
+				const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
+				if (myInvitationCodeResult.success) {
+					if (myInvitationCodeResult.result?.length > 0) {
+						// 提取并返回第一个匹配的邀请码
+						const invitationCode = myInvitationCodeResult.result[0].invitationCode;
+						return { success: true, message: '获取邀请码成功', invitationCode };
+					} else {
+						return { success: true, message: '邀请码为空' };
+					}
+				} else {
+					console.error('ERROR', '获取邀请码失败，请求失败', { uuid });
+					return { success: false, message: '获取邀请码失败，请求失败！' };
+				}
+			} catch (error) {
+				console.error('ERROR', '获取邀请码失败，请求时出错', { uuid, error });
+				return { success: false, message: '获取邀请码失败，请求时出错！' };
+			}
+		} else {
+			console.error('ERROR', '获取邀请码失败，非法用户！', { uuid });
+			return { success: false, message: '获取邀请码失败，非法用户！' };
+		}
+	} catch (error) {
+		console.error('ERROR', '获取邀请码失败，未知错误', error);
+		return { success: false, message: '获取邀请码失败，未知错误' };
+	}
 }
 
 /**
@@ -2567,40 +2567,40 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  * @returns 用户当前的一次性验证码
  */
 const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, message?: string, otp?: string}> => {
-    try {
-        // 检查用户是否已有身份验证器
-        const hasAuthenticator = await checkUserAuthenticatorService(uuid);
-        if (!hasAuthenticator.success || !hasAuthenticator.isValid) {
-            console.error('获取验证码失败，用户没有身份验证器', { uuid });
-            return { success: false, message: '获取验证码失败，用户没有身份验证器' };
-        }
+	try {
+		// 检查用户是否已有身份验证器
+		const hasAuthenticator = await checkUserAuthenticatorService(uuid);
+		if (!hasAuthenticator.success || !hasAuthenticator.isValid) {
+			console.error('获取验证码失败，用户没有身份验证器', { uuid });
+			return { success: false, message: '获取验证码失败，用户没有身份验证器' };
+		}
 
-        // 从数据库中检索用户的验证码
-        const { collectionName, schemaInstance } = UserAuthenticatorSchema;
-        type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-        const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-        const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1 };
+		// 从数据库中检索用户的验证码
+		const { collectionName, schemaInstance } = UserAuthenticatorSchema;
+		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+		const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
+		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1 };
 
-        const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-        const user = userInfo?.result?.[0];
-        if (!user) {
-            console.error('获取验证码失败，未找到用户信息', { uuid });
-            return { success: false, message: '获取验证码失败，未找到用户信息' };
-        }
+		const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
+		const user = userInfo?.result?.[0];
+		if (!user) {
+			console.error('获取验证码失败，未找到用户信息', { uuid });
+			return { success: false, message: '获取验证码失败，未找到用户信息' };
+		}
 
-        const secret = user.Secret;
-        if (!secret) {
-            console.error('获取验证码失败，未找到用户的 secret', { uuid });
-            return { success: false, message: '获取验证码失败，未找到用户的 secret' };
-        }
+		const secret = user.Secret;
+		if (!secret) {
+			console.error('获取验证码失败，未找到用户的 secret', { uuid });
+			return { success: false, message: '获取验证码失败，未找到用户的 secret' };
+		}
 
-        // 生成一次性验证码
-        const otp = authenticator.generate(secret);
-        return { success: true, message: '获取验证码成功', otp };
-    } catch (error) {
-        console.error('获取验证码失败，未知错误', error);
-        return { success: false, message: '获取验证码失败，未知错误' };
-    }
+		// 生成一次性验证码
+		const otp = authenticator.generate(secret);
+		return { success: true, message: '获取验证码成功', otp };
+	} catch (error) {
+		console.error('获取验证码失败，未知错误', error);
+		return { success: false, message: '获取验证码失败，未知错误' };
+	}
 };
 
 /**
@@ -2609,29 +2609,29 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, me
  * @returns 删除操作的结果
  */
 export const deleteUserAuthenticatorService = async (uuid: string, token: string): Promise<UserDeleteAuthenticatorResponseDto> => {
-    try {
-        // 鉴权检查
-        const isValidUser = await checkUserTokenByUUID(uuid, token);
-        if (!isValidUser) {
-            return { success: false, message: '删除身份验证器失败，非法用户' };
-        }
+	try {
+		// 鉴权检查
+		const isValidUser = await checkUserTokenByUUID(uuid, token);
+		if (!isValidUser) {
+			return { success: false, message: '删除身份验证器失败，非法用户' };
+		}
 
-        const { collectionName, schemaInstance } = UserAuthenticatorSchema;
-        type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-        const where: QueryType<UserAuthenticator> = { UUID: uuid };
+		const { collectionName, schemaInstance } = UserAuthenticatorSchema;
+		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+		const where: QueryType<UserAuthenticator> = { UUID: uuid };
 
-        // 调用删除函数
-        const deleteResult = await deleteDataFromMongoDB(where, schemaInstance, collectionName);
+		// 调用删除函数
+		const deleteResult = await deleteDataFromMongoDB(where, schemaInstance, collectionName);
 
-        if (deleteResult.success && deleteResult.result.deletedCount > 0) {
-            return { success: true, message: '删除身份验证器成功' };
-        } else {
-            return { success: false, message: '删除身份验证器失败，未找到匹配的数据' };
-        }
-    } catch (error) {
-        console.error('删除身份验证器失败', error);
-        return { success: false, message: '删除身份验证器失败，发生未知错误' };
-    }
+		if (deleteResult.success && deleteResult.result.deletedCount > 0) {
+			return { success: true, message: '删除身份验证器成功' };
+		} else {
+			return { success: false, message: '删除身份验证器失败，未找到匹配的数据' };
+		}
+	} catch (error) {
+		console.error('删除身份验证器失败', error);
+		return { success: false, message: '删除身份验证器失败，发生未知错误' };
+	}
 };
 
 /**
@@ -2654,15 +2654,15 @@ export const CreateUserAuthenticatorService = async (uuid: string, token: string
 			return { success: false, message: '创建身份验证器失败，已经存在一个验证器了' };
 		}
 		const { collectionName, schemaInstance } = UserAuthSchema;
-        type UserEmail = InferSchemaType<typeof schemaInstance>;
+		type UserEmail = InferSchemaType<typeof schemaInstance>;
 
-        // 查询条件：确保 assignee 字段等于传入的 uid
-        const InvitationCodeWhere: QueryType<UserEmail> = {
-            assigneeUUID: uuid,
-        };
-        const InvitationCodeSelect: SelectType<UserEmail> = {
-            email: 1,
-        };
+		// 查询条件：确保 assignee 字段等于传入的 uid
+		const InvitationCodeWhere: QueryType<UserEmail> = {
+			assigneeUUID: uuid,
+		};
+		const InvitationCodeSelect: SelectType<UserEmail> = {
+			email: 1,
+		};
 		const EmailResult = await selectDataFromMongoDB<UserEmail>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
 		const email =  EmailResult.result[0].email
 		return await CreateUserAuthenticator(uuid, token, email);
