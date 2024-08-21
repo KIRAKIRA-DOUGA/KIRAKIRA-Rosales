@@ -195,6 +195,7 @@ export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => 
 
 /**
  * 校验用户 token
+ * // DELETE: 顺便给用户加上UUID
  * @param ctx context
  * @param next context
  * @return CheckUserTokenResponseDto 通过 token 中的 uid 和 token 校验用户，如果校验成功则 success 和 userTokenOk 的值都为 true，不成功则 success 或 userTokenOk 的值为 false

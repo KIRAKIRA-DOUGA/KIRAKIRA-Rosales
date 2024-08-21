@@ -1,5 +1,3 @@
-import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { getUserUuid } from '../service/UserService.js'
 import { approvePendingReviewVideoService, deleteVideoByKvidService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService } from '../service/VideoService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { ApprovePendingReviewVideoRequestDto, DeleteVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
@@ -38,16 +36,15 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 获取首页要显示的视频
- * // DELETE: 顺便给用户加上UUID
  * // TODO: 现在还只是获取全部视频，未来优化为推荐视频
  * @param ctx context
  * @param next context
  * @returns 获取首页要显示的视频
  */
 export const getThumbVideoController = async (ctx: koaCtx, next: koaNext) => {
-    const getThumbVideoResponse = await getThumbVideoService()
-    ctx.body = getThumbVideoResponse
-    await next()
+	const getThumbVideoResponse = await getThumbVideoService()
+	ctx.body = getThumbVideoResponse
+	await next()
 }
 
 /**
