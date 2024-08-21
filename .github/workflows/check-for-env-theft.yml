@@ -1,0 +1,22 @@
+name: Check for env theft
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  check-process-env:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Search for process.env
+      run: |
+        if grep -r "process.env" ./src; then
+          echo "Found process.env, check failed!"
+          exit 1
+        else
+          echo "No process.env found, check passed!"
+        fi
