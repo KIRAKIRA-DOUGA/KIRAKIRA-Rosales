@@ -2579,7 +2579,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, me
         const { collectionName, schemaInstance } = UserAuthenticatorSchema;
         type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
         const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-        const userStatusSelect: SelectType<UserAuthenticator> = { Secret: 1 };
+        const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1 };
 
         const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
         const user = userInfo?.result?.[0];
@@ -2681,7 +2681,7 @@ export const checkUserAuthenticatorService = async (uuid: string): Promise<GetUs
 	const { collectionName, schemaInstance } = UserAuthenticatorSchema;
 	type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
 	const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-	const userStatusSelect: SelectType<UserAuthenticator> = { Authenticator: 1, createDateTime: 1 };
+	const userStatusSelect: SelectType<UserAuthenticator> = { authenticator: 1, createDateTime: 1 };
 
 	try {
 		// 查询数据库中用户的验证器状态
@@ -2707,11 +2707,10 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 	const session = await mongoose.startSession();
 	session.startTransaction();
 	try {
-		const IsVaildUser = await checkUserTokenByUUID(uuid, token)
+		const isValidUser = await checkUserTokenByUUID(uuid, token)
 		const { schemaInstance } = UserAuthenticatorSchema;
 		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-		if (IsVaildUser){
-
+		if (isValidUser){
 			const now = new Date().getTime();
 			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			const secret = authenticator.generateSecret();
@@ -2721,8 +2720,8 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 			// 准备要插入的身份验证器数据
 			const userAuthenticatorData: UserAuthenticator = {
 				UUID: uuid,
-				Authenticator: true,
-				Secret: secret,
+				authenticator: true,
+				secret,
 				otpauth: otpauth,
 				backupCodes,
 				createDateTime: now,

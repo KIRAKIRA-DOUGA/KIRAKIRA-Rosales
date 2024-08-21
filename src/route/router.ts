@@ -34,7 +34,7 @@ router.post('/user/registering', userRegistrationController) // 用户注册
 
 router.post('/user/createAuthenticator', userCreateAuthenticatorController) // 用户创建身份验证器
 // https://localhost:9999/user/createAuthenticator
-// cookie: uuid, token 
+// cookie: uuid, token
 
 router.delete('/user/deleteUserAuthenticator', deleteUserAuthenticatorController) // 用户删除身份验证器
 // https://localhost:9999/user/deleteUserAuthenticator
@@ -49,7 +49,7 @@ router.post('/user/login', userLoginController) // 用户登录
 // {
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-//  ”otp“: "XXXXXX" //非必须
+// 	”otp“: "XXXXXX" //非必须
 // }
 
 router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检查用户是否存在
