@@ -263,7 +263,16 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 
 						if (currentOtpResult.otp == otp) {
 							return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
-						} else {
+						} 
+
+						if( currentOtpResult.backupCodes == otp ) {
+							const deletestatus = await deleteUserAuthenticatorService(userAuthInfo.UUID, userAuthInfo.token)
+							if (!deletestatus.success){
+								console.error('ERROR', '删除验证器错误', {uuid})
+							}
+							return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户以备用码登录成功' }
+							
+						}else {
 							console.log('验证码错误', currentOtpResult.otp, otp)
 							return { success: false, message: '验证码错误', authenticator: true }
 						}
@@ -2566,7 +2575,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  * @param token 用户的 token
  * @returns 用户当前的一次性验证码
  */
-const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, message?: string, otp?: string}> => {
+const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, message?: string, otp?: string, backupCodes?: string }> => {
 	try {
 		// 检查用户是否已有身份验证器
 		const hasAuthenticator = await checkUserAuthenticatorService(uuid);
@@ -2579,7 +2588,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, me
 		const { collectionName, schemaInstance } = UserAuthenticatorSchema;
 		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
 		const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1 };
+		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1, backupCodes: 1 };
 
 		const userAuthenticator = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
 		if (!userAuthenticator.success) {
@@ -2588,6 +2597,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, me
 		}
 
 		const secret = userAuthenticator?.result?.[0]?.secret;
+		const backupCodes = userAuthenticator?.result?.[0]?.backupCodes;
 		if (!secret) {
 			console.error('获取验证码失败，未找到用户的 secret', { uuid });
 			return { success: false, message: '获取验证码失败，未找到用户的 secret' };
@@ -2595,7 +2605,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, me
 
 		// 生成一次性验证码
 		const otp = authenticator.generate(secret);
-		return { success: true, message: '获取验证码成功', otp };
+		return { success: true, message: '获取验证码成功', otp, backupCodes};
 	} catch (error) {
 		console.error('获取验证码失败，未知错误', error);
 		return { success: false, message: '获取验证码失败，未知错误' };
@@ -2685,7 +2695,7 @@ export const checkUserAuthenticatorService = async (uuid: string): Promise<GetUs
 	try {
 		// 查询数据库中用户的验证器状态
 		const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-		const status = !!userInfo?.result?.[0]?.Authenticator
+		const status = !!userInfo?.result?.[0]?.authenticator
 		const time = userInfo?.result?.[0]?.createDateTime
 		return { success: true, isValid: status, createdTime: time };
 
@@ -2714,7 +2724,7 @@ const createUserAuthenticator = async (uuid: string, token: string, email: strin
 			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			const secret = authenticator.generateSecret();
 			const otpauth = authenticator.keyuri(email, 'KIRAKIRA', secret);
-			const backupCodes = generateSecureVerificationStringCode(4, charset);
+			const backupCodes = generateSecureVerificationStringCode(6, charset);
 
 			// 准备要插入的身份验证器数据
 			const userAuthenticatorData: UserAuthenticator = {
