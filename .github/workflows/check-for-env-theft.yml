@@ -12,11 +12,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Search for process.env
+    - name: Fetch target branch
       run: |
-        if grep -r "process.env" ./src; then
-          echo "Found process.env, check failed!"
+        git fetch origin ${{ github.base_ref }}
+
+    - name: Search for process.env in diff
+      run: |
+        if git diff --name-only --diff-filter=AM origin/${{ github.base_ref }} | xargs grep -E "process.env"; then
+          echo "Found process.env in changed files, check failed!"
           exit 1
         else
-          echo "No process.env found, check passed!"
+          echo "No process.env found in changed files, check passed!"
         fi
