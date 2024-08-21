@@ -1275,7 +1275,7 @@ export const getUserInvitationCodeService = async (uuid: string, token: string):
 			const { collectionName, schemaInstance } = UserInvitationCodeSchema;
 			type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
 
-			// 查询条件：确保 assignee 字段等于传入的 uid
+			// 查询条件：确保 assigneeUUID 字段等于传入的 uuid
 			const InvitationCodeWhere: QueryType<UserInvitationCode> = {
 				assigneeUUID: uuid,
 			};
@@ -1287,12 +1287,12 @@ export const getUserInvitationCodeService = async (uuid: string, token: string):
 			try {
 				const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
 				if (myInvitationCodeResult.success) {
-					if (myInvitationCodeResult.result?.length > 0) {
+					if (myInvitationCodeResult.result?.length <= 0) {
+						return { success: true, message: '邀请码为空' };
+					} else {
 						// 提取并返回第一个匹配的邀请码
 						const invitationCode = myInvitationCodeResult.result[0].invitationCode;
 						return { success: true, message: '获取邀请码成功', invitationCode };
-					} else {
-						return { success: true, message: '邀请码为空' };
 					}
 				} else {
 					console.error('ERROR', '获取邀请码失败，请求失败', { uuid });
@@ -2581,14 +2581,13 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{success: boolean, me
 		const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
 		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1 };
 
-		const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-		const user = userInfo?.result?.[0];
-		if (!user) {
+		const userAuthenticator = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
+		if (!userAuthenticator.success) {
 			console.error('获取验证码失败，未找到用户信息', { uuid });
 			return { success: false, message: '获取验证码失败，未找到用户信息' };
 		}
 
-		const secret = user.Secret;
+		const secret = userAuthenticator?.result?.[0]?.secret;
 		if (!secret) {
 			console.error('获取验证码失败，未找到用户的 secret', { uuid });
 			return { success: false, message: '获取验证码失败，未找到用户的 secret' };
