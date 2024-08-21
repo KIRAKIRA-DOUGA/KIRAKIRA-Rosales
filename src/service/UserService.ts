@@ -2639,7 +2639,7 @@ export const deleteUserAuthenticatorService = async (uuid: string, token: string
  * @param token 用户的 token
  * @returns 用户创建身份验证器的请求响应
  */
-export const CreateUserAuthenticatorService = async (uuid: string, token: string): Promise<UserCreateAuthenticatorResponseDto> => {
+export const createUserAuthenticatorService = async (uuid: string, token: string): Promise<UserCreateAuthenticatorResponseDto> => {
 	try {
 		const isValidUser = await checkUserTokenByUUID(uuid, token);
 		if (!isValidUser) {
@@ -2664,7 +2664,7 @@ export const CreateUserAuthenticatorService = async (uuid: string, token: string
 		};
 		const EmailResult = await selectDataFromMongoDB<UserEmail>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
 		const email =  EmailResult.result[0].email
-		return await CreateUserAuthenticator(uuid, token, email);
+		return await createUserAuthenticator(uuid, token, email);
 	} catch (error) {
 		console.error('创建身份验证器失败，未知错误', error);
 		return { success: false, message: '创建身份验证器失败，未知错误' };
@@ -2701,7 +2701,7 @@ export const checkUserAuthenticatorService = async (uuid: string): Promise<GetUs
  * @param uuid 用户的 UUID
  * @returns 创建身份验证器的结果
  */
-const CreateUserAuthenticator = async (uuid: string, token: string, email: string): Promise<UserCreateAuthenticatorResponseDto> => {
+const createUserAuthenticator = async (uuid: string, token: string, email: string): Promise<UserCreateAuthenticatorResponseDto> => {
 	// 创建一个数据库会话并启动事务
 	const session = await mongoose.startSession();
 	session.startTransaction();
@@ -2721,7 +2721,7 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 				UUID: uuid,
 				authenticator: true,
 				secret,
-				otpauth: otpauth,
+				otpauth,
 				backupCodes,
 				createDateTime: now,
 				editDateTime: now
@@ -2733,7 +2733,7 @@ const CreateUserAuthenticator = async (uuid: string, token: string, email: strin
 
 			if (saveAuthenticatorResult.success) {
 				await session.commitTransaction();
-				return { success: true, message: '创建身份验证器成功', secret: secret, otpauth: otpauth, backupCodes };
+				return { success: true, message: '创建身份验证器成功', secret, otpauth, backupCodes };
 			} else {
 				await session.abortTransaction();
 				console.error('创建身份验证器失败，保存数据失败', { uuid });
