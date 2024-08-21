@@ -2682,7 +2682,7 @@ export const checkUserAuthenticatorService = async (uuid: string): Promise<GetUs
 	try {
 		// 查询数据库中用户的验证器状态
 		const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-		const status = Boolean(userInfo?.result?.[0]?.Authenticator)
+		const status = !!userInfo?.result?.[0]?.Authenticator
 		const time = userInfo?.result?.[0]?.createDateTime
 		if (!status){
 			return { isvaild: false };
