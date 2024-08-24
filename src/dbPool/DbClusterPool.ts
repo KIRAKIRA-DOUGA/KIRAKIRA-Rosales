@@ -62,7 +62,11 @@ export type DbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> =
  */
 export const connectMongoDBCluster = async (): Promise<void> => {
 	try {
+		const databaseProtocol = process.env.MONGODB_PROTOCOL
 		const databaseHost = process.env.MONGODB_CLUSTER_HOST
+		const databaseTlsCa = process.env.MONGODB_TLS_CA_BASE64 ? Buffer.from(process.env.MONGODB_TLS_CA_BASE64, 'base64').toString('utf-8') : ''
+		const databaseTlsCert = process.env.MONGODB_TLS_CERT_BASE64 ? Buffer.from(process.env.MONGODB_TLS_CERT_BASE64, 'base64').toString('utf-8') : ''
+		const databaseTlsKey = process.env.MONGODB_TLS_KEY_BASE64 ? Buffer.from(process.env.MONGODB_TLS_KEY_BASE64, 'base64').toString('utf-8') : ''
 		const databaseName = process.env.MONGODB_NAME
 		const databaseUsername = process.env.MONGODB_USERNAME
 		const databasePassword = process.env.MONGODB_PASSWORD
@@ -84,10 +88,24 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			process.exit()
 		}
 
-		const mongoURL = `mongodb://${databaseUsername}:${databasePassword}@${databaseHost}/${databaseName}?authSource=admin&replicaSet=rs0&readPreference=secondaryPreferred`
+		const protocol = databaseProtocol === 'mongodb+srv' ? 'mongodb+srv' : 'mongodb'
+		const mongoURL = `${protocol}://${databaseUsername}:${databasePassword}@${databaseHost}/${databaseName}?authSource=admin`
 
 		const connectionOptions = {
 			readPreference: ReadPreferenceMode.secondaryPreferred, // 默认的读偏好为优先从副本中读取，在某些情况下会覆盖这个设置，比如说使用事务时会优先从主读取。
+		}
+
+		if (databaseProtocol === 'mongodb+srv' && !databaseTlsCa) {
+			connectionOptions['tlsAllowInvalidCertificates'] = true
+			console.warn('WARN', 'WARNING', "Your MongoDB connection protocol is 'mongodb+srv', but can not find any TLS credentials. Communications with the database may be eavesdropped!")
+		}
+
+		if (databaseTlsCa && databaseTlsCert && databaseTlsKey) {
+			connectionOptions['tls'] = true
+			connectionOptions['ca'] = databaseTlsCa
+			connectionOptions['cert'] = databaseTlsCert
+			connectionOptions['key'] = databaseTlsKey
+			connectionOptions['tlsAllowInvalidCertificates'] = false
 		}
 
 		try {
