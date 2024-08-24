@@ -94,7 +94,7 @@ npm run dev-hot
 ├ old - 存放不舍得删除的旧代码
 ├ src - 存放源代码
 │  ├ cloudflare - 存放了 Cloudflare 相关的共通代码
-│  ├ common - 存放了共通方法
+│  ├ common - 存放了共通函数
 │  ├ controller - controller 层，用于处理接受的请求载荷数据和丰富请求响应数据
 │  ├ dbPool - 存放了 MongoDB 相关的共通代码
 │  ├ elasticsearchPool - 存放了 Elasticsearch 相关的共通代码
@@ -130,7 +130,7 @@ import { koaCtx, koaNext } from '../type/koaTypes.js'
 
 export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {
 	const something = ctx.query.something
-	ctx.body = `Hello World: ${something}`
+	ctx.body = something === 'Beautiful' ? `Hello Beautiful World` : 'Hello World'
 	await next()
 }
 ```
@@ -144,32 +144,35 @@ import { koaCtx, koaNext } from '../type/koaTypes.js'
 export type koaCtx = Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext, unknown> & {elasticsearchClient?: Client}
 export type koaNext = Koa.Next
 ```
-这两个类型扩展自 Koa 提供的类型，koaCtx 是网络请求的上下文，koaNext 是一个可以被调用的异步方法。  
-koaCtx 类型要求对象应当包含请求头、请求体、响应头、响应体以及中间件为其添加的其他参数。  
-koaNext 类型要求一个异步方法，用于执行下一中间件，如果是最后一个，则完成请求并将响应返回给客户端。
+这两个类型扩展自 Koa 提供的类型，koaCtx 是网络请求的上下文，koaNext 是一个可以被调用的异步函数。  
+koaCtx 类型为一个对象。该对象内应当包含请求头、请求体、响应头、响应体以及中间件为其添加的其他参数。  
+koaNext 类型为一个异步函数。该函数用于执行下一中间件，如果是最后一个，则完成请求并将响应返回给客户端。  
+在通过 koa-router 编写路由时，会自动为传入的 Controller 函数添加上述两个变量。
 
 目前，您不需要完全了解这两个类型，让我们接着往下看。
 ``` TypeScript
 export const helloWorld = async (ctx: koaCtx, next: koaNext): Promise<void> => {...}
 ```
 在这一行，我们导出了一个名为 `helloWorld` 的异步箭头函数，该函数接收两个参数：`ctx: koaCtx` 和 `next: koaNext`, 并返回一个空的 Promise.  
-ctx 是 context 的缩写，代表上下文，其类型 koaCtx 说明见上文。  
-next 的类型是 koaNext，说明见上文。
+ctx 是 context 的缩写，代表上下文。
 
 接下来的两行代码：
 ``` TypeScript
 const something = ctx.query.something
-ctx.body = something ? `Hello ${something} World` : 'Hello World'
+ctx.body = something === 'Beautiful' ? `Hello Beautiful World` : 'Hello World'
 ```
-这一部分用来存取网络请求上下文中的标头或 body（正文）。  
-首先，从 `ctx` 上下文对象中匹配网络请求中名为 `something` 的“查询”参数，并赋值给 `something` 常量。  
-紧接着是一个三元表达式，您可以将这个运算部分理解为“业务逻辑代码”。如果 `something` 不是假值，则将其与 "Hello World" 字符串拼接的结果作为三元表达式的运算结果，如果是假值，则直接将 'Hello World' 字符串作为三元表达式的运算结果。最后，将运算结果赋值到 `ctx` 请求上下文对象的响应体中。
+这一部分用来存取网络请求上下文中的标头或 body（正文）。
 
-最后一行代码：
+首先，从 `ctx` 上下文对象中匹配网络请求中名为 `something` 的“查询”参数，并赋值给 `something` 常量。  
+紧接着是一个三元表达式，您可以将这个运算部分理解为“业务逻辑代码”。如果 `something` 的值是字符串 "Beautiful"，则将 "Hello Beautiful World" 赋值到 `ctx` 请求上下文对象的响应体中，否则将 "Hello World" 赋值到 `ctx` 请求上下文对象的响应体中。
+
+在后端开发模式中，我们通常将整理请求载荷、整理请求响应的代码逻辑放置于 Controller 层，而将复杂的业务逻辑放置于 Service 层。
+
+接下来，看最后一行代码：
 ``` TypeScript
 await next()
 ```
-等待下一个中间件执行完成，如果没有下一个，则完成请求并返回给客户端。
+这一行代码的作用是等待下一个中间件执行完成，如果没有下一个，则完成请求并将响应返回给客户端。
 
 以上便是 KIRAKIRA-Rosales 通过 Koa 响应一个网络请求的最简单的流程。  
 打开您的浏览器，在地址栏输入`https://localhost:9999?something=Beautiful` 后回车，您将会在页面中看到 `Hello Beautiful World` 字样。🎉
@@ -178,9 +181,9 @@ await next()
 ### 路由
 与前端的路由类似，后端也存在“路由”的概念。  
 前端通过路由匹配到正确的组件并渲染，而后端通过路由将网络请求发送（映射）到正确的 Controller 层并执行。  
-文件 `src\route\router.ts`  就是我们编写从 URL 到 TypeScript Controller 函数的映射的地方。  
+我们在文件 `src\route\router.ts`  中集中编写、管理从 URL 到 Controller 函数的映射。  
 
-一个典型的 GET 请求路由看起来像：
+一个典型的接收 GET 请求的接口路由看起来像：
 ``` typescript
 //      请求的 URL  
 //          ↓
@@ -188,7 +191,7 @@ router.get(URL, controller)
 //                   ↑
 //      这个 URL 对应的 Controller 函数
 ```
-如果是 POST 请求，则需要将 `router.get` 改为 `router.post`
+如果是接收 POST 请求的接口，则需要将 `router.get` 改为 `router.post`
 ``` typescript
 //      请求的 URL  
 //          ↓
@@ -197,14 +200,14 @@ router.post(URL, controller)
 //      这个 URL 对应的 Controller 函数
 ```
 以此类推，我们可以编写其他类型的请求，例如 PUT 请求或 DELETE 请求
-```
+``` typescript
 router.put(URL, controller)
 router.delete(URL, controller)
 ...
 ```
 > [!IMPORTANT]    
-> 传入的 controller 应为 TypeScript Controller 函数本身，而非函数的调用（结果）。  
-> 触发一个请求时，koa-router 会自动将 (ctx: koaCtx, next: koaNext) 传入到 TypeScript Controller 函数中。  
+> 传入的 controller 应为 Controller 函数本身，而非函数的调用（结果）。  
+> 触发一个请求时，koa-router 会自动将 (ctx: koaCtx, next: koaNext) 传入到 Controller 函数中。  
 ``` typescript
 router.get(URL, controller) // 正确用法
 
@@ -228,7 +231,7 @@ curl https://localhost:9999?something=Beautiful
 > [!IMPORTANT]   
 > URL 不宜过长，传递的数据长度有限，一般用于请求某些数据时传递简单的查询参数。 
 
-在后端 TypeScript Controller 函数中，你可以从 ctx 对象中获取 something 所对应的值
+在后端 Controller 函数中，你可以从 ctx 对象中获取 something 所对应的值
 ``` typescript
 const something = ctx.query.something
 ```
@@ -246,7 +249,7 @@ const something = ctx.query.something
 # 使用 curl 命令向一个 URL 发送带有请求体的 POST 请求
 curl -d "param1=value1&param2=value2" -X POST https://localhost:9999/xxxxx
 ```
-在后端 TypeScript Controller 函数中，你可以从 ctx 对象中获取请求体数据
+在后端 Controller 函数中，你可以从 ctx 对象中获取请求体数据
 ``` typescript
 const data = ctx.request.body as { param1: string; param2: string }
 ```
@@ -260,9 +263,9 @@ KIRAKIRA 项目大量使用 Cookie 来存储用户 Token, 用户设置和用户�
 * Cookie 可以被限制仅限 HTTPS
 * HttpOnly 的 Cookie 只能通过请求的 set-cookie 设置/删除，不能通过 JavaScript 访问
 * 目前很多浏览器仅支持第一方（同站点） Cookie，即 `SameSite=Strict`。
-* fetch 方法使用 { credentials: "include" } 选项可以允许在发送跨源请求时包含 Cookie
+* fetch 函数使用 { credentials: "include" } 选项可以允许在发送跨源请求时包含 Cookie
 
-在后端 TypeScript Controller 函数中，你可以从 ctx 对象中获取 Cookie 数据
+在后端 Controller 函数中，你可以从 ctx 对象中获取 Cookie 数据
 ``` typescript
 ctx.cookies.get(cookieKey) // 获取名字为 cookieKey 的 Cookie 对应的值。
 ```
@@ -279,13 +282,13 @@ await next() // 假设已经是最后一个中间件
 ```
 
 ### 访问 MongoDB 数据库和 Elasticsearch 搜索引擎
-用户产生的数据通常会存储到 MongoDB 中，而需要能够被搜索的数据会存储到 Elasticsearch 搜索引擎中。  
+用户产生的数据通常会存储到 MongoDB 中，但需要被搜索的数据会存储到 Elasticsearch 搜索引擎中。  
 对数据库和搜索引擎的增删改查是后端代码的主要功能。
 
 #### MongoDB
 后端使用 Mongoose 连接 MongoDB 数据库。
 
-在程序初始化时，会立即执行 `src\dbPool\DbClusterPool.ts` 文件中的 `connectMongoDBCluster` 函数，该函数首先会读取环境变量中的连接字符串和数据库账号密码，然后创建数据库连接池。创建的连接池是在 Mongoose 内部维护的，Mongoose 暴露一个 `mongoose` 实例用来执行数据库增删改查操作，用户无需关心连接池的具体实现及负载均衡等问题。
+在程序初始化时，会立即执行 `src\dbPool\DbClusterPool.ts` 文件中的 `connectMongoDBCluster` 函数，该函数首先会读取环境变量中的连接字符串和数据库账号密码等数据，然后创建数据库连接池。创建的连接池是在 Mongoose 内部维护的，Mongoose 暴露一个 `mongoose` 实例用来执行数据库增删改查操作，用户无需关心连接池的具体实现及负载均衡问题。
 
 > [!IMPORTANT]     
 > 对于副本集，写操作总是向主分片提交，随后再由主分片同步至副本分片。  
@@ -342,10 +345,11 @@ try {
 
 
 #### Elasticsearch
-Elasticsearch 是一个搜索引擎，部署在 AWS EKS 上的 Elasticsearch 集群需要通过 HTTP 请求来操作。  
-官方提供了 SDK 来方便 Node.js 程序操作 Elasticsearch 而无需手动构建 HTTP 请求。
+Elasticsearch 是一个搜索引擎，部署在 Elasticsearch 集群需要通过 HTTP 请求来操作。  
+官方提供了 SDK 来方便 Node.js 程序操作 Elasticsearch。  
+无需手动构建 HTTP 请求。
 
-同样的，程序在初始化时会执行 `src\elasticsearchPool\elasticsearchClusterPool.ts` 文件中的 `connectElasticSearchCluster` 函数，该函数会读取环境变量，然后创建与 Elasticsearch 集群的连接。在创建连接后，连接客户端实例会被添加至 Koa 的请求上下文 ctx 中。在 Controller 中，我们可以通过 `ctx.elasticsearchClient` 获取连接客户端，然后执行”增删改查“操作，本项目在 `src\elasticsearchPool\elasticsearchClusterPool.ts` 文件中也封装了带有类型约束的便捷函数来执行这些操作。  
+同样的，程序在初始化时会执行 `src\elasticsearchPool\elasticsearchClusterPool.ts` 文件中的 `connectElasticSearchCluster` 函数，该函数会读取环境变量，然后创建与 Elasticsearch 集群的连接。在创建连接后，连接客户端实例会被添加至 Koa 的请求上下文 ctx 中。在 Controller 中，我们可以通过 `ctx.elasticsearchClient` 获取客户端连接，然后执行”增删改查“操作，本项目在 `src\elasticsearchPool\elasticsearchClusterPool.ts` 文件中也封装了带有类型约束的便捷函数来执行这些操作。  
 
 以下是一个简单的示例。
 ``` typescript
@@ -397,7 +401,7 @@ try {
 
 ## 五、构建与部署
 您可以在本地测试运行本项目，或者简单的将其构建并部署在一个服务器实例中。  
-您可也可将其打包为容器镜像，然后在其他 Docker 兼容程序上运行。
+您可也可将其打包为容器镜像，然后在 Docker 或其他 Docker 兼容程序上运行。
 
 #### 构建，然后运行
 1.设置环境变量
@@ -438,7 +442,7 @@ docker buildx inspect --bootstrap
 # 构建并推送多平台镜像到 Docker Hub
 # 请确保安装 docekr 并且 docker 已经登录/连接了远程容器镜像存储库，这里使用 cfdxkk01/kirakira
 # 请替换 <tag> 为正确的版本号，例如：3.21.1
-#                                                                              注意这里有个点「.」，复制语句的时候别落下
+#                                                                              注意这里有个点「.」，复制时别落下
 #                                                                                             ↓ 
 docker buildx build --platform linux/amd64,linux/arm64 -t <username>/<repo-name>:<tag> --push .
 ```
@@ -447,6 +451,6 @@ docker buildx build --platform linux/amd64,linux/arm64 -t <username>/<repo-name>
 > [!IMPORTANT]  
 > 生产环境及容器镜像环境也不要忘记配置环境变量！
 
-## 六、开源规范与安全
+## 六、开源与安全
 * 本项目遵守 BSD-3-Clause license 开源协议。
-* 一般问题请创建 Issue，安全问题请前往 [Discord 频道](https://discord.gg/maveEWn6VP) 汇报
+* 一般问题请创建 Issue，涉及隐私或报告安全问题请前往 [Discord 频道](https://discord.gg/maveEWn6VP)。
