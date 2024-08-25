@@ -3,7 +3,7 @@ import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWith
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { adminClearUserInfoController, adminGetUserInfoController, approveUserInfoController, blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController, getUserInvitationCodeController, userCreateAuthenticatorController, deleteUserAuthenticatorController, checkUserAuthenticatorController } from '../controller/UserController.js'
+import { adminClearUserInfoController, adminGetUserInfoController, approveUserInfoController, blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController, getUserInvitationCodeController, userCreateAuthenticatorController, deleteUserAuthenticatorController, checkUserAuthenticatorController, deleteAuthenticatorLoginController } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
@@ -40,6 +40,14 @@ router.delete('/user/deleteUserAuthenticator', deleteUserAuthenticatorController
 // https://localhost:9999/user/deleteUserAuthenticator
 // cookie: uuid, token
 
+router.delete('/user/deleteAuthenticatorLogin', deleteAuthenticatorLoginController)
+// https://localhost:9999/user/deleteAuthenticatorLogin
+// {
+//  "way": 1, // 1 为用邮箱和恢复码进行删除 or 2为用邮箱和验证码进行删除
+//  "email": "aaa@aaa.aaa"
+//  "recovercode": "XXXXXXXX" // 非必须
+// }
+
 router.get('/user/GetUserAuthenticator', checkUserAuthenticatorController) // 获取当前身份验证器状态
 // https://localhost:9999/user/GetUserAuthenticator
 // cookie uuid, token
@@ -49,7 +57,7 @@ router.post('/user/login', userLoginController) // 用户登录
 // {
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-// 	”otp“: "XXXXXX" //非必须
+// 	"otp": "XXXXXX" //非必须
 // }
 
 router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检查用户是否存在

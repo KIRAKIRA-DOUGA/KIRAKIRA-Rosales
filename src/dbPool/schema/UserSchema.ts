@@ -316,7 +316,7 @@ class UserAuthenticatorSchemaFactory {
 		/** 验证器密钥 */
 		secret: { type: String },
 		/** 备份码 */
-		backupCodes: { type: String },
+		recoverycode: { type: String },
 		/** QRcode */
 		otpauth: { type: String },
 		/** 系统专用字段-创建时间 - 非空 */

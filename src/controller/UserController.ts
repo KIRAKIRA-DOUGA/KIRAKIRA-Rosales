@@ -1,7 +1,7 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
 import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService, getUserUuid, createUserAuthenticatorService, deleteUserAuthenticatorService, checkUserAuthenticatorService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { AdminClearUserInfoRequestDto, AdminGetUserInfoRequestDto, ApproveUserInfoRequestDto, BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
+import { AdminClearUserInfoRequestDto, AdminGetUserInfoRequestDto, ApproveUserInfoRequestDto, BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserDeleteAuthenticatorRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
 /**
  * 用户注册
@@ -93,6 +93,34 @@ export const deleteUserAuthenticatorController = async (ctx: koaCtx, next: koaNe
 	const result = await deleteUserAuthenticatorService(uuid, token);
 	ctx.body = result;
 	await next()
+}
+
+/**
+ * 登录时删除身份验证器
+ * @param ctx context
+ * @param next next
+ * @returns UserDeleteAuthenticatorResponseDto 删除结果
+ */
+export const deleteAuthenticatorLoginController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<UserDeleteAuthenticatorRequestDto>
+	const way = data?.way
+	if (way == 1) { // 用邮箱和恢复码进行删除
+		const UserDeleteAuthenticatorRequest: UserDeleteAuthenticatorRequestDto = {
+			way: data?.way,
+			email: data?.email,
+			recoverycode: data?.recoverycode,
+		}
+		// 这里要放一个删除
+	}
+	if (way == 2) { // 用邮箱和验证码进行删除
+		const UserDeleteAuthenticatorRequest: UserDeleteAuthenticatorRequestDto = {
+			way: data?.way,
+			email: data?.email,
+		}
+	} else {
+		ctx.body = {success: false, message: "不存在的方法"}
+		await next()
+	}
 }
 
 /**

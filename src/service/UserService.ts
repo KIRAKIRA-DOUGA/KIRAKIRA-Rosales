@@ -263,15 +263,6 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 
 						if (currentOtpResult.otp == otp) {
 							return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
-						} 
-
-						if( currentOtpResult.backupCodes == otp ) {
-							const deletestatus = await deleteUserAuthenticatorService(userAuthInfo.UUID, userAuthInfo.token)
-							if (!deletestatus.success){
-								console.error('ERROR', '删除验证器错误', {uuid})
-							}
-							return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户以备用码登录成功' }
-							
 						}else {
 							console.log('验证码错误', currentOtpResult.otp, otp)
 							return { success: false, message: '验证码错误', authenticator: true }
@@ -861,7 +852,7 @@ export const checkUserTokenService = async (uid: number, token: string): Promise
 }
 
 /**
- * 请求发送验证码
+ * 请求发送注册验证码
  * @param requestSendVerificationCodeRequest 请求发送验证码的请求载荷
  * @returns 请求发送验证码的请求响应
  */
@@ -2575,7 +2566,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  * @param token 用户的 token
  * @returns 用户当前的一次性验证码
  */
-const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, message?: string, otp?: string, backupCodes?: string }> => {
+const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, message?: string, otp?: string, recoverycode?: string }> => {
 	try {
 		// 检查用户是否已有身份验证器
 		const hasAuthenticator = await checkUserAuthenticatorService(uuid);
@@ -2588,7 +2579,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, m
 		const { collectionName, schemaInstance } = UserAuthenticatorSchema;
 		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
 		const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1, backupCodes: 1 };
+		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1, recoverycode: 1 };
 
 		const userAuthenticator = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
 		if (!userAuthenticator.success) {
@@ -2597,7 +2588,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, m
 		}
 
 		const secret = userAuthenticator?.result?.[0]?.secret;
-		const backupCodes = userAuthenticator?.result?.[0]?.backupCodes;
+		const recoverycode = userAuthenticator?.result?.[0]?.recoverycode;
 		if (!secret) {
 			console.error('获取验证码失败，未找到用户的 secret', { uuid });
 			return { success: false, message: '获取验证码失败，未找到用户的 secret' };
@@ -2605,10 +2596,194 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, m
 
 		// 生成一次性验证码
 		const otp = authenticator.generate(secret);
-		return { success: true, message: '获取验证码成功', otp, backupCodes};
+		return { success: true, message: '获取验证码成功', otp, recoverycode};
 	} catch (error) {
 		console.error('获取验证码失败，未知错误', error);
 		return { success: false, message: '获取验证码失败，未知错误' };
+	}
+};
+
+/**
+ * 请求发送验证码
+ * @param requestSendVerificationCodeRequest 请求发送验证码的请求载荷
+ * @returns 请求发送验证码的请求响应
+ */
+export const RequestSendDeleteVerificationCodeService = async (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): Promise<RequestSendVerificationCodeResponseDto> => {
+	try {
+		if (checkRequestSendVerificationCodeRequest(requestSendVerificationCodeRequest)) {
+			const { email, clientLanguage } = requestSendVerificationCodeRequest
+			const emailLowerCase = email.toLowerCase()
+			const nowTime = new Date().getTime()
+			const todayStart = new Date()
+			todayStart.setHours(0, 0, 0, 0)
+			const { collectionName, schemaInstance } = UserVerificationCodeSchema
+			type UserVerificationCode = InferSchemaType<typeof schemaInstance>
+			const requestSendVerificationCodeWhere: QueryType<UserVerificationCode> = {
+				emailLowerCase,
+			}
+
+			const requestSendVerificationCodeSelect: SelectType<UserVerificationCode> = {
+				emailLowerCase: 1, // 用户邮箱
+				attemptsTimes: 1,
+				lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
+			}
+
+			// 启动事务
+			const session = await mongoose.startSession()
+			session.startTransaction()
+
+			try {
+				const requestSendVerificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(requestSendVerificationCodeWhere, requestSendVerificationCodeSelect, schemaInstance, collectionName, { session })
+				if (requestSendVerificationCodeResult.success) {
+					const lastRequestDateTime = requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
+					const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
+					if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 55000 < nowTime) { // 前端 60 秒，后端 55 秒
+						const lastRequestDate = new Date(lastRequestDateTime)
+						if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 5) { // ! 每天五次机会
+							const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
+							let newAttemptsTimes = attemptsTimes + 1
+							if (todayStart > lastRequestDate) {
+								newAttemptsTimes = 0
+							}
+
+							const requestSendVerificationCodeUpdate: UserVerificationCode = {
+								emailLowerCase,
+								verificationCode,
+								overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
+								attemptsTimes: newAttemptsTimes,
+								lastRequestDateTime: nowTime,
+								editDateTime: nowTime,
+							}
+							const updateResult = await findOneAndUpdateData4MongoDB(requestSendVerificationCodeWhere, requestSendVerificationCodeUpdate, schemaInstance, collectionName, { session })
+							if (updateResult.success) {
+								// TODO: 使用多语言 email title and text
+								try {
+									const mailTitleCHS = 'KIRAKIRA 确认验证码'
+									const mailTitleEN = 'KIRAKIRA Confirm Code'
+									const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN // FIX ME: 这边我语言表述不是很来 能帮忙改一下吗;w;
+
+									const mailHtmlCHS = `
+											<p>你的确认验证码是：<strong>${verificationCode}</strong></p>
+											欢迎来到 KIRAKIRA，使用这个验证码来完成删除操作！
+											<br>
+											验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
+										`
+									const mailHtmlEN = `
+											<p>Your confirm verification code is: <strong>${verificationCode}</strong></p>
+											Welcome to KIRAKIRA. You can use this verification code to delete your Authenticator.
+											<br>
+											Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
+											<br>
+											<br>
+											To stop receiving notifications, please contact the KIRAKIRA support team.
+										`
+									const correctMailHTML = clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
+									const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
+									if (sendMailResult.success) {
+										await session.commitTransaction()
+										session.endSession()
+										return { success: true, isTimeout: false, message: '确认验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
+									} else {
+										if (session.inTransaction()) {
+											await session.abortTransaction()
+										}
+										session.endSession()
+										console.error('ERROR', '请求发送确认验证码失败，邮件发送失败')
+										return { success: false, isTimeout: true, message: '请求发送确认验证码失败，邮件发送失败' }
+									}
+								} catch (error) {
+									if (session.inTransaction()) {
+										await session.abortTransaction()
+									}
+									session.endSession()
+									console.error('ERROR', '请求发送确认验证码失败，邮件发送时出错', error)
+									return { success: false, isTimeout: true, message: '请求发送确认验证码失败，邮件发送时出错' }
+								}
+							} else {
+								if (session.inTransaction()) {
+									await session.abortTransaction()
+								}
+								session.endSession()
+								console.error('ERROR', '请求发送确认验证码失败，更新或新增用户验证码失败')
+								return { success: false, isTimeout: false, message: '请求发送确认验证码失败，更新或新增用户验证码失败' }
+							}
+						} else {
+							if (session.inTransaction()) {
+								await session.abortTransaction()
+							}
+							session.endSession()
+							console.warn('WARN', 'WARNING', '请求发送确认验证码失败，已达本日重复次数上限，请稍后再试')
+							return { success: true, isTimeout: true, message: '请求发送确认验证码失败，已达本日重复次数上限，请稍后再试' }
+						}
+					} else {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						console.warn('WARN', 'WARNING', '请求发送确认验证码失败，未超过邮件超时时间，请稍后再试')
+						return { success: true, isTimeout: true, message: '请求发送确认验证码失败，未超过邮件超时时间，请稍后再试' }
+					}
+				} else {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('ERROR', '请求发送确认验证码失败，获取验证码失败')
+					return { success: false, isTimeout: false, message: '请求发确认送验证码失败，获取验证码失败' }
+				}
+			} catch (error) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.error('ERROR', '请求发送确认验证码失败，检查超时时间时出错', error)
+				return { success: false, isTimeout: false, message: '请求发送确认验证码失败，检查超时时间时出错' }
+			}
+		} else {
+			console.error('ERROR', '请求发送确认验证码失败，参数不合法')
+			return { success: false, isTimeout: false, message: '请求发送确认验证码失败，参数不合法' }
+		}
+	} catch (error) {
+		console.error('ERROR', '请求发送确认验证码失败，未知错误', error)
+		return { success: false, isTimeout: false, message: '请求发送确认验证码失败，未知错误' }
+	}
+}
+
+/**
+ * 登录时删除用户的身份验证器
+ * @param uuid 用户的 UUID
+ * @returns 删除操作的结果
+ */
+export const deleteAuthenticatorLoginService = async (way: number, email: string, recoverycode?: string): Promise<UserDeleteAuthenticatorResponseDto> => {
+	try {
+		const emaillower = email.toLowerCase()
+		const { collectionName, schemaInstance } = UserAuthSchema;
+		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+		const userStatusWhere: QueryType<UserAuthenticator> = { emailLowerCase: emaillower }; // 这里是不是要一个passwordHash更安全?
+		const userStatusSelect: SelectType<UserAuthenticator> = { UUID: 1, token: 1 };
+		const userinfo = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
+		const uuid = userinfo?.result?.[0]?.UUID;
+		const token = userinfo?.result?.[0]?.token;
+
+		if ( way == 1 ) { // 邮箱和恢复码进行删除
+			const { collectionName, schemaInstance } = UserAuthenticatorSchema;
+			type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
+			const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
+			const userStatusSelect: SelectType<UserAuthenticator> = { recoverycode: 1 };
+			const userAuthenticator = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
+			const correctrecoverycode = userAuthenticator?.result?.[0]?.recoverycode;
+			if ( correctrecoverycode == recoverycode ){
+				const result = await deleteUserAuthenticatorService( uuid, token )
+				return result
+			}else{
+				return { success: false, message: "删除身份验证器失败，恢复码错误" }
+			}
+		}if ( way == 2 ) {
+			
+		}
+	} catch (error) {
+		console.error('删除身份验证器失败', error);
+		return { success: false, message: '删除身份验证器失败，发生未知错误' };
 	}
 };
 
@@ -2724,7 +2899,7 @@ const createUserAuthenticator = async (uuid: string, token: string, email: strin
 			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			const secret = authenticator.generateSecret();
 			const otpauth = authenticator.keyuri(email, 'KIRAKIRA', secret);
-			const backupCodes = generateSecureVerificationStringCode(6, charset);
+			const recoverycode = generateSecureVerificationStringCode(8, charset);
 
 			// 准备要插入的身份验证器数据
 			const userAuthenticatorData: UserAuthenticator = {
@@ -2732,7 +2907,7 @@ const createUserAuthenticator = async (uuid: string, token: string, email: strin
 				authenticator: true,
 				secret,
 				otpauth,
-				backupCodes,
+				recoverycode,
 				createDateTime: now,
 				editDateTime: now
 			};
@@ -2743,7 +2918,7 @@ const createUserAuthenticator = async (uuid: string, token: string, email: strin
 
 			if (saveAuthenticatorResult.success) {
 				await session.commitTransaction();
-				return { success: true, message: '创建身份验证器成功', secret, otpauth, backupCodes };
+				return { success: true, message: '创建身份验证器成功', secret, otpauth, recoverycode };
 			} else {
 				await session.abortTransaction();
 				console.error('创建身份验证器失败，保存数据失败', { uuid });

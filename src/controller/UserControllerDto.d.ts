@@ -747,8 +747,17 @@ export type UserCreateAuthenticatorResponseDto = {
 	secret?: string;
 	/** 验证器的二维码 */
 	otpauth?: string;
-	/** 备份码 */
-	backupCodes?: string;
+	/** 恢复码 */
+	recoverycode?: string;
+}
+
+export type UserDeleteAuthenticatorRequestDto = {
+	/** 删除的方法 */
+	way: number,
+	/** 用户的邮箱 */
+	email: string,
+	/** 用户的恢复码 */
+	recoverycode?: string,
 }
 
 /**
