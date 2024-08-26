@@ -16,8 +16,8 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 	try {
 		if (checkEmitDanmakuRequest(emitDanmakuRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
-				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
-				if (!UUID) {
+				const uuid = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				if (!uuid) {
 					console.error('ERROR', '发送弹幕失败，UUID 不存在', { uid })
 					return { success: false, message: '发送弹幕失败，UUID 不存在' }
 				}
@@ -31,7 +31,7 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 				type Danmaku = InferSchemaType<typeof schemaInstance>
 				const nowDate = new Date().getTime()
 				const danmaku: Danmaku = {
-					UUID,
+					uuid,
 					uid,
 					...emitDanmakuRequest,
 					editDateTime: nowDate,
@@ -75,6 +75,8 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 
 			const select: SelectType<Danmaku> = {
 				videoId: 1,
+				uuid: 1,
+				uid: 1,
 				time: 1,
 				text: 1,
 				color: 1,
