@@ -753,11 +753,13 @@ export type UserCreateAuthenticatorResponseDto = {
 
 export type UserDeleteAuthenticatorRequestDto = {
 	/** 删除的方法 */
-	way: number,
+	way: number;
 	/** 用户的邮箱 */
-	email: string,
+	email: string;
 	/** 用户的恢复码 */
-	recoverycode?: string,
+	recoverycode?: string;
+	/** 用户的验证码 */
+	verificationCode?: string;
 }
 
 /**

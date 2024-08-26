@@ -44,8 +44,9 @@ router.delete('/user/deleteAuthenticatorLogin', deleteAuthenticatorLoginControll
 // https://localhost:9999/user/deleteAuthenticatorLogin
 // {
 //  "way": 1, // 1 为用邮箱和恢复码进行删除 or 2为用邮箱和验证码进行删除
-//  "email": "aaa@aaa.aaa"
-//  "recovercode": "XXXXXXXX" // 非必须
+//  "email": "aaa@aaa.aaa",
+//  "recovercode": "XXXXXXXX", // 非必须
+//  "verificationCode": "ZZZZZZ", // 非必须 仅适用于邮箱方法
 // }
 
 router.get('/user/GetUserAuthenticator', checkUserAuthenticatorController) // 获取当前身份验证器状态

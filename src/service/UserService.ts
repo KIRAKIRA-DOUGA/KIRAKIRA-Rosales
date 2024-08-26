@@ -2754,12 +2754,12 @@ export const RequestSendDeleteVerificationCodeService = async (requestSendVerifi
  * @param uuid 用户的 UUID
  * @returns 删除操作的结果
  */
-export const deleteAuthenticatorLoginService = async (way: number, email: string, recoverycode?: string): Promise<UserDeleteAuthenticatorResponseDto> => {
+export const deleteAuthenticatorLoginService = async (way: number, email: string, recoverycode?: string, verificationCode?: string): Promise<UserDeleteAuthenticatorResponseDto> => {
 	try {
-		const emaillower = email.toLowerCase()
+		const emailLowerCase = email.toLowerCase()
 		const { collectionName, schemaInstance } = UserAuthSchema;
 		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-		const userStatusWhere: QueryType<UserAuthenticator> = { emailLowerCase: emaillower }; // 这里是不是要一个passwordHash更安全?
+		const userStatusWhere: QueryType<UserAuthenticator> = { emailLowerCase: emailLowerCase }; // 这里是不是要一个passwordHash更安全?
 		const userStatusSelect: SelectType<UserAuthenticator> = { UUID: 1, token: 1 };
 		const userinfo = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
 		const uuid = userinfo?.result?.[0]?.UUID;
@@ -2779,7 +2779,46 @@ export const deleteAuthenticatorLoginService = async (way: number, email: string
 				return { success: false, message: "删除身份验证器失败，恢复码错误" }
 			}
 		}if ( way == 2 ) {
-			
+			const session = await mongoose.startSession()
+			session.startTransaction()
+
+			const now = new Date().getTime()
+
+			const { collectionName: userVerificationCodeCollectionName, schemaInstance: userVerificationCodeSchemaInstance } = UserVerificationCodeSchema
+			type UserVerificationCode = InferSchemaType<typeof userVerificationCodeSchemaInstance>
+			const verificationCodeWhere: QueryType<UserVerificationCode> = {
+				emailLowerCase,
+				verificationCode,
+				overtimeAt: { $gte: now },
+			}
+			const verificationCodeSelect: SelectType<UserVerificationCode> = {
+				emailLowerCase: 1, // 用户邮箱
+			}			
+
+			try {
+				const verificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(verificationCodeWhere, verificationCodeSelect, userVerificationCodeSchemaInstance, userVerificationCodeCollectionName, { session })
+				if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('ERROR', '用户删除失败：验证失败')
+					return { success: false, message: '用户删除失败：验证失败' }
+				}
+			} catch (error) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.error('ERROR', '用户删除失败：请求验证失败')
+				return { success: false, message: '用户删除失败：请求验证失败' }
+			}
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			const result = await deleteUserAuthenticatorService( uuid, token )
+			return result
 		}
 	} catch (error) {
 		console.error('删除身份验证器失败', error);
