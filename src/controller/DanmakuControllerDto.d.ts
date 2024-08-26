@@ -6,6 +6,8 @@ type BasicDanmakuDto = {
 	videoId: number;
 	/** 非空 - 用户 UUID */
 	uuid: string;
+	/** 非空 用户 UID */
+	uid: number;
 	/** 非空 - 弹幕发送的时机，单位：秒（支持小数） */
 	time: number;
 	/** 非空 - 弾幕文本 */
