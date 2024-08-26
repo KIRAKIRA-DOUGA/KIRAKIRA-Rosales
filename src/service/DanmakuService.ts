@@ -75,7 +75,7 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 
 			const select: SelectType<Danmaku> = {
 				videoId: 1,
-				UUID: 1,
+				uuid: 1,
 				time: 1,
 				text: 1,
 				color: 1,
