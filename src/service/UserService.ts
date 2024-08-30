@@ -2754,7 +2754,7 @@ export const RequestSendDeleteAuthenticatorVerificationCodeService = async (requ
  * @param uuid 用户的 UUID
  * @returns 删除操作的结果
  */
-export const deleteAuthenticatorLoginService = async (way: number, email: string, recoverycode?: string, verificationCode?: string): Promise<UserDeleteAuthenticatorResponseDto> => {
+export const deleteAuthenticatorLoginService = async (way: string, email?: string, recoverycode?: string, verificationCode?: string): Promise<UserDeleteAuthenticatorResponseDto> => {
 	try {
 		const emailLowerCase = email.toLowerCase()
 		const { collectionName, schemaInstance } = UserAuthSchema;
@@ -2765,7 +2765,7 @@ export const deleteAuthenticatorLoginService = async (way: number, email: string
 		const uuid = userinfo?.result?.[0]?.UUID;
 		const token = userinfo?.result?.[0]?.token;
 
-		if ( way == 1 ) { // 邮箱和恢复码进行删除
+		if ( way == "ByRecoveryCode" ) { // 邮箱和恢复码进行删除
 			const { collectionName, schemaInstance } = UserAuthenticatorSchema;
 			type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
 			const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
@@ -2778,7 +2778,7 @@ export const deleteAuthenticatorLoginService = async (way: number, email: string
 			}else{
 				return { success: false, message: "删除身份验证器失败，恢复码错误" }
 			}
-		}if ( way == 2 ) {
+		}if ( way == "ByEmail" ) {
 			const session = await mongoose.startSession()
 			session.startTransaction()
 			const now = new Date().getTime()

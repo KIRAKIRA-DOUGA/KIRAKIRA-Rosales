@@ -1,5 +1,5 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
-import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService, getUserUuid, createUserAuthenticatorService, deleteUserAuthenticatorService, checkUserAuthenticatorService, RequestSendDeleteAuthenticatorVerificationCodeService } from '../service/UserService.js'
+import { adminClearUserInfoService, adminGetUserInfoService, approveUserInfoService, blockUserByUIDService, changePasswordService, checkInvitationCodeService, checkUsernameService, checkUserTokenService, createInvitationCodeService, getBlockedUserService, getMyInvitationCodeService, getSelfUserInfoService, getUserAvatarUploadSignedUrlService, getUserInfoByUidService, getUserSettingsService, reactivateUserByUIDService, requestSendChangeEmailVerificationCodeService, requestSendChangePasswordVerificationCodeService, RequestSendVerificationCodeService, updateOrCreateUserInfoService, updateOrCreateUserSettingsService, updateUserEmailService, userExistsCheckService, userLoginService, userRegistrationService, getUserInvitationCodeService, getUserUuid, createUserAuthenticatorService, deleteUserAuthenticatorService, checkUserAuthenticatorService, RequestSendDeleteAuthenticatorVerificationCodeService, deleteAuthenticatorLoginService } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminClearUserInfoRequestDto, AdminGetUserInfoRequestDto, ApproveUserInfoRequestDto, BlockUserByUIDRequestDto, CheckInvitationCodeRequestDto, CheckUsernameRequestDto, GetSelfUserInfoRequestDto, GetUserInfoByUidRequestDto, GetUserSettingsRequestDto, ReactivateUserByUIDRequestDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeRequestDto, RequestSendVerificationCodeRequestDto, UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserSettingsRequestDto, UpdateUserEmailRequestDto, UpdateUserPasswordRequestDto, UserDeleteAuthenticatorRequestDto, UserExistsCheckRequestDto, UserLoginRequestDto, UserLogoutResponseDto, UserRegistrationRequestDto } from './UserControllerDto.js'
 
@@ -104,24 +104,29 @@ export const deleteUserAuthenticatorController = async (ctx: koaCtx, next: koaNe
 export const deleteAuthenticatorLoginController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UserDeleteAuthenticatorRequestDto>
 	const way = data?.way
-	if (way == 1) { // 用邮箱和恢复码进行删除
-		const UserDeleteAuthenticatorRequest: UserDeleteAuthenticatorRequestDto = {
-			way: data?.way,
-			email: data?.email,
-			recoverycode: data?.recoverycode,
-		}
-		// 这里要放一个删除
-	}
-	if (way == 2) { // 用邮箱和验证码进行删除
-		const UserDeleteAuthenticatorRequest: UserDeleteAuthenticatorRequestDto = {
-			way: data?.way,
-			email: data?.email,
-		}
+  
+	if (way === "ByRecoveryCode") { // 用邮箱和恢复码进行删除
+	  if (!data.email || !data.recoverycode) {
+		ctx.body = { success: false, message: "邮箱或恢复码不能为空" }
+	  } else {
+		const email = data?.email
+		const recoverycode = data?.recoverycode
+		ctx.body = await deleteAuthenticatorLoginService(way, email, recoverycode)
+	  }
+	} else if (way === "ByEmail") { // 用邮箱和验证码进行删除
+	  if (!data.email || !data.verificationCode) {
+		ctx.body = { success: false, message: "邮箱或验证码不能为空" }
+	  } else {
+		const email = data?.email
+		const verificationcode = data?.verificationCode
+		ctx.body = await deleteAuthenticatorLoginService(way, email, verificationcode)
+	  }
 	} else {
-		ctx.body = { success: false, message: "不存在的方法" }
-		await next()
+	  ctx.body = { success: false, message: "不存在的方法" }
 	}
-}
+  
+	await next()
+  }  
 
 /**
  * 请求发送验证码，用于删除用户的身份验证器
