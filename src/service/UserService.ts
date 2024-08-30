@@ -2608,7 +2608,7 @@ const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, m
  * @param requestSendVerificationCodeRequest 请求发送验证码的请求载荷
  * @returns 请求发送验证码的请求响应
  */
-export const RequestSendDeleteVerificationCodeService = async (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): Promise<RequestSendVerificationCodeResponseDto> => {
+export const RequestSendDeleteAuthenticatorVerificationCodeService = async (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): Promise<RequestSendVerificationCodeResponseDto> => {
 	try {
 		if (checkRequestSendVerificationCodeRequest(requestSendVerificationCodeRequest)) {
 			const { email, clientLanguage } = requestSendVerificationCodeRequest
@@ -2781,9 +2781,7 @@ export const deleteAuthenticatorLoginService = async (way: number, email: string
 		}if ( way == 2 ) {
 			const session = await mongoose.startSession()
 			session.startTransaction()
-
 			const now = new Date().getTime()
-
 			const { collectionName: userVerificationCodeCollectionName, schemaInstance: userVerificationCodeSchemaInstance } = UserVerificationCodeSchema
 			type UserVerificationCode = InferSchemaType<typeof userVerificationCodeSchemaInstance>
 			const verificationCodeWhere: QueryType<UserVerificationCode> = {
@@ -2794,7 +2792,6 @@ export const deleteAuthenticatorLoginService = async (way: number, email: string
 			const verificationCodeSelect: SelectType<UserVerificationCode> = {
 				emailLowerCase: 1, // 用户邮箱
 			}			
-
 			try {
 				const verificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(verificationCodeWhere, verificationCodeSelect, userVerificationCodeSchemaInstance, userVerificationCodeCollectionName, { session })
 				if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
