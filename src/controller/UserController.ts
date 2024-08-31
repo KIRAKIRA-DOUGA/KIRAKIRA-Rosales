@@ -104,7 +104,6 @@ export const deleteUserAuthenticatorController = async (ctx: koaCtx, next: koaNe
 export const deleteAuthenticatorLoginController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UserDeleteAuthenticatorRequestDto>
 	const way = data?.way
-  
 	if (way === "ByRecoveryCode") { // 用邮箱和恢复码进行删除
 	  if (!data.email || !data.recoverycode) {
 		ctx.body = { success: false, message: "邮箱或恢复码不能为空" }
@@ -124,9 +123,8 @@ export const deleteAuthenticatorLoginController = async (ctx: koaCtx, next: koaN
 	} else {
 	  ctx.body = { success: false, message: "不存在的方法" }
 	}
-  
 	await next()
-  }  
+}  
 
 /**
  * 请求发送验证码，用于删除用户的身份验证器
