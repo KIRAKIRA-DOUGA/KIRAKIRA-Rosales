@@ -728,9 +728,9 @@ export type AdminClearUserInfoResponseDto = {
  */
 export type UserCreateAuthenticatorRequestDto = {
 	/** 用户的 UUID */
-	uuid: string,
+	uuid: string;
 	/** 用户的 token */
-	token: string,
+	token: string;
 }
 
 /**
@@ -749,6 +749,8 @@ export type UserCreateAuthenticatorResponseDto = {
 	otpauth?: string;
 	/** 恢复码 */
 	recoverycode?: string;
+	/** 备份码 */
+	backupcode?: string;
 }
 
 export type UserDeleteAuthenticatorRequestDto = {

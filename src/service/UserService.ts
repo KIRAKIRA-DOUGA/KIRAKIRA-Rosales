@@ -2791,7 +2791,7 @@ export const deleteAuthenticatorLoginService = async (way: string, email?: strin
 			}
 			const verificationCodeSelect: SelectType<UserVerificationCode> = {
 				emailLowerCase: 1, // 用户邮箱
-			}			
+			}
 			try {
 				const verificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(verificationCodeWhere, verificationCodeSelect, userVerificationCodeSchemaInstance, userVerificationCodeCollectionName, { session })
 				if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
@@ -2934,8 +2934,9 @@ const createUserAuthenticator = async (uuid: string, token: string, email: strin
 			const now = new Date().getTime();
 			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			const secret = authenticator.generateSecret();
-			const otpauth = authenticator.keyuri(email, 'KIRAKIRA', secret);
+			const otpauth = authenticator.keyuri(email, 'KIRAKIRA☆DOUGA', secret);
 			const recoverycode = generateSecureVerificationStringCode(8, charset);
+			const backupcode = Array.from({ length: 5 }, () => generateSecureVerificationStringCode(6, charset));
 
 			// 准备要插入的身份验证器数据
 			const userAuthenticatorData: UserAuthenticator = {
@@ -2944,6 +2945,7 @@ const createUserAuthenticator = async (uuid: string, token: string, email: strin
 				secret,
 				otpauth,
 				recoverycode,
+				backupcode,
 				createDateTime: now,
 				editDateTime: now
 			};
