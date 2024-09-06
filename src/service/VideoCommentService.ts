@@ -64,6 +64,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 										_id: insertData2MongoDBResult.result?.[0]?._id?.toString(),
 										...videoComment,
 										userInfo: {
+											userNickname: videoCommentSenderUserInfoResult.userNickname,
 											username: videoCommentSenderUserInfoResult.username,
 											avatar: videoCommentSenderUserInfoResult.avatar,
 											userBannerImage: videoCommentSenderUserInfoResult.userBannerImage,

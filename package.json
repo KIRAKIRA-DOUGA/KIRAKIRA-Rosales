@@ -4,6 +4,7 @@
 	"description": "",
 	"main": "src/app.ts",
 	"type": "module",
+	"author": "",
 	"scripts": {
 		"start": "tsc --noEmitOnError --sourceMap --outDir .kirakira && node ./.kirakira/app.js",
 		"dev": "npm start",
@@ -11,8 +12,6 @@
 		"dev-hot": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
 		"build": "tsc --removeComments --declaration"
 	},
-	"author": "",
-	"license": "ISC",
 	"devDependencies": {
 		"@types/koa": "^2.13.5",
 		"@types/koa-route": "^3.2.5",

@@ -15,3 +15,5 @@ LICENSE
 *.out
 dist
 .env.powershell.temp
+local
+.kirakira
