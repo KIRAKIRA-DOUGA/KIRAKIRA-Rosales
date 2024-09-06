@@ -221,6 +221,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 										isDownvote,
 										userInfo: {
 											username: videoCommentSenderUserInfoResult.username,
+											userNickname: videoCommentSenderUserInfoResult.userNickname,
 											avatar: videoCommentSenderUserInfoResult.avatar,
 											userBannerImage: videoCommentSenderUserInfoResult.userBannerImage,
 											signature: videoCommentSenderUserInfoResult.signature,
