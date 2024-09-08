@@ -818,6 +818,32 @@ export const checkUserTokenService = async (uid: number, token: string): Promise
 }
 
 /**
+ * 通过 UUID 校验用户
+ * @param UUID 用户 UUID
+ * @param token 用户 ID 对应的 token，为空时会导致校验失败
+ * @returns 校验结果
+ */
+export const checkUserTokenByUuidService = async (UUID: string, token: string): Promise<CheckUserTokenResponseDto> => {
+	try {
+		if (UUID !== undefined && UUID !== null && token) {
+			const checkUserTokenResult = await checkUserTokenByUUID(UUID, token)
+			if (checkUserTokenResult) {
+				return { success: true, message: '用户校验成功', userTokenOk: true }
+			} else {
+				console.error('ERROR', `用户校验失败！非法用户！用户 UUID：${UUID}`)
+				return { success: false, message: '用户校验失败！非法用户！', userTokenOk: false }
+			}
+		} else {
+			console.error('ERROR', `用户校验失败！用户 UUID 或 token 不存在，用户 UUID：${UUID}`)
+			return { success: false, message: '用户校验失败！', userTokenOk: false }
+		}
+	} catch {
+		console.error('ERROR', `用户校验异常！用户 UUID：${UUID}`)
+		return { success: false, message: '用户校验异常！', userTokenOk: false }
+	}
+}
+
+/**
  * 请求发送验证码
  * @param requestSendVerificationCodeRequest 请求发送验证码的请求载荷
  * @returns 请求发送验证码的请求响应
