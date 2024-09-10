@@ -204,8 +204,8 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			// 5. 关联目标用户的点赞数据
 			{
 				$lookup: {
-					from: 'video-comment-upvote', // 用户视频评论点赞表名 // WARN: 别忘了变复数
-					let: { commentId: '$_id' }, // 当前评论的 _id
+					from: 'video-comment-upvotes', // 用户视频评论点赞表名 // WARN: 别忘了变复数
+					let: { commentId: { $toString: '$_id' } }, // 当前评论的 _id
 					pipeline: [
 						{
 							$match: {
@@ -213,6 +213,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 									$and: [
 										{ $eq: ['$commentId', '$$commentId'] }, // 匹配评论 ID
 										{ $eq: ['$UUID', uuid] }, // 匹配用户 UUID
+										{ $eq: ['$invalidFlag', false] }, // 只统计有效点赞
 									],
 								},
 							},
@@ -225,7 +226,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			{
 				$lookup: {
 					from: 'video-comment-downvotes', // 用户视频评论点踩表名 // WARN: 别忘了变复数
-					let: { commentId: '$_id' },
+					let: { commentId: { $toString: '$_id' } },
 					pipeline: [
 						{
 							$match: {
@@ -233,6 +234,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 									$and: [
 										{ $eq: ['$commentId', '$$commentId'] },
 										{ $eq: ['$UUID', uuid] }, // 匹配用户 UUID
+										{ $eq: ['$invalidFlag', false] }, // 只统计有效点踩
 									],
 								},
 							},
@@ -263,12 +265,19 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 					downvoteCount: 1, // 评论点踩数
 					commentIndex: 1, // 评论楼层数
 					subCommentsCount: 1, // 该评论的下一级子评论数量
+					editDateTime: 1, // 最后编辑时间
 					isUpvote: 1, // 是否已点赞
-					isDownvote: 1 // 是否已点踩
-				}
-			}
+					isDownvote: 1, // 是否已点踩
+					userInfo: {
+						username: '$user_info_data.username', // 用户名
+						userNickname: '$user_info_data.userNickname', // 用户昵称
+						avatar: '$user_info_data.avatar', // 用户头像的链接
+						signature: '$user_info_data.signature', // 用户的个性签名
+						gender: '$user_info_data.gender' // 用户的性别
+					},
+				},
+			},
 		]
-
 
 		const { collectionName, schemaInstance } = VideoCommentSchema
 		const videoCommentsCountResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, countVideoCommentPipeline)
