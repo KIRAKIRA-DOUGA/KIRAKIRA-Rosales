@@ -22,7 +22,6 @@ export const emitVideoCommentController = async (ctx: koaCtx, next: koaNext) => 
 	await next()
 }
 
-
 /**
  * 根据 KVID 获取视频评论列表，并检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应的值会变为 true
  * @param ctx context
@@ -30,12 +29,18 @@ export const emitVideoCommentController = async (ctx: koaCtx, next: koaNext) => 
  */
 export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koaNext) => {
 	const videoId = ctx.query.videoId as string
+	const page = ctx.query.page as string
+	const pageSize = ctx.query.pageSize as string
 	const getVideoCommentByKvidRequest: GetVideoCommentByKvidRequestDto = {
 		videoId: videoId ? parseInt(videoId, 10) : -1, // WARN -1 means you can't find any video
+		pagination: {
+			page: parseInt(page, 10) ?? 0,
+			pageSize: parseInt(pageSize, 10) ?? Infinity,
+		},
 	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const UUID = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	const videoCommentListResponse = await getVideoCommentListByKvidService(getVideoCommentByKvidRequest, uid, token)
+	const videoCommentListResponse = await getVideoCommentListByKvidService(getVideoCommentByKvidRequest, UUID, token)
 	ctx.body = videoCommentListResponse
 	await next()
 }

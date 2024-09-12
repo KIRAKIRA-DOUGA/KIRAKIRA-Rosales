@@ -49,7 +49,7 @@ git clone https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales.git
 > [!IMPORTANT]    
 > 下方的示例代码中并不包含全部环境变量，在实际使用时必须为每一个环境变量赋值。  
 > 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)。  
-```powershell
+``` powershell
 # 对于不同操作系统，设置环境变量的方式也不同。以下为 Windows PowerShell 的示例
 $env:SERVER_PORT="9999"
 $env:SERVER_ENV="dev"
@@ -427,7 +427,7 @@ node ./dist/app.js
 部署 KIRAKIRA-Rosales 的最佳实践是将其运行在 K8s 集群中。您正在使用的 KIRAKIRA-Rosales 服务便是如此。  
 
 首先确保你安装并运行了 Docker，执行以下命令，您应该可以看到 Docker 的版本号
-```
+``` shell
 docker --version
 ```
 使用 Docker 打包多平台容器镜像（以下示例为 AMD 架构的 Windows 平台，MacOS 与 Linux 平台可能不同）
