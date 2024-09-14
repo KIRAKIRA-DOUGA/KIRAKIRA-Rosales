@@ -42,8 +42,8 @@ export type UserLoginRequestDto = {
 	email: string;
 	/** 在前端已经 Hash 过一次的的密码 */
 	passwordHash: string;
-	/** 一次性验证码 */
-	otp?: string;
+	/** 用户输入的一次性验证码 */
+	clientOtp?: string;
 }
 
 /**
@@ -64,8 +64,8 @@ export type UserLoginResponseDto = {
 	passwordHint?: string;
 	/** 附加的文本消息 */
 	message?: string;
-	/** 是否启用身份验证器 */
-	authenticator?: boolean;
+	/** 身份验证器的类型 */
+	authenticatorType?: 'email' | 'totp' | 'none';
 }
 
 /**
@@ -205,6 +205,16 @@ export type GetSelfUserInfoRequestDto = {
 }
 
 /**
+ * 通过 UUID 获取当前登录的用户信息的请求参数
+ */
+export type GetSelfUserInfoByUuidRequestDto = {
+	/** UUID */
+	uuid: string;
+	/** 用户的身分令牌 */
+	token: string;
+}
+
+/**
  * 获取当前登录的用户信息的请求响应
  */
 export type GetSelfUserInfoResponseDto = {
@@ -217,6 +227,8 @@ export type GetSelfUserInfoResponseDto = {
 		{
 			/** 用户 ID */
 			uid?: number;
+			/** UUID */
+			uuid?: string;
 			/** 用户邮箱 */
 			email?: string;
 			/** 用户创建时间 */
@@ -227,6 +239,11 @@ export type GetSelfUserInfoResponseDto = {
 		& UpdateOrCreateUserInfoRequestDto
 	);
 }
+
+/**
+ * 通过 UUID 获取当前登录的用户信息的请求响应
+ */
+export type GetSelfUserInfoByUuidResponseDto = {} & GetSelfUserInfoResponseDto
 
 /**
  * 通过 UID 获取用户信息的请求载荷
@@ -724,50 +741,37 @@ export type AdminClearUserInfoResponseDto = {
 }
 
 /**
- * 用户创建身份验证器的请求载荷
+ * 发送删除身份验证器的邮箱验证码的请求载荷
  */
-export type UserCreateAuthenticatorRequestDto = {
-	/** 用户的 UUID */
-	uuid: string;
-	/** 用户的 token */
-	token: string;
+export type SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
+	/** 用户客户端使用的语言 */
+	clientLanguage: string;
 }
 
 /**
- * 用户创建身份验证器的请求响应
+ * 发送删除身份验证器的邮箱验证码的请求响应
  */
-export type UserCreateAuthenticatorResponseDto = {
-	/** 执行结果 */
+export type SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
-	/** 验证器状态 */
-	Authenticator?: boolean;
+	/** 是否达到超时时间 */
+	isCoolingDown: boolean;
 	/** 附加的文本消息 */
 	message?: string;
-	/** 验证器的密钥 */
-	secret?: string;
-	/** 验证器的二维码 */
-	otpauth?: string;
-	/** 恢复码 */
-	recoverycode?: string;
-	/** 备份码 */
-	backupcode?: string;
-}
-
-export type UserDeleteAuthenticatorRequestDto = {
-	/** 删除的方法 */
-	way: "ByRecoveryCode" | "ByEmail";
-	/** 用户的邮箱 */
-	email?: string;
-	/** 用户的恢复码 */
-	recoverycode?: string;
-	/** 用户的验证码 */
-	verificationCode?: string;
 }
 
 /**
- * 删除用户的身份验证器的请求响应
+ * 已登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
  */
-export type UserDeleteAuthenticatorResponseDto = {
+export type DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
+	/** 验证码 */
+	verificationCode: string,
+}
+
+/**
+ * 已登录用户通过密码和邮箱验证码删除用户的身份验证器的请求响应
+ */
+export type DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto = {
 	/** 执行结果 */
 	success: boolean;
 	/** 附加的文本消息 */
@@ -775,15 +779,59 @@ export type UserDeleteAuthenticatorResponseDto = {
 }
 
 /**
- * 检查身份验证器功能是否开启的请求响应
+ * 用户创建 TOTP 身份验证器的请求响应
  */
-export type GetUserAuthenticatorResponseDto = {
+export type CreateUserTotpAuthenticatorResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 身份验证器是否已存在 */
+	isExists: 'none' | 'email' | 'totp';
+	/** TOTP 身份验证器信息 */
+	result?: {
+		/** TOTP 的唯一 ID，验证器的二维码 */
+		otpAuth?: string;
+	}
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 用户确认绑定 TOTP 设备的请求载荷
+ */
+export type ConfirmUserTotpAuthenticatorRequestDto = {
+	/** 用户设备中生成的 TOTP 验证码 */
+	clientOtp: string;
+	/** TOTP 的唯一 ID */
+	otpAuth: string;
+}
+
+/**
+ * 用户确认绑定 TOTP 设备的请求响应
+ */
+export type ConfirmUserTotpAuthenticatorResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 结果 */
+	result?: {
+		/** 验证器备份码 */
+		backupCode?: string[];
+		/** 验证器备份码 */
+		recoveryCode?: string;
+	}
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 检查 2FA 是否开启的请求响应
+ */
+export type CheckUserHave2FaServiceResponseDto = {
 	/** 执行结果 */
 	success: boolean;
 	/** 是否存在身份验证器 */
-	isValid: boolean;
-	/** 如果存在，则返回创建时间 */
-	createdTime?: string;
+	have2Fa: boolean;
+	/** 如果存在，则返回 2FA 的类型 */
+	type?: 'email' | 'totp';
 	/** 附加的文本消息 */
 	message?: string;
 }
