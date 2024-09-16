@@ -823,6 +823,14 @@ export type ConfirmUserTotpAuthenticatorResponseDto = {
 }
 
 /**
+ * 检查 2FA 是否开启的请求在和
+ */
+export type CheckUserHave2FaServiceRequestDto = {
+	/** 用户的邮箱 */
+	email: string,
+}
+
+/**
  * 检查 2FA 是否开启的请求响应
  */
 export type CheckUserHave2FaServiceResponseDto = {
@@ -835,3 +843,4 @@ export type CheckUserHave2FaServiceResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+

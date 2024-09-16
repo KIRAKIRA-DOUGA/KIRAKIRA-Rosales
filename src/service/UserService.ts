@@ -62,6 +62,7 @@ import {
 	DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
 	ConfirmUserTotpAuthenticatorResponseDto,
+	CheckUserHave2FaServiceRequestDto,
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
@@ -2798,9 +2799,11 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 /**
  * 发送删除身份验证器的邮箱验证码
  * @param sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest 发送删除身份验证器的邮箱验证码的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
  * @returns 发送删除身份验证器的邮箱验证码的请求响应
  */
-export const sendDeleteTotpAuthenticatorByEmailVerificationCode = async (sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest: SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto> => {
+export const sendDeleteTotpAuthenticatorByEmailVerificationCodeService = async (sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest: SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendDeleteTotpAuthenticatorByEmailVerificationCodeRequest(sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest)) {
 			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，参数不合法')
@@ -3221,7 +3224,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
  * @param token 用户的 token
  * @returns 用户确认绑定 TOTP 设备的请求响应
  */
-export const confirmUserTotpAuthenticator = async (confirmUserTotpAuthenticatorRequest: ConfirmUserTotpAuthenticatorRequestDto, uuid: string, token: string): Promise<ConfirmUserTotpAuthenticatorResponseDto> => {
+export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthenticatorRequest: ConfirmUserTotpAuthenticatorRequestDto, uuid: string, token: string): Promise<ConfirmUserTotpAuthenticatorResponseDto> => {
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			console.error('确认绑定 TOTP 设备失败，非法用户')
@@ -3313,11 +3316,12 @@ export const confirmUserTotpAuthenticator = async (confirmUserTotpAuthenticatorR
 
 /**
  * 通过 Email 检查用户是否已开启 2FA 身份验证器
- * @param email 用户的邮箱
- * @returns
+ * @param checkUserHave2FaServiceRequestDto 通过 Email 检查用户是否已开启 2FA 身份验证器的请求载荷
+ * @returns 通过 Email 检查用户是否已开启 2FA 身份验证器的请求响应
  */
-export const checkUserHave2FaByEmailService = async (email: string): Promise<CheckUserHave2FaServiceResponseDto> => {
+export const checkUserHave2FaByEmailService = async (checkUserHave2FaServiceRequestDto: CheckUserHave2FaServiceRequestDto): Promise<CheckUserHave2FaServiceResponseDto> => {
 	try {
+		const { email } = checkUserHave2FaServiceRequestDto
 		if (!email) {
 			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空`)
 			return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空' }
@@ -3344,7 +3348,7 @@ export const checkUserHave2FaByEmailService = async (email: string): Promise<Che
 			return { success: true, have2Fa: false, message: '用户未开启 2FA' }
 		}
 	} catch (error) {
-		console.error('通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error, email)
+		console.error('通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
 		return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
 	}
 }
