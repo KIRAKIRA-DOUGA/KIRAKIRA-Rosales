@@ -789,7 +789,7 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
 		type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
 
-		const where: QueryType<UserAuth> | QueryType<UserInfo> = { uuid }
+		const where: QueryType<UserAuth> | QueryType<UserInfo> = { UUID: uuid }
 
 		const userAuthSelect: SelectType<UserAuth> = {
 			email: 1, // 用户邮箱
