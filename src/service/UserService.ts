@@ -5,22 +5,68 @@ import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateRandomString, generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
 import {
-	AdminClearUserInfoRequestDto, AdminClearUserInfoResponseDto,
-	AdminGetUserInfoRequestDto, AdminGetUserInfoResponseDto, ApproveUserInfoRequestDto, ApproveUserInfoResponseDto,
-	BlockUserByUIDRequestDto, BlockUserByUIDResponseDto, CheckInvitationCodeRequestDto, CheckInvitationCodeResponseDto,
-	CheckUsernameRequestDto, CheckUsernameResponseDto, CheckUserTokenResponseDto, CreateInvitationCodeResponseDto,
-	GetBlockedUserResponseDto, GetMyInvitationCodeResponseDto, GetSelfUserInfoRequestDto, GetSelfUserInfoResponseDto,
-	GetUserAvatarUploadSignedUrlResponseDto, GetUserInfoByUidRequestDto, GetUserInfoByUidResponseDto, GetUserSettingsResponseDto,
-	ReactivateUserByUIDRequestDto, ReactivateUserByUIDResponseDto, RequestSendChangeEmailVerificationCodeRequestDto, RequestSendChangeEmailVerificationCodeResponseDto,
-	RequestSendChangePasswordVerificationCodeRequestDto, RequestSendChangePasswordVerificationCodeResponseDto, RequestSendVerificationCodeRequestDto, RequestSendVerificationCodeResponseDto,
-	UpdateOrCreateUserInfoRequestDto, UpdateOrCreateUserInfoResponseDto, UpdateOrCreateUserSettingsRequestDto, UpdateOrCreateUserSettingsResponseDto,
-	UpdateUserEmailRequestDto, UpdateUserEmailResponseDto, UpdateUserPasswordRequestDto, UpdateUserPasswordResponseDto,
-	UseInvitationCodeDto, UseInvitationCodeResultDto, UserExistsCheckRequestDto, UserExistsCheckResponseDto,
-	UserLoginRequestDto, UserLoginResponseDto, UserRegistrationRequestDto, UserRegistrationResponseDto, GetUserInvitationCodeResponseDto, UserCreateAuthenticatorResponseDto, UserDeleteAuthenticatorResponseDto, GetUserAuthenticatorResponseDto
+	AdminClearUserInfoRequestDto,
+	AdminClearUserInfoResponseDto,
+	AdminGetUserInfoRequestDto,
+	AdminGetUserInfoResponseDto,
+	ApproveUserInfoRequestDto,
+	ApproveUserInfoResponseDto,
+	BlockUserByUIDRequestDto,
+	BlockUserByUIDResponseDto,
+	CheckInvitationCodeRequestDto,
+	CheckInvitationCodeResponseDto,
+	CheckUsernameRequestDto,
+	CheckUsernameResponseDto,
+	CheckUserTokenResponseDto,
+	CreateInvitationCodeResponseDto,
+	DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto,
+	GetBlockedUserResponseDto,
+	GetMyInvitationCodeResponseDto,
+	GetSelfUserInfoRequestDto,
+	GetSelfUserInfoResponseDto,
+	CheckUserHave2FaServiceResponseDto,
+	GetUserAvatarUploadSignedUrlResponseDto,
+	GetUserInfoByUidRequestDto,
+	GetUserInfoByUidResponseDto,
+	GetUserInvitationCodeResponseDto,
+	GetUserSettingsResponseDto,
+	ReactivateUserByUIDRequestDto,
+	ReactivateUserByUIDResponseDto,
+	RequestSendChangeEmailVerificationCodeRequestDto,
+	RequestSendChangeEmailVerificationCodeResponseDto,
+	RequestSendChangePasswordVerificationCodeRequestDto,
+	RequestSendChangePasswordVerificationCodeResponseDto,
+	RequestSendVerificationCodeRequestDto,
+	RequestSendVerificationCodeResponseDto,
+	UpdateOrCreateUserInfoRequestDto,
+	UpdateOrCreateUserInfoResponseDto,
+	UpdateOrCreateUserSettingsRequestDto,
+	UpdateOrCreateUserSettingsResponseDto,
+	UpdateUserEmailRequestDto,
+	UpdateUserEmailResponseDto,
+	UpdateUserPasswordRequestDto,
+	UpdateUserPasswordResponseDto,
+	UseInvitationCodeDto,
+	UseInvitationCodeResultDto,
+	UserExistsCheckRequestDto,
+	UserExistsCheckResponseDto,
+	UserLoginRequestDto,
+	UserLoginResponseDto,
+	UserRegistrationRequestDto,
+	UserRegistrationResponseDto,
+	SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto,
+	SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto,
+	GetSelfUserInfoByUuidResponseDto,
+	GetSelfUserInfoByUuidRequestDto,
+	CreateUserTotpAuthenticatorResponseDto,
+	DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto,
+	ConfirmUserTotpAuthenticatorRequestDto,
+	ConfirmUserTotpAuthenticatorResponseDto,
+	CheckUserHave2FaServiceRequestDto,
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserDeleteTotpAuthenticatorVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { authenticator } from 'otplib'
 
@@ -117,6 +163,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					token,
 					passwordHint,
 					role: 'user', // newbie will always be user role.
+					authenticatorType: 'none', // 刚注册的用户默认没有开启 2FA
 					userCreateDateTime: now,
 					editDateTime: now,
 				}
@@ -212,7 +259,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			return { success: false, message: '用户信息校验未通过' }
 		}
 
-		const { email, passwordHash, otp } = userLoginRequest
+		const { email, passwordHash, clientOtp } = userLoginRequest
 		const emailLowerCase = email.toLowerCase()
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
@@ -225,60 +272,150 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			token: 1,
 			passwordHint: 1,
 			passwordHashHash: 1,
+			authenticatorType: 1,
 		}
 
-		try {
-			const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
-			if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
-				console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，用户未注册或信息异常`)
-				return { success: false, email, message: '用户未注册或信息异常' }
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
+		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
+			console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，用户未注册或信息异常`)
+			return { success: false, email, message: '用户未注册或信息异常' }
+		}
+
+		const userAuthData = userAuthResult.result[0]
+		const token = userAuthData.token
+		const uid = userAuthData.uid
+		const uuid = userAuthData.UUID
+		const authenticatorType = userAuthData.authenticatorType
+		if (!token || uid === null || uid === undefined || !uuid || !authenticator) {
+			console.error('ERROR', `登陆失败，未能获取用户安全信息`)
+			return { success: false, message: '登陆失败，未能获取用户安全信息' }
+		}
+
+		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData.passwordHashHash)
+		if (!isCorrectPassword) {
+			return { success: false, email, passwordHint: userAuthData.passwordHint, message: '用户密码错误' }
+		}
+
+		if (authenticatorType === 'totp') {
+			if (!clientOtp) {
+				console.error('登陆失败，启用了 TOTP 但用户未提供验证码', authenticatorType )
+				return { success: false, message:"登陆失败，启用了 TOTP 但用户未提供验证码", authenticatorType }
 			}
 
-			const userAuthInfo = userAuthResult.result[0]
-			const uuid = userAuthInfo.UUID
-			const isCorrectPassword = comparePasswordSync(passwordHash, userAuthInfo.passwordHashHash)
-
-			if (!isCorrectPassword) {
-				return { success: false, email, passwordHint: userAuthInfo.passwordHint, message: '用户密码错误' }
+			const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+			type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+			const userTotpAuthenticatorWhere: QueryType<UserAuthenticator> = {
+				UUID: uuid,
+				authenticator: true,
 			}
 
-			if (userAuthInfo.email && userAuthInfo.token && userAuthInfo.uid != null) {
-				const checkUserAuthenticatorResult = await checkUserAuthenticatorService(uuid)
-
-				// 如果用户没有开启 2FA 则直接登陆成功
-				if (checkUserAuthenticatorResult.success && !checkUserAuthenticatorResult.isValid) {
-					return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
-				} else {
-					if ( otp == "" ) {
-						console.error('启用了身份验证器但未进行二次验证', authenticator )
-						return { success: false, message:"启用了身份验证器但未进行二次验证", authenticator: true }
-					}
-
-					try {
-						const currentOtpResult = await getCurrentOtpForUser(uuid)
-						if (!currentOtpResult.success) {
-							console.error('ERROR', '查询验证码错误')
-							return { success: false, message: '查询验证码错误', authenticator: true }
-						}
-
-						if (currentOtpResult.otp == otp) {
-							return { success: true, email: userAuthInfo.email, uid: userAuthInfo.uid, token: userAuthInfo.token, UUID: userAuthInfo.UUID, message: '用户登录成功' }
-						}else {
-							console.log('验证码错误', currentOtpResult.otp, otp)
-							return { success: false, message: '验证码错误', authenticator: true }
-						}
-					} catch (error) {
-						console.error('ERROR', `查询验证码时出现异常，错误信息：`, error)
-						return { success: false, message: '查询验证码时出现异常', authenticator: true }
-					}
+			if (clientOtp.length === 8) { // 八位时是恢复码
+				const userTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
+					recoveryCodeHash: 1,
 				}
+
+				const selectResult = await selectDataFromMongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
+
+				if (!selectResult.success || selectResult.result.length !== 1) {
+					console.error('登陆失败，获取验证数据失败 - 1')
+					return { success: false, message: '登陆失败，获取验证数据失败 - 1', authenticatorType }
+				}
+
+				const recoveryCodeHash = selectResult.result[0].recoveryCodeHash
+				const isCorrectRecoveryCode = comparePasswordSync(clientOtp, recoveryCodeHash)
+
+				if (!isCorrectRecoveryCode) {
+					console.error('登陆失败，恢复码错误')
+					return { success: false, message: '登陆失败，恢复码错误', authenticatorType }
+				}
+
+				const session = await mongoose.startSession()
+				session.startTransaction()
+
+				const deleteTotpAuthenticatorByRecoveryCodeData: DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
+					email,
+					recoveryCodeHash,
+					session
+				}
+				const deleteResult = await deleteTotpAuthenticatorByRecoveryCode(deleteTotpAuthenticatorByRecoveryCodeData)
+
+				if (!deleteResult.success) {
+					if (session.inTransaction()) {
+						await session.abortTransaction()
+					}
+					session.endSession()
+					console.error('登陆失败，未能删除 TOTP 2FA')
+					return { success: false, message: '登陆失败，未能删除 TOTP 2FA', authenticatorType }
+				}
+
+				await session.commitTransaction()
+				session.endSession()
+				return { success: true, email, uid, token, UUID: uuid, message: '使用恢复码登录成功，您的 TOTP 2FA 已删除', authenticatorType }
+
+
 			} else {
-				console.error('ERROR', `登陆失败，未能获取用户安全信息`)
-				return { success: false, message: '登陆失败，未能获取用户安全信息' }
+				const userTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
+					secret: 1,
+					backupCodeHash: 1,
+				}
+
+				const selectResult = await selectDataFromMongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
+
+				if (!selectResult.success || selectResult.result.length !== 1) {
+					console.error('登陆失败，获取验证数据失败 - 2')
+					return { success: false, message: '登陆失败，获取验证数据失败 - 2', authenticatorType }
+				}
+
+				const totpSecret = selectResult.result[0].secret
+				const listOfBackupCodeHash = selectResult.result[0].backupCodeHash
+				const serverOtp = authenticator.generate(totpSecret)
+
+				if (clientOtp !== serverOtp) {
+					let useCorrectBackupCode = false // 用户是否使用了一个正确的备用码。
+					const newBackupCodeHash = []
+					listOfBackupCodeHash.forEach( backupCodeHash => {
+						const isCorrectBackupCode = comparePasswordSync(clientOtp, backupCodeHash)
+						if (isCorrectBackupCode) {
+							useCorrectBackupCode = true
+						} else {
+							newBackupCodeHash.push(backupCodeHash)
+						}
+					})
+
+					if (!useCorrectBackupCode) {
+						return { success: false, message: '登陆失败，备份码不正确', authenticatorType }
+					}
+
+					const session = await mongoose.startSession()
+					session.startTransaction()
+
+					const now = new Date().getTime()
+					const userLoginByBackupCodeUpdate: UpdateType<UserAuthenticator> = {
+						backupCodeHash: newBackupCodeHash,
+						editDateTime: now,
+					}
+
+					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+					if (!updateAuthenticatorResult.success) {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						console.error('登陆失败，更新备份码失败')
+						return { success: false, message: '登陆失败，更新备份码失败', authenticatorType }
+					}
+
+					return { success: true, email, uid, token, UUID: uuid, message: '用户使用备用码登陆成功', authenticatorType }
+				} else {
+					return { success: true, email, uid, token, UUID: uuid, message: '用户使用验证码登陆成功', authenticatorType }
+				}
 			}
-		} catch (error) {
-			console.error('ERROR', `用户登录（查询用户信息）时出现异常，用户邮箱：【${email}】，错误信息：`, error)
-			return { success: false, email, message: '用户登录（检索用户信息）时出现异常' }
+		} else if (authenticatorType === 'email') {
+			// TODO: email 2FA login
+			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
+		} else {
+			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType: 'none' }
 		}
 	} catch (error) {
 		console.error('ERROR', '用户登录时程序异常：', error)
@@ -364,11 +501,11 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 					const userAuthData = userAuthResult.result
 					if (userAuthData) {
 						if (userAuthData.length !== 1) { // 确保只更新一个用户的邮箱
-							console.error('ERROR', '更新用户邮箱失败，匹配到零个或多个用户', { uid, oldEmail })
 							if (session.inTransaction()) {
 								await session.abortTransaction()
 							}
 							session.endSession()
+							console.error('ERROR', '更新用户邮箱失败，匹配到零个或多个用户', { uid, oldEmail })
 							return { success: false, message: '更新用户邮箱失败，无法找到正确的用户' }
 						}
 
@@ -555,14 +692,14 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 }
 
 /**
- * 获取当前登录的用户信息
+ * 【已废弃】通过 uid 获取当前登录的用户信息
+ * // DELETE ME: 禁止使用！该 API 应随着 UUID 普及逐渐被替换
  * @param getSelfUserInfoRequest 获取当前登录的用户信息的请求参数
  * @returns 获取到的当前登录的用户信息
  */
 export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUserInfoRequestDto): Promise<GetSelfUserInfoResponseDto> => {
 	try {
-		const uid = getSelfUserInfoRequest.uid
-		const token = getSelfUserInfoRequest.token
+		const { uid, token } = getSelfUserInfoRequest
 		if (uid !== null && uid !== undefined && token) {
 			if (await checkUserToken(uid, token)) {
 				const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
@@ -572,6 +709,8 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 					email: 1, // 用户邮箱
 					userCreateDateTime: 1, // 用户创建日期
 					role: 1, // 用户的角色
+					uid: 1, // 用户 UID
+					UUID: 1, // UUID
 				}
 
 				const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
@@ -579,6 +718,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 				const getUserInfoWhere: QueryType<UserInfo> = { uid }
 				const getUserInfoSelect: SelectType<UserInfo> = {
 					uid: 1, // 用户 UID
+					UUID: 1, // UUID
 					label: 1, // 用户标签
 					username: 1, // 用户名
 					userNickname: 1, // 用户昵称
@@ -608,7 +748,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 						return { success: false, message: '获取用户信息时失败，结果为空' }
 					}
 				} catch (error) {
-					console.error('ERROR', '获取用户信息时失败，查询数据时出错：0', error)
+					console.error('ERROR', '获取用户信息时失败，查询数据时出错：', error)
 					return { success: false, message: '获取用户信息时失败' }
 				}
 			} else {
@@ -624,6 +764,81 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 		return { success: false, message: '获取用户信息时失败，未知错误' }
 	}
 }
+
+/**
+ * 通过 UUID 获取当前登录的用户信息
+ * @param getSelfUserInfoRequest 通过 UUID 获取当前登录的用户信息的请求参数
+ * @returns 通过 UUID 获取当前登录的用户信息的请求响应
+ */
+export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest: GetSelfUserInfoByUuidRequestDto): Promise<GetSelfUserInfoByUuidResponseDto> => {
+	try {
+		const { uuid, token } = getSelfUserInfoByUuidRequest
+		if (!uuid || !token) {
+			console.error('ERROR', '通过 UUID 获取用户信息失败，uuid 或 token 为空')
+			return { success: false, message: '通过 UUID 获取用户信息失败，必要的参数为空' }
+		}
+
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('ERROR', '通过 UUID 获取用户信息时失败，用户的 token 校验未通过，非法用户！')
+			return { success: false, message: '通过 UUID 获取用户信息时失败，非法用户！' }
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
+
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+		type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
+
+		const where: QueryType<UserAuth> | QueryType<UserInfo> = { uuid }
+
+		const userAuthSelect: SelectType<UserAuth> = {
+			email: 1, // 用户邮箱
+			userCreateDateTime: 1, // 用户创建日期
+			role: 1, // 用户的角色
+			uid: 1, // 用户 UID
+			UUID: 1, // UUID
+		}
+		const getUserInfoSelect: SelectType<UserInfo> = {
+			uid: 1, // 用户 UID
+			UUID: 1, // UUID
+			label: 1, // 用户标签
+			username: 1, // 用户名
+			userNickname: 1, // 用户昵称
+			avatar: 1, // 用户头像
+			userBannerImage: 1, // 用户的背景图
+			signature: 1, // 用户的个性签名
+			gender: 1, // 用户的性别
+		}
+
+		try {
+			const userAuthPromise = selectDataFromMongoDB<UserAuth>(where, userAuthSelect, userAuthSchemaInstance, userAuthCollectionName)
+			const userInfoPromise = selectDataFromMongoDB<UserInfo>(where, getUserInfoSelect, userInfoSchemaInstance, userInfoCollectionName)
+			const [userAuthResult, userInfoResult] = await Promise.all([userAuthPromise, userInfoPromise])
+			if (userInfoResult && userAuthResult && userInfoResult.success && userAuthResult.success) {
+				const userAuth = userAuthResult?.result
+				const userInfo = userInfoResult?.result
+				if (userAuth?.length === 0 || userInfo?.length === 0) {
+					return { success: true, message: '用户未填写用户信息', result: { uuid, email: userAuth?.[0]?.email, userCreateDateTime: userAuth[0].userCreateDateTime, role: userAuth[0].role } }
+				} else if (userAuth?.length === 1 && userAuth?.[0] && userInfo?.length === 1 && userInfo?.[0]) {
+					return { success: true, message: '获取用户信息成功', result: { ...userInfo[0], email: userAuth[0].email, userCreateDateTime: userAuth[0].userCreateDateTime, role: userAuth[0].role } }
+				} else {
+					console.error('ERROR', '通过 UUID 获取用户信息时失败，获取到的结果长度不为 1')
+					return { success: false, message: '通过 UUID 获取用户信息时失败，结果异常' }
+				}
+			} else {
+				console.error('ERROR', '通过 UUID 获取用户信息时失败，获取到的结果为空')
+				return { success: false, message: '通过 UUID 获取用户信息时失败，结果为空' }
+			}
+		} catch (error) {
+			console.error('ERROR', '通过 UUID 获取用户信息时出错，查询数据时出错：', error)
+			return { success: false, message: '通过 UUID 获取用户信息时出错' }
+		}
+	} catch (error) {
+		console.error('ERROR', '通过 UUID 获取用户信息时出错，未知错误：', error)
+		return { success: false, message: '通过 UUID 获取用户信息时出错，未知错误' }
+	}
+}
+
 
 /**
  * 通过 uid 获取（其他）用户信息
@@ -936,6 +1151,7 @@ export const RequestSendVerificationCodeService = async (requestSendVerification
 									const mailTitleEN = 'KIRAKIRA Registration Verification Code'
 									const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
 
+									// 请不要使用 “您”
 									const mailHtmlCHS = `
 											<p>你的注册验证码是：<strong>${verificationCode}</strong></p>
 											欢迎来到 KIRAKIRA，使用这个验证码来完成注册吧！
@@ -1298,43 +1514,43 @@ export const checkInvitationCodeService = async (checkInvitationCodeRequestDto: 
 export const getUserInvitationCodeService = async (uuid: string, token: string): Promise<GetUserInvitationCodeResponseDto> => {
 	try {
 		if (await checkUserTokenByUUID(uuid, token)) {
-			const { collectionName, schemaInstance } = UserInvitationCodeSchema;
-			type UserInvitationCode = InferSchemaType<typeof schemaInstance>;
+			const { collectionName, schemaInstance } = UserInvitationCodeSchema
+			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
 
 			// 查询条件：确保 assigneeUUID 字段等于传入的 uuid
 			const InvitationCodeWhere: QueryType<UserInvitationCode> = {
 				assigneeUUID: uuid,
-			};
+			}
 
 			const InvitationCodeSelect: SelectType<UserInvitationCode> = {
 				invitationCode: 1,
-			};
+			}
 
 			try {
-				const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
+				const myInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName)
 				if (myInvitationCodeResult.success) {
 					if (myInvitationCodeResult.result?.length <= 0) {
-						return { success: true, message: '邀请码为空' };
+						return { success: true, message: '邀请码为空' }
 					} else {
 						// 提取并返回第一个匹配的邀请码
-						const invitationCode = myInvitationCodeResult.result[0].invitationCode;
-						return { success: true, message: '获取邀请码成功', invitationCode };
+						const invitationCode = myInvitationCodeResult.result[0].invitationCode
+						return { success: true, message: '获取邀请码成功', invitationCode }
 					}
 				} else {
-					console.error('ERROR', '获取邀请码失败，请求失败', { uuid });
-					return { success: false, message: '获取邀请码失败，请求失败！' };
+					console.error('ERROR', '获取邀请码失败，请求失败', { uuid })
+					return { success: false, message: '获取邀请码失败，请求失败！' }
 				}
 			} catch (error) {
-				console.error('ERROR', '获取邀请码失败，请求时出错', { uuid, error });
-				return { success: false, message: '获取邀请码失败，请求时出错！' };
+				console.error('ERROR', '获取邀请码失败，请求时出错', { uuid, error })
+				return { success: false, message: '获取邀请码失败，请求时出错！' }
 			}
 		} else {
-			console.error('ERROR', '获取邀请码失败，非法用户！', { uuid });
-			return { success: false, message: '获取邀请码失败，非法用户！' };
+			console.error('ERROR', '获取邀请码失败，非法用户！', { uuid })
+			return { success: false, message: '获取邀请码失败，非法用户！' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取邀请码失败，未知错误', error);
-		return { success: false, message: '获取邀请码失败，未知错误' };
+		console.error('ERROR', '获取邀请码失败，未知错误', error)
+		return { success: false, message: '获取邀请码失败，未知错误' }
 	}
 }
 
@@ -1402,6 +1618,7 @@ export const requestSendChangeEmailVerificationCodeService = async (requestSendC
 												const mailTitleEN = 'KIRAKIRA Change Email Verification Code'
 												const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
 
+												// 请不要使用 “您”
 												const mailHtmlCHS = `
 														<p>你更改邮箱的验证码是：<strong>${verificationCode}</strong></p>
 														<br>
@@ -1577,6 +1794,7 @@ export const requestSendChangePasswordVerificationCodeService = async (requestSe
 												const mailTitleEN = 'KIRAKIRA Change Password Verification Code'
 												const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
 
+												// 请不要使用 “您”
 												const mailHtmlCHS = `
 														<p>你更改密码的验证码是：<strong>${verificationCode}</strong></p>
 														<br>
@@ -2444,58 +2662,7 @@ export const getUserUuid = async (uid: number): Promise<string | void> => {
 }
 
 /**
- * 校验用户注册信息
- * @param userRegistrationRequest
- * @returns boolean 如果合法则返回 true
- */
-const checkUserRegistrationData = (userRegistrationRequest: UserRegistrationRequestDto): boolean => {
-	// TODO // WARN 这里可能需要更安全的校验机制
-	return (
-		true
-		&& !!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email && !isInvalidEmail(userRegistrationRequest.email)
-		&& !!userRegistrationRequest.verificationCode
-		&& !!userRegistrationRequest.username
-	)
-}
-
-/**
- * 用户是否存在验证的请求参数的非空验证
- * @param userExistsCheckRequest
- * @returns boolean 合法则返回 true
- */
-const checkUserExistsCheckRequest = (userExistsCheckRequest: UserExistsCheckRequestDto): boolean => {
-	// TODO // WARN 这里可能需要更安全的校验机制
-	return (!!userExistsCheckRequest.email && !isInvalidEmail(userExistsCheckRequest.email))
-}
-
-/**
- * 用户登录的请求参数的校验
- * @param userExistsCheckRequest
- * @returns boolean 合法则返回 true
- */
-const checkUserLoginRequest = (userLoginRequest: UserLoginRequestDto): boolean => {
-	// TODO // WARN 这里可能需要更安全的校验机制
-	return (!!userLoginRequest.email && !isInvalidEmail(userLoginRequest.email) && !!userLoginRequest.passwordHash)
-}
-
-/**
- * 用户修改邮箱的请求参数的非空验证
- * @param updateUserEmailRequest
- * @returns boolean 合法则返回 true
- */
-const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequestDto): boolean => {
-	// TODO // WARN 这里可能需要更安全的校验机制
-	return (
-		updateUserEmailRequest.uid !== null && updateUserEmailRequest.uid !== undefined
-		&& !!updateUserEmailRequest.oldEmail && !isInvalidEmail(updateUserEmailRequest.oldEmail)
-		&& !!updateUserEmailRequest.newEmail && !isInvalidEmail(updateUserEmailRequest.newEmail)
-		&& !!updateUserEmailRequest.passwordHash
-		&& !!updateUserEmailRequest.verificationCode
-	)
-}
-
-/**
- * 检查用户 Token，检查 Token 和用户 id 是否吻合，判断用户是否已注册
+ * 检查用户 Token，检查 Token 和用户 uid 是否吻合，判断用户是否已注册
  * // DELETE ME 这是一个临时的解决方案，以后 Cookie 中直接存储 UUID
  * @param uid 用户 ID
  * @param token 用户 Token
@@ -2542,7 +2709,7 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 
 
 /**
- * 检查用户 Token，检查 Token 和用户 id 是否吻合，判断用户是否已注册
+ * 检查用户 Token，检查 Token 和用户 uuid 是否吻合，判断用户是否已注册
  * @param UUID 用户 UUID
  * @param token 用户 Token
  * @returns boolean 如果验证通过则为 true，不通过为 false
@@ -2592,414 +2759,650 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  * @param token 用户的 token
  * @returns 用户当前的一次性验证码
  */
-const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, message?: string, otp?: string, recoverycode?: string }> => {
-	try {
-		// 检查用户是否已有身份验证器
-		const hasAuthenticator = await checkUserAuthenticatorService(uuid);
-		if (!hasAuthenticator.success || !hasAuthenticator.isValid) {
-			console.error('获取验证码失败，用户没有身份验证器', { uuid });
-			return { success: false, message: '获取验证码失败，用户没有身份验证器' };
-		}
+// const getCurrentOtpForUser = async (uuid: string): Promise<{ success: boolean, message?: string, otp?: string, recoveryCode?: string }> => {
+// 	try {
+// 		// 检查用户是否已有身份验证器
+// 		const hasAuthenticator = await checkUserAuthenticatorService(uuid)
+// 		if (!hasAuthenticator.success || !hasAuthenticator.isValid) {
+// 			console.error('获取验证码失败，用户没有身份验证器', { uuid })
+// 			return { success: false, message: '获取验证码失败，用户没有身份验证器' }
+// 		}
 
-		// 从数据库中检索用户的验证码
-		const { collectionName, schemaInstance } = UserAuthenticatorSchema;
-		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-		const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1, recoverycode: 1 };
+// 		// 从数据库中检索用户的验证码
+// 		const { collectionName, schemaInstance } = UserAuthenticatorSchema
+// 		type UserAuthenticator = InferSchemaType<typeof schemaInstance>
+// 		const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid }
+// 		const userStatusSelect: SelectType<UserAuthenticator> = { secret: 1, recoveryCode: 1 }
 
-		const userAuthenticator = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-		if (!userAuthenticator.success) {
-			console.error('获取验证码失败，未找到用户信息', { uuid });
-			return { success: false, message: '获取验证码失败，未找到用户信息' };
-		}
+// 		const userAuthenticator = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName)
+// 		if (!userAuthenticator.success) {
+// 			console.error('获取验证码失败，未找到用户信息', { uuid })
+// 			return { success: false, message: '获取验证码失败，未找到用户信息' }
+// 		}
 
-		const secret = userAuthenticator?.result?.[0]?.secret;
-		const recoverycode = userAuthenticator?.result?.[0]?.recoverycode;
-		if (!secret) {
-			console.error('获取验证码失败，未找到用户的 secret', { uuid });
-			return { success: false, message: '获取验证码失败，未找到用户的 secret' };
-		}
+// 		const secret = userAuthenticator?.result?.[0]?.secret
+// 		const recoveryCode = userAuthenticator?.result?.[0]?.recoveryCode
+// 		if (!secret) {
+// 			console.error('获取验证码失败，未找到用户的 secret', { uuid })
+// 			return { success: false, message: '获取验证码失败，未找到用户的 secret' }
+// 		}
 
-		// 生成一次性验证码
-		const otp = authenticator.generate(secret);
-		return { success: true, message: '获取验证码成功', otp, recoverycode};
-	} catch (error) {
-		console.error('获取验证码失败，未知错误', error);
-		return { success: false, message: '获取验证码失败，未知错误' };
-	}
-};
-
-/**
- * 请求发送验证码
- * @param requestSendVerificationCodeRequest 请求发送验证码的请求载荷
- * @returns 请求发送验证码的请求响应
- */
-export const RequestSendDeleteAuthenticatorVerificationCodeService = async (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): Promise<RequestSendVerificationCodeResponseDto> => {
-	try {
-		if (checkRequestSendVerificationCodeRequest(requestSendVerificationCodeRequest)) {
-			const { email, clientLanguage } = requestSendVerificationCodeRequest
-			const emailLowerCase = email.toLowerCase()
-			const nowTime = new Date().getTime()
-			const todayStart = new Date()
-			todayStart.setHours(0, 0, 0, 0)
-			const { collectionName, schemaInstance } = UserVerificationCodeSchema
-			type UserVerificationCode = InferSchemaType<typeof schemaInstance>
-			const requestSendVerificationCodeWhere: QueryType<UserVerificationCode> = {
-				emailLowerCase,
-			}
-
-			const requestSendVerificationCodeSelect: SelectType<UserVerificationCode> = {
-				emailLowerCase: 1, // 用户邮箱
-				attemptsTimes: 1,
-				lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
-			}
-
-			// 启动事务
-			const session = await mongoose.startSession()
-			session.startTransaction()
-
-			try {
-				const requestSendVerificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(requestSendVerificationCodeWhere, requestSendVerificationCodeSelect, schemaInstance, collectionName, { session })
-				if (requestSendVerificationCodeResult.success) {
-					const lastRequestDateTime = requestSendVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
-					const attemptsTimes = requestSendVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
-					if (requestSendVerificationCodeResult.result.length === 0 || lastRequestDateTime + 55000 < nowTime) { // 前端 60 秒，后端 55 秒
-						const lastRequestDate = new Date(lastRequestDateTime)
-						if (requestSendVerificationCodeResult.result.length === 0 || todayStart > lastRequestDate || attemptsTimes < 5) { // ! 每天五次机会
-							const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
-							let newAttemptsTimes = attemptsTimes + 1
-							if (todayStart > lastRequestDate) {
-								newAttemptsTimes = 0
-							}
-
-							const requestSendVerificationCodeUpdate: UserVerificationCode = {
-								emailLowerCase,
-								verificationCode,
-								overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
-								attemptsTimes: newAttemptsTimes,
-								lastRequestDateTime: nowTime,
-								editDateTime: nowTime,
-							}
-							const updateResult = await findOneAndUpdateData4MongoDB(requestSendVerificationCodeWhere, requestSendVerificationCodeUpdate, schemaInstance, collectionName, { session })
-							if (updateResult.success) {
-								// TODO: 使用多语言 email title and text
-								try {
-									const mailTitleCHS = 'KIRAKIRA 确认验证码'
-									const mailTitleEN = 'KIRAKIRA Confirm Code'
-									const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN // FIX ME: 这边我语言表述不是很来 能帮忙改一下吗;w;
-
-									const mailHtmlCHS = `
-											<p>你的确认验证码是：<strong>${verificationCode}</strong></p>
-											欢迎来到 KIRAKIRA，使用这个验证码来完成删除操作！
-											<br>
-											验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
-										`
-									const mailHtmlEN = `
-											<p>Your confirm verification code is: <strong>${verificationCode}</strong></p>
-											Welcome to KIRAKIRA. You can use this verification code to delete your Authenticator.
-											<br>
-											Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
-											<br>
-											<br>
-											To stop receiving notifications, please contact the KIRAKIRA support team.
-										`
-									const correctMailHTML = clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
-									const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
-									if (sendMailResult.success) {
-										await session.commitTransaction()
-										session.endSession()
-										return { success: true, isTimeout: false, message: '确认验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
-									} else {
-										if (session.inTransaction()) {
-											await session.abortTransaction()
-										}
-										session.endSession()
-										console.error('ERROR', '请求发送确认验证码失败，邮件发送失败')
-										return { success: false, isTimeout: true, message: '请求发送确认验证码失败，邮件发送失败' }
-									}
-								} catch (error) {
-									if (session.inTransaction()) {
-										await session.abortTransaction()
-									}
-									session.endSession()
-									console.error('ERROR', '请求发送确认验证码失败，邮件发送时出错', error)
-									return { success: false, isTimeout: true, message: '请求发送确认验证码失败，邮件发送时出错' }
-								}
-							} else {
-								if (session.inTransaction()) {
-									await session.abortTransaction()
-								}
-								session.endSession()
-								console.error('ERROR', '请求发送确认验证码失败，更新或新增用户验证码失败')
-								return { success: false, isTimeout: false, message: '请求发送确认验证码失败，更新或新增用户验证码失败' }
-							}
-						} else {
-							if (session.inTransaction()) {
-								await session.abortTransaction()
-							}
-							session.endSession()
-							console.warn('WARN', 'WARNING', '请求发送确认验证码失败，已达本日重复次数上限，请稍后再试')
-							return { success: true, isTimeout: true, message: '请求发送确认验证码失败，已达本日重复次数上限，请稍后再试' }
-						}
-					} else {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						console.warn('WARN', 'WARNING', '请求发送确认验证码失败，未超过邮件超时时间，请稍后再试')
-						return { success: true, isTimeout: true, message: '请求发送确认验证码失败，未超过邮件超时时间，请稍后再试' }
-					}
-				} else {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					console.error('ERROR', '请求发送确认验证码失败，获取验证码失败')
-					return { success: false, isTimeout: false, message: '请求发确认送验证码失败，获取验证码失败' }
-				}
-			} catch (error) {
-				if (session.inTransaction()) {
-					await session.abortTransaction()
-				}
-				session.endSession()
-				console.error('ERROR', '请求发送确认验证码失败，检查超时时间时出错', error)
-				return { success: false, isTimeout: false, message: '请求发送确认验证码失败，检查超时时间时出错' }
-			}
-		} else {
-			console.error('ERROR', '请求发送确认验证码失败，参数不合法')
-			return { success: false, isTimeout: false, message: '请求发送确认验证码失败，参数不合法' }
-		}
-	} catch (error) {
-		console.error('ERROR', '请求发送确认验证码失败，未知错误', error)
-		return { success: false, isTimeout: false, message: '请求发送确认验证码失败，未知错误' }
-	}
-}
+// 		// 生成一次性验证码
+// 		const otp = authenticator.generate(secret)
+// 		return { success: true, message: '获取验证码成功', otp, recoveryCode}
+// 	} catch (error) {
+// 		console.error('获取验证码失败，未知错误', error)
+// 		return { success: false, message: '获取验证码失败，未知错误' }
+// 	}
+// }
 
 /**
- * 登录时删除用户的身份验证器
+ * 发送删除身份验证器的邮箱验证码
+ * @param sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest 发送删除身份验证器的邮箱验证码的请求载荷
  * @param uuid 用户的 UUID
- * @returns 删除操作的结果
+ * @param token 用户的 token
+ * @returns 发送删除身份验证器的邮箱验证码的请求响应
  */
-export const deleteAuthenticatorLoginService = async (way: string, email?: string, recoverycode?: string, verificationCode?: string): Promise<UserDeleteAuthenticatorResponseDto> => {
+export const sendDeleteTotpAuthenticatorByEmailVerificationCodeService = async (sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest: SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto> => {
 	try {
-		const emailLowerCase = email.toLowerCase()
-		const { collectionName, schemaInstance } = UserAuthSchema;
-		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-		const userStatusWhere: QueryType<UserAuthenticator> = { emailLowerCase: emailLowerCase }; // 这里是不是要一个passwordHash更安全?
-		const userStatusSelect: SelectType<UserAuthenticator> = { UUID: 1, token: 1 };
-		const userinfo = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-		const uuid = userinfo?.result?.[0]?.UUID;
-		const token = userinfo?.result?.[0]?.token;
+		if (!checkSendDeleteTotpAuthenticatorByEmailVerificationCodeRequest(sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest)) {
+			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，参数不合法')
+			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，参数不合法' }
+		}
 
-		if ( way == "ByRecoveryCode" ) { // 邮箱和恢复码进行删除
-			const { collectionName, schemaInstance } = UserAuthenticatorSchema;
-			type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-			const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-			const userStatusSelect: SelectType<UserAuthenticator> = { recoverycode: 1 };
-			const userAuthenticator = await selectDataFromMongoDB<UserAuthenticator>(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-			const correctrecoverycode = userAuthenticator?.result?.[0]?.recoverycode;
-			if ( correctrecoverycode == recoverycode ){
-				const result = await deleteUserAuthenticatorService( uuid, token )
-				return result
-			}else{
-				return { success: false, message: "删除身份验证器失败，恢复码错误" }
-			}
-		}if ( way == "ByEmail" ) {
-			const session = await mongoose.startSession()
-			session.startTransaction()
-			const now = new Date().getTime()
-			const { collectionName: userVerificationCodeCollectionName, schemaInstance: userVerificationCodeSchemaInstance } = UserVerificationCodeSchema
-			type UserVerificationCode = InferSchemaType<typeof userVerificationCodeSchemaInstance>
-			const verificationCodeWhere: QueryType<UserVerificationCode> = {
-				emailLowerCase,
-				verificationCode,
-				overtimeAt: { $gte: now },
-			}
-			const verificationCodeSelect: SelectType<UserVerificationCode> = {
-				emailLowerCase: 1, // 用户邮箱
-			}
-			try {
-				const verificationCodeResult = await selectDataFromMongoDB<UserVerificationCode>(verificationCodeWhere, verificationCodeSelect, userVerificationCodeSchemaInstance, userVerificationCodeCollectionName, { session })
-				if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					console.error('ERROR', '用户删除失败：验证失败')
-					return { success: false, message: '用户删除失败：验证失败' }
-				}
-			} catch (error) {
-				if (session.inTransaction()) {
-					await session.abortTransaction()
-				}
-				session.endSession()
-				console.error('ERROR', '用户删除失败：请求验证失败')
-				return { success: false, message: '用户删除失败：请求验证失败' }
-			}
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，用户不合法')
+			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，用户不合法' }
+		}
+
+		const getSelfUserInfoByUuidRequest = {
+			uuid,
+			token,
+		}
+		const selfUserInfoResult = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
+		const email = selfUserInfoResult.result?.email
+		if (!email) {
+			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，用户邮箱查找失败')
+			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，用户邮箱查找失败' }
+		}
+
+		const emailLowerCase = email.toLowerCase()
+		const nowTime = new Date().getTime()
+		const todayStart = new Date()
+		todayStart.setHours(0, 0, 0, 0)
+		const { clientLanguage } = sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest
+
+		// 启动事务
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
+		const { collectionName, schemaInstance } = UserDeleteTotpAuthenticatorVerificationCodeSchema
+		type UserDeleteTotpAuthenticatorVerificationCode = InferSchemaType<typeof schemaInstance>
+		const requestSendDeleteTotpAuthenticatorByEmailVerificationCodeWhere: QueryType<UserDeleteTotpAuthenticatorVerificationCode> = {
+			emailLowerCase,
+		}
+
+		const requestSendDeleteTotpAuthenticatorByEmailVerificationCodeSelect: SelectType<UserDeleteTotpAuthenticatorVerificationCode> = {
+			emailLowerCase: 1, // 用户邮箱
+			attemptsTimes: 1, // 验证码请求次数
+			lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
+		}
+
+		const requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult = await selectDataFromMongoDB<UserDeleteTotpAuthenticatorVerificationCode>(requestSendDeleteTotpAuthenticatorByEmailVerificationCodeWhere, requestSendDeleteTotpAuthenticatorByEmailVerificationCodeSelect, schemaInstance, collectionName, { session })
+
+		if (!requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.success) {
 			if (session.inTransaction()) {
 				await session.abortTransaction()
 			}
 			session.endSession()
-			const result = await deleteUserAuthenticatorService( uuid, token )
-			return result
+			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，获取验证码失败')
+			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，获取验证码失败' }
+		}
+
+		const lastRequestDateTime = requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
+		if (requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result.length >= 1 && lastRequestDateTime + 55000 > nowTime) { // 是否仍在冷却，前端 60 秒，后端 55 秒
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.warn('WARN', 'WARNING', '请求发送删除身份验证器的邮箱验证码失败，未超过邮件超时时间，请稍后再试')
+			return { success: true, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码失败，未超过邮件超时时间，请稍后再试' }
+		}
+
+		const attemptsTimes = requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
+		const lastRequestDate = new Date(lastRequestDateTime)
+		if (requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result.length >= 1 && todayStart < lastRequestDate && attemptsTimes > 5) { // ! 每天五次机会
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.warn('WARN', 'WARNING', '请求发送删除身份验证器的邮箱验证码失败，已达本日重复次数上限，请稍后再试')
+			return { success: true, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码失败，已达本日重复次数上限，请稍后再试' }
+		}
+
+		const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
+		let newAttemptsTimes = attemptsTimes + 1
+		if (todayStart > lastRequestDate) {
+			newAttemptsTimes = 0
+		}
+
+		const requestSeDeleteTotpAuthenticatorVerificationCodeUpdate: UpdateType<UserDeleteTotpAuthenticatorVerificationCode> = {
+			emailLowerCase,
+			verificationCode,
+			overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
+			attemptsTimes: newAttemptsTimes,
+			lastRequestDateTime: nowTime,
+			editDateTime: nowTime,
+		}
+
+		const updateResult = await findOneAndUpdateData4MongoDB(requestSendDeleteTotpAuthenticatorByEmailVerificationCodeWhere, requestSeDeleteTotpAuthenticatorVerificationCodeUpdate, schemaInstance, collectionName, { session })
+
+		if (!updateResult.success) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，更新或新增用户验证码失败')
+			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，更新或新增用户验证码失败' }
+		}
+
+		// TODO: 使用多语言 email title and text
+		try {
+			const mailTitleCHS = 'KIRAKIRA - 删除 2FA 的验证码'
+			const mailTitleEN = 'KIRAKIRA - Verification Code For Delete 2FA'
+			const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
+
+			// 请不要使用 “您”
+			const mailHtmlCHS = `
+					<p>删除 2FA 的确认验证码是：<strong>${verificationCode}</strong></p>
+					注意：你可以使用这个验证码来删除您的 2FA（二重身分验证器），这会导致您的账户更容易遭到攻击！
+					<br>
+					验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
+				`
+			const mailHtmlEN = `
+					<p>Your verification code for delete Authenticator is: <strong>${verificationCode}</strong></p>
+					Note: Please make sure you will use this verification code to delete your Authenticator.
+					<br>
+					Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
+					<br>
+					<br>
+					To stop receiving notifications, please contact the KIRAKIRA support team.
+				`
+			const correctMailHTML = clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
+
+			const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
+			if (!sendMailResult.success) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，邮件发送失败')
+				return { success: false, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码失败，邮件发送失败' }
+			}
+
+			await session.commitTransaction()
+			session.endSession()
+			return { success: true, isCoolingDown: false, message: '删除身份验证器的邮箱验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
+		} catch (error) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码时出错，邮件发送时出错', error)
+			return { success: false, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码时出错，邮件发送时出错' }
 		}
 	} catch (error) {
-		console.error('删除身份验证器失败', error);
-		return { success: false, message: '删除身份验证器失败，发生未知错误' };
+		console.error('ERROR', '请求发送删除身份验证器的邮箱验证码时出错，未知错误', error)
+		return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码时出错，未知错误' }
 	}
-};
+}
+
+/** 通过恢复码删除用户 2FA 的参数 */
+type DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
+	/** 用户邮箱 */
+	email: string,
+	/** 恢复码 */
+	recoveryCodeHash: string,
+	/** 事务 */
+	session?: mongoose.ClientSession,
+}
+
+/** 通过恢复码删除用户 2FA 的结果 */
+type DeleteTotpAuthenticatorByRecoveryCodeResultDto = {} & DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto
 
 /**
- * 删除用户的身份验证器
- * @param uuid 用户的 UUID
- * @returns 删除操作的结果
+ * 通过恢复码删除用户 2FA，只能在登录时使用
+ * @param deleteTotpAuthenticatorByRecoveryCodeData 通过恢复码删除用户 2FA 的参数
+ * @returns 通过恢复码删除用户 2FA 的结果
  */
-export const deleteUserAuthenticatorService = async (uuid: string, token: string): Promise<UserDeleteAuthenticatorResponseDto> => {
+const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRecoveryCodeData: DeleteTotpAuthenticatorByRecoveryCodeParametersDto): Promise<DeleteTotpAuthenticatorByRecoveryCodeResultDto> => {
 	try {
-		// 鉴权检查
-		const isValidUser = await checkUserTokenByUUID(uuid, token);
-		if (!isValidUser) {
-			return { success: false, message: '删除身份验证器失败，非法用户' };
+		if (!checkDeleteTotpAuthenticatorByRecoveryCodeData(deleteTotpAuthenticatorByRecoveryCodeData)) {
+			console.error('ERROR', '通过恢复码删除用户 2FA 失败，参数不合法')
+			return { success: false, message: '通过恢复码删除用户 2FA 失败，参数不合法' }
 		}
 
-		const { collectionName, schemaInstance } = UserAuthenticatorSchema;
-		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-		const where: QueryType<UserAuthenticator> = { UUID: uuid };
+		const { email, recoveryCodeHash, session } = deleteTotpAuthenticatorByRecoveryCodeData
+		const emailLowerCase = email.toLowerCase()
 
-		// 调用删除函数
-		const deleteResult = await deleteDataFromMongoDB(where, schemaInstance, collectionName);
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+		const userAuthWhere: QueryType<UserAuth> = { emailLowerCase: emailLowerCase }
+		const userAuthSelect: SelectType<UserAuth> = { UUID: 1 }
+		const userInfo = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
 
-		if (deleteResult.success && deleteResult.result.deletedCount > 0) {
-			return { success: true, message: '删除身份验证器成功' };
-		} else {
-			return { success: false, message: '删除身份验证器失败，未找到匹配的数据' };
+		const uuid = userInfo?.result?.[0]?.UUID
+		if (!uuid) {
+			console.error('ERROR', '通过恢复码删除用户 2FA 失败，无法获取用户信息', { emailLowerCase })
+			return { success: false, message: '通过恢复码删除用户 2FA 失败，无法获取用户信息' }
 		}
+
+		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+		type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+		const userTotpAuthenticatorWhere: QueryType<UserTotpAuthenticator> = { UUID: uuid, recoveryCodeHash }
+		const deleteResult = await deleteDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+		if (!deleteResult.success) {
+			console.error('ERROR', '通过恢复码删除用户 2FA 失败，删除失败', { emailLowerCase })
+			return { success: false, message: '通过恢复码删除用户 2FA 失败，删除失败' }
+		}
+
+		return { success: true, message: '用户的身份验证器已删除' }
 	} catch (error) {
-		console.error('删除身份验证器失败', error);
-		return { success: false, message: '删除身份验证器失败，发生未知错误' };
+		console.error('ERROR', '通过恢复码删除用户 2FA失败', error)
+		return { success: false, message: '通过恢复码删除用户 2FA 失败，发生未知错误' }
 	}
-};
+}
 
 /**
- * 用户创建身份验证器服务
+ * 已登录用户通过密码和邮箱验证码删除身份验证器
+ * @param deleteTotpAuthenticatorByEmailVerificationCodeRequest 登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
  * @param uuid 用户的 UUID
  * @param token 用户的 token
- * @returns 用户创建身份验证器的请求响应
+ * @returns 删除操作的结果
  */
-export const createUserAuthenticatorService = async (uuid: string, token: string): Promise<UserCreateAuthenticatorResponseDto> => {
+export const deleteTotpAuthenticatorByEmailVerificationCodeService = async (deleteTotpAuthenticatorByEmailVerificationCodeRequest: DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto> => {
 	try {
-		const isValidUser = await checkUserTokenByUUID(uuid, token);
-		if (!isValidUser) {
-			console.error('创建身份验证器失败，非法用户', { uuid });
-			return { success: false, message: '创建身份验证器失败，非法用户' };
+		if (!checkDeleteTotpAuthenticatorByEmailVerificationCodeRequest(deleteTotpAuthenticatorByEmailVerificationCodeRequest)) {
+			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败，参数不合法')
+			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器验证器失败，参数不合法' }
 		}
 
-		const checkUserAuthenticatorResult = await checkUserAuthenticatorService(uuid)
-		if (checkUserAuthenticatorResult.success && checkUserAuthenticatorResult.isValid) {
-			console.error('创建身份验证器失败，已经存在一个验证器了', { uuid });
-			return { success: false, message: '创建身份验证器失败，已经存在一个验证器了' };
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败，用户校验未通过')
+			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器验证器失败，用户校验未通过' }
 		}
-		const { collectionName, schemaInstance } = UserAuthSchema;
-		type UserEmail = InferSchemaType<typeof schemaInstance>;
 
-		// 查询条件：确保 assignee 字段等于传入的 uid
-		const InvitationCodeWhere: QueryType<UserEmail> = {
-			assigneeUUID: uuid,
-		};
-		const InvitationCodeSelect: SelectType<UserEmail> = {
-			email: 1,
-		};
-		const EmailResult = await selectDataFromMongoDB<UserEmail>(InvitationCodeWhere, InvitationCodeSelect, schemaInstance, collectionName);
-		const email =  EmailResult.result[0].email
-		return await createUserAuthenticator(uuid, token, email);
-	} catch (error) {
-		console.error('创建身份验证器失败，未知错误', error);
-		return { success: false, message: '创建身份验证器失败，未知错误' };
-	}
-};
+		const getSelfUserInfoByUuidRequest = {
+			uuid,
+			token,
+		}
+		const selfUserInfoResult = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
+		const email = selfUserInfoResult.result?.email
+		if (!email) {
+			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败，用户邮箱查找失败')
+			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败，用户邮箱查找失败' }
+		}
 
-/**
- * 检查用户是否已有身份验证器
- * @param uuid 用户的 UUID
- * @returns 如果已有验证器，返回 true，否则返回 false
- */
-export const checkUserAuthenticatorService = async (uuid: string): Promise<GetUserAuthenticatorResponseDto> => {
-	const { collectionName, schemaInstance } = UserAuthenticatorSchema;
-	type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-	const userStatusWhere: QueryType<UserAuthenticator> = { UUID: uuid };
-	const userStatusSelect: SelectType<UserAuthenticator> = { authenticator: 1, createDateTime: 1 };
+		const now = new Date().getTime()
+		const emailLowerCase = email.toLowerCase()
+		const { verificationCode } = deleteTotpAuthenticatorByEmailVerificationCodeRequest
 
-	try {
-		// 查询数据库中用户的验证器状态
-		const userInfo = await selectDataFromMongoDB(userStatusWhere, userStatusSelect, schemaInstance, collectionName);
-		const status = !!userInfo?.result?.[0]?.authenticator
-		const time = userInfo?.result?.[0]?.createDateTime
-		return { success: true, isValid: status, createdTime: time };
+		const session = await mongoose.startSession()
+		session.startTransaction()
 
-	} catch (error) {
-		console.error('ERROR', '检查用户身份验证器时出现异常：', error);
-		return { success: false, isValid: false, message: '检查用户身份验证器时出现异常' };
-	}
-};
+		const { collectionName: userDeleteTotpAuthenticatorVerificationCodeCollectionName, schemaInstance: userDeleteTotpAuthenticatorVerificationCodeSchemaInstance } = UserDeleteTotpAuthenticatorVerificationCodeSchema
 
+		type UserDeleteTotpAuthenticatorVerificationCode = InferSchemaType<typeof userDeleteTotpAuthenticatorVerificationCodeSchemaInstance>
+		const checkDeleteTotpAuthenticatorEmailVerificationCodeWhere: QueryType<UserDeleteTotpAuthenticatorVerificationCode> = {
+			emailLowerCase,
+			verificationCode,
+			overtimeAt: { $gte: now },
+		}
+		const checkDeleteTotpAuthenticatorEmailVerificationCodeSelect: SelectType<UserDeleteTotpAuthenticatorVerificationCode> = {
+			emailLowerCase: 1, // 用户邮箱
+		}
 
-/**
- * 为用户创建身份验证器
- * @param uuid 用户的 UUID
- * @returns 创建身份验证器的结果
- */
-const createUserAuthenticator = async (uuid: string, token: string, email: string): Promise<UserCreateAuthenticatorResponseDto> => {
-	// 创建一个数据库会话并启动事务
-	const session = await mongoose.startSession();
-	session.startTransaction();
-	try {
-		const isValidUser = await checkUserTokenByUUID(uuid, token)
-		const { schemaInstance } = UserAuthenticatorSchema;
-		type UserAuthenticator = InferSchemaType<typeof schemaInstance>;
-		if (isValidUser){
-			const now = new Date().getTime();
-			const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-			const secret = authenticator.generateSecret();
-			const otpauth = authenticator.keyuri(email, 'KIRAKIRA☆DOUGA', secret);
-			const recoverycode = generateSecureVerificationStringCode(8, charset);
-			const backupcode = Array.from({ length: 5 }, () => generateSecureVerificationStringCode(6, charset));
+		const checkDeleteAuthenticatorEmailVerificationCodeResult = await selectDataFromMongoDB<UserDeleteTotpAuthenticatorVerificationCode>(checkDeleteTotpAuthenticatorEmailVerificationCodeWhere, checkDeleteTotpAuthenticatorEmailVerificationCodeSelect, userDeleteTotpAuthenticatorVerificationCodeSchemaInstance, userDeleteTotpAuthenticatorVerificationCodeCollectionName, { session })
 
-			// 准备要插入的身份验证器数据
-			const userAuthenticatorData: UserAuthenticator = {
-				UUID: uuid,
-				authenticator: true,
-				secret,
-				otpauth,
-				recoverycode,
-				backupcode,
-				createDateTime: now,
-				editDateTime: now
-			};
-
-			// 插入数据到数据库
-			const { collectionName, schemaInstance } = UserAuthenticatorSchema;
-			const saveAuthenticatorResult = await insertData2MongoDB(userAuthenticatorData, schemaInstance, collectionName, { session });
-
-			if (saveAuthenticatorResult.success) {
-				await session.commitTransaction();
-				return { success: true, message: '创建身份验证器成功', secret, otpauth, recoverycode };
-			} else {
-				await session.abortTransaction();
-				console.error('创建身份验证器失败，保存数据失败', { uuid });
-				return { success: false, message: '创建身份验证器失败，保存数据失败' };
+		if (!checkDeleteAuthenticatorEmailVerificationCodeResult.success || checkDeleteAuthenticatorEmailVerificationCodeResult.result?.length !== 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
 			}
-		}else{
-			console.error('创建身份验证器失败，非法用户', { uuid });
-			return { success: false, message: '创建身份验证器失败，非法用户' };
+			session.endSession()
+			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败：邮箱验证码验证失败')
+			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败：邮箱验证码验证失败' }
+		}
+
+		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+		type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+		const deleteTotpAuthenticatorByEmailVerificationCodeWhere: QueryType<UserTotpAuthenticator> = { UUID: uuid }
+
+		// 调用删除函数
+		const deleteResult = await deleteDataFromMongoDB(deleteTotpAuthenticatorByEmailVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
+
+		if (!deleteResult.success || deleteResult.result.deletedCount !== 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败：未找到匹配的数据')
+			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败：未找到匹配的数据' }
+		}
+
+		await session.commitTransaction()
+		session.endSession()
+		return { success: true, message: '删除身份验证器成功' }
+	} catch (error) {
+		console.error('已登录用户通过密码和邮箱验证码删除身份验证器失败时出错，未知错误', error)
+		return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败时出错，未知错误' }
+	}
+}
+
+/**
+ * 用户创建 TOTP 身份验证器服务
+ * 开启邮箱验证的是另一个函数，这个只是开启 totp
+ * 这里只是创建，但应当有一个确认创建的步骤。
+ *
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 用户创建 TOTP 身份验证器的请求响应
+ */
+export const createUserTotpAuthenticatorService = async (uuid: string, token: string): Promise<CreateUserTotpAuthenticatorResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('创建 TOTP 身份验证器失败，非法用户', { uuid })
+			return { success: false, isExists: 'none', message: '创建 TOTP 身份验证器失败，非法用户' }
+		}
+
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+
+		const createUserTotpAuthenticatorUserAuthWhere: QueryType<UserAuth> = { UUID: uuid }
+		const createUserTotpAuthenticatorUserAuthSelect: SelectType<UserAuth> = {
+			authenticatorType: 1,
+			email: 1,
+		}
+
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(createUserTotpAuthenticatorUserAuthWhere, createUserTotpAuthenticatorUserAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
+
+		if (!userAuthResult.success || !userAuthResult?.result || userAuthResult.result?.length !== 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，用户不存在', { uuid })
+			return { success: false, isExists: 'none', message: '创建 TOTP 身份验证器失败，用户不存在' }
+		}
+
+		if (userAuthResult.result[0].authenticatorType === 'email') {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，已经开启 Email 2FA', { uuid })
+			return { success: false, isExists: 'email', message: '创建 TOTP 身份验证器失败，已经开启 Email 2FA' }
+		}
+
+		if (userAuthResult.result[0].authenticatorType === 'email') {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，已经开启 TOTP 2FA', { uuid })
+			return { success: false, isExists: 'totp', message: '创建 TOTP 身份验证器失败，已经开启 TOTP 2FA' }
+		}
+
+		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+		const checkUserAuthenticatorWhere: QueryType<UserAuthenticator> = { UUID: uuid, authenticator: true }
+		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { authenticator: 1, createDateTime: 1 }
+		const checkUserAuthenticatorResult = await selectDataFromMongoDB(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+		if (!checkUserAuthenticatorResult.success || !checkUserAuthenticatorResult.result || checkUserAuthenticatorResult.result.length !== 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，验证器唯一检查失败', { uuid })
+			return { success: false, isExists: 'none', message: '创建身份验证器失败，验证器唯一检查失败' }
+		}
+
+		if (checkUserAuthenticatorResult.result) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，数据库中已经存储了一个启用的 TOTP 2FA', { uuid })
+			return { success: false, isExists: 'totp', message: '创建 TOTP 身份验证器失败，数据库中已经存储了一个启用的' }
+		}
+
+		const now = new Date().getTime()
+		const secret = authenticator.generateSecret()
+		const email = userAuthResult.result[0].email
+		const otpAuth = authenticator.keyuri(email, 'KIRAKIRA☆DOUGA', secret)
+
+		// 准备要插入的身份验证器数据
+		const userAuthenticatorData: UserAuthenticator = {
+			UUID: uuid,
+			authenticator: false,
+			secret,
+			otpAuth,
+			backupCodeHash: [],
+			createDateTime: now,
+			editDateTime: now,
+		}
+
+		// 插入数据到数据库
+		const saveTotpAuthenticatorResult = await insertData2MongoDB<UserAuthenticator>(userAuthenticatorData, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+		if (!saveTotpAuthenticatorResult.success) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，保存数据失败', { uuid })
+			return { success: false, isExists: 'none', message: '创建 TOTP 身份验证器失败，保存数据失败' }
+		}
+
+		await session.commitTransaction()
+		session.endSession()
+		return { success: true, isExists: 'none', message: '创建 TOTP 身份验证器成功', result: { otpAuth } }
+	} catch (error) {
+		console.error('创建 TOTP 身份验证器失败时出错，未知错误', error)
+		return { success: false, isExists: 'none', message: '创建 TOTP 身份验证器时出错，未知错误' }
+	}
+}
+
+/**
+ * 用户确认绑定 TOTP 设备
+ * @param confirmUserTotpAuthenticatorRequest 用户确认绑定 TOTP 设备的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 用户确认绑定 TOTP 设备的请求响应
+ */
+export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthenticatorRequest: ConfirmUserTotpAuthenticatorRequestDto, uuid: string, token: string): Promise<ConfirmUserTotpAuthenticatorResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('确认绑定 TOTP 设备失败，非法用户')
+			return { success: false, message: '确认绑定 TOTP 设备失败，非法用户' }
+		}
+
+		const { clientOtp, otpAuth } = confirmUserTotpAuthenticatorRequest
+
+		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+		const confirmUserTotpAuthenticatorWhere: QueryType<UserAuthenticator> = {
+			UUID: uuid,
+			authenticator: false,
+			otpAuth,
+		}
+		const confirmUserTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
+			secret: 1,
+		}
+
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
+		const selectResult = await selectDataFromMongoDB<UserAuthenticator>(confirmUserTotpAuthenticatorWhere, confirmUserTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+		if (!selectResult.success || selectResult.result.length !== 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('确认绑定 TOTP 设备失败，获取验证数据失败')
+			return { success: false, message: '确认绑定 TOTP 设备失败，获取验证数据失败' }
+		}
+
+		const totpSecret = selectResult.result[0].secret
+		const serverOtp = authenticator.generate(totpSecret)
+		if (clientOtp !== serverOtp) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('确认绑定 TOTP 设备失败，验证失败')
+			return { success: false, message: '确认绑定 TOTP 设备失败，验证失败' }
+		}
+
+		const now = new Date().getTime()
+		const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+		const recoveryCode = generateSecureVerificationStringCode(8, charset)
+		const recoveryCodeHash = hashPasswordSync(recoveryCode)
+		const backupCode = Array.from({ length: 5 }, () => generateSecureVerificationStringCode(6, charset))
+		const backupCodeHash = backupCode.map(hashPasswordSync)
+
+		const confirmUserTotpAuthenticatorUpdate: UpdateType<UserAuthenticator> = {
+			authenticator: true,
+			recoveryCodeHash,
+			backupCodeHash,
+			editDateTime: now,
+		}
+
+		const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(confirmUserTotpAuthenticatorWhere, confirmUserTotpAuthenticatorUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+
+		const userAuthWhere: QueryType<UserAuth> = {
+			UUID: uuid,
+		}
+		const userAuthUpdate: UpdateType<UserAuth> = {
+			authenticatorType: 'totp',
+		}
+		const updateUserAuthResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userAuthWhere, userAuthUpdate, userAuthSchemaInstance, userAuthCollectionName, { session })
+
+		if (!updateAuthenticatorResult.success || !updateAuthenticatorResult.result || !updateUserAuthResult.success || !updateUserAuthResult.result) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('确认绑定 TOTP 设备失败，更新失败')
+			return { success: false, message: '确认绑定 TOTP 设备失败，更新失败' }
+		}
+
+		await session.commitTransaction()
+		session.endSession()
+		return { success: true, result: { backupCode, recoveryCode }, message: '已绑定 TOTP 设备' }
+	} catch (error) {
+		console.error('确认绑定 TOTP 设备时出错，未知错误', error)
+		return { success: false, message: '确认绑定 TOTP 设备时出错，未知错误' }
+	}
+}
+
+/**
+ * 通过 Email 检查用户是否已开启 2FA 身份验证器
+ * @param checkUserHave2FaServiceRequestDto 通过 Email 检查用户是否已开启 2FA 身份验证器的请求载荷
+ * @returns 通过 Email 检查用户是否已开启 2FA 身份验证器的请求响应
+ */
+export const checkUserHave2FaByEmailService = async (checkUserHave2FaServiceRequestDto: CheckUserHave2FaServiceRequestDto): Promise<CheckUserHave2FaServiceResponseDto> => {
+	try {
+		const { email } = checkUserHave2FaServiceRequestDto
+		if (!email) {
+			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空`)
+			return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空' }
+		}
+
+		const emailLowerCase = email.toLowerCase()
+
+		const { collectionName, schemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof schemaInstance>
+
+		const userAuthWhere: QueryType<UserAuth> = { emailLowerCase }
+		const userAuthSelect: SelectType<UserAuth> = { authenticatorType: 1 }
+
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
+		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
+			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据`)
+			return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据' }
+		}
+
+		const authenticator = userAuthResult.result[0].authenticatorType
+		if (authenticator === 'email' || authenticator === 'totp') {
+			return { success: true, have2Fa: true, type: authenticator, message: '用户已开启 2FA' }
+		} else {
+			return { success: true, have2Fa: false, message: '用户未开启 2FA' }
 		}
 	} catch (error) {
-		await session.abortTransaction();
-		console.error('创建身份验证器失败，插入数据时出现异常', error);
-		return { success: false, message: '创建身份验证器失败，插入数据时出现异常' };
-	} finally {
-		session.endSession();
+		console.error('通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
+		return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
 	}
-};
+}
+
+/**
+ * 校验用户注册信息
+ * @param userRegistrationRequest
+ * @returns boolean 如果合法则返回 true
+ */
+const checkUserRegistrationData = (userRegistrationRequest: UserRegistrationRequestDto): boolean => {
+	// TODO // WARN 这里可能需要更安全的校验机制
+	return (
+		true
+		&& !!userRegistrationRequest.passwordHash && !!userRegistrationRequest.email && !isInvalidEmail(userRegistrationRequest.email)
+		&& !!userRegistrationRequest.verificationCode
+		&& !!userRegistrationRequest.username
+	)
+}
+
+/**
+ * 用户是否存在验证的请求参数的非空验证
+ * @param userExistsCheckRequest
+ * @returns boolean 合法则返回 true
+ */
+const checkUserExistsCheckRequest = (userExistsCheckRequest: UserExistsCheckRequestDto): boolean => {
+	// TODO // WARN 这里可能需要更安全的校验机制
+	return (!!userExistsCheckRequest.email && !isInvalidEmail(userExistsCheckRequest.email))
+}
+
+/**
+ * 用户登录的请求参数的校验
+ * @param userExistsCheckRequest
+ * @returns boolean 合法则返回 true
+ */
+const checkUserLoginRequest = (userLoginRequest: UserLoginRequestDto): boolean => {
+	// TODO // WARN 这里可能需要更安全的校验机制
+	return (!!userLoginRequest.email && !isInvalidEmail(userLoginRequest.email) && !!userLoginRequest.passwordHash)
+}
+
+/**
+ * 用户修改邮箱的请求参数的非空验证
+ * @param updateUserEmailRequest
+ * @returns boolean 合法则返回 true
+ */
+const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequestDto): boolean => {
+	// TODO // WARN 这里可能需要更安全的校验机制
+	return (
+		updateUserEmailRequest.uid !== null && updateUserEmailRequest.uid !== undefined
+		&& !!updateUserEmailRequest.oldEmail && !isInvalidEmail(updateUserEmailRequest.oldEmail)
+		&& !!updateUserEmailRequest.newEmail && !isInvalidEmail(updateUserEmailRequest.newEmail)
+		&& !!updateUserEmailRequest.passwordHash
+		&& !!updateUserEmailRequest.verificationCode
+	)
+}
 
 // WARN // TODO 或许这些数据放到环境变量里更好？
 const ALLOWED_ACCOUNT_TYPE = [
@@ -3185,4 +3588,31 @@ const checkAdminClearUserInfoRequest = (adminClearUserInfoRequest: AdminClearUse
 	return (
 		adminClearUserInfoRequest.uid !== undefined && adminClearUserInfoRequest.uid !== null && typeof adminClearUserInfoRequest.uid === 'number' && adminClearUserInfoRequest.uid > 0
 	)
+}
+
+/**
+ * 检查通过恢复码删除用户 2FA 的参数
+ * @param deleteAuthenticatorByRecoveryCodeData 通过恢复码删除用户 2FA 的参数
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkDeleteTotpAuthenticatorByRecoveryCodeData = (deleteTotpAuthenticatorByRecoveryCodeData: DeleteTotpAuthenticatorByRecoveryCodeParametersDto) => {
+	return (!!deleteTotpAuthenticatorByRecoveryCodeData.email && !!deleteTotpAuthenticatorByRecoveryCodeData.recoveryCodeHash)
+}
+
+/**
+ * 检查已登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
+ * @param deleteAuthenticatorByEmailVerificationCodeRequest 已登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkDeleteTotpAuthenticatorByEmailVerificationCodeRequest = (deleteTotpAuthenticatorByEmailVerificationCodeRequest: DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto) => {
+	return (!!deleteTotpAuthenticatorByEmailVerificationCodeRequest.verificationCode)
+}
+
+/**
+ * 检查发送删除身份验证器的邮箱验证码的请求载荷
+ * @param sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest 发送删除身份验证器的邮箱验证码的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkSendDeleteTotpAuthenticatorByEmailVerificationCodeRequest = (sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest: SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto) => {
+	return (!!sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest.clientLanguage)
 }

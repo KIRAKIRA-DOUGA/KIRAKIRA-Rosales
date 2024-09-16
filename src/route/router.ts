@@ -3,7 +3,40 @@ import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWith
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
 import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
-import { adminClearUserInfoController, adminGetUserInfoController, approveUserInfoController, blockUserByUIDController, checkInvitationCodeController, checkUsernameController, checkUserTokenController, createInvitationCodeController, getBlockedUserController, getMyInvitationCodeController, getSelfUserInfoController, getUserAvatarUploadSignedUrlController, getUserInfoByUidController, getUserSettingsController, reactivateUserByUIDController, requestSendChangeEmailVerificationCodeController, requestSendChangePasswordVerificationCodeController, requestSendVerificationCodeController, updateOrCreateUserInfoController, updateOrCreateUserSettingsController, updateUserEmailController, updateUserPasswordController, userExistsCheckController, userLoginController, userLogoutController, userRegistrationController, getUserInvitationCodeController, userCreateAuthenticatorController, deleteUserAuthenticatorController, checkUserAuthenticatorController, deleteAuthenticatorLoginController, requestSendDeleteAuthenticatorVerificationCodeController } from '../controller/UserController.js'
+import {
+	adminClearUserInfoController,
+	adminGetUserInfoController,
+	approveUserInfoController,
+	blockUserByUIDController,
+	checkInvitationCodeController,
+	checkUsernameController,
+	checkUserTokenController,
+	createInvitationCodeController,
+	getBlockedUserController,
+	getMyInvitationCodeController,
+	getSelfUserInfoController,
+	getUserAvatarUploadSignedUrlController,
+	getUserInfoByUidController,
+	getUserSettingsController,
+	reactivateUserByUIDController,
+	requestSendChangeEmailVerificationCodeController,
+	requestSendChangePasswordVerificationCodeController,
+	requestSendVerificationCodeController,
+	updateOrCreateUserInfoController,
+	updateOrCreateUserSettingsController,
+	updateUserEmailController,
+	updateUserPasswordController,
+	userExistsCheckController,
+	userLoginController,
+	userLogoutController,
+	userRegistrationController,
+	getUserInvitationCodeController,
+	userCreateAuthenticatorController,
+	deleteUserAuthenticatorController,
+	checkUserAuthenticatorController,
+	deleteAuthenticatorLoginController,
+	requestSendDeleteAuthenticatorVerificationCodeController
+} from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
