@@ -78,7 +78,7 @@ router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorContolle
 // cookie: uuid, token
 
 router.post('/user/confirmUserTotpAuthenticator', confirmUserTotpAuthenticatorController) // 用户确认绑定 TOTP 设备
-// https://localhost:9999/user//user/confirmUserTotpAuthenticator
+// https://localhost:9999/user/confirmUserTotpAuthenticator
 // {
 // 	"clientOtp": "XXXXXX",
 // 	"otpAuth": "XXXXXXXXXXXXXXXXX"
@@ -97,10 +97,10 @@ router.get('/user/GetUserAuthenticator', checkUserHave2FaByEmailController) // �
 // "email": "aaa@bbb.com",
 //}
 
-router.post('/user/sendDeleteTotpAuthenticatorByEmailVerificationCodeCode', sendDeleteTotpAuthenticatorByEmailVerificationCodeController) // 请求发送验证码，用于注册时验证用户邮箱
+router.post('/user/sendDeleteTotpAuthenticatorByEmailVerificationCode', sendDeleteTotpAuthenticatorByEmailVerificationCodeController) // 已登录用户请求发送删除身份验证器的邮箱验证码
 // https://localhost:9999/user/sendDeleteTotpAuthenticatorByEmailVerificationCode
+// cookie: uuid, token
 // {
-// 	"email": "aaa@bbb.com",
 // 	"clientLanguage": "zh-Hans-CN"
 // }
 
