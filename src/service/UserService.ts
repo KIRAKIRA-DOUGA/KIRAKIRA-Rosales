@@ -2915,7 +2915,7 @@ export const sendDeleteTotpAuthenticatorByEmailVerificationCodeService = async (
 			// 请不要使用 “您”
 			const mailHtmlCHS = `
 					<p>删除 2FA 的确认验证码是：<strong>${verificationCode}</strong></p>
-					注意：你可以使用这个验证码来删除您的 2FA（二重身分验证器），这会导致您的账户更容易遭到攻击！
+					注意：你可以使用这个验证码来删除您的 2FA（二重身份验证器），这会导致您的账户更容易遭到攻击！
 					<br>
 					验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
 				`
