@@ -3162,7 +3162,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { authenticator: 1, createDateTime: 1 }
 		const checkUserAuthenticatorResult = await selectDataFromMongoDB(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
-		if (!checkUserAuthenticatorResult.success || !checkUserAuthenticatorResult.result || checkUserAuthenticatorResult.result.length !== 1) {
+		if (!checkUserAuthenticatorResult.success || !checkUserAuthenticatorResult.result) {
 			if (session.inTransaction()) {
 				await session.abortTransaction()
 			}
@@ -3170,8 +3170,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 			console.error('创建 TOTP 身份验证器失败，验证器唯一检查失败', { uuid })
 			return { success: false, isExists: 'none', message: '创建身份验证器失败，验证器唯一检查失败' }
 		}
-
-		if (checkUserAuthenticatorResult.result) {
+		if (checkUserAuthenticatorResult.result.length == 1 && checkUserAuthenticatorResult.result) {
 			if (session.inTransaction()) {
 				await session.abortTransaction()
 			}
