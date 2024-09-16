@@ -31,11 +31,11 @@ import {
 	userLogoutController,
 	userRegistrationController,
 	getUserInvitationCodeController,
-	userCreateAuthenticatorController,
-	deleteUserAuthenticatorController,
-	checkUserAuthenticatorController,
-	deleteAuthenticatorLoginController,
-	requestSendDeleteAuthenticatorVerificationCodeController
+	createUserTotpAuthenticatorContoller,
+	checkUserHave2FaByEmailController,
+	deleteTotpAuthenticatorByEmailVerificationCodeController,
+	sendDeleteTotpAuthenticatorByEmailVerificationCodeController,
+	confirmUserTotpAuthenticatorController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
@@ -65,40 +65,43 @@ router.post('/user/registering', userRegistrationController) // 用户注册
 // 	"invitationCode": "KIRA-XXXX-XXXX"
 // }
 
-router.post('/user/createAuthenticator', userCreateAuthenticatorController) // 用户创建身份验证器
-// https://localhost:9999/user/createAuthenticator
-// cookie: uuid, token
-
-router.delete('/user/deleteUserAuthenticator', deleteUserAuthenticatorController) // 用户删除身份验证器
-// https://localhost:9999/user/deleteUserAuthenticator
-// cookie: uuid, token
-
-router.delete('/user/deleteAuthenticatorLogin', deleteAuthenticatorLoginController)
-// https://localhost:9999/user/deleteAuthenticatorLogin
-// {
-//  "way": "ByRecoveryCode" or "ByEmail", // ByRecoveryCode 为用邮箱和恢复码进行删除 or ByEmail为用邮箱和验证码进行删除
-//  "email": "aaa@aaa.aaa",
-//  "recovercode": "XXXXXXXX", // 非必须
-//  "verificationCode": "ZZZZZZ", // 非必须 仅适用于邮箱方法
-// }
-
-router.get('/user/GetUserAuthenticator', checkUserAuthenticatorController) // 获取当前身份验证器状态
-// https://localhost:9999/user/GetUserAuthenticator
-// cookie uuid, token
-
-router.post('/user/requestSendDeleteAuthenticatorVerificationCode', requestSendDeleteAuthenticatorVerificationCodeController) // 请求发送验证码，用于注册时验证用户邮箱
-// https://localhost:9999/user/requestSendDeleteAuthenticatorVerificationCode
-// {
-// 	"email": "aaa@bbb.com",
-// 	"clientLanguage": "zh-Hans-CN"
-// }
-
 router.post('/user/login', userLoginController) // 用户登录
 // https://localhost:9999/user/login
 // {
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-// 	"otp": "XXXXXX" //非必须
+// 	"clientOtp": "XXXXXX" //非必须
+// }
+
+router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorContoller) // 用户创建 TOTP 身份验证器
+// https://localhost:9999/user/createTotpAuthenticator
+// cookie: uuid, token
+
+router.post('/user/confirmUserTotpAuthenticator', confirmUserTotpAuthenticatorController) // 用户确认绑定 TOTP 设备
+// https://localhost:9999/user//user/confirmUserTotpAuthenticator
+// {
+// 	"clientOtp": "XXXXXX",
+// 	"otpAuth": "XXXXXXXXXXXXXXXXX"
+// }
+
+router.delete('/user/deleteUserAuthenticator', deleteTotpAuthenticatorByEmailVerificationCodeController) // 已登录用户通过密码和邮箱验证码删除身份验证器
+// https://localhost:9999/user/deleteUserAuthenticator
+// cookie: uuid, token
+// {
+//	"verificationCode": "XXXXXX",
+// }
+
+router.get('/user/GetUserAuthenticator', checkUserHave2FaByEmailController) // 通过 Email 检查用户是否已开启 2FA 身份验证器
+// https://localhost:9999/user/GetUserAuthenticator
+// {
+// "email": "aaa@bbb.com",
+//}
+
+router.post('/user/sendDeleteTotpAuthenticatorByEmailVerificationCodeCode', sendDeleteTotpAuthenticatorByEmailVerificationCodeController) // 请求发送验证码，用于注册时验证用户邮箱
+// https://localhost:9999/user/sendDeleteTotpAuthenticatorByEmailVerificationCode
+// {
+// 	"email": "aaa@bbb.com",
+// 	"clientLanguage": "zh-Hans-CN"
 // }
 
 router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检查用户是否存在
