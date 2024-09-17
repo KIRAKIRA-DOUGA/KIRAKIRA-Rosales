@@ -132,7 +132,7 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  * @return CreateUserTotpAuthenticatorResponseDto 创建结果
  */
-export const createUserTotpAuthenticatorContoller = async (ctx: koaCtx, next: koaNext) => {
+export const createUserTotpAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const result = await createUserTotpAuthenticatorService(uuid, token)
@@ -186,6 +186,7 @@ export const deleteTotpAuthenticatorByEmailVerificationCodeController = async (c
 	const data = ctx.request.body as Partial<DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto>
 	const deleteTotpAuthenticatorByEmailVerificationCodeRequest: DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
 		verificationCode: data.verificationCode || '',
+		passwordHash: data.passwordHash || '',
 	}
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')

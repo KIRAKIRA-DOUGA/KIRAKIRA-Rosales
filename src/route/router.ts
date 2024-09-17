@@ -31,7 +31,7 @@ import {
 	userLogoutController,
 	userRegistrationController,
 	getUserInvitationCodeController,
-	createUserTotpAuthenticatorContoller,
+	createUserTotpAuthenticatorController,
 	checkUserHave2FaByEmailController,
 	deleteTotpAuthenticatorByEmailVerificationCodeController,
 	sendDeleteTotpAuthenticatorByEmailVerificationCodeController,
@@ -73,7 +73,7 @@ router.post('/user/login', userLoginController) // 用户登录
 // 	"clientOtp": "XXXXXX" //非必须
 // }
 
-router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorContoller) // 用户创建 TOTP 身份验证器
+router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorController) // 用户创建 TOTP 身份验证器
 // https://localhost:9999/user/createTotpAuthenticator
 // cookie: uuid, token
 

@@ -766,6 +766,8 @@ export type SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto = {
 export type DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
 	/** 验证码 */
 	verificationCode: string,
+	/** 被哈希一次的密码 */
+	passwordHash: string,
 }
 
 /**
@@ -785,7 +787,9 @@ export type CreateUserTotpAuthenticatorResponseDto = {
 	/** 执行结果 */
 	success: boolean;
 	/** 身份验证器是否已存在 */
-	isExists: 'none' | 'email' | 'totp';
+	isExists: boolean;
+	/** 如果已存在，则返回验证器的类型 */
+	existsAuthenticatorType?: 'email' | 'totp';
 	/** TOTP 身份验证器信息 */
 	result?: {
 		/** TOTP 的唯一 ID，验证器的二维码 */
