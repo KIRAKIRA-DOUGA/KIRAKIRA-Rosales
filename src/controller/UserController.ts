@@ -31,7 +31,8 @@ import {
 	confirmUserTotpAuthenticatorService,
 	sendDeleteTotpAuthenticatorByEmailVerificationCodeService,
 	deleteTotpAuthenticatorByEmailVerificationCodeService,
-	checkUserHave2FaByEmailService,
+	checkUserHave2FAByEmailService,
+	checkUserHave2FAByUUIDService,
 } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import {
@@ -40,7 +41,7 @@ import {
 	ApproveUserInfoRequestDto,
 	BlockUserByUIDRequestDto,
 	CheckInvitationCodeRequestDto,
-	CheckUserHave2FaServiceRequestDto,
+	CheckUserHave2FAServiceRequestDto,
 	CheckUsernameRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
 	DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto,
@@ -200,12 +201,26 @@ export const deleteTotpAuthenticatorByEmailVerificationCodeController = async (c
  * @param next next
  * @returns GetUserAuthenticatorResponseDto 检查结果
  */
-export const checkUserHave2FaByEmailController = async (ctx: koaCtx, next: koaNext) => {
+export const checkUserHave2FAByEmailController = async (ctx: koaCtx, next: koaNext) => {
 	const email = ctx.query.email as string
-	const checkUserHave2FaServiceRequestDto: CheckUserHave2FaServiceRequestDto = {
+	const checkUserHave2FAServiceRequestDto: CheckUserHave2FAServiceRequestDto = {
 		email,
 	}
-	const result = await checkUserHave2FaByEmailService(checkUserHave2FaServiceRequestDto);
+	const result = await checkUserHave2FAByEmailService(checkUserHave2FAServiceRequestDto);
+	ctx.body = result;
+	await next()
+}
+
+/**
+ * 通过 UUID 检查用户是否已开启 2FA 身份验证器
+ * @param ctx context
+ * @param next next
+ * @returns GetUserAuthenticatorResponseDto 检查结果
+ */
+export const checkUserHave2FAByUUIDController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const result = await checkUserHave2FAByUUIDService(uuid, token);
 	ctx.body = result;
 	await next()
 }

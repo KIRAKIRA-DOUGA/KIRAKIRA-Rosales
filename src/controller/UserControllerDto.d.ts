@@ -829,21 +829,23 @@ export type ConfirmUserTotpAuthenticatorResponseDto = {
 /**
  * 检查 2FA 是否开启的请求在和
  */
-export type CheckUserHave2FaServiceRequestDto = {
+export type CheckUserHave2FAServiceRequestDto = {
 	/** 用户的邮箱 */
-	email: string,
+	email: string;
 }
 
 /**
  * 检查 2FA 是否开启的请求响应
  */
-export type CheckUserHave2FaServiceResponseDto = {
+export type CheckUserHave2FAServiceResponseDto = {
 	/** 执行结果 */
 	success: boolean;
 	/** 是否存在身份验证器 */
-	have2Fa: boolean;
+	have2FA: boolean;
 	/** 如果存在，则返回 2FA 的类型 */
 	type?: 'email' | 'totp';
+	/** 如果存在且结果为 totp，则返回 2FA 的创建时间 */
+	totpCreationDateTime?: number;
 	/** 附加的文本消息 */
 	message?: string;
 }

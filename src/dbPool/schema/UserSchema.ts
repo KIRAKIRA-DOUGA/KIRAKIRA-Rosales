@@ -313,7 +313,7 @@ class UserTotpAuthenticatorSchemaFactory {
 		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
 		UUID: { type: String, required: true },
 		/** 是否启用身份验证器 - 非空 - 默认值：false */
-		authenticator: { type: Boolean, required: true, default: false },
+		enabled: { type: Boolean, required: true, default: false },
 		/** 验证器密钥 */
 		secret: { type: String },
 		/** 恢复码 */
@@ -334,8 +334,8 @@ class UserTotpAuthenticatorSchemaFactory {
 
 	// 构造器
 	constructor() {
-		// 添加 UUID 和 authenticator 组合的唯一索引
-		this.schemaInstance.index({ UUID: 1, authenticator: 1 }, { unique: true });
+		// 添加 UUID 和 secret 组合的唯一索引
+		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true });
 	}
 }
 export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()

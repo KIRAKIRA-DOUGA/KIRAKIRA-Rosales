@@ -32,10 +32,11 @@ import {
 	userRegistrationController,
 	getUserInvitationCodeController,
 	createUserTotpAuthenticatorController,
-	checkUserHave2FaByEmailController,
+	checkUserHave2FAByEmailController,
 	deleteTotpAuthenticatorByEmailVerificationCodeController,
 	sendDeleteTotpAuthenticatorByEmailVerificationCodeController,
 	confirmUserTotpAuthenticatorController,
+	checkUserHave2FAByUUIDController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
@@ -88,14 +89,18 @@ router.delete('/user/deleteUserAuthenticator', deleteTotpAuthenticatorByEmailVer
 // https://localhost:9999/user/deleteUserAuthenticator
 // cookie: uuid, token
 // {
-//	"verificationCode": "XXXXXX",
+//   "verificationCode": "XXXXXX",
 // }
 
-router.get('/user/GetUserAuthenticator', checkUserHave2FaByEmailController) // 通过 Email 检查用户是否已开启 2FA 身份验证器
-// https://localhost:9999/user/GetUserAuthenticator
+router.get('/user/checkUserHave2FAByEmail', checkUserHave2FAByEmailController) // 通过 Email 检查用户是否已开启 2FA 身份验证器
+// https://localhost:9999/user/checkUserHave2FAByEmail
 // {
-// "email": "aaa@bbb.com",
-//}
+//   "email": "aaa@bbb.com",
+// }
+
+router.get('/user/checkUserHave2FAByUUID', checkUserHave2FAByUUIDController) // 通过 UUID 检查用户是否已开启 2FA 身份验证器
+// https://localhost:9999/user/checkUserHave2FAByUUID
+// cookie: uuid, token
 
 router.post('/user/sendDeleteTotpAuthenticatorByEmailVerificationCode', sendDeleteTotpAuthenticatorByEmailVerificationCodeController) // 已登录用户请求发送删除身份验证器的邮箱验证码
 // https://localhost:9999/user/sendDeleteTotpAuthenticatorByEmailVerificationCode

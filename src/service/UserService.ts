@@ -24,7 +24,7 @@ import {
 	GetMyInvitationCodeResponseDto,
 	GetSelfUserInfoRequestDto,
 	GetSelfUserInfoResponseDto,
-	CheckUserHave2FaServiceResponseDto,
+	CheckUserHave2FAServiceResponseDto,
 	GetUserAvatarUploadSignedUrlResponseDto,
 	GetUserInfoByUidRequestDto,
 	GetUserInfoByUidResponseDto,
@@ -62,7 +62,7 @@ import {
 	DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
 	ConfirmUserTotpAuthenticatorResponseDto,
-	CheckUserHave2FaServiceRequestDto,
+	CheckUserHave2FAServiceRequestDto,
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
@@ -286,7 +286,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		const uid = userAuthData.uid
 		const uuid = userAuthData.UUID
 		const authenticatorType = userAuthData.authenticatorType
-		if (!token || uid === null || uid === undefined || !uuid || !authenticator) {
+		if (!token || uid === null || uid === undefined || !uuid) {
 			console.error('ERROR', `登录失败，未能获取用户安全信息`)
 			return { success: false, message: '登录失败，未能获取用户安全信息' }
 		}
@@ -297,6 +297,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		}
 
 		if (authenticatorType === 'totp') {
+			// TODO: 防爆破，例如一个小时内应该只允许尝试 5 次
 			if (!clientOtp) {
 				console.error('登录失败，启用了 TOTP 但用户未提供验证码', authenticatorType )
 				return { success: false, message:"登录失败，启用了 TOTP 但用户未提供验证码", authenticatorType }
@@ -306,7 +307,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
 			const userTotpAuthenticatorWhere: QueryType<UserAuthenticator> = {
 				UUID: uuid,
-				authenticator: true,
+				enabled: true,
 			}
 
 			if (clientOtp.length === 8) { // 八位时是恢复码
@@ -3124,7 +3125,7 @@ export const deleteTotpAuthenticatorByEmailVerificationCodeService = async (dele
 /**
  * 用户创建 TOTP 身份验证器服务
  * 开启邮箱验证的是另一个函数，这个只是开启 totp
- * 这里只是创建，但应当有一个确认创建的步骤。
+ * 这里只是创建，然后还有一个确认创建的步骤。
  *
  * @param uuid 用户的 UUID
  * @param token 用户的 token
@@ -3180,8 +3181,8 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
-		const checkUserAuthenticatorWhere: QueryType<UserAuthenticator> = { UUID: uuid, authenticator: true }
-		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { authenticator: 1, createDateTime: 1 }
+		const checkUserAuthenticatorWhere: QueryType<UserAuthenticator> = { UUID: uuid, enabled: true }
+		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { enabled: 1, createDateTime: 1 }
 		const checkUserAuthenticatorResult = await selectDataFromMongoDB(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
 		if (!checkUserAuthenticatorResult.success || !checkUserAuthenticatorResult.result) {
@@ -3210,7 +3211,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 		// 准备要插入的身份验证器数据
 		const userAuthenticatorData: UserAuthenticator = {
 			UUID: uuid,
-			authenticator: false,
+			enabled: false,
 			secret,
 			otpAuth,
 			backupCodeHash: [],
@@ -3259,7 +3260,7 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
 		const confirmUserTotpAuthenticatorWhere: QueryType<UserAuthenticator> = {
 			UUID: uuid,
-			authenticator: false,
+			enabled: false,
 			otpAuth,
 		}
 		const confirmUserTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
@@ -3299,7 +3300,7 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		const backupCodeHash = backupCode.map(hashPasswordSync)
 
 		const confirmUserTotpAuthenticatorUpdate: UpdateType<UserAuthenticator> = {
-			authenticator: true,
+			enabled: true,
 			recoveryCodeHash,
 			backupCodeHash,
 			editDateTime: now,
@@ -3338,15 +3339,15 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 
 /**
  * 通过 Email 检查用户是否已开启 2FA 身份验证器
- * @param checkUserHave2FaServiceRequestDto 通过 Email 检查用户是否已开启 2FA 身份验证器的请求载荷
+ * @param checkUserHave2FAServiceRequestDto 通过 Email 检查用户是否已开启 2FA 身份验证器的请求载荷
  * @returns 通过 Email 检查用户是否已开启 2FA 身份验证器的请求响应
  */
-export const checkUserHave2FaByEmailService = async (checkUserHave2FaServiceRequestDto: CheckUserHave2FaServiceRequestDto): Promise<CheckUserHave2FaServiceResponseDto> => {
+export const checkUserHave2FAByEmailService = async (checkUserHave2FAServiceRequestDto: CheckUserHave2FAServiceRequestDto): Promise<CheckUserHave2FAServiceResponseDto> => {
 	try {
-		const { email } = checkUserHave2FaServiceRequestDto
+		const { email } = checkUserHave2FAServiceRequestDto
 		if (!email) {
 			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空`)
-			return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空' }
+			return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空' }
 		}
 
 		const emailLowerCase = email.toLowerCase()
@@ -3360,18 +3361,83 @@ export const checkUserHave2FaByEmailService = async (checkUserHave2FaServiceRequ
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
 			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据`)
-			return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据' }
+			return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据' }
 		}
 
-		const authenticator = userAuthResult.result[0].authenticatorType
-		if (authenticator === 'email' || authenticator === 'totp') {
-			return { success: true, have2Fa: true, type: authenticator, message: '用户已开启 2FA' }
+		const UUID = userAuthResult.result[0].UUID
+		if (!UUID) {
+			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到 UUID`)
+			return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到 UUID' }
+		}
+
+		const authenticatorType = userAuthResult.result[0].authenticatorType
+		if (authenticatorType === 'totp') {
+			const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+			type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+
+			const userTotpAuthenticatorWhere: QueryType<UserTotpAuthenticator> = { UUID, enabled: true }
+			const userTotpAuthenticatorSelect: SelectType<UserTotpAuthenticator> = { createDateTime: 1 }
+
+			const userTotpAuthenticatorResult = await selectDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
+			const totpCreationDateTime = userTotpAuthenticatorResult?.result?.[0].createDateTime
+
+			return { success: true, have2FA: true, type: authenticatorType, totpCreationDateTime, message: '用户已开启 TOTP 2FA' }
+		} else if (authenticatorType === 'email') {
+			return { success: true, have2FA: true, type: authenticatorType, message: '用户已开启 Email 2FA' }
 		} else {
-			return { success: true, have2Fa: false, message: '用户未开启 2FA' }
+			return { success: true, have2FA: false, message: '用户未开启 2FA' }
 		}
 	} catch (error) {
 		console.error('通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
-		return { success: false, have2Fa: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
+		return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
+	}
+}
+
+/**
+ * 通过 UUID 检查用户是否已开启 2FA 身份验证器
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 通过 UUID 检查用户是否已开启 2FA 身份验证器的请求响应
+ */
+export const checkUserHave2FAByUUIDService = async (uuid: string, token: string): Promise<CheckUserHave2FAServiceResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('ERROR', `通过 UUID 检查用户是否已开启 2FA 身份验证器失败，非法用户`)
+			return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器失败，非法用户' }
+		}
+
+		const { collectionName, schemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof schemaInstance>
+
+		const userAuthWhere: QueryType<UserAuth> = { UUID: uuid }
+		const userAuthSelect: SelectType<UserAuth> = { authenticatorType: 1 }
+
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
+		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
+			console.error('ERROR', `通过 UUID 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据`)
+			return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据' }
+		}
+
+		const authenticatorType = userAuthResult.result[0].authenticatorType
+		if (authenticatorType === 'totp') {
+			const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+			type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+
+			const userTotpAuthenticatorWhere: QueryType<UserTotpAuthenticator> = { UUID: uuid, enabled: true }
+			const userTotpAuthenticatorSelect: SelectType<UserTotpAuthenticator> = { createDateTime: 1 }
+
+			const userTotpAuthenticatorResult = await selectDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
+			const totpCreationDateTime = userTotpAuthenticatorResult?.result?.[0].createDateTime
+
+			return { success: true, have2FA: true, type: authenticatorType, totpCreationDateTime, message: '用户已开启 TOTP 2FA' }
+		} else if (authenticatorType === 'email') {
+			return { success: true, have2FA: true, type: authenticatorType, message: '用户已开启 Email 2FA' }
+		} else {
+			return { success: true, have2FA: false, message: '用户未开启 2FA' }
+		}
+	} catch (error) {
+		console.error('通过 UUID 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
+		return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
 	}
 }
 
