@@ -819,7 +819,7 @@ export type ConfirmUserTotpAuthenticatorResponseDto = {
 	result?: {
 		/** 验证器备份码 */
 		backupCode?: string[];
-		/** 验证器备份码 */
+		/** 验证器恢复码 */
 		recoveryCode?: string;
 	}
 	/** 附加的文本消息 */
