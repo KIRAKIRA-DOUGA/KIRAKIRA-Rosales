@@ -297,7 +297,10 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		}
 
 		if (authenticatorType === 'totp') {
-			// TODO: 防爆破，例如一个小时内应该只允许尝试 5 次
+			const maxAttempts	 = 5
+			const lockTime = 60 * 60 * 1000
+			const now = new Date().getTime()
+
 			if (!clientOtp) {
 				console.error('登录失败，启用了 TOTP 但用户未提供验证码', authenticatorType )
 				return { success: false, message:"登录失败，启用了 TOTP 但用户未提供验证码", authenticatorType }
@@ -358,6 +361,8 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				const userTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
 					secret: 1,
 					backupCodeHash: 1,
+					lastAttemptTime: 1,
+					attempts: 1,
 				}
 
 				const selectResult = await selectDataFromMongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
@@ -367,11 +372,46 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 					return { success: false, message: '登录失败，获取验证数据失败 - 2', authenticatorType }
 				}
 
+				let attempts = selectResult.result[0].attempts
+
 				const totpSecret = selectResult.result[0].secret
 				const listOfBackupCodeHash = selectResult.result[0].backupCodeHash
 				const serverOtp = authenticator.generate(totpSecret)
 
+				// 限制用户的登录频率
+				if (selectResult.result[0].attempts >= maxAttempts) {
+					const lastAttemptTime = new Date(selectResult.result[0].lastAttemptTime).getTime();
+					if (now - lastAttemptTime < lockTime) {
+						attempts += 1
+						console.warn('用户登录失败，已达最大尝试次数，请稍后再试');
+    				return { success: false, message: '登录失败，已达最大尝试次数，请稍后再试', authenticatorType };
+					} else {
+						attempts = 0
+					}
+
+					//启动事务
+					const session = await mongoose.startSession()
+					session.startTransaction()
+
+					const userLoginByBackupCodeUpdate: UpdateType<UserAuthenticator> = {
+						attempts: attempts,
+						lastAttemptTime: now,
+					}
+					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+					if (!updateAuthenticatorResult.success) {
+						if (session.inTransaction()) {
+							await session.abortTransaction()
+						}
+						session.endSession()
+						console.error('登录失败，更新最后尝试时间或尝试次数失败')
+						return { success: false, message: '登录失败，更新最后尝试时间或尝试次数失败', authenticatorType }
+					}
+				}
+
+
 				if (clientOtp !== serverOtp) {
+					attempts += 1
 					let useCorrectBackupCode = false // 用户是否使用了一个正确的备用码。
 					const newBackupCodeHash = []
 					listOfBackupCodeHash.forEach( backupCodeHash => {
@@ -390,10 +430,11 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 					const session = await mongoose.startSession()
 					session.startTransaction()
 
-					const now = new Date().getTime()
 					const userLoginByBackupCodeUpdate: UpdateType<UserAuthenticator> = {
 						backupCodeHash: newBackupCodeHash,
 						editDateTime: now,
+						attempts: attempts,
+						lastAttemptTime: now,
 					}
 
 					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
@@ -3207,6 +3248,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 		const secret = authenticator.generateSecret()
 		const email = userAuthResult.result[0].email
 		const otpAuth = authenticator.keyuri(email, 'KIRAKIRA☆DOUGA', secret)
+		const attempts = 0
 
 		// 准备要插入的身份验证器数据
 		const userAuthenticatorData: UserAuthenticator = {
@@ -3215,6 +3257,8 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 			secret,
 			otpAuth,
 			backupCodeHash: [],
+			attempts,
+			lastAttemptTime: now,
 			createDateTime: now,
 			editDateTime: now,
 		}

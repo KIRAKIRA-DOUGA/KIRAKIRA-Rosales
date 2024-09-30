@@ -322,6 +322,10 @@ class UserTotpAuthenticatorSchemaFactory {
 		backupCodeHash: { type: [String] },
 		/** QRcode */
 		otpAuth: { type: String, unique: true },
+		/** 尝试次数 */
+		attempts: { type: Number },
+		/** 上次尝试登录时间 */
+		lastAttemptTime: { type: Number },
 		/** 系统专用字段-创建时间 - 非空 */
 		createDateTime: { type: Number, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
