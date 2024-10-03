@@ -792,6 +792,11 @@ export type CreateUserEmailAuthenticatorResponseDto = {
 	isExists: boolean;
 	/** 如果已存在，则返回验证器的类型 */
 	existsAuthenticatorType?: 'email' | 'totp';
+	/** Email 身份验证器信息 */
+	result?: {
+		/** Email */
+		email?: string;
+	}
 	/** 附加的文本消息 */
 	message?: string;
 }

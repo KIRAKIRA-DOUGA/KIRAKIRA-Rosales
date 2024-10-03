@@ -67,7 +67,7 @@ import {
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserDeleteTotpAuthenticatorVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserDeleteTotpAuthenticatorVerificationCodeSchema, UserEmailAuthenticatorSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { authenticator } from 'otplib'
 
@@ -3286,16 +3286,18 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 }
 
 /**
- * 用户创建邮箱身份验证器
+ * 用户创建 Email 身份验证器服务
+ * 这里只是创建，然后还有一个确认创建的步骤。
+ *
  * @param uuid 用户的 UUID
  * @param token 用户的 token
- * @returns 用户创建 TOTP 身份验证器的请求响应
+ * @returns 用户创建 Email 身份验证器的请求响应
  */
 export const createUserEmailAuthenticatorService = async (uuid: string, token: string): Promise<CreateUserEmailAuthenticatorResponseDto> => {
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('创建 Email 身份验证器失败，非法用户', { uuid })
-			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，非法用户' }
+			console.error('创建 TOTP 身份验证器失败，非法用户', { uuid })
+			return { success: false, isExists: false, message: '创建 TOTP 身份验证器失败，非法用户' }
 		}
 
 		const session = await mongoose.startSession()
@@ -3304,12 +3306,13 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
 
-		const UserEmailAuthenticatorUserAuthWhere: QueryType<UserAuth> = { UUID: uuid }
-		const UserEmailAuthenticatorUserAuthSelect: SelectType<UserAuth> = {
+		const createUserTotpAuthenticatorUserAuthWhere: QueryType<UserAuth> = { UUID: uuid }
+		const createUserTotpAuthenticatorUserAuthSelect: SelectType<UserAuth> = {
 			authenticatorType: 1,
+			email: 1,
 		}
-
-		const userAuthResult = await selectDataFromMongoDB<UserAuth>(UserEmailAuthenticatorUserAuthWhere, UserEmailAuthenticatorUserAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(createUserTotpAuthenticatorUserAuthWhere, createUserTotpAuthenticatorUserAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
+		const email = userAuthResult.result[0].emailLowerCase
 
 		if (!userAuthResult.success || !userAuthResult?.result || userAuthResult.result?.length !== 1) {
 			if (session.inTransaction()) {
@@ -3338,13 +3341,49 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 			return { success: false, isExists: true, existsAuthenticatorType: 'totp', message: '创建 TOTP 身份验证器失败，已经开启 TOTP 2FA' }
 		}
 
-		const updateUserEmailAuthenticatorUserAuth = {
-			authenticatorType: 'email',
+		const { collectionName: UserEmailAuthenticatorCollectionName, schemaInstance: userEmailAuthenticatorSchemaInstance } = UserEmailAuthenticatorSchema
+		type UserAuthenticator = InferSchemaType<typeof userEmailAuthenticatorSchemaInstance>
+		const checkUserAuthenticatorWhere: QueryType<UserAuthenticator> = { UUID: uuid, enabled: true }
+		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = {
+			enabled: 1,
+			createDateTime: 1
 		}
 
-		const updateEmailAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuth>(UserEmailAuthenticatorUserAuthWhere, updateUserEmailAuthenticatorUserAuth, userAuthSchemaInstance, userAuthCollectionName, { session })
+		const checkUserAuthenticatorResult = await selectDataFromMongoDB(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userEmailAuthenticatorSchemaInstance, UserEmailAuthenticatorCollectionName, { session })
 
-		if (!updateEmailAuthenticatorResult.success) {
+		if (!checkUserAuthenticatorResult.success || !checkUserAuthenticatorResult.result) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 Email 身份验证器失败，验证器唯一检查失败', { uuid })
+			return { success: false, isExists: false, message: '创建身份验证器失败，验证器唯一检查失败' }
+		}
+
+		if (checkUserAuthenticatorResult.result.length >= 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 Email 身份验证器失败，数据库中已经存储了一个启用的 Email 2FA', { uuid })
+			return { success: false, isExists: true, existsAuthenticatorType: 'email', message: '创建 Email 身份验证器失败，数据库中已经存储了一个启用的' }
+		}
+
+		const now = new Date().getTime()
+
+		// 准备要插入的身份验证器数据
+		const userAuthenticatorData: UserAuthenticator = {
+			UUID: uuid,
+			enabled: false,
+			email: email,
+			createDateTime: now,
+			editDateTime: now,
+		}
+
+		// 插入数据到数据库
+		const saveTotpAuthenticatorResult = await insertData2MongoDB<UserAuthenticator>(userAuthenticatorData, userEmailAuthenticatorSchemaInstance, UserEmailAuthenticatorCollectionName, { session })
+
+		if (!saveTotpAuthenticatorResult.success) {
 			if (session.inTransaction()) {
 				await session.abortTransaction()
 			}
@@ -3355,12 +3394,13 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 
 		await session.commitTransaction()
 		session.endSession()
-		return { success: true, isExists: false, message: '创建 Email 身份验证器成功' }
+		return { success: true, isExists: false, message: '创建 Email 身份验证器成功', result: { email } }
 	} catch (error) {
-		console.error('创建 TOTP 身份验证器失败时出错，未知错误', error)
+		console.error('创建 Email 身份验证器失败时出错，未知错误', error)
 		return { success: false, isExists: false, message: '创建 Email 身份验证器时出错，未知错误' }
 	}
 }
+
 /**
  * 用户确认绑定 TOTP 设备
  * @param confirmUserTotpAuthenticatorRequest 用户确认绑定 TOTP 设备的请求载荷

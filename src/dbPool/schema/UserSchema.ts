@@ -305,14 +305,14 @@ class UserChangePasswordVerificationCodeSchemaFactory {
 export const UserChangePasswordVerificationCodeSchema = new UserChangePasswordVerificationCodeSchemaFactory()
 
 /**
- * 用户身份验证器
+ * 用户 TOTP 身份验证器
  */
 class UserTotpAuthenticatorSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
 		UUID: { type: String, required: true },
-		/** 是否启用身份验证器 - 非空 - 默认值：false */
+		/** 是否启用 TOTP 身份验证器 - 非空 - 默认值：false */
 		enabled: { type: Boolean, required: true, default: false },
 		/** 验证器密钥 */
 		secret: { type: String },
@@ -343,6 +343,36 @@ class UserTotpAuthenticatorSchemaFactory {
 	}
 }
 export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()
+
+/**
+ * 用户 Email 身份验证器
+ */
+class UserEmailAuthenticatorSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 用户的 Email */
+		email: { type: String, required: true },
+		/** 是否启用 Email 身份验证器 - 非空 - 默认值：false */
+		enabled: { type: Boolean, required: true, default: false },
+		/** 系统专用字段-创建时间 - 非空 */
+		createDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-email-authenticator'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+
+	// 构造器
+	constructor() {
+		// 添加 UUID 和 secret 组合的唯一索引
+		this.schemaInstance.index({ UUID: 1, email: 1 }, { unique: true });
+	}
+}
+export const UserEmailAuthenticatorSchema = new UserEmailAuthenticatorSchemaFactory()
 
 /**
  * 用户删除 2FA 的邮箱验证码
