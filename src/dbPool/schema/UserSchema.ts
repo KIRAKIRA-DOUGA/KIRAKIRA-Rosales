@@ -373,3 +373,33 @@ class UserDeleteTotpAuthenticatorVerificationCodeSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserDeleteTotpAuthenticatorVerificationCodeSchema = new UserDeleteTotpAuthenticatorVerificationCodeSchemaFactory()
+
+/**
+ * 用户删除 2FA 的邮箱验证码
+ */
+class UserEmailAuthenticatorVerificationCodeSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 用户 ID - 非空 */
+		uid: { type: Number, required: true },
+		/** 用户的邮箱 - 非空 - 唯一 */
+		emailLowerCase: { type: String, required: true, unique: true },
+		/** 用户的验证码 - 非空 */
+		verificationCode: { type: String, required: true },
+		/** 用户的验证码过期时间 - 非空 */
+		overtimeAt: { type: Number, required: true, unique: true },
+		/** 用户今日请求的次数，用于防止滥用 - 非空 */
+		attemptsTimes: { type: Number, required: true },
+		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
+		lastRequestDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-email-authenticator-verification-code'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const UserEmailAuthenticatorVerificationCodeSchema = new UserEmailAuthenticatorVerificationCodeSchemaFactory()

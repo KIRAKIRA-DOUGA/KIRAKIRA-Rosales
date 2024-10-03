@@ -3285,6 +3285,82 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 }
 
 /**
+ * 用户创建邮箱身份验证器
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 用户创建 TOTP 身份验证器的请求响应
+ */
+export const createUserEmailAuthenticatorService = async (uuid: string, token: string): Promise<CreateUserEmailAuthenticatorResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('创建 Email 身份验证器失败，非法用户', { uuid })
+			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，非法用户' }
+		}
+
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+
+		const UserEmailAuthenticatorUserAuthWhere: QueryType<UserAuth> = { UUID: uuid }
+		const UserEmailAuthenticatorUserAuthSelect: SelectType<UserAuth> = {
+			authenticatorType: 1,
+		}
+
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(UserEmailAuthenticatorUserAuthWhere, UserEmailAuthenticatorUserAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
+
+		if (!userAuthResult.success || !userAuthResult?.result || userAuthResult.result?.length !== 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，用户不存在', { uuid })
+			return { success: false, isExists: false, message: '创建 TOTP 身份验证器失败，用户不存在' }
+		}
+
+		if (userAuthResult.result[0].authenticatorType === 'email') {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，已经开启 Email 2FA', { uuid })
+			return { success: false, isExists: true, existsAuthenticatorType: 'email', message: '创建 TOTP 身份验证器失败，已经开启 Email 2FA' }
+		}
+
+		if (userAuthResult.result[0].authenticatorType === 'email') {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 TOTP 身份验证器失败，已经开启 TOTP 2FA', { uuid })
+			return { success: false, isExists: true, existsAuthenticatorType: 'totp', message: '创建 TOTP 身份验证器失败，已经开启 TOTP 2FA' }
+		}
+
+		const updateUserEmailAuthenticatorUserAuth = {
+			authenticatorType: 'email',
+		}
+
+		const updateEmailAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuth>(UserEmailAuthenticatorUserAuthWhere, updateUserEmailAuthenticatorUserAuth, userAuthSchemaInstance, userAuthCollectionName, { session })
+
+		if (!updateEmailAuthenticatorResult.success) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 Email 身份验证器失败，保存数据失败', { uuid })
+			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，保存数据失败' }
+		}
+
+		await session.commitTransaction()
+		session.endSession()
+		return { success: true, isExists: false, message: '创建 Email 身份验证器成功' }
+	} catch (error) {
+		console.error('创建 TOTP 身份验证器失败时出错，未知错误', error)
+		return { success: false, isExists: false, message: '创建 Email 身份验证器时出错，未知错误' }
+	}
+}
+/**
  * 用户确认绑定 TOTP 设备
  * @param confirmUserTotpAuthenticatorRequest 用户确认绑定 TOTP 设备的请求载荷
  * @param uuid 用户的 UUID

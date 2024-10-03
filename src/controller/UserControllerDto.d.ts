@@ -783,6 +783,19 @@ export type DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto = {
 }
 
 /**
+ * 用户创建 Email 身份验证器的请求响应
+ */
+export type CreateUserEmailAuthenticatorResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 身份验证器是否已存在 */
+	isExists: boolean;
+	/** 如果已存在，则返回验证器的类型 */
+	existsAuthenticatorType?: 'email' | 'totp';
+	/** 附加的文本消息 */
+	message?: string;
+}
+/**
  * 用户创建 TOTP 身份验证器的请求响应
  */
 export type CreateUserTotpAuthenticatorResponseDto = {
