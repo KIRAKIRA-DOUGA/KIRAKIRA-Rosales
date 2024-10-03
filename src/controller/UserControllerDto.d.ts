@@ -64,6 +64,8 @@ export type UserLoginResponseDto = {
 	passwordHint?: string;
 	/** 附加的文本消息 */
 	message?: string;
+	/** 是否冷却 */
+	isCoolingDown?: boolean;
 	/** 身份验证器的类型 */
 	authenticatorType?: 'email' | 'totp' | 'none';
 }

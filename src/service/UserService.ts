@@ -384,7 +384,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 					if (now - lastAttemptTime < lockTime) {
 						attempts += 1
 						console.warn('用户登录失败，已达最大尝试次数，请稍后再试');
-    				return { success: false, message: '登录失败，已达最大尝试次数，请稍后再试', authenticatorType };
+    				return { success: false, message: '登录失败，已达最大尝试次数，请稍后再试', isCoolingDown: true, authenticatorType };
 					} else {
 						attempts = 0
 					}
@@ -405,7 +405,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 						}
 						session.endSession()
 						console.error('登录失败，更新最后尝试时间或尝试次数失败')
-						return { success: false, message: '登录失败，更新最后尝试时间或尝试次数失败', authenticatorType }
+						return { success: false, message: '登录失败，更新最后尝试时间或尝试次数失败', isCoolingDown: true, authenticatorType }
 					}
 				}
 
