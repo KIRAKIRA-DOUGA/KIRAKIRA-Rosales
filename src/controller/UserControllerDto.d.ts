@@ -830,6 +830,50 @@ export type ConfirmUserTotpAuthenticatorRequestDto = {
 }
 
 /**
+ * 用户确认绑定 Email 的请求载荷
+ */
+export type confirmUserEmailAuthenticatorRequestDto = {
+	/** Email */
+	email: string;
+	/** 验证码 */
+	verificationCode: string;
+}
+
+/**
+ * 用户确认绑定 Email 身份验证器的请求响应
+ */
+export type confirmUserEmailAuthenticatorResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 用户邮箱 */
+	email?: string;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 用户发送 Email 身份验证器验证邮件的请求载荷
+ */
+export type sendUserEmailAuthenticatorVerificationCodeRequestDto = {
+	/** 用户的邮箱 */
+	email: string;
+	/** 用户客户端使用的语言 */
+	clientLanguage: string;
+}
+
+/**
+ * 用户发送 Email 身份验证器验证邮件的请求响应
+ */
+export type SendUserEmailAuthenticatorVerificationCodeResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 是否达到超时时间 */
+	isCoolingDown: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
  * 用户确认绑定 TOTP 设备的请求响应
  */
 export type ConfirmUserTotpAuthenticatorResponseDto = {
