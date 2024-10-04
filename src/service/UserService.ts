@@ -19,7 +19,7 @@ import {
 	CheckUsernameResponseDto,
 	CheckUserTokenResponseDto,
 	CreateInvitationCodeResponseDto,
-	DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto,
+	DeleteTotpAuthenticatorByTotpVerificationCodeResponseDto,
 	GetBlockedUserResponseDto,
 	GetMyInvitationCodeResponseDto,
 	GetSelfUserInfoRequestDto,
@@ -59,7 +59,7 @@ import {
 	GetSelfUserInfoByUuidResponseDto,
 	GetSelfUserInfoByUuidRequestDto,
 	CreateUserTotpAuthenticatorResponseDto,
-	DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto,
+	DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
 	ConfirmUserTotpAuthenticatorResponseDto,
 	CheckUserHave2FAServiceRequestDto,
@@ -71,7 +71,7 @@ import {
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserDelete2FAAuthenticatorVerificationCodeSchema, UserEmailAuthenticatorSchema, UserEmailAuthenticatorVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserEmailAuthenticatorSchema, UserEmailAuthenticatorVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { authenticator } from 'otplib'
 
@@ -320,7 +320,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				enabled: true,
 			}
 
-			if (clientOtp.length === 8) { // 八位时是恢复码
+			if (clientOtp.length > 6) { // 大于六位时，视为恢复码进行验证
 				const userTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
 					recoveryCodeHash: 1,
 				}
@@ -328,7 +328,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				const selectResult = await selectDataFromMongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
 
 				if (!selectResult.success || selectResult.result.length !== 1) {
-					console.error('登录失败，获取验证数据失败 - 1')
+					console.error('ERROR', '登录失败，获取验证数据失败 - 1')
 					return { success: false, message: '登录失败，获取验证数据失败 - 1', authenticatorType }
 				}
 
@@ -336,7 +336,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				const isCorrectRecoveryCode = comparePasswordSync(clientOtp, recoveryCodeHash)
 
 				if (!isCorrectRecoveryCode) {
-					console.error('登录失败，恢复码错误')
+					console.error('ERROR', '登录失败，恢复码错误')
 					return { success: false, message: '登录失败，恢复码错误', authenticatorType }
 				}
 
@@ -355,15 +355,13 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('登录失败，未能删除 TOTP 2FA')
+					console.error('ERROR', '登录失败，未能删除 TOTP 2FA')
 					return { success: false, message: '登录失败，未能删除 TOTP 2FA', authenticatorType }
 				}
 
 				await session.commitTransaction()
 				session.endSession()
 				return { success: true, email, uid, token, UUID: uuid, message: '使用恢复码登录成功，您的 TOTP 2FA 已删除', authenticatorType }
-
-
 			} else {
 				const userTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
 					secret: 1,
@@ -375,7 +373,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				const selectResult = await selectDataFromMongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
 
 				if (!selectResult.success || selectResult.result.length !== 1) {
-					console.error('登录失败，获取验证数据失败 - 2')
+					console.error('ERROR', '登录失败，获取验证数据失败 - 2')
 					return { success: false, message: '登录失败，获取验证数据失败 - 2', authenticatorType }
 				}
 
@@ -389,7 +387,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 					const lastAttemptTime = new Date(selectResult.result[0].lastAttemptTime).getTime();
 					if (now - lastAttemptTime < lockTime) {
 						attempts += 1
-						console.warn('用户登录失败，已达最大尝试次数，请稍后再试');
+						console.warn('WARN', 'WARNING', '用户登录失败，已达最大尝试次数，请稍后再试');
 						return { success: false, message: '登录失败，已达最大尝试次数，请稍后再试', isCoolingDown: true, authenticatorType };
 					} else {
 						attempts = 0
@@ -410,7 +408,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 							await session.abortTransaction()
 						}
 						session.endSession()
-						console.error('登录失败，更新最后尝试时间或尝试次数失败')
+						console.error('ERROR', '登录失败，更新最后尝试时间或尝试次数失败')
 						return { success: false, message: '登录失败，更新最后尝试时间或尝试次数失败', isCoolingDown: true, authenticatorType }
 					}
 				}
@@ -430,6 +428,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 					})
 
 					if (!useCorrectBackupCode) {
+						console.error('ERROR', '登录失败，备份码不正确')
 						return { success: false, message: '登录失败，备份码不正确', authenticatorType }
 					}
 
@@ -443,6 +442,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 						lastAttemptTime: now,
 					}
 
+					// 使用备份码登录后，将除了已使用的备份码之外的备份码写回数据库（这样一来，备份码就无法被重复使用了）
 					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
 					if (!updateAuthenticatorResult.success) {
@@ -450,13 +450,13 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 							await session.abortTransaction()
 						}
 						session.endSession()
-						console.error('登录失败，更新备份码失败')
+						console.error('ERROR', '登录失败，更新备份码失败')
 						return { success: false, message: '登录失败，更新备份码失败', authenticatorType }
 					}
 
 					return { success: true, email, uid, token, UUID: uuid, message: '用户使用备用码登录成功', authenticatorType }
 				} else {
-					return { success: true, email, uid, token, UUID: uuid, message: '用户使用验证码登录成功', authenticatorType }
+					return { success: true, email, uid, token, UUID: uuid, message: '用户使用 TOTP 验证码登录成功', authenticatorType }
 				}
 			}
 		} else if (authenticatorType === 'email') {
@@ -2801,167 +2801,6 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 	}
 }
 
-/**
- * 发送删除身份验证器的邮箱验证码
- * @param sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest 发送删除身份验证器的邮箱验证码的请求载荷
- * @param uuid 用户的 UUID
- * @param token 用户的 token
- * @returns 发送删除身份验证器的邮箱验证码的请求响应
- */
-export const sendDeleteTotpAuthenticatorByEmailVerificationCodeService = async (sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest: SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto> => {
-	try {
-		if (!checkSendDeleteTotpAuthenticatorByEmailVerificationCodeRequest(sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest)) {
-			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，参数不合法')
-			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，参数不合法' }
-		}
-
-		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，用户不合法')
-			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，用户不合法' }
-		}
-
-		const getSelfUserInfoByUuidRequest = {
-			uuid,
-			token,
-		}
-		const selfUserInfoResult = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
-		const email = selfUserInfoResult.result?.email
-		if (!email) {
-			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，用户邮箱查找失败')
-			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，用户邮箱查找失败' }
-		}
-
-		const emailLowerCase = email.toLowerCase()
-		const nowTime = new Date().getTime()
-		const todayStart = new Date()
-		todayStart.setHours(0, 0, 0, 0)
-		const { clientLanguage } = sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest
-
-		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
-
-		const { collectionName, schemaInstance } = UserDelete2FAAuthenticatorVerificationCodeSchema
-		type UserDeleteTotpAuthenticatorVerificationCode = InferSchemaType<typeof schemaInstance>
-		const requestSendDeleteTotpAuthenticatorByEmailVerificationCodeWhere: QueryType<UserDeleteTotpAuthenticatorVerificationCode> = {
-			emailLowerCase,
-		}
-
-		const requestSendDeleteTotpAuthenticatorByEmailVerificationCodeSelect: SelectType<UserDeleteTotpAuthenticatorVerificationCode> = {
-			emailLowerCase: 1, // 用户邮箱
-			attemptsTimes: 1, // 验证码请求次数
-			lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
-		}
-
-		const requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult = await selectDataFromMongoDB<UserDeleteTotpAuthenticatorVerificationCode>(requestSendDeleteTotpAuthenticatorByEmailVerificationCodeWhere, requestSendDeleteTotpAuthenticatorByEmailVerificationCodeSelect, schemaInstance, collectionName, { session })
-
-		if (!requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.success) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，获取验证码失败')
-			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，获取验证码失败' }
-		}
-
-		const lastRequestDateTime = requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result?.[0]?.lastRequestDateTime ?? 0
-		if (requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result.length >= 1 && lastRequestDateTime + 55000 > nowTime) { // 是否仍在冷却，前端 60 秒，后端 55 秒
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.warn('WARN', 'WARNING', '请求发送删除身份验证器的邮箱验证码失败，未超过邮件超时时间，请稍后再试')
-			return { success: true, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码失败，未超过邮件超时时间，请稍后再试' }
-		}
-
-		const attemptsTimes = requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result?.[0]?.attemptsTimes ?? 0
-		const lastRequestDate = new Date(lastRequestDateTime)
-		if (requestSendDeleteTotpAuthenticatorByEmailVerificationCodeResult.result.length >= 1 && todayStart < lastRequestDate && attemptsTimes > 5) { // ! 每天五次机会
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.warn('WARN', 'WARNING', '请求发送删除身份验证器的邮箱验证码失败，已达本日重复次数上限，请稍后再试')
-			return { success: true, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码失败，已达本日重复次数上限，请稍后再试' }
-		}
-
-		const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
-		let newAttemptsTimes = attemptsTimes + 1
-		if (todayStart > lastRequestDate) {
-			newAttemptsTimes = 0
-		}
-
-		const requestSeDeleteTotpAuthenticatorVerificationCodeUpdate: UpdateType<UserDeleteTotpAuthenticatorVerificationCode> = {
-			emailLowerCase,
-			verificationCode,
-			overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
-			attemptsTimes: newAttemptsTimes,
-			lastRequestDateTime: nowTime,
-			editDateTime: nowTime,
-		}
-
-		const updateResult = await findOneAndUpdateData4MongoDB(requestSendDeleteTotpAuthenticatorByEmailVerificationCodeWhere, requestSeDeleteTotpAuthenticatorVerificationCodeUpdate, schemaInstance, collectionName, { session })
-
-		if (!updateResult.success) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，更新或新增用户验证码失败')
-			return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码失败，更新或新增用户验证码失败' }
-		}
-
-		// TODO: 使用多语言 email title and text
-		try {
-			const mailTitleCHS = 'KIRAKIRA - 删除 2FA 的验证码'
-			const mailTitleEN = 'KIRAKIRA - Verification Code For Delete 2FA'
-			const correctMailTitle = clientLanguage === 'zh-Hans-CN' ? mailTitleCHS : mailTitleEN
-
-			// 请不要使用 “您”
-			const mailHtmlCHS = `
-					<p>删除 2FA 的确认验证码是：<strong>${verificationCode}</strong></p>
-					注意：你可以使用这个验证码来删除您的 2FA（二重身份验证器），这会导致您的账户更容易遭到攻击！
-					<br>
-					验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。
-				`
-			const mailHtmlEN = `
-					<p>Your verification code for delete Authenticator is: <strong>${verificationCode}</strong></p>
-					Note: Please make sure you will use this verification code to delete your Authenticator.
-					<br>
-					Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.
-					<br>
-					<br>
-					To stop receiving notifications, please contact the KIRAKIRA support team.
-				`
-			const correctMailHTML = clientLanguage === 'zh-Hans-CN' ? mailHtmlCHS : mailHtmlEN
-
-			const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
-			if (!sendMailResult.success) {
-				if (session.inTransaction()) {
-					await session.abortTransaction()
-				}
-				session.endSession()
-				console.error('ERROR', '请求发送删除身份验证器的邮箱验证码失败，邮件发送失败')
-				return { success: false, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码失败，邮件发送失败' }
-			}
-
-			await session.commitTransaction()
-			session.endSession()
-			return { success: true, isCoolingDown: false, message: '删除身份验证器的邮箱验证码已发送至您注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
-		} catch (error) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('ERROR', '请求发送删除身份验证器的邮箱验证码时出错，邮件发送时出错', error)
-			return { success: false, isCoolingDown: true, message: '请求发送删除身份验证器的邮箱验证码时出错，邮件发送时出错' }
-		}
-	} catch (error) {
-		console.error('ERROR', '请求发送删除身份验证器的邮箱验证码时出错，未知错误', error)
-		return { success: false, isCoolingDown: false, message: '请求发送删除身份验证器的邮箱验证码时出错，未知错误' }
-	}
-}
-
 /** 通过恢复码删除用户 2FA 的参数 */
 type DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
 	/** 用户邮箱 */
@@ -2973,7 +2812,7 @@ type DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
 }
 
 /** 通过恢复码删除用户 2FA 的结果 */
-type DeleteTotpAuthenticatorByRecoveryCodeResultDto = {} & DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto
+type DeleteTotpAuthenticatorByRecoveryCodeResultDto = {} & DeleteTotpAuthenticatorByTotpVerificationCodeResponseDto
 
 /**
  * 通过恢复码删除用户 2FA，只能在登录时使用
@@ -3028,29 +2867,31 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 }
 
 /**
- * 已登录用户通过密码和邮箱验证码删除身份验证器
- * @param deleteTotpAuthenticatorByEmailVerificationCodeRequest 登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
+ * 已登录用户通过密码和 TOTP 验证码删除身份验证器
+ * @param deleteTotpAuthenticatorByTotpVerificationCodeRequest 登录用户通过密码和 TOTP 验证码删除身份验证器的请求载荷
  * @param uuid 用户的 UUID
  * @param token 用户的 token
  * @returns 删除操作的结果
  */
-export const deleteTotpAuthenticatorByEmailVerificationCodeService = async (deleteTotpAuthenticatorByEmailVerificationCodeRequest: DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto> => {
+export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (deleteTotpAuthenticatorByTotpVerificationCodeRequest: DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto, uuid: string, token: string): Promise<DeleteTotpAuthenticatorByTotpVerificationCodeResponseDto> => {
 	try {
-		if (!checkDeleteTotpAuthenticatorByEmailVerificationCodeRequest(deleteTotpAuthenticatorByEmailVerificationCodeRequest)) {
-			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败，参数不合法')
-			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器验证器失败，参数不合法' }
+		if (!checkDeleteTotpAuthenticatorByTotpVerificationCodeRequest(deleteTotpAuthenticatorByTotpVerificationCodeRequest)) {
+			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，参数不合法')
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器验证器失败，参数不合法' }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败，用户校验未通过')
-			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器验证器失败，用户校验未通过' }
+			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户校验未通过')
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器验证器失败，用户校验未通过' }
 		}
 
 		const session = await mongoose.startSession()
 		session.startTransaction()
 
 		const now = new Date().getTime()
-		const { verificationCode, passwordHash } = deleteTotpAuthenticatorByEmailVerificationCodeRequest
+		const { clientOtp, passwordHash } = deleteTotpAuthenticatorByTotpVerificationCodeRequest
+		const maxAttempts	 = 5
+		const lockTime = 60 * 60 * 1000
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
@@ -3063,58 +2904,85 @@ export const deleteTotpAuthenticatorByEmailVerificationCodeService = async (dele
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
 		const passwordHashHash = userAuthResult.result?.[0]?.passwordHashHash
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
-			console.error('ERROR', `已登录用户通过密码和邮箱验证码删除身份验证器失败，无法查询到用户安全信息`)
-			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败，无法查询到用户安全信息' }
+			console.error('ERROR', `已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息`)
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息' }
 		}
 
 		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash)
 		if (!isCorrectPassword) {
-			console.error('ERROR', `已登录用户通过密码和邮箱验证码删除身份验证器失败，无法查询到用户安全信息`)
-			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败，用户密码不正确' }
-		}
-
-		const getSelfUserInfoByUuidRequest = {
-			uuid,
-			token,
-		}
-		const selfUserInfoResult = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
-		const email = selfUserInfoResult.result?.email
-		if (!email) {
-			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败，用户邮箱查找失败')
-			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败，用户邮箱查找失败' }
-		}
-
-		const emailLowerCase = email.toLowerCase()
-
-		const { collectionName: userDeleteTotpAuthenticatorVerificationCodeCollectionName, schemaInstance: userDeleteTotpAuthenticatorVerificationCodeSchemaInstance } = UserDelete2FAAuthenticatorVerificationCodeSchema
-
-		type UserDeleteTotpAuthenticatorVerificationCode = InferSchemaType<typeof userDeleteTotpAuthenticatorVerificationCodeSchemaInstance>
-		const checkDeleteTotpAuthenticatorEmailVerificationCodeWhere: QueryType<UserDeleteTotpAuthenticatorVerificationCode> = {
-			emailLowerCase,
-			verificationCode,
-			overtimeAt: { $gte: now },
-		}
-		const checkDeleteTotpAuthenticatorEmailVerificationCodeSelect: SelectType<UserDeleteTotpAuthenticatorVerificationCode> = {
-			emailLowerCase: 1, // 用户邮箱
-		}
-
-		const checkDeleteAuthenticatorEmailVerificationCodeResult = await selectDataFromMongoDB<UserDeleteTotpAuthenticatorVerificationCode>(checkDeleteTotpAuthenticatorEmailVerificationCodeWhere, checkDeleteTotpAuthenticatorEmailVerificationCodeSelect, userDeleteTotpAuthenticatorVerificationCodeSchemaInstance, userDeleteTotpAuthenticatorVerificationCodeCollectionName, { session })
-
-		if (!checkDeleteAuthenticatorEmailVerificationCodeResult.success || checkDeleteAuthenticatorEmailVerificationCodeResult.result?.length !== 1) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败：邮箱验证码验证失败')
-			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败：邮箱验证码验证失败' }
+			console.error('ERROR', `已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息`)
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确' }
 		}
 
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
-		const deleteTotpAuthenticatorByEmailVerificationCodeWhere: QueryType<UserTotpAuthenticator> = { UUID: uuid }
+		const deleteTotpAuthenticatorByTotpVerificationCodeWhere: QueryType<UserTotpAuthenticator> = {
+			UUID: uuid,
+			enabled: true,
+		}
+		const deleteTotpAuthenticatorByTotpVerificationCodeSelect: SelectType<UserTotpAuthenticator> = {
+			secret: 1,
+			backupCodeHash: 1,
+			lastAttemptTime: 1,
+			attempts: 1,
+		}
+
+		const selectResult = await selectDataFromMongoDB<UserTotpAuthenticator>(deleteTotpAuthenticatorByTotpVerificationCodeWhere, deleteTotpAuthenticatorByTotpVerificationCodeSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		if (!selectResult.success || selectResult.result.length !== 1) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据')
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据' }
+		}
+
+		let attempts = selectResult.result[0].attempts
+		const totpSecret = selectResult.result[0].secret
+
+		// 限制用户尝试删除的频率
+		if (selectResult.result[0].attempts >= maxAttempts) {
+			const lastAttemptTime = new Date(selectResult.result[0].lastAttemptTime).getTime();
+			if (now - lastAttemptTime < lockTime) {
+				attempts += 1
+
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.warn('WARN', 'WARNING', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，已达最大尝试次数，请稍后再试');
+				return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，已达最大尝试次数，请稍后再试', isCoolingDown: true }
+			} else {
+				attempts = 0
+			}
+
+			const deleteTotpAuthenticatorByTotpVerificationCodeUpdate: UpdateType<UserTotpAuthenticator> = {
+				attempts: attempts,
+				lastAttemptTime: now,
+			}
+			const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(deleteTotpAuthenticatorByTotpVerificationCodeWhere, deleteTotpAuthenticatorByTotpVerificationCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+
+			if (!updateAuthenticatorResult.success) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，更新最后尝试时间或尝试次数失败');
+				return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，更新最后尝试时间或尝试次数失败', isCoolingDown: true }
+			}
+		}
+
+		if (!authenticator.check(clientOtp, totpSecret)) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('ERROR', '已登录用户通过密码和邮 TOTP 证码删除身份验证器失败：删除失败，验证码错误')
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，验证码错误' }
+		}
 
 		// 调用删除函数
-		const deleteResult = await deleteDataFromMongoDB(deleteTotpAuthenticatorByEmailVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		const deleteResult = await deleteDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 		const resetResult = await restUser2FATypeByUUID(uuid, session)
 
 		if (!deleteResult.success || deleteResult.result.deletedCount !== 1 || !resetResult) {
@@ -3122,16 +2990,16 @@ export const deleteTotpAuthenticatorByEmailVerificationCodeService = async (dele
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('ERROR', '已登录用户通过密码和邮箱验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败')
-			return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败' }
+			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败')
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败' }
 		}
 
 		await session.commitTransaction()
 		session.endSession()
-		return { success: true, message: '删除身份验证器成功' }
+		return { success: true, message: '删除 TOTP 身份验证器成功' }
 	} catch (error) {
-		console.error('已登录用户通过密码和邮箱验证码删除身份验证器失败时出错，未知错误', error)
-		return { success: false, message: '已登录用户通过密码和邮箱验证码删除身份验证器失败时出错，未知错误' }
+		console.error('已登录用户通过密码和 TOTP 验证码删除身份验证器失败时出错，未知错误', error)
+		return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败时出错，未知错误' }
 	}
 }
 
@@ -4135,12 +4003,12 @@ const checkDeleteTotpAuthenticatorByRecoveryCodeData = (deleteTotpAuthenticatorB
 }
 
 /**
- * 检查已登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
- * @param deleteAuthenticatorByEmailVerificationCodeRequest 已登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
+ * 检查已登录用户通过密码和 TOTP 验证码删除身份验证器的请求载荷
+ * @param deleteAuthenticatorByTotpVerificationCodeRequest 已登录用户通过密码和 TOTP 验证码删除身份验证器的请求载荷
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
-const checkDeleteTotpAuthenticatorByEmailVerificationCodeRequest = (deleteTotpAuthenticatorByEmailVerificationCodeRequest: DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto) => {
-	return (!!deleteTotpAuthenticatorByEmailVerificationCodeRequest.verificationCode && !!deleteTotpAuthenticatorByEmailVerificationCodeRequest.passwordHash)
+const checkDeleteTotpAuthenticatorByTotpVerificationCodeRequest = (deleteTotpAuthenticatorByTotpVerificationCodeRequest: DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto) => {
+	return (!!deleteTotpAuthenticatorByTotpVerificationCodeRequest.clientOtp && !!deleteTotpAuthenticatorByTotpVerificationCodeRequest.passwordHash)
 }
 
 /**

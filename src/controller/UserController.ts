@@ -29,8 +29,7 @@ import {
 	getUserUuid,
 	createUserTotpAuthenticatorService,
 	confirmUserTotpAuthenticatorService,
-	sendDeleteTotpAuthenticatorByEmailVerificationCodeService,
-	deleteTotpAuthenticatorByEmailVerificationCodeService,
+	deleteTotpAuthenticatorByTotpVerificationCodeService,
 	checkUserHave2FAByEmailService,
 	checkUserHave2FAByUUIDService,
 } from '../service/UserService.js'
@@ -44,7 +43,7 @@ import {
 	CheckUserHave2FAServiceRequestDto,
 	CheckUsernameRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
-	DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto,
+	DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto,
 	GetSelfUserInfoRequestDto,
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
@@ -161,37 +160,20 @@ export const confirmUserTotpAuthenticatorController = async (ctx: koaCtx, next: 
 }
 
 /**
- * 已登录用户请求发送删除身份验证器的邮箱验证码
+ * 已登录用户通过密码和 TOTP 验证码删除身份验证器
  * @param ctx context
  * @param next context
- * @returns 已登录用户请求发送删除身份验证器的邮箱验证码的请求响应
+ * @returns 已登录用户通过密码和 TOTP 验证码删除身份验证器的请求响应
  */
-export const sendDeleteTotpAuthenticatorByEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto>
-	const sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest: SendDeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
-		clientLanguage: data.clientLanguage,
-	}
-	const uuid = ctx.cookies.get('uuid')
-	const token = ctx.cookies.get('token')
-	ctx.body = await sendDeleteTotpAuthenticatorByEmailVerificationCodeService(sendDeleteTotpAuthenticatorByEmailVerificationCodeRequest, uuid, token)
-	await next()
-}
-
-/**
- * 已登录用户通过密码和邮箱验证码删除身份验证器
- * @param ctx context
- * @param next context
- * @returns 已登录用户通过密码和邮箱验证码删除身份验证器的请求响应
- */
-export const deleteTotpAuthenticatorByEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto>
-	const deleteTotpAuthenticatorByEmailVerificationCodeRequest: DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
-		verificationCode: data.verificationCode || '',
+export const deleteTotpAuthenticatorByTotpVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto>
+	const deleteTotpAuthenticatorByTotpVerificationCodeRequest: DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto = {
+		clientOtp: data.clientOtp || '',
 		passwordHash: data.passwordHash || '',
 	}
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await deleteTotpAuthenticatorByEmailVerificationCodeService(deleteTotpAuthenticatorByEmailVerificationCodeRequest, uuid, token)
+	ctx.body = await deleteTotpAuthenticatorByTotpVerificationCodeService(deleteTotpAuthenticatorByTotpVerificationCodeRequest, uuid, token)
 	await next()
 }
 

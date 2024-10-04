@@ -763,11 +763,11 @@ export type SendDeleteTotpAuthenticatorByEmailVerificationCodeResponseDto = {
 }
 
 /**
- * 已登录用户通过密码和邮箱验证码删除身份验证器的请求载荷
+ * 已登录用户通过密码和 TOTP 验证码删除身份验证器的请求载荷
  */
-export type DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
-	/** 验证码 */
-	verificationCode: string,
+export type DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto = {
+	/** 用户的 TOTP 验证器中的验证码 */
+	clientOtp: string,
 	/** 被哈希一次的密码 */
 	passwordHash: string,
 }
@@ -775,11 +775,13 @@ export type DeleteTotpAuthenticatorByEmailVerificationCodeRequestDto = {
 /**
  * 已登录用户通过密码和邮箱验证码删除用户的身份验证器的请求响应
  */
-export type DeleteTotpAuthenticatorByEmailVerificationCodeResponseDto = {
+export type DeleteTotpAuthenticatorByTotpVerificationCodeResponseDto = {
 	/** 执行结果 */
 	success: boolean;
 	/** 附加的文本消息 */
 	message?: string;
+	/** 是否正在冷却中 */
+	isCoolingDown?: boolean;
 }
 
 /**

@@ -33,8 +33,7 @@ import {
 	getUserInvitationCodeController,
 	createUserTotpAuthenticatorController,
 	checkUserHave2FAByEmailController,
-	deleteTotpAuthenticatorByEmailVerificationCodeController,
-	sendDeleteTotpAuthenticatorByEmailVerificationCodeController,
+	deleteTotpAuthenticatorByTotpVerificationCodeController,
 	confirmUserTotpAuthenticatorController,
 	checkUserHave2FAByUUIDController,
 } from '../controller/UserController.js'
@@ -85,11 +84,12 @@ router.post('/user/confirmUserTotpAuthenticator', confirmUserTotpAuthenticatorCo
 // 	"otpAuth": "XXXXXXXXXXXXXXXXX"
 // }
 
-router.delete('/user/deleteUserAuthenticator', deleteTotpAuthenticatorByEmailVerificationCodeController) // 已登录用户通过密码和邮箱验证码删除身份验证器
+router.delete('/user/deleteUserAuthenticator', deleteTotpAuthenticatorByTotpVerificationCodeController) // 已登录用户通过密码和 TOTP 验证码删除 TOTP 身份验证器
 // https://localhost:9999/user/deleteUserAuthenticator
 // cookie: uuid, token
 // {
-//   "verificationCode": "XXXXXX",
+//   "clientOtp": "XXXXXX",
+//   "passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXX",
 // }
 
 router.get('/user/checkUserHave2FAByEmail', checkUserHave2FAByEmailController) // 通过 Email 检查用户是否已开启 2FA 身份验证器
@@ -101,13 +101,6 @@ router.get('/user/checkUserHave2FAByEmail', checkUserHave2FAByEmailController) /
 router.get('/user/checkUserHave2FAByUUID', checkUserHave2FAByUUIDController) // 通过 UUID 检查用户是否已开启 2FA 身份验证器
 // https://localhost:9999/user/checkUserHave2FAByUUID
 // cookie: uuid, token
-
-router.post('/user/sendDeleteTotpAuthenticatorByEmailVerificationCode', sendDeleteTotpAuthenticatorByEmailVerificationCodeController) // 已登录用户请求发送删除身份验证器的邮箱验证码
-// https://localhost:9999/user/sendDeleteTotpAuthenticatorByEmailVerificationCode
-// cookie: uuid, token
-// {
-// 	"clientLanguage": "zh-Hans-CN"
-// }
 
 router.get('/user/existsCheck', userExistsCheckController) // 注册用户时检查用户是否存在
 // https://localhost:9999/user/existsCheck?email=xxxxxxx
