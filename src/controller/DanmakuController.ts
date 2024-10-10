@@ -15,10 +15,6 @@ export const emitDanmakuController = async (ctx: koaCtx, next: koaNext) => {
 	const emitDanmakuRequest: EmitDanmakuRequestDto = {
 		/** 非空 - KVID 视频 ID */
 		videoId: data.videoId,
-		/** 非空 - 用户 UUID */
-		uuid: data.uuid,
-		/** 非空 - 用户 UID */
-		uid: data.uid,
 		/** 非空 - 弹幕发送的时机，单位：秒（支持小数） */
 		time: data.time,
 		/** 非空 - 弾幕文本 */
