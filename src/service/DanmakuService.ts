@@ -139,7 +139,7 @@ const checkEmitDanmakuRequest = (emitDanmakuRequest: EmitDanmakuRequestDto): boo
 		console.error('ERROR', '发送弹幕出错，弹幕数据非法：弹幕模式为空或格式错误', emitDanmakuRequest)
 		return false
 	}
-	if (!emitDanmakuRequest.text || !emitDanmakuRequest.time || !emitDanmakuRequest.videoId) {
+	if (!emitDanmakuRequest.text || emitDanmakuRequest.time === undefined || emitDanmakuRequest.time === null || !emitDanmakuRequest.videoId) {
 		console.error('ERROR', '发送弹幕出错，弹幕数据非法：必要的请求参数为空或格式错误', emitDanmakuRequest)
 		return false
 	}
