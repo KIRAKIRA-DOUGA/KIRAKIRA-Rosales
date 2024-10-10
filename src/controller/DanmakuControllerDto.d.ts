@@ -15,7 +15,7 @@ type BasicDanmakuDto = {
 	/** 非空 - 弾幕颜色 */
 	color: string;
 	/** 非空 - 弹幕字体大小，后端只存储三种数据，在前端再映射为 css 可用的像素值 */
-	fontSIze: 'small' | 'medium' | 'large';
+	fontSize: 'small' | 'medium' | 'large';
 	/** 非空 - 弹幕发射模式，默认 'rtl' —— 从右舷向左发射 */
 	mode: 'ltr' | 'rtl' | 'top' | 'bottom';
 	/** 非空 - 是否启用彩虹弹幕，默认不启用 */
