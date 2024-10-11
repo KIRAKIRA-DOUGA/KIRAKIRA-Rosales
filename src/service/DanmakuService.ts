@@ -1,5 +1,5 @@
 import { InferSchemaType } from 'mongoose'
-import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidRequestDto, GetDanmakuByKvidResponseDto } from '../controller/DanmakuControllerDto.js'
+import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidDto, GetDanmakuByKvidRequestDto, GetDanmakuByKvidResponseDto } from '../controller/DanmakuControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { DanmakuSchema } from '../dbPool/schema/DanmakuSchema.js'
@@ -31,7 +31,7 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 				type Danmaku = InferSchemaType<typeof schemaInstance>
 				const nowDate = new Date().getTime()
 				const danmaku: Danmaku = {
-					uuid,
+					UUID: uuid,
 					uid,
 					...emitDanmakuRequest,
 					editDateTime: nowDate,
@@ -75,20 +75,23 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 
 			const select: SelectType<Danmaku> = {
 				videoId: 1,
-				uuid: 1,
+				UUID: 1,
 				uid: 1,
 				time: 1,
 				text: 1,
 				color: 1,
-				fontSIze: 1,
+				fontSize: 1,
 				mode: 1,
 				enableRainbow: 1,
 				editDateTime: 1,
 			}
 
 			try {
-				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
-				const danmakuList = result.result
+				const result = await selectDataFromMongoDB<Danmaku>(where, select, schemaInstance, collectionName)
+				const danmakuList = result.result?.map(danmaku => {
+					const fontSize = danmaku.fontSize === 'small' || danmaku.fontSize === 'medium' || danmaku.fontSize === 'large' ? danmaku.fontSize : 'medium'
+					return { ...danmaku, uuid: danmaku.UUID, fontSize: fontSize } as GetDanmakuByKvidDto
+				})
 				if (result.success) {
 					if (danmakuList && danmakuList.length > 0) {
 						return { success: true, message: '获取弹幕列表成功', danmaku: danmakuList }
@@ -128,7 +131,7 @@ const checkEmitDanmakuRequest = (emitDanmakuRequest: EmitDanmakuRequestDto): boo
 		console.error('ERROR', '发送弹幕出错，弹幕数据非法：是否启用彩虹弹幕为空或格式错误', emitDanmakuRequest)
 		return false
 	}
-	if (!emitDanmakuRequest.fontSIze || !(['small', 'medium', 'large'].includes(emitDanmakuRequest.fontSIze))) {
+	if (!emitDanmakuRequest.fontSize || !(['small', 'medium', 'large'].includes(emitDanmakuRequest.fontSize))) {
 		console.error('ERROR', '发送弹幕出错，弹幕数据非法：字体大小为空或格式错误', emitDanmakuRequest)
 		return false
 	}
@@ -136,7 +139,7 @@ const checkEmitDanmakuRequest = (emitDanmakuRequest: EmitDanmakuRequestDto): boo
 		console.error('ERROR', '发送弹幕出错，弹幕数据非法：弹幕模式为空或格式错误', emitDanmakuRequest)
 		return false
 	}
-	if (!emitDanmakuRequest.text || !emitDanmakuRequest.time || !emitDanmakuRequest.videoId) {
+	if (!emitDanmakuRequest.text || emitDanmakuRequest.time === undefined || emitDanmakuRequest.time === null || !emitDanmakuRequest.videoId) {
 		console.error('ERROR', '发送弹幕出错，弹幕数据非法：必要的请求参数为空或格式错误', emitDanmakuRequest)
 		return false
 	}

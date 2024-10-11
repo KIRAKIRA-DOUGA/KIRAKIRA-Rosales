@@ -15,10 +15,6 @@ export const emitDanmakuController = async (ctx: koaCtx, next: koaNext) => {
 	const emitDanmakuRequest: EmitDanmakuRequestDto = {
 		/** 非空 - KVID 视频 ID */
 		videoId: data.videoId,
-		/** 非空 - 用户 UUID */
-		uuid: data.uuid,
-		/** 非空 - 用户 UID */
-		uid: data.uid,
 		/** 非空 - 弹幕发送的时机，单位：秒（支持小数） */
 		time: data.time,
 		/** 非空 - 弾幕文本 */
@@ -26,7 +22,7 @@ export const emitDanmakuController = async (ctx: koaCtx, next: koaNext) => {
 		/** 非空 - 弾幕颜色 */
 		color: data.color,
 		/** 非空 - 弹幕字体大小，后端只存储三种数据，在前端再根据类型映射为 css 可用的像素 */
-		fontSIze: data.fontSIze,
+		fontSize: data.fontSize,
 		/** 非空 - 弹幕发射模式，默认 'rtl' —— 从右舷向左发射 */
 		mode: data.mode,
 		/** 非空 - 是否启用彩虹弹幕，默认不启用 */
