@@ -74,6 +74,7 @@ router.post('/user/login', userLoginController) // 用户登录
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 // 	"clientOtp": "XXXXXX" //非必须
+//  "verificationCode": "XXXXXX" //非必须
 // }
 
 router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorController) // 用户创建 TOTP 身份验证器

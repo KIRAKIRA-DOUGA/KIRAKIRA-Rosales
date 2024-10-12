@@ -44,6 +44,8 @@ export type UserLoginRequestDto = {
 	passwordHash: string;
 	/** 用户输入的一次性验证码 */
 	clientOtp?: string;
+	/** 用户输入的邮箱验证码 */
+	verificationCode?: string;
 }
 
 /**

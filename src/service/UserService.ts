@@ -460,7 +460,28 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				}
 			}
 		} else if (authenticatorType === 'email') {
-			// TODO: email 2FA login
+
+			const { verificationCode } = userLoginRequest
+			if (!verificationCode) {
+				console.error('ERROR', '登录失败，启用了邮箱验证但用户未提供验证码')
+				return { success: false, message: '登录失败，启用了邮箱验证但用户未提供验证码', authenticatorType }
+			}
+
+			if (verificationCode.length !== 6) {
+				console.error('ERROR', '登录失败，验证码长度错误')
+				return { success: false, message: '登录失败，验证码长度错误', authenticatorType }
+			}
+
+			const checkVerificationCodeData = {
+				email: emailLowerCase,
+				verificationCode: verificationCode
+			}
+
+			if (!(await checkEmailAuthenticatorVerificationCodeService(checkVerificationCodeData)).success) {
+				console.error('ERROR', '登录失败，验证码错误')
+				return { success: false, message: '登录失败，验证码错误', authenticatorType }
+			}
+			
 			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
 		} else {
 			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType: 'none' }
