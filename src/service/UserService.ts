@@ -3376,32 +3376,16 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 /**
  * 用户发送 Email 身份验证器验证邮件
  * @param sendUserEmailAuthenticatorRequestDto 用户发送 Email 身份验证器验证邮件的请求载荷
- * @param uuid 用户的 UUID
- * @param token 用户的 token
  * @returns 用户发送 Email 身份验证器验证邮件的请求响应
  */
-export const sendUserEmailAuthenticatorService = async (sendUserEmailAuthenticatorVerificationCodeRequest: sendUserEmailAuthenticatorVerificationCodeRequestDto, uuid: string, token: string): Promise<SendUserEmailAuthenticatorVerificationCodeResponseDto> => {
+export const sendUserEmailAuthenticatorService = async (sendUserEmailAuthenticatorVerificationCodeRequest: sendUserEmailAuthenticatorVerificationCodeRequestDto): Promise<SendUserEmailAuthenticatorVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendDeleteTotpAuthenticatorByEmailVerificationCodeRequest(sendUserEmailAuthenticatorVerificationCodeRequest)) {
 			console.error('ERROR', '请求发送身份验证器的邮箱验证码失败，参数不合法')
 			return { success: false, isCoolingDown: false, message: '请求发送身份验证器的邮箱验证码失败，参数不合法' }
 		}
 
-		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('ERROR', '请求发送身份验证器的邮箱验证码失败，用户不合法')
-			return { success: false, isCoolingDown: false, message: '请求发送身份验证器的邮箱验证码失败，用户不合法' }
-		}
-
-		const getSelfUserInfoByUuidRequest = {
-			uuid,
-			token,
-		}
-		const selfUserInfoResult = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
-		const email = selfUserInfoResult.result?.email
-		if (!email) {
-			console.error('ERROR', '请求发送身份验证器的邮箱验证码失败，用户邮箱查找失败')
-			return { success: false, isCoolingDown: false, message: '请求发送身份验证器的邮箱验证码失败，用户邮箱查找失败' }
-		}
+		const { email } = sendUserEmailAuthenticatorVerificationCodeRequest
 
 		const emailLowerCase = email.toLowerCase()
 		const nowTime = new Date().getTime()

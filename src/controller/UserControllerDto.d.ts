@@ -893,7 +893,7 @@ export type ConfirmUserTotpAuthenticatorResponseDto = {
 }
 
 /**
- * 检查 2FA 是否开启的请求在和
+ * 检查 2FA 是否开启的请求载荷
  */
 export type CheckUserHave2FAServiceRequestDto = {
 	/** 用户的邮箱 */

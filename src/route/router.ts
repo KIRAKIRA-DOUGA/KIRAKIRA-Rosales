@@ -36,6 +36,9 @@ import {
 	deleteTotpAuthenticatorByTotpVerificationCodeController,
 	confirmUserTotpAuthenticatorController,
 	checkUserHave2FAByUUIDController,
+	createUserEmailAuthenticatorController,
+	sendUserEmailAuthenticatorController,
+	checkEmailAuthenticatorVerificationCodeController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
@@ -76,6 +79,24 @@ router.post('/user/login', userLoginController) // 用户登录
 router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorController) // 用户创建 TOTP 身份验证器
 // https://localhost:9999/user/createTotpAuthenticator
 // cookie: uuid, token
+
+router.post('/user/createEmailAuthenticator', createUserEmailAuthenticatorController) // 用户创建 Email 身份验证器
+// https://localhost:9999/user/createEmailAuthenticator
+// cookie: uuid, token
+
+router.post('/user/sendUserEmailAuthenticator', sendUserEmailAuthenticatorController) // 用户发送 Email 身份验证器验证码
+// https://localhost:9999/user/sendUserEmailAuthenticator
+// {
+// 	 "email": "aaa@aaa.aaa",
+//   "clientLanguage": "zh-Hans-CN",
+// 	 "verificationCode": "ZZZZZZ"
+// }
+
+router.post('/user/checkEmailAuthenticatorVerificationCode', checkEmailAuthenticatorVerificationCodeController) // 检查 Email 身份验证器验证码是否正确
+// {
+// 	 "email": "aaa@aaa.aaa",
+// 	 "verificationCode": "ZZZZZZ"
+// }
 
 router.post('/user/confirmUserTotpAuthenticator', confirmUserTotpAuthenticatorController) // 用户确认绑定 TOTP 设备
 // https://localhost:9999/user/confirmUserTotpAuthenticator

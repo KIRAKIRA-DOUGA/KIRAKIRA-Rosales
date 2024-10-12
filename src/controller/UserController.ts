@@ -32,6 +32,9 @@ import {
 	deleteTotpAuthenticatorByTotpVerificationCodeService,
 	checkUserHave2FAByEmailService,
 	checkUserHave2FAByUUIDService,
+	createUserEmailAuthenticatorService,
+	sendUserEmailAuthenticatorService,
+	checkEmailAuthenticatorVerificationCodeService,
 } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import {
@@ -42,6 +45,7 @@ import {
 	CheckInvitationCodeRequestDto,
 	CheckUserHave2FAServiceRequestDto,
 	CheckUsernameRequestDto,
+	confirmUserEmailAuthenticatorRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
 	DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto,
 	GetSelfUserInfoRequestDto,
@@ -137,6 +141,54 @@ export const createUserTotpAuthenticatorController = async (ctx: koaCtx, next: k
 	const token = ctx.cookies.get('token')
 	const result = await createUserTotpAuthenticatorService(uuid, token)
 	ctx.body = result
+	await next()
+}
+
+/**
+ * 用户创建 Email 身份验证器
+ * @param ctx context
+ * @param next context
+ * @returns CreateUserEmailAuthenticatorResponseDto 创建结果
+ */
+export const createUserEmailAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const result = await createUserEmailAuthenticatorService(uuid,token)
+	ctx.body = result
+	await next()
+}
+
+/**
+ * 请求发送验证码，用于登录时验证身份验证器
+ * @param ctx context
+ * @param next context
+ */
+export const sendUserEmailAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+
+	const requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto = {
+		email: data.email || '',
+		clientLanguage: data.clientLanguage,
+	}
+
+	ctx.body = await sendUserEmailAuthenticatorService(requestSendVerificationCodeRequest)
+	await next()
+}
+
+/**
+ * 验证 Email 身份验证器的验证码是否正确
+ * @param ctx context
+ * @param next context
+ */
+export const checkEmailAuthenticatorVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<confirmUserEmailAuthenticatorRequestDto>
+
+	const checkSendVerificationCodeRequest: confirmUserEmailAuthenticatorRequestDto = {
+		email: data.email || '',
+		verificationCode: data.verificationCode,
+	}
+
+	ctx.body = await checkEmailAuthenticatorVerificationCodeService(checkSendVerificationCodeRequest)
 	await next()
 }
 
