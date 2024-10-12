@@ -832,7 +832,7 @@ export type ConfirmUserTotpAuthenticatorRequestDto = {
 }
 
 /**
- * 用户确认绑定 Email 的请求载荷
+ * 用户验证邮箱身份验证器的请求载荷
  */
 export type confirmUserEmailAuthenticatorRequestDto = {
 	/** Email */
@@ -842,7 +842,7 @@ export type confirmUserEmailAuthenticatorRequestDto = {
 }
 
 /**
- * 用户确认绑定 Email 身份验证器的请求响应
+ * 用户验证邮箱身份验证器的请求响应
  */
 export type confirmUserEmailAuthenticatorResponseDto = {
 	/** 执行结果 */

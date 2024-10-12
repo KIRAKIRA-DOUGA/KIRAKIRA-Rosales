@@ -3148,7 +3148,6 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 
 /**
  * 用户创建 Email 身份验证器服务
- * 这里只是创建，然后还有一个确认创建的步骤。
  * @param uuid 用户的 UUID
  * @param token 用户的 token
  * @returns 用户创建 Email 身份验证器的请求响应
@@ -3234,22 +3233,39 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		// 准备要插入的身份验证器数据
 		const userAuthenticatorData: UserAuthenticator = {
 			UUID: uuid,
-			enabled: false,
+			enabled: true,
 			email: email,
 			createDateTime: now,
 			editDateTime: now,
 		}
 
 		// 插入数据到数据库
-		const saveTotpAuthenticatorResult = await insertData2MongoDB<UserAuthenticator>(userAuthenticatorData, userEmailAuthenticatorSchemaInstance, UserEmailAuthenticatorCollectionName, { session })
+		const saveEmailAuthenticatorResult = await insertData2MongoDB<UserAuthenticator>(userAuthenticatorData, userEmailAuthenticatorSchemaInstance, UserEmailAuthenticatorCollectionName, { session })
 
-		if (!saveTotpAuthenticatorResult.success) {
+		if (!saveEmailAuthenticatorResult.success) {
 			if (session.inTransaction()) {
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('创建 Email 身份验证器失败，保存数据失败', { uuid })
-			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，保存数据失败' }
+			console.error('创建 Email 身份验证器失败，保存数据失败-1', { uuid })
+			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，保存数据失败-1' }
+		}
+		const userAuthWhere: QueryType<UserAuth> = {
+			UUID: uuid,
+		}
+		const userAuthUpdate: UpdateType<UserAuth> = {
+			authenticatorType: 'email',
+			editDateTime: now,
+		}
+		const updateUserAuthResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userAuthWhere, userAuthUpdate, userAuthSchemaInstance, userAuthCollectionName, { session })
+
+		if (!updateUserAuthResult.success || !updateUserAuthResult.result) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
+			console.error('创建 Email 身份验证器失败，保存数据失败-2', { uuid })
+			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，保存数据失败-2' }
 		}
 
 		await session.commitTransaction()
@@ -3569,88 +3585,88 @@ export const checkEmailAuthenticatorVerificationCodeService = async (checkEmailA
 	}
 }
 
-/**
- * 用户确认绑定 Email 身份验证器
- * @param confirmUserEmailAuthenticatorRequest 用户确认绑定 TOTP 设备的请求载荷
- * @param uuid 用户的 UUID
- * @param token 用户的 token
- * @returns 用户确认绑定 Email 的请求响应
- */
-export const confirmUserEmailAuthenticatorService = async (confirmUserEmailAuthenticatorRequest: confirmUserEmailAuthenticatorRequestDto, uuid: string, token: string): Promise<confirmUserEmailAuthenticatorResponseDto> => {
-	try{
-		const { email, verificationCode } = confirmUserEmailAuthenticatorRequest
-
-		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('确认绑定 Email 身份验证器失败，非法用户')
-			return { success: false, message: '确认绑定 Email 身份验证器失败，非法用户' }
-		}
-
-		const getSelfUserInfoByUuidRequest = {
-			uuid,
-			token,
-		}
-		const emailLowerCase = email.toLowerCase()
-		const selfUserInfoResult = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
-
-		if (emailLowerCase !== selfUserInfoResult.result[0].emailLowerCase) {
-			console.error('确认绑定 Email 身份验证器失败，邮箱不匹配')
-			return { success: false, message: '确认绑定 Email 身份验证器失败，邮箱不匹配' }
-		}
-
-		const checkEmailAuthenticatorVerificationCode = {
-			email,
-			verificationCode,
-		}
-		if (!!await checkEmailAuthenticatorVerificationCodeService(checkEmailAuthenticatorVerificationCode)){
-			console.error('确认绑定 Email 身份验证器失败，验证失败')
-			return { success: false, message: '确认绑定 Email 身份验证器失败，验证失败' }
-		}
-
-		const session = await mongoose.startSession()
-		session.startTransaction()
-
-		const now = new Date().getTime()
-
-		const { collectionName: userEmailAuthenticatorCollectionName, schemaInstance: userEmailAuthenticatorSchemaInstance } = UserEmailAuthenticatorSchema
-		type UserAuthenticator = InferSchemaType<typeof userEmailAuthenticatorSchemaInstance>
-		const confirmUserEmailAuthenticatorWhere: QueryType<UserAuthenticator> = {
-			UUID: uuid,
-			enabled: false,
-		}
-		const confirmUserEmailAuthenticatorUpdate: UpdateType<UserAuthenticator> = {
-			enabled: true,
-			editDateTime: now,
-		}
-
-		const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(confirmUserEmailAuthenticatorWhere, confirmUserEmailAuthenticatorUpdate, userEmailAuthenticatorSchemaInstance, userEmailAuthenticatorCollectionName, { session })
-		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
-		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
-
-		const userAuthWhere: QueryType<UserAuth> = {
-			UUID: uuid,
-		}
-		const userAuthUpdate: UpdateType<UserAuth> = {
-			authenticatorType: 'email',
-		}
-		const updateUserAuthResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userAuthWhere, userAuthUpdate, userAuthSchemaInstance, userAuthCollectionName, { session })
-
-		if (!updateAuthenticatorResult.success || !updateAuthenticatorResult.result || !updateUserAuthResult.success || !updateUserAuthResult.result) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('确认绑定 Email 身份验证器失败，更新失败')
-			return { success: false, message: '确认绑定 Email 身份验证器失败，更新失败' }
-		}
-
-		await session.commitTransaction()
-		session.endSession()
-		return { success: true, email: email, message: '已绑定 Email 身份验证器' }
-	} catch (error) {
-		console.error('确认绑定 Email 身份验证器时出错，未知错误', error)
-		return { success: false, message: '确认绑定 Email 身份验证器时出错，未知错误' }
-	}
-}
+///**
+// * 用户确认绑定 Email 身份验证器
+// * @param confirmUserEmailAuthenticatorRequest 用户确认绑定 TOTP 设备的请求载荷
+// * @param uuid 用户的 UUID
+// * @param token 用户的 token
+// * /@returns 用户确认绑定 Email 的请求响应
+// */
+//export const confirmUserEmailAuthenticatorService = async (confirmUserEmailAuthenticatorRequest: confirmUserEmailAuthenticatorRequestDto, uuid: string, token: string): Promise<confirmUserEmailAuthenticatorResponseDto> => {
+//	try{
+//		const { email, verificationCode } = confirmUserEmailAuthenticatorRequest
+//
+//		if (!await checkUserTokenByUUID(uuid, token)) {
+//			console.error('确认绑定 Email 身份验证器失败，非法用户')
+//			return { success: false, message: '确认绑定 Email 身份验证器失败，非法用户' }
+//		}
+//
+//		const getSelfUserInfoByUuidRequest = {
+//			uuid,
+//			token,
+//		}
+//		const emailLowerCase = email.toLowerCase()
+//		const selfUserInfoResult = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
+//
+//		if (emailLowerCase !== selfUserInfoResult.result[0].emailLowerCase) {
+//			console.error('确认绑定 Email 身份验证器失败，邮箱不匹配')
+//			return { success: false, message: '确认绑定 Email 身份验证器失败，邮箱不匹配' }
+//		}
+//
+//		const checkEmailAuthenticatorVerificationCode = {
+//			email,
+//			verificationCode,
+//		}
+//		if (!!await checkEmailAuthenticatorVerificationCodeService(checkEmailAuthenticatorVerificationCode)){
+//			console.error('确认绑定 Email 身份验证器失败，验证失败')
+//			return { success: false, message: '确认绑定 Email 身份验证器失败，验证失败' }
+//		}
+//
+//		const session = await mongoose.startSession()
+//		session.startTransaction()
+//
+//		const now = new Date().getTime()
+//
+//		const { collectionName: userEmailAuthenticatorCollectionName, schemaInstance: userEmailAuthenticatorSchemaInstance } = UserEmailAuthenticatorSchema
+//		type UserAuthenticator = InferSchemaType<typeof userEmailAuthenticatorSchemaInstance>
+//		const confirmUserEmailAuthenticatorWhere: QueryType<UserAuthenticator> = {
+//			UUID: uuid,
+//			enabled: false,
+//		}
+//		const confirmUserEmailAuthenticatorUpdate: UpdateType<UserAuthenticator> = {
+//			enabled: true,
+//			editDateTime: now,
+//		}
+//
+//		const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(confirmUserEmailAuthenticatorWhere, confirmUserEmailAuthenticatorUpdate, userEmailAuthenticatorSchemaInstance, userEmailAuthenticatorCollectionName, { session })
+//		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+//		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+//
+//		const userAuthWhere: QueryType<UserAuth> = {
+//			UUID: uuid,
+//		}
+//		const userAuthUpdate: UpdateType<UserAuth> = {
+//			authenticatorType: 'email',
+//		}
+//		const updateUserAuthResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userAuthWhere, userAuthUpdate, userAuthSchemaInstance, userAuthCollectionName, { session })
+//
+//		if (!updateAuthenticatorResult.success || !updateAuthenticatorResult.result || !updateUserAuthResult.success || !updateUserAuthResult.result) {
+//			if (session.inTransaction()) {
+//				await session.abortTransaction()
+//			}
+//			session.endSession()
+//			console.error('确认绑定 Email 身份验证器失败，更新失败')
+//			return { success: false, message: '确认绑定 Email 身份验证器失败，更新失败' }
+//		}
+//
+//		await session.commitTransaction()
+//		session.endSession()
+//		return { success: true, email: email, message: '已绑定 Email 身份验证器' }
+//	} catch (error) {
+//		console.error('确认绑定 Email 身份验证器时出错，未知错误', error)
+//		return { success: false, message: '确认绑定 Email 身份验证器时出错，未知错误' }
+//	}
+//}
 
 /**
  * 通过 Email 检查用户是否已开启 2FA 身份验证器
