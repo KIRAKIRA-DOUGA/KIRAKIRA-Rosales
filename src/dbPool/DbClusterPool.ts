@@ -2,7 +2,7 @@ import { ReadPreferenceMode } from 'mongodb'
 import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
-import { UserInfoSchema } from './schema/UserSchema.js'
+import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
 
 /**
  * 虚拟属性，用于关联查询
@@ -113,8 +113,10 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			await mongoose.connect(mongoURL, connectionOptions)
 
 			// 在此处放置需要提前注册的 Model
-			// 比如说用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据
+			// 用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据
 			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
+			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
+			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
 
 			console.info('MongoDB Cluster Connect successfully!')
 		} catch (error) {

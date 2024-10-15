@@ -19,9 +19,11 @@ class UserAuthSchemaFactory {
 		/** 用户的身分令牌 - 非空 */
 		token: { type: String, required: true },
 		/** 密码提示 */
-		passwordHint: String,
+		passwordHint: String, // TODO: 如何确保密码提示的安全性？
 		/** 用户的角色 */
 		role: { type: String, required: true },
+		/** 用户开启的 2FA 类型 - 非空 */ /* 可以为 email, totp 或 none（表示未开启） */
+		authenticatorType: { type: String, required: true },
 		/** 系统专用字段-创建时间 - 非空 */
 		userCreateDateTime: { type: Number, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
@@ -272,7 +274,6 @@ class UserChangeEmailVerificationCodeSchemaFactory {
 }
 export const UserChangeEmailVerificationCodeSchema = new UserChangeEmailVerificationCodeSchemaFactory()
 
-
 /**
  * 用户更改密码的邮箱验证码
  */
@@ -302,3 +303,103 @@ class UserChangePasswordVerificationCodeSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserChangePasswordVerificationCodeSchema = new UserChangePasswordVerificationCodeSchemaFactory()
+
+/**
+ * 用户 TOTP 身份验证器
+ */
+class UserTotpAuthenticatorSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 是否启用 TOTP 身份验证器 - 非空 - 默认值：false */
+		enabled: { type: Boolean, required: true, default: false },
+		/** 验证器密钥 */
+		secret: { type: String },
+		/** 恢复码 */
+		recoveryCodeHash: { type: String },
+		/** 备份码 */
+		backupCodeHash: { type: [String] },
+		/** QRcode */
+		otpAuth: { type: String, unique: true },
+		/** 尝试次数 */
+		attempts: { type: Number },
+		/** 上次尝试登录时间 */
+		lastAttemptTime: { type: Number },
+		/** 系统专用字段-创建时间 - 非空 */
+		createDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-totp-authenticator'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+
+	// 构造器
+	constructor() {
+		// 添加 UUID 和 secret 组合的唯一索引
+		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true });
+	}
+}
+export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()
+
+/**
+ * 用户 Email 身份验证器
+ */
+class UserEmailAuthenticatorSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 用户的 Email */
+		email: { type: String, required: true },
+		/** 是否启用 Email 身份验证器 - 非空 - 默认值：false */
+		enabled: { type: Boolean, required: true, default: false },
+		/** 系统专用字段-创建时间 - 非空 */
+		createDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-email-authenticator'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+
+	// 构造器
+	constructor() {
+		// 添加 UUID 和 secret 组合的唯一索引
+		this.schemaInstance.index({ UUID: 1, email: 1 }, { unique: true });
+	}
+}
+export const UserEmailAuthenticatorSchema = new UserEmailAuthenticatorSchemaFactory()
+
+/**
+ * 用户确认绑定 Email 身份验证器的邮箱验证码
+ */
+class UserEmailAuthenticatorVerificationCodeSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		UUID: { type: String, required: true },
+		/** 用户 ID - 非空 */
+		uid: { type: Number, required: true },
+		/** 用户的邮箱 - 非空 - 唯一 */
+		emailLowerCase: { type: String, required: true, unique: true },
+		/** 用户的验证码 - 非空 */
+		verificationCode: { type: String, required: true },
+		/** 用户的验证码过期时间 - 非空 */
+		overtimeAt: { type: Number, required: true, unique: true },
+		/** 用户今日请求的次数，用于防止滥用 - 非空 */
+		attemptsTimes: { type: Number, required: true },
+		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
+		lastRequestDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editDateTime: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'user-email-authenticator-verification-code'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const UserEmailAuthenticatorVerificationCodeSchema = new UserEmailAuthenticatorVerificationCodeSchemaFactory()
