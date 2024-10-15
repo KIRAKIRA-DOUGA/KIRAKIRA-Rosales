@@ -81,6 +81,13 @@ router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorControll
 // https://localhost:9999/user/createTotpAuthenticator
 // cookie: uuid, token
 
+router.post('/user/confirmUserTotpAuthenticator', confirmUserTotpAuthenticatorController) // 用户确认绑定 TOTP 设备
+// https://localhost:9999/user/confirmUserTotpAuthenticator
+// {
+// 	"clientOtp": "XXXXXX",
+// 	"otpAuth": "XXXXXXXXXXXXXXXXX"
+// }
+
 router.post('/user/createEmailAuthenticator', createUserEmailAuthenticatorController) // 用户创建 Email 身份验证器
 // https://localhost:9999/user/createEmailAuthenticator
 // cookie: uuid, token
@@ -99,11 +106,11 @@ router.post('/user/checkEmailAuthenticatorVerificationCode', checkEmailAuthentic
 // 	 "verificationCode": "ZZZZZZ"
 // }
 
-router.post('/user/confirmUserTotpAuthenticator', confirmUserTotpAuthenticatorController) // 用户确认绑定 TOTP 设备
-// https://localhost:9999/user/confirmUserTotpAuthenticator
+router.delete('/user/deleteTotpAuthenticatorByTotpVerificationCodeController', deleteTotpAuthenticatorByTotpVerificationCodeController) // 已登录用户通过密码和 TOTP 验证码删除身份验证器
+// cookie: uuid, token
 // {
-// 	"clientOtp": "XXXXXX",
-// 	"otpAuth": "XXXXXXXXXXXXXXXXX"
+// 	 "clientOtp": "XXXXXX",
+// 	 "passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 // }
 
 router.delete('/user/deleteUserAuthenticator', deleteTotpAuthenticatorByTotpVerificationCodeController) // 已登录用户通过密码和 TOTP 验证码删除 TOTP 身份验证器
@@ -374,9 +381,9 @@ router.post('/video/pending/approved', approvePendingReviewVideoController) // �
 
 router.post('/video/danmaku/emit', emitDanmakuController) // 发送弹幕的接口
 // https://localhost:9999/video/danmaku/emit
+// cookie: uid, token, uuid
 // {
 // 	"videoId": 10,
-// 	"uid": 2,
 // 	"time": 5,
 // 	"text": "这是一条测试弹幕",
 // 	"color": "#66CCFF",

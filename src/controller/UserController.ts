@@ -159,6 +159,25 @@ export const createUserEmailAuthenticatorController = async (ctx: koaCtx, next: 
 }
 
 /**
+ * 用户确认绑定 TOTP 设备
+ * @param ctx context
+ * @param next context
+ * @returns 用户确认绑定 TOTP 设备的请求响应
+ */
+export const confirmUserTotpAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<ConfirmUserTotpAuthenticatorRequestDto>
+	const confirmUserTotpAuthenticatorRequest: ConfirmUserTotpAuthenticatorRequestDto = {
+		clientOtp: data.clientOtp || '',
+		otpAuth: data.otpAuth || '',
+	}
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const result = await confirmUserTotpAuthenticatorService(confirmUserTotpAuthenticatorRequest, uuid, token)
+	ctx.body = result
+	await next()
+}
+
+/**
  * 请求发送验证码，用于登录时验证身份验证器
  * @param ctx context
  * @param next context
@@ -189,25 +208,6 @@ export const checkEmailAuthenticatorVerificationCodeController = async (ctx: koa
 	}
 
 	ctx.body = await checkEmailAuthenticatorVerificationCodeService(checkSendVerificationCodeRequest)
-	await next()
-}
-
-/**
- * 用户确认绑定 TOTP 设备
- * @param ctx context
- * @param next context
- * @returns 用户确认绑定 TOTP 设备的请求响应
- */
-export const confirmUserTotpAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<ConfirmUserTotpAuthenticatorRequestDto>
-	const confirmUserTotpAuthenticatorRequest: ConfirmUserTotpAuthenticatorRequestDto = {
-		clientOtp: data.clientOtp || '',
-		otpAuth: data.otpAuth || '',
-	}
-	const uuid = ctx.cookies.get('uuid')
-	const token = ctx.cookies.get('token')
-	const result = await confirmUserTotpAuthenticatorService(confirmUserTotpAuthenticatorRequest, uuid, token)
-	ctx.body = result
 	await next()
 }
 

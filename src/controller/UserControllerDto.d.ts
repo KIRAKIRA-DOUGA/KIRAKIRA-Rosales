@@ -673,7 +673,6 @@ export type GetBlockedUserResponseDto = {
 	)[];
 }
 
-
 /**
  * 管理员获取用户信息的请求载荷
  */
@@ -689,23 +688,22 @@ export type AdminGetUserInfoRequestDto = {
 	};
 }
 
-
 /**
  * 管理员获取用户信息的请求响应
  */
 export type AdminGetUserInfoResponseDto = {
-		/** 执行结果 */
-		success: boolean;
-		/** 附加的文本消息 */
-		message?: string;
-		/** 请求响应 */
-		result?: (
-			GetSelfUserInfoResponseDto['result']
-			& { uid: number }
-			& { UUID: string }
-		)[];
-		/** 数据总长度 */
-		totalCount: number;
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 请求响应 */
+	result?: (
+		GetSelfUserInfoResponseDto['result']
+		& { uid: number }
+		& { UUID: string }
+	)[];
+	/** 数据总长度 */
+	totalCount: number;
 }
 
 /**
@@ -804,6 +802,7 @@ export type CreateUserEmailAuthenticatorResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+
 /**
  * 用户创建 TOTP 身份验证器的请求响应
  */
