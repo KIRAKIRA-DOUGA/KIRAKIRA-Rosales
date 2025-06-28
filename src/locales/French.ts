@@ -10,10 +10,12 @@ export default {
 	SendChangeEmailVerificationCode: {
 		mailTitle: "KIRAKIRA - Changer le code de vérification d'email",
 		mailHeading: "Votre code de vérification de courriel de changement est",
+		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
 	},
 	SendChangePasswordVerificationCode: {
 		mailTitle: "KIRAKIRA - Changer le code de vérification du mot de passe",
 		mailHeading: "Votre code de vérification de mot de passe de changement est",
+		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
 	},
 	UserEmailAuthenticator: {
 		mailTitle: "KIRAKIRA - Code de vérification pour la vérification de 2FA",

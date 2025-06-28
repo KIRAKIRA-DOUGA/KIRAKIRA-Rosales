@@ -3,25 +3,28 @@
 
 export default {
 	SendVerificationCode: {
-		mailTitle: "KIRAKIRA-登録確認コード",
-		mailHeading: "登録確認コードは",
+		mailTitle: "KIRAKIRA - 登録確認用のコード",
+		mailHeading: "登録確認用のコードは",
+		mailText: "KIRAKIRA へようこそ！このコードを使ってアカウントを登録しましょう。\nコードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendChangeEmailVerificationCode: {
-		mailTitle: "KIRAKIRA-メール確認コードの変更",
+		mailTitle: "KIRAKIRA - メールアドレス変更の確認コード",
 		mailHeading: "メールアドレスの確認コードは",
-		mailText: "認証コードは30分間有効です。他人に確認コードを開示しないようにしてください。\n通知の受信を停止するには、KIRAサポートチームまでご連絡ください。",
+		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendChangePasswordVerificationCode: {
-		mailTitle: "KIRAKIRA-パスワード認証コードの変更",
-		mailHeading: "パスワードの確認コードは",
-		mailText: "認証コードは30分間有効です。他人に確認コードを開示しないようにしてください。\n通知の受信を停止するには、KIRAサポートチームまでご連絡ください。",
+		mailTitle: "KIRAKIRA - パスワード変更の認証コード",
+		mailHeading: "パスワード変更の確認コードは",
+		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	UserEmailAuthenticator: {
 		mailTitle: "KIRAKIRA-2FA認証のための認証コード",
 		mailHeading: "認証システムを確認するための認証コードは",
+		mailText: "注意：このコードは認証システムを確認するための認証コードです。\nコードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知のを停止するには KIRAKIRA サポートチームに連絡してください。",
 	},
 	DeleteUserEmailAuthenticator: {
-		mailTitle: "KIRAKIRA-2FA削除のための認証コード",
+		mailTitle: "KIRAKIRA - 2FA削除のための認証コード",
 		mailHeading: "認証システムを削除するための認証コードは",
+		mailText: "注意：このコードは認証システムを削除するための認証コードです。\nコードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 }

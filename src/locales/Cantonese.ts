@@ -2,9 +2,29 @@
 
 
 export default {
-	SendVerificationCode: {},
-	SendChangeEmailVerificationCode: {},
-	SendChangePasswordVerificationCode: {},
-	UserEmailAuthenticator: {},
-	DeleteUserEmailAuthenticator: {},
+	SendVerificationCode: {
+		mailTitle: "KIRAKIRA - 注冊驗證碼",
+		mailHeading: "你嘅註冊驗證碼係",
+		mailText: "歡迎嚟到 KIRAKIRA，用呢個驗證碼嚟註冊你嘅帳戶啦！\n驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+	},
+	SendChangeEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - 電郵變更驗證碼",
+		mailHeading: "你嘅電郵變更驗證碼係",
+		mailText: "驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+	},
+	SendChangePasswordVerificationCode: {
+		mailTitle: "KIRAKIRA - 密碼變更驗證碼",
+		mailHeading: "你嘅密碼變更驗證碼係",
+		mailText: "驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+	},
+	UserEmailAuthenticator: {
+		mailTitle: "KIRAKIRA - 驗證 2FA 驗證碼",
+		mailHeading: "你嘅身份驗證器驗證碼係",
+		mailText: "注意：請確保你會用呢個驗證碼去驗證你嘅身份驗證器。\n驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+	},
+	DeleteUserEmailAuthenticator: {
+		mailTitle: "KIRAKIRA - 刪除 2FA 驗證碼",
+		mailHeading: "你嘅身份驗證器驗證碼係",
+		mailText: "注意：請確保你會用呢個驗證碼去刪除你嘅身份驗證器。\n驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+	},
 }

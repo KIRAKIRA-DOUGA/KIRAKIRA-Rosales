@@ -23,8 +23,8 @@ export default {
 		mailText: "注意：你可以使用这个验证码来验证你的双重身份验证器。\n验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
 	},
 	DeleteUserEmailAuthenticator: {
-		mailTitle: "KIRAKIRA - 删除 2FA 的验证码",
+		mailTitle: "KIRAKIRA - 删除双重验证的验证码",
 		mailHeading: "你删除的身份验证器验证码是",
-		mailText: "注意：你可以使用这个验证码来删除你的二重身份验证器。\n验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
+		mailText: "注意：你可以使用这个验证码来删除你的双重验证。\n验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
 	},
 }
