@@ -19,12 +19,12 @@ export default {
 	},
 	UserEmailAuthenticator: {
 		mailTitle: "crwdns3173:0crwdne3173:0",
-		mailHeading: "crwdns3175:0crwdne3175:0",
+		mailHeading: "crwdns3616:0crwdne3616:0",
 		mailText: "crwdns3177:0crwdne3177:0",
 	},
 	DeleteUserEmailAuthenticator: {
 		mailTitle: "crwdns3179:0crwdne3179:0",
-		mailHeading: "crwdns3181:0crwdne3181:0",
+		mailHeading: "crwdns3618:0crwdne3618:0",
 		mailText: "crwdns3183:0crwdne3183:0",
 	},
 }

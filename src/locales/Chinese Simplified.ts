@@ -5,26 +5,26 @@ export default {
 	SendVerificationCode: {
 		mailTitle: "KIRAKIRA - 注册验证码",
 		mailHeading: "你的注册验证码是",
-		mailText: "欢迎来到 KIRAKIRA，使用这个验证码来注册你的账号吧！\n验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
+		mailText: "欢迎来到KIRAKIRA，使用这个验证码来注册你的账号吧！\n验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
 	SendChangeEmailVerificationCode: {
 		mailTitle: "KIRAKIRA - 更改邮箱验证码",
 		mailHeading: "你更改邮箱的验证码是",
-		mailText: "验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
+		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
 	SendChangePasswordVerificationCode: {
 		mailTitle: "KIRAKIRA - 更改密码验证码",
 		mailHeading: "你更改密码的验证码是",
-		mailText: "验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
+		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
 	UserEmailAuthenticator: {
-		mailTitle: "KIRAKIRA - 验证 2FA 的验证码",
-		mailHeading: "你的身份验证器验证码是",
-		mailText: "注意：你可以使用这个验证码来验证你的双重身份验证器。\n验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
+		mailTitle: "KIRAKIRA - 验证2FA的验证码",
+		mailHeading: "您的验证码是",
+		mailText: "注意：你可以使用这个验证码来验证你的身份验证器。\n验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
 	DeleteUserEmailAuthenticator: {
 		mailTitle: "KIRAKIRA - 删除双重验证的验证码",
-		mailHeading: "你删除的身份验证器验证码是",
-		mailText: "注意：你可以使用这个验证码来删除你的双重验证。\n验证码 30 分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系 KIRAKIRA 支持团队。",
+		mailHeading: "您的身份验证删除代码是",
+		mailText: "注意：你可以使用这个验证码来删除你的双重验证。\n验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
 }

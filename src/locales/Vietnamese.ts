@@ -19,12 +19,10 @@ export default {
 	},
 	UserEmailAuthenticator: {
 		mailTitle: "KIRAKIRA - Mã Xác Minh Dành Cho Xác Thực 2 Bước",
-		mailHeading: "Mã xác minh của bạn để xác thực Authenticator là",
 		mailText: "Lưu ý: Vui lòng đảm bảo bạn sẽ sử dụng mã xác minh này để xác minh Authenticator của mình.\nMã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
 	},
 	DeleteUserEmailAuthenticator: {
 		mailTitle: "KIRAKIRA - Mã Xác Minh Gỡ Bỏ Xác Thực 2 Bước",
-		mailHeading: "Mã xác minh của bạn để xóa Authenticator là",
 		mailText: "Lưu ý: Vui lòng đảm bảo bạn sẽ sử dụng mã xác minh này để xóa Authenticator của mình.\nMã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
 	},
 }
