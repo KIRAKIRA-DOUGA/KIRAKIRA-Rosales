@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import cors from '@koa/cors'
 import fs from 'fs'
 import https from 'https'

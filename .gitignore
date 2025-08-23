@@ -8,6 +8,9 @@ dist/
 # ignore some local file
 local/
 
+# ignore environment variable files
+.env
+.envrc
+
 # macOS
 .DS_Store
-.envrc
