@@ -17,6 +17,11 @@ export default {
 		mailHeading: "crwdns3169:0crwdne3169:0",
 		mailText: "crwdns3171:0crwdne3171:0",
 	},
+	SendResetPasswordVerificationCode: {
+		mailTitle: "crwdns3692:0crwdne3692:0",
+		mailHeading: "crwdns3694:0crwdne3694:0",
+		mailText: "crwdns3696:0crwdne3696:0",
+	},
 	SendLoginVerificationCode: {
 		mailTitle: "crwdns3622:0crwdne3622:0",
 		mailHeading: "crwdns3624:0crwdne3624:0",

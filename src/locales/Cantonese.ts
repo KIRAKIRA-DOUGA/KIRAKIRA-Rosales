@@ -3,23 +3,31 @@
 
 export default {
 	SendVerificationCode: {
+		mailTitle: "KIRAKIRA - 註冊驗證碼",
 		mailHeading: "你嘅註冊驗證碼係",
-		mailText: "歡迎嚟到 KIRAKIRA，用呢個驗證碼嚟註冊你嘅帳戶啦！\n驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+		mailText: "歡迎蒞臨KIRAKIRA，用呢個驗證碼去註冊你嘅帳戶啦！\n驗證碼有效期30分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n若要停止收取通知，請聯絡KIRAKIRA支援團隊。",
 	},
 	SendChangeEmailVerificationCode: {
-		mailTitle: "KIRAKIRA - 電郵變更驗證碼",
+		mailTitle: "KIRAKIRA - 變更電郵驗證碼",
 		mailHeading: "你嘅電郵變更驗證碼係",
-		mailText: "驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+		mailText: "驗證碼有效期30分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n若要停止收取通知，請聯絡KIRAKIRA支援團隊。",
 	},
 	SendChangePasswordVerificationCode: {
 		mailTitle: "KIRAKIRA - 密碼變更驗證碼",
 		mailHeading: "你嘅密碼變更驗證碼係",
-		mailText: "驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+		mailText: "驗證碼有效期30分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n若要停止收取通知，請聯絡KIRAKIRA支援團隊。",
+	},
+	SendResetPasswordVerificationCode: {
+		mailText: "驗證碼有效期30分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n若要停止收取通知，請聯絡KIRAKIRA支援團隊。",
 	},
 	SendLoginVerificationCode: {
-		mailText: "驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+		mailTitle: "KIRAKIRA - 登入驗證碼",
+		mailHeading: "你嘅登入驗證碼係",
+		mailText: "驗證碼有效期30分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n若要停止收取通知，請聯絡KIRAKIRA支援團隊。",
 	},
 	SendDisableUserEmail2FAVerificationCode: {
-		mailText: "驗證碼有效期 30 分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n想停止接收通知，請聯絡 KIRAKIRA 支援團隊。",
+		mailTitle: "KIRAKIRA - 停用電郵雙重驗證驗證碼",
+		mailHeading: "你嘅驗證碼係",
+		mailText: "驗證碼有效期30分鐘。請確保唔好將你嘅驗證碼洩露俾其他人。\n若要停止收取通知，請聯絡KIRAKIRA支援團隊。",
 	},
 }

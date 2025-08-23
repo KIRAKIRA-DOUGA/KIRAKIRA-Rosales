@@ -17,6 +17,7 @@ export default {
 		mailHeading: "パスワード変更の確認コードは",
 		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
+	SendResetPasswordVerificationCode: {},
 	SendLoginVerificationCode: {
 		mailTitle: "KIRAKIA - ログイン認証コード",
 		mailHeading: "ログイン認証コードは",
