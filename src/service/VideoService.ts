@@ -1,5 +1,4 @@
 import { Client } from '@elastic/elasticsearch'
-import axios from 'axios'
 import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
@@ -694,19 +693,24 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 				return undefined
 			}
 
-			// 创建 Axios 请求配置
-			const config = {
-				headers: {
-					Authorization: `Bearer ${streamToken}`,
-					'Tus-Resumable': '1.0.0',
-					'Upload-Length': uploadLength,
-					'Upload-Metadata': uploadMetadata,
-				},
-			}
-
 			try {
-				const videoTusEndpointResult = await axios.post(streamTusEndpointUrl, {}, config)
-				const videoTusEndpoint = videoTusEndpointResult.headers?.location
+				const videoTusEndpointResponse = await fetch(streamTusEndpointUrl, {
+					method: 'POST',
+					headers: {
+						Authorization: `Bearer ${streamToken}`,
+						'Tus-Resumable': '1.0.0',
+						'Upload-Length': `${uploadLength}`,
+						'Upload-Metadata': uploadMetadata,
+					},
+				})
+
+				if (!videoTusEndpointResponse.ok) {
+					console.error('ERROR', `无法创建 Cloudflare Stream TUS Endpoint, HTTP error! status: ${videoTusEndpointResponse.status}`)
+					return undefined
+				}
+
+				const videoTusEndpoint = videoTusEndpointResponse.headers.get('location')
+
 				if (videoTusEndpoint) {
 					return videoTusEndpoint
 				} else {

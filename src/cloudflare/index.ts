@@ -1,6 +1,5 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import axios from 'axios'
 import { getCloudflareRFC3339ExpiryDateTime } from '../common/GetCloudflareRFC3339ExpiryDateTime.js'
 
 /**
@@ -101,23 +100,28 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 			return undefined
 		}
 
-		// 创建 Axios 请求数据
-		const data: Record<string, string | Record<string, string> > = {}
-		data.expiry = getCloudflareRFC3339ExpiryDateTime(expiresIn) // 生成的日期格式为：2024-03-17T13:47:28Z
-		fileName && (data.id = fileName)
-		metaData && (data.metaData = metaData)
+		const formData = new FormData();
+		formData.append('expiry', getCloudflareRFC3339ExpiryDateTime(expiresIn)); // 生成的日期格式为：2024-03-17T13:47:28Z
+		if (fileName) formData.append('id', fileName);
+		if (metaData) formData.append('metaData', JSON.stringify(metaData));
 
-		// 创建 Axios 请求配置
-		const config = {
-			headers: {
-				Authorization: `Bearer ${imagesToken}`,
-				'Content-Type': 'multipart/form-data; boundary=---011000010111000001101001',
-			},
-		}
 		try {
-			const imageUploadSignedUrlResult = await axios.post(imagesEndpointUrl, data, config)
-			const imageUploadSignedUrl = imageUploadSignedUrlResult?.data?.result?.uploadURL
-			if (imageUploadSignedUrlResult.status === 200 && imageUploadSignedUrl) {
+			const imageUploadSignedUrlResponse = await fetch(imagesEndpointUrl, {
+				method: 'POST',
+				body: formData,
+				headers: {
+					Authorization: `Bearer ${imagesToken}`,
+				},
+			})
+			if (!imageUploadSignedUrlResponse.ok) {
+				console.error('ERROR', `无法创建 Cloudflare Images 预签名 URL, HTTP error! status: ${imageUploadSignedUrlResponse.status}`)
+				return undefined
+			}
+
+			const imageUploadSignedUrlResult = await imageUploadSignedUrlResponse.json()
+			
+			const imageUploadSignedUrl = imageUploadSignedUrlResult?.result?.uploadURL
+			if (imageUploadSignedUrlResult.success && imageUploadSignedUrl) {
 				return imageUploadSignedUrl
 			} else {
 				console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL：未能创建 URL！', { fileName, expiresIn, metaData })

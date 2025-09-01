@@ -1,8 +1,9 @@
 import { Client } from '@elastic/elasticsearch'
-import { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { EsResultType, EsSchema2TsType } from './ElasticsearchClusterPoolTypes.js'
+import type { estypes } from '@elastic/elasticsearch';
 
+type QueryDslQueryContainer = estypes.QueryDslQueryContainer;
 /**
  * 创建 Elasticsearch 连接，这个函数在整个应用的生命周期里应该只被调用一次（only in elasticsearchMiddleware.ts）
  * @returns Elasticsearch 客户端连接

@@ -14,6 +14,11 @@ export default {
 		mailHeading: "Your change password verification code is",
 		mailText: "Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.\nTo stop receiving notifications, please contact the KIRAKIRA support team.",
 	},
+	SendResetPasswordVerificationCode: {
+		mailTitle: "KIRAKIRA - Reset Password Verification Code",
+		mailHeading: "Your reset password verification code is",
+		mailText: "Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.\nTo stop receiving notifications, please contact the KIRAKIRA support team.",
+	},
 	SendLoginVerificationCode: {
 		mailTitle: "KIRAKIRA - Login Verification Code",
 		mailHeading: "Your login verification code is",

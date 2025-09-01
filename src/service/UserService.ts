@@ -73,12 +73,15 @@ import {
 	AdminEditUserInfoRequestDto,
 	AdminEditUserInfoResponseDto,
 	GetBlockedUserRequestDto,
-	AdminGetUserInvitationCodeResponseDto,
-	AdminGetUserByInvitationCodeResponseDto
+	AdminGetUserByInvitationCodeResponseDto,
+	ForgotPasswordRequestDto,
+	RequestSendForgotPasswordVerificationCodeRequestDto,
+	ForgotPasswordResponseDto,
+	RequestSendForgotPasswordVerificationCodeResponseDto
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserEmailAuthenticatorSchema, UserEmailAuthenticatorVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserEmailAuthenticatorSchema, UserEmailAuthenticatorVerificationCodeSchema, UserForgotPasswordVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { authenticator } from 'otplib'
 import { getI18nLanguagePack } from '../common/i18n.js'
@@ -103,6 +106,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			}
 			const { email, passwordHash, passwordHint, verificationCode, username, userNickname } = userRegistrationRequest
 			const emailLowerCase = email.toLowerCase()
+			const usernameStandardized = username.trim().normalize();
 
 			if (email && emailLowerCase && verificationCode) {
 				// 启动事务
@@ -115,7 +119,6 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 
 				const userAuthWhere: QueryType<UserAuth> = {
 					emailLowerCase,
-					username: { $regex: new RegExp(`\\b${username}\\b`, 'iu') },
 				}
 				const userAuthSelect: SelectType<UserAuth> = { emailLowerCase: 1 }
 				try {
@@ -192,7 +195,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				const userInfoData: UserInfo = {
 					UUID: uuid,
 					uid,
-					username,
+					username: usernameStandardized,
 					userNickname,
 					label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
 					userLinkedAccounts: [] as UserInfo['userLinkedAccounts'], // TODO: Mongoose issue: #12420
@@ -200,7 +203,6 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 					editDateTime: now,
 					createDateTime: now,
 				}
-
 
 				const { collectionName: userSettingsCollectionName, schemaInstance: userSettingsSchemaInstance } = UserSettingsSchema
 				type UserSettings = InferSchemaType<typeof userSettingsSchemaInstance>
@@ -703,79 +705,57 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
  * @param token 用户 token
  * @returns 更新或创建用户信息的请求结果
  */
-export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto, uid: number, token: string): Promise<UpdateOrCreateUserInfoResponseDto> => {
+export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto, uuid: string, token: string): Promise<UpdateOrCreateUserInfoResponseDto> => {
 	try {
-		if (await checkUserToken(uid, token)) {
-			if (checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
-				const { collectionName, schemaInstance } = UserInfoSchema
-				type UserInfo = InferSchemaType<typeof schemaInstance>
-				const username = updateOrCreateUserInfoRequest.username
+		if (!checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
+			console.error('ERROR', '更新用户信息时失败，参数校验未通过', { updateOrCreateUserInfoRequest, uuid })
+			return { success: false, message: '更新用户数据时失败，参数校验未通过' }
+		}
 
-				if (username) {
-					if (!validateNameField(username) || !validateNameField(updateOrCreateUserInfoRequest.userNickname)) {
-						console.error('ERROR', '更新用户信息失败，用户名或昵称不合法，用户 UID:', uid)
-						return { success: false, message: '更新用户信息失败，用户名或昵称不合法' }
-					}
-
-					const getUserInfoWhere: QueryType<UserInfo> = {
-						username: { $regex: new RegExp(`\\b${updateOrCreateUserInfoRequest.username}\\b`, 'iu') },
-					}
-					const getUserInfoSelect: SelectType<UserInfo> = {
-						uid: 1,
-						username: 1,
-					}
-					const checkUsernameResult = await selectDataFromMongoDB<UserInfo>(getUserInfoWhere, getUserInfoSelect, schemaInstance, collectionName)
-
-					let isSafeUsername = false
-					if (checkUsernameResult.success) {
-						if (checkUsernameResult.result.length === 0) {
-							isSafeUsername = true
-						}
-						if (checkUsernameResult.result.length === 1) {
-							if (checkUsernameResult.result[0].uid === uid) {
-								isSafeUsername = true
-							}
-						}
-					}
-
-					if (!isSafeUsername) {
-						console.error('ERROR', '更新用户信息失败，用户重名', { updateOrCreateUserInfoRequest, uid })
-						return { success: false, message: '更新用户信息失败，用户重名' }
-					}
-				}
-
-				const editOperatorUUID = await getUserUuid(uid)
-				if (!editOperatorUUID) {
-					console.error('ERROR', '更新或创建用户信息失败，UUID 不存在', { updateOrCreateUserInfoRequest, uid })
-					return { success: false, message: '更新或创建用户信息失败，UUID 不存在' }
-				}
-
-				const updateUserInfoWhere: QueryType<UserInfo> = {
-					uid,
-				}
-				const updateUserInfoUpdate: UpdateType<UserInfo> = {
-					...updateOrCreateUserInfoRequest,
-					label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
-					userLinkedAccounts: updateOrCreateUserInfoRequest.userLinkedAccounts as UserInfo['userLinkedAccounts'], // TODO: Mongoose issue: #12420
-					isUpdatedAfterReview: true,
-					editOperatorUUID,
-					editDateTime: new Date().getTime(),
-				}
-				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
-				if (updateResult && updateResult.success && updateResult.result) {
-					return { success: true, message: '更新用户信息成功', result: updateResult.result }
-				} else {
-					console.error('ERROR', '更新用户信息失败，没有返回用户数据', { updateOrCreateUserInfoRequest, uid })
-					return { success: false, message: '更新用户信息失败，没有返回用户数据' }
-				}
-			} else {
-				console.error('ERROR', '更新用户信息时失败，未找到必要的数据，或者关联账户平台类型不合法：', { updateOrCreateUserInfoRequest, uid })
-				return { success: false, message: '更新用户数据时失败，必要的数据为空或关联平台信息出错' }
-			}
-		} else {
-			console.error('ERROR', '更新用户数据时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uid })
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('ERROR', '更新用户信息时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uuid })
 			return { success: false, message: '更新用户数据时失败，非法用户！' }
 		}
+
+		const { collectionName, schemaInstance } = UserInfoSchema
+		type UserInfo = InferSchemaType<typeof schemaInstance>
+		const { username, userNickname } = updateOrCreateUserInfoRequest
+
+		const usernameStandardized = username.trim().normalize();
+
+		if (usernameStandardized) {
+			const checkUserNameResult = await checkUsernameService({ username: usernameStandardized }, [uuid]) // exclude self when check duplicate username
+			if (!checkUserNameResult.success || !checkUserNameResult.isAvailableUsername) {
+				console.error('ERROR', '更新用户信息失败，用户重名', { updateOrCreateUserInfoRequest, uuid })
+				return { success: false, message: '更新用户信息失败，用户重名' }
+			}
+		}
+
+		if (userNickname && !validateNameField(userNickname)) {
+			console.error('ERROR', '更新用户信息失败，用户昵称不合法，用户 UUID:', uuid)
+			return { success: false, message: '更新用户信息失败，用户昵称不合法' }
+		}
+
+		const updateUserInfoWhere: QueryType<UserInfo> = {
+			UUID: uuid,
+		}
+		const updateUserInfoUpdate: UpdateType<UserInfo> = {
+			...updateOrCreateUserInfoRequest,
+			username: usernameStandardized, // username 经过了特殊处理，所以需要覆盖前面展开的 updateOrCreateUserInfoRequest
+			label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
+			userLinkedAccounts: updateOrCreateUserInfoRequest.userLinkedAccounts as UserInfo['userLinkedAccounts'], // TODO: Mongoose issue: #12420
+			isUpdatedAfterReview: true,
+			editOperatorUUID: uuid,
+			editDateTime: new Date().getTime(),
+		}
+		const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
+
+		if (!updateResult || !updateResult.success || !updateResult.result) {
+			console.error('ERROR', '更新用户信息失败，没有返回用户数据', { updateOrCreateUserInfoRequest, uuid })
+			return { success: false, message: '更新用户信息失败，没有返回用户数据' }
+		}
+
+		return { success: true, message: '更新用户信息成功', result: updateResult.result }
 	} catch (error) {
 		console.error('ERROR', '更新用户信息时失败，未知异常', error)
 		return { success: false, message: '更新用户数据时失败，未知异常' }
@@ -1350,7 +1330,7 @@ export const checkUserTokenByUuidService = async (UUID: string, token: string): 
  * @param requestSendVerificationCodeRequest 请求发送验证码的请求载荷
  * @returns 请求发送验证码的请求响应
  */
-export const RequestSendVerificationCodeService = async (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): Promise<RequestSendVerificationCodeResponseDto> => {
+export const requestSendVerificationCodeService = async (requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto): Promise<RequestSendVerificationCodeResponseDto> => {
 	try {
 		if (checkRequestSendVerificationCodeRequest(requestSendVerificationCodeRequest)) {
 			const { email, clientLanguage } = requestSendVerificationCodeRequest
@@ -2237,135 +2217,236 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 	}
 }
 
-// /**
-//  * // TODO: 计划中删除
-//  * // DELETE ME 这是一个临时的解决方案，以后 Cookie 中直接存储 UUID
-//  * 根据 UID 验证某个用户是否是某个角色
-//  * @param uid 用户 ID, 为空时会导致校验失败
-//  * @param role 用户的角色
-//  * @returns 校验结果，如果用户是这个角色返回 true，否则返回 false
-//  */
-// export const checkUserRoleService = async (uid: number, role: string | string[]): Promise<boolean> => {
-// 	// try {
-// 	// 	if (uid !== undefined && uid !== null && role) {
-// 	// 		const { collectionName, schemaInstance } = UserAuthSchema
-// 	// 		type UserAuth = InferSchemaType<typeof schemaInstance>
-// 	// 		let userTokenWhere: QueryType<UserAuth> = {
-// 	// 			uid: -1,
-// 	// 		}
-// 	// 		if (typeof role === 'string') {
-// 	// 			userTokenWhere = {
-// 	// 				uid,
-// 	// 				role,
-// 	// 			}
-// 	// 		} else {
-// 	// 			userTokenWhere = {
-// 	// 				uid,
-// 	// 				role: { $in: role },
-// 	// 			}
-// 	// 		}
-// 	// 		const userTokenSelect: SelectType<UserAuth> = {
-// 	// 			uid: 1,
-// 	// 		}
+/**
+ * 请求发送忘记密码的邮箱验证码
+ * @param requestSendForgotPasswordVerificationCodeRequest 请求发送忘记密码的邮箱验证码的请求载荷
+ * @returns 请求发送忘记密码的邮箱验证码的请求响应
+ */
+export const requestSendForgotPasswordVerificationCodeService = async (requestSendForgotPasswordVerificationCodeRequest: RequestSendForgotPasswordVerificationCodeRequestDto): Promise<RequestSendForgotPasswordVerificationCodeResponseDto> => {
+	try {
+		if (!checkRequestSendForgotPasswordVerificationCodeRequest(requestSendForgotPasswordVerificationCodeRequest)) {
+			const message = '请求发送忘记密码的验证码失败，参数不合法！'
+			console.error('ERROR', message)
+			return { success: false, isCoolingDown: false, message }
+		}
+		const { clientLanguage, email } = requestSendForgotPasswordVerificationCodeRequest
 
-// 	// 		try {
-// 	// 			const checkUserRoleResult = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
-// 	// 			if (checkUserRoleResult && checkUserRoleResult.success) {
-// 	// 				if (checkUserRoleResult.result?.length === 1) {
-// 	// 					return true
-// 	// 				} else {
-// 	// 					console.error('ERROR', `验证用户角色时，用户信息长度不为 1，用户uid：【${uid}】`)
-// 	// 					return false
-// 	// 				}
-// 	// 			} else {
-// 	// 				console.error('ERROR', `验证用户角色时未查询到用户信息，用户uid：【${uid}】`)
-// 	// 				return false
-// 	// 			}
-// 	// 		} catch (error) {
-// 	// 			console.error('ERROR', `验证用户角色时出错，用户uid：【${uid}】，错误信息：`, error)
-// 	// 			return false
-// 	// 		}
-// 	// 	} else {
-// 	// 		console.error('ERROR', `验证用户角色失败！用户 uid 或 role 不存在，用户 UID：${uid}`)
-// 	// 		return false
-// 	// 	}
-// 	// } catch (error) {
-// 	// 	console.error('ERROR', `验证用户角色失败！用户 UID：${uid}`, error)
-// 	// 	return false
-// 	// }
-// 	return role !== 'admin' && role !== 'blocked'
-// }
+		const emailLowerCase = email.toLowerCase()
+		const nowTime = new Date().getTime()
+		const todayStart = new Date()
+		todayStart.setHours(0, 0, 0, 0)
+
+		const { collectionName, schemaInstance } = UserForgotPasswordVerificationCodeSchema
+		type UserForgotPasswordVerificationCode = InferSchemaType<typeof schemaInstance>
+		const requestSendForgotPasswordVerificationCodeWhere: QueryType<UserForgotPasswordVerificationCode> = {
+			emailLowerCase,
+		}
+
+		const requestSendForgotPasswordVerificationCodeSelect: SelectType<UserForgotPasswordVerificationCode> = {
+			emailLowerCase: 1, // 用户邮箱
+			attemptsTimes: 1,
+			lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
+		}
+
+		// 启动事务
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
+		try {
+			const forgotPasswordVerificationCodeHistoryResult = await selectDataFromMongoDB<UserForgotPasswordVerificationCode>(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeSelect, schemaInstance, collectionName, { session })
+			
+			if (!forgotPasswordVerificationCodeHistoryResult.success) {
+				await abortAndEndSession(session)
+				const message = '请求发送忘记密码的验证码失败，获取验证码失败'
+				console.error('ERROR', message)
+				return { success: false, isCoolingDown: false, message }
+			}
+
+			const lastRequestDateTime = forgotPasswordVerificationCodeHistoryResult.result?.[0]?.lastRequestDateTime ?? 0
+			const attemptsTimes = forgotPasswordVerificationCodeHistoryResult.result?.[0]?.attemptsTimes ?? 0
+			if (forgotPasswordVerificationCodeHistoryResult.result.length > 0 && lastRequestDateTime + 55000 >= nowTime) { // 前端 60 秒，后端 55 秒
+				await abortAndEndSession(session)
+				const message = '请求发送忘记密码的验证码失败，未超过邮件超时时间，请稍后再试'
+				console.warn('WARN', message)
+				return { success: false, isCoolingDown: true, message }
+			}
+
+			const lastRequestDate = new Date(lastRequestDateTime)
+			if (forgotPasswordVerificationCodeHistoryResult.result.length > 0 && todayStart < lastRequestDate && attemptsTimes > 3) { // ! 每天三次机会
+				await abortAndEndSession(session)
+				const message = '请求发送忘记密码的验证码失败，已达本日重试次数上限，请稍后再试'
+				console.warn('WARN', 'WARNING', message)
+				return { success: false, isCoolingDown: true, message }
+			}
+
+			const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
+			let newAttemptsTimes = attemptsTimes + 1
+			if (todayStart > lastRequestDate) {
+				newAttemptsTimes = 0
+			}
+
+			const requestSendForgotPasswordVerificationCodeUpdate: UserForgotPasswordVerificationCode = {
+				emailLowerCase,
+				verificationCode,
+				overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
+				attemptsTimes: newAttemptsTimes,
+				lastRequestDateTime: nowTime,
+				editDateTime: nowTime,
+			}
+			const updateResult = await findOneAndUpdateData4MongoDB(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeUpdate, schemaInstance, collectionName, { session })
+			
+			if (!updateResult.success) {
+				await abortAndEndSession(session)
+				const message = '请求发送忘记密码的验证码失败，更新或新增验证码失败'
+				console.error('ERROR', message)
+				return { success: false, isCoolingDown: false, message }
+			}
+
+			try {
+				const mail = getI18nLanguagePack(clientLanguage, "SendResetPasswordVerificationCode")
+				const correctMailTitle = mail?.mailTitle
+				const correctMailHTML = mail?.mailHtml?.replaceAll('{{verificationCode}}', verificationCode)
+
+				const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
+
+				if (!sendMailResult.success) {
+					await abortAndEndSession(session)
+					const message = '请求发送忘记密码的验证码失败，邮件发送失败'
+					console.error('ERROR', message)
+					return { success: false, isCoolingDown: true, message }
+				}
+
+				await commitAndEndSession(session)
+				return { success: true, isCoolingDown: false, message: '忘记密码的验证码已发送至你注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
+
+			} catch (error) {
+				await abortAndEndSession(session)
+				const message = '请求发送忘记密码的验证码失败，邮件发送时出错'
+				console.error('ERROR', message, error)
+				return { success: false, isCoolingDown: true, message }
+			}
+		} catch (error) {
+			await abortAndEndSession(session)
+			const message = '请求发送忘记密码的验证码失败，检查超时时间时出错'
+			console.error('ERROR', message, error)
+			return { success: false, isCoolingDown: false, message }
+		}
+	} catch (error) {
+		const message = '请求发送忘记密码的验证码失败，未知错误'
+		console.error('ERROR', message, error)
+		return { success: false, isCoolingDown: false, message }
+	}
+}
 
 /**
- * 验证某个用户是否是某个角色
- * @param UUID 用户 UUID, 为空时会导致校验失败
- * @param role 用户的角色
- * @returns 校验结果，如果用户是这个角色返回 true，否则返回 false
+ * 找回密码（更新密码）
+ * @param forgotPasswordRequest 忘记密码（更新密码）的请求载荷
+ * @returns 忘记密码（更新密码）的请求响应
  */
-// export const checkUserRoleByUUIDService = async (UUID: string, role: string | string[]): Promise<boolean> => {
-// 	// try {
-// 	// 	if (UUID !== undefined && UUID !== null && role) {
-// 	// 		const { collectionName, schemaInstance } = UserAuthSchema
-// 	// 		type UserAuth = InferSchemaType<typeof schemaInstance>
-// 	// 		let userTokenWhere: QueryType<UserAuth> = {
-// 	// 			uid: -1,
-// 	// 		}
-// 	// 		if (typeof role === 'string') {
-// 	// 			userTokenWhere = {
-// 	// 				UUID,
-// 	// 				role,
-// 	// 			}
-// 	// 		} else {
-// 	// 			userTokenWhere = {
-// 	// 				UUID,
-// 	// 				role: { $in: role },
-// 	// 			}
-// 	// 		}
-// 	// 		const userTokenSelect: SelectType<UserAuth> = {
-// 	// 			uid: 1,
-// 	// 		}
+export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswordRequestDto): Promise<ForgotPasswordResponseDto> => {
+	try {
+		if (!checkForgotPasswordRequest(forgotPasswordRequest)) {
+			const message = '找回密码失败，参数不合法！'
+			console.error('ERROR', message)
+			return { success: false, message }
+		}
 
-// 	// 		try {
-// 	// 			const checkUserRoleResult = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
-// 	// 			if (checkUserRoleResult && checkUserRoleResult.success) {
-// 	// 				if (checkUserRoleResult.result?.length === 1) {
-// 	// 					return true
-// 	// 				} else {
-// 	// 					console.error('ERROR', `验证用户角色时，用户信息长度不为 1，用户 UUID: ${UUID}`)
-// 	// 					return false
-// 	// 				}
-// 	// 			} else {
-// 	// 				console.error('ERROR', `验证用户角色时未查询到用户信息，用户 UUID:${UUID}`)
-// 	// 				return false
-// 	// 			}
-// 	// 		} catch (error) {
-// 	// 			console.error('ERROR', `验证用户角色时出错，用户 UUID:${UUID}，错误信息：`, error)
-// 	// 			return false
-// 	// 		}
-// 	// 	} else {
-// 	// 		console.error('ERROR', `验证用户角色失败！用户 UUID 或 role 不存在，用户 UUID: ${UUID}`)
-// 	// 		return false
-// 	// 	}
-// 	// } catch (error) {
-// 	// 	console.error('ERROR', `验证用户角色失败！用户 UUID: ${UUID}`, error)
-// 	// 	return false
-// 	// }
-// 	return role !== 'admin' && role !== 'blocked'
-// }
+		const { email, newPasswordHash, verificationCode } = forgotPasswordRequest
+		const emailLowerCase = email.toLowerCase()
+		const now = new Date().getTime()
+
+		const { collectionName: userForgotPasswordVerificationCodeCollectionName, schemaInstance: userForgotPasswordVerificationCodeInstance } = UserForgotPasswordVerificationCodeSchema
+		type UserForgotPasswordVerificationCode = InferSchemaType<typeof userForgotPasswordVerificationCodeInstance>
+
+		const userForgoPasswordVerificationCodeWhere: QueryType<UserForgotPasswordVerificationCode> = {
+			emailLowerCase,
+			verificationCode,
+			overtimeAt: { $gte: now },
+		}
+		const userForgotPasswordVerificationCodeSelect: SelectType<UserForgotPasswordVerificationCode> = {
+			emailLowerCase: 1, // 用户邮箱
+		}
+
+		// 启动事务
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
+		const verificationCodeResult = await selectDataFromMongoDB<UserForgotPasswordVerificationCode>(userForgoPasswordVerificationCodeWhere, userForgotPasswordVerificationCodeSelect, userForgotPasswordVerificationCodeInstance, userForgotPasswordVerificationCodeCollectionName, { session })
+		if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
+			await abortAndEndSession(session)
+			const message = '找回密码时出错，验证失败'
+			console.error('ERROR', message)
+			return { success: false, message }
+		}
+
+		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
+		if (!newPasswordHashHash) {
+			await abortAndEndSession(session)
+			const message = '找回密码失败，未能散列新密码'
+			console.error('ERROR', message, { email })
+			return { success: false, message }
+		}
+
+		const { collectionName, schemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof schemaInstance>
+
+		const changePasswordWhere: QueryType<UserAuth> = {
+			emailLowerCase,
+		}
+		const changePasswordUpdate: UpdateType<UserAuth> = {
+			passwordHashHash: newPasswordHashHash,
+			editDateTime: now,
+		}
+
+		try {
+			const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
+			
+			if (!updateResult.success) {
+				await abortAndEndSession(session)
+				const message = '找回密码失败，更新密码失败'
+				console.error('ERROR', message, { email })
+				return { success: false, message }
+			}
+
+			await session.commitTransaction()
+			session.endSession()
+			return { success: true, message: '找回密码成功，密码已更新！' }
+		} catch (error) {
+			await abortAndEndSession(session)
+			const message = '找回密码时出错，更新密码时出错'
+			console.error('ERROR', message, { email, error })
+			return { success: false, message }
+		}
+	} catch (error) {
+		const message = '找回密码时出错，未知错误'
+		console.error('ERROR', message, error)
+		return { success: false, message }
+	}
+}
 
 /**
  * 检查用户名是否可用
  * @param checkUsernameRequest 检查用户名是否可用的请求载荷
- * @returns 检查用户名是否可用的请求响应
+ * @returns 检查用户名是否可用的请求响应，可用返回 true，否则返回 false
  */
-export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRequestDto): Promise<CheckUsernameResponseDto> => {
+export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRequestDto, excluedUuid: 'none' | string[] = 'none'): Promise<CheckUsernameResponseDto> => {
 	try {
 		if (checkCheckUsernameRequest(checkUsernameRequest)) {
 			const { username } = checkUsernameRequest
+			const usernameStandardized = username.trim().normalize()
+
+			if (!validateNameField(usernameStandardized)) {
+				console.error('ERROR', '用户名不合法')
+				return { success: false, message: '用户名不合法', isAvailableUsername: true }
+			}
+
 			const { collectionName, schemaInstance } = UserInfoSchema
 			type UserInfo = InferSchemaType<typeof schemaInstance>
 			const checkUsernameWhere: QueryType<UserInfo> = {
-				username: { $regex: new RegExp(`\\b${username}\\b`, 'iu') },
+				username: { $regex: new RegExp(`\\b${usernameStandardized}\\b`, 'iu') },
+			}
+			if (excluedUuid && excluedUuid !== 'none') { // 如果 excluedUuid 存在且不是 'none'，则在检查用户名可用性时增加排除用户（修改自己用户名时排除自己，或者排除一些官方号等...）
+				checkUsernameWhere.UUID = { $nin: excluedUuid }
 			}
 			const checkUsernameSelete: SelectType<UserInfo> = {
 				uid: 1,
@@ -2802,7 +2883,7 @@ export const adminClearUserInfoService = async (adminClearUserInfoRequest: Admin
 			signature: '',
 			gender: '',
 			label: [] as UserInfo['label'], // TODO: Mongoose issue: #12420
-			userBirthday: -1,
+			userBirthday: '',
 			userProfileMarkdown: '',
 			userLinkedAccounts: [] as UserInfo['userLinkedAccounts'], // TODO: Mongoose issue: #12420
 			userWebsite: { websiteName: '', websiteUrl: '' },
@@ -2844,33 +2925,15 @@ export const adminEditUserInfoService = async (adminEditUserInfoRequest: AdminEd
 
 		const { uid } = adminEditUserInfoRequest
 		const { username } = adminEditUserInfoRequest.userInfo
+		const usernameStandardized = username.trim().normalize()
 		const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
 
 		if (username) {
-			const getUserInfoWhere: QueryType<UserInfo> = {
-				username: { $regex: new RegExp(`\\b${username}\\b`, 'iu') },
-			}
-			const getUserInfoSelect: SelectType<UserInfo> = {
-				uid: 1,
-				username: 1,
-			}
-			const checkUsernameResult = await selectDataFromMongoDB<UserInfo>(getUserInfoWhere, getUserInfoSelect, userInfoSchemaInstance, userInfoCollectionName)
+			const checkResult = await checkUsernameService({ username: usernameStandardized })
 
-			let isSafeUsername = false
-			if (checkUsernameResult.success) {
-				if (checkUsernameResult.result.length === 0) {
-					isSafeUsername = true
-				}
-				if (checkUsernameResult.result.length === 1) {
-					if (checkUsernameResult.result[0].uid === uid) {
-						isSafeUsername = true
-					}
-				}
-			}
-
-			if (!isSafeUsername) {
-				console.error('ERROR', '更新用户信息失败，用户重名', { adminEditUserInfoRequest, uid })
-				return { success: false, message: '更新用户信息失败，用户重名' }
+			if (!checkResult.success || !checkResult.isAvailableUsername) {
+				console.error('ERROR', '管理员编辑用户信息失败，用户名不可用', { adminEditUserInfoRequest, uid })
+				return { success: false, message: '管理员编辑用户信息失败，用户名不可用' }
 			}
 		}
 
@@ -4433,6 +4496,32 @@ const checkUpdateUserPasswordRequest = (updateUserPasswordRequest: UpdateUserPas
 		&& !!updateUserPasswordRequest.newPasswordHash
 		&& !!updateUserPasswordRequest.oldPasswordHash
 		&& !!updateUserPasswordRequest.verificationCode && updateUserPasswordRequest.verificationCode.length === 6
+	)
+}
+
+/**
+ * 验证请求发送忘记密码的邮箱验证码的请求载荷
+ * @param requestSendForgotPasswordVerificationCodeRequest 请求发送忘记密码的邮箱验证码的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkRequestSendForgotPasswordVerificationCodeRequest = (requestSendForgotPasswordVerificationCodeRequest: RequestSendForgotPasswordVerificationCodeRequestDto): boolean => {
+	return (
+		true
+		&& !!requestSendForgotPasswordVerificationCodeRequest.email
+	)
+}
+
+/**
+ * 验证忘记密码（更新密码）的请求载荷
+ * @param forgotPasswordRequest 忘记密码（更新密码）的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkForgotPasswordRequest = (forgotPasswordRequest: ForgotPasswordRequestDto): boolean => {
+	return (
+		true
+		&& !!forgotPasswordRequest.email
+		&& !!forgotPasswordRequest.newPasswordHash
+		&& !!forgotPasswordRequest.verificationCode && forgotPasswordRequest.verificationCode.length === 6
 	)
 }
 

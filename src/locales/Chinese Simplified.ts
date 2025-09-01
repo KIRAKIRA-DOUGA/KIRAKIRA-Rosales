@@ -17,14 +17,19 @@ export default {
 		mailHeading: "你更改密码的验证码是",
 		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
+	SendResetPasswordVerificationCode: {
+		mailTitle: "KIRAKIRA - 找回密码验证码",
+		mailHeading: "你找回密码的验证码是",
+		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
+	},
 	SendLoginVerificationCode: {
 		mailTitle: "KIRAKIRA - 登录验证码",
-		mailHeading: "您的登录验证码是",
+		mailHeading: "你的登录验证码是",
 		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
 	SendDisableUserEmail2FAVerificationCode: {
-		mailTitle: "KIRAKIRA - 禁用电子邮件 2FA 验证码",
-		mailHeading: "您的验证码是",
+		mailTitle: "KIRAKIRA - 禁用邮箱双重验证验证码",
+		mailHeading: "你的验证码是",
 		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
 }

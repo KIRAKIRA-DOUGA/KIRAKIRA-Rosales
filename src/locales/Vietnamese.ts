@@ -3,6 +3,7 @@
 
 export default {
 	SendVerificationCode: {
+		mailTitle: "KIRAKIRA - Mã Xác Minh Đăng Ký",
 		mailHeading: "Mã xác minh đăng ký của bạn là",
 		mailText: "Chào mừng đến với KIRAKIRA. Bạn có thể sử dụng mã xác minh này để đăng ký tài khoản của mình.\nMã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
 	},
@@ -16,10 +17,17 @@ export default {
 		mailHeading: "Mã xác minh đổi mật khẩu của bạn là",
 		mailText: "Mã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
 	},
+	SendResetPasswordVerificationCode: {
+		mailText: "Mã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
+	},
 	SendLoginVerificationCode: {
+		mailTitle: "KIRAKIRA - Mã Xác Minh Đăng Nhập",
+		mailHeading: "Mã xác minh đăng nhập của bạn là",
 		mailText: "Mã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
 	},
 	SendDisableUserEmail2FAVerificationCode: {
+		mailTitle: "KIRAKIRA - Vô hiệu xác minh 2 bước qua email",
+		mailHeading: "Mã xác minh của bạn là",
 		mailText: "Mã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
 	},
 }

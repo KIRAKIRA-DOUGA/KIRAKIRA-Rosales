@@ -2,9 +2,32 @@
 
 
 export default {
-	SendVerificationCode: {},
-	SendChangeEmailVerificationCode: {},
-	SendChangePasswordVerificationCode: {},
-	SendLoginVerificationCode: {},
-	SendDisableUserEmail2FAVerificationCode: {},
+	SendVerificationCode: {
+		mailTitle: "KIRAKIRA - Kode Verifikasi Pendaftaran",
+		mailHeading: "Kode verifikasi pendaftaran Anda adalah",
+		mailText: "Selamat datang di KIRAKIRA. Anda bisa menggunakan kode verifikasi ini untuk mendaftar.\nKode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
+	},
+	SendChangeEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - Kode Verifikasi Ganti Email",
+		mailHeading: "Kode verifikasi ganti email Anda adalah",
+		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
+	},
+	SendChangePasswordVerificationCode: {
+		mailTitle: "KIRAKIRA - Kode Verifikasi Ubah Kata Sandi",
+		mailHeading: "Kode verifikasi ubah kata sandi Anda adalah",
+		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
+	},
+	SendResetPasswordVerificationCode: {
+		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
+	},
+	SendLoginVerificationCode: {
+		mailTitle: "KIRAKIRA - Kode Verifikasi Masuk",
+		mailHeading: "Kode verifikasi masuk Anda adalah",
+		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
+	},
+	SendDisableUserEmail2FAVerificationCode: {
+		mailTitle: "KIRAKIRA - Kode Verifikasi Otentikasi 2 Faktor",
+		mailHeading: "Kode verifikasi Anda adalah",
+		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
+	},
 }

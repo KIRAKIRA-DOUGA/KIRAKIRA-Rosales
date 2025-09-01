@@ -17,6 +17,11 @@ export default {
 		mailHeading: "Votre code de vérification de mot de passe de changement est",
 		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
 	},
+	SendResetPasswordVerificationCode: {
+		mailTitle: "KIRAKIRA - Réinitialiser le code de vérification du mot de passe",
+		mailHeading: "Le code de vérification de votre mot de passe de réinitialisation est",
+		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+	},
 	SendLoginVerificationCode: {
 		mailTitle: "KIRAKIRA - Code de vérification de connexion",
 		mailHeading: "Votre code de vérification de connexion est",

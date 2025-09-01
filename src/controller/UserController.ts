@@ -4,7 +4,6 @@ import {
 	adminClearUserInfoService,
 	adminGetUserInfoService,
 	approveUserInfoService,
-	// blockUserByUIDService,
 	changePasswordService,
 	checkInvitationCodeService,
 	checkUsernameService,
@@ -16,10 +15,9 @@ import {
 	getUserAvatarUploadSignedUrlService,
 	getUserInfoByUidService,
 	getUserSettingsService,
-	// reactivateUserByUIDService,
 	requestSendChangeEmailVerificationCodeService,
 	requestSendChangePasswordVerificationCodeService,
-	RequestSendVerificationCodeService,
+	requestSendVerificationCodeService,
 	updateOrCreateUserInfoService,
 	updateOrCreateUserSettingsService,
 	updateUserEmailService,
@@ -39,6 +37,8 @@ import {
 	userEmailExistsCheckService,
 	adminEditUserInfoService,
 	adminGetUserByInvitationCodeService,
+	forgotPasswordService,
+	requestSendForgotPasswordVerificationCodeService,
 } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import {
@@ -52,12 +52,14 @@ import {
 	ConfirmUserTotpAuthenticatorRequestDto,
 	DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto,
 	DeleteUserEmailAuthenticatorRequestDto,
+	ForgotPasswordRequestDto,
 	GetBlockedUserRequestDto,
 	GetSelfUserInfoRequestDto,
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
 	RequestSendChangeEmailVerificationCodeRequestDto,
 	RequestSendChangePasswordVerificationCodeRequestDto,
+	RequestSendForgotPasswordVerificationCodeRequestDto,
 	RequestSendVerificationCodeRequestDto,
 	SendDeleteUserEmailAuthenticatorVerificationCodeRequestDto,
 	SendUserEmailAuthenticatorVerificationCodeRequestDto,
@@ -342,11 +344,11 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateOrCreateUserInfoRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
@@ -363,7 +365,7 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 		userLinkedAccounts: data?.userLinkedAccounts,
 		userWebsite: data?.userWebsite,
 	}
-	ctx.body = await updateOrCreateUserInfoService(updateOrCreateUserInfoRequest, uid, token)
+	ctx.body = await updateOrCreateUserInfoService(updateOrCreateUserInfoRequest, uuid, token)
 	await next()
 }
 
@@ -560,7 +562,7 @@ export const requestSendVerificationCodeController = async (ctx: koaCtx, next: k
 		clientLanguage: data.clientLanguage,
 	}
 
-	ctx.body = await RequestSendVerificationCodeService(requestSendVerificationCodeRequest)
+	ctx.body = await requestSendVerificationCodeService(requestSendVerificationCodeRequest)
 	await next()
 }
 
@@ -665,7 +667,7 @@ export const requestSendChangePasswordVerificationCodeController = async (ctx: k
  * 更新用户密码
  * @param ctx context
  * @param next context
- * @return UpdateUserPasswordResponseDto 更新结果，如果更新成功则 success: true，不成功则 success: false
+ * @return 更新结果，如果更新成功则 success: true，不成功则 success: false
  */
 export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateUserPasswordRequestDto>
@@ -678,6 +680,42 @@ export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) =
 	const token = ctx.cookies.get('token')
 
 	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uid, token)
+	ctx.body = updateUserEmailResponse
+	await next()
+}
+
+/**
+ * 请求发送忘记密码的邮箱验证码
+ * @param ctx context
+ * @param next context
+ */
+export const requestSendForgotPasswordVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<RequestSendForgotPasswordVerificationCodeRequestDto>
+
+	const requestSendForgotPasswordVerificationCodeRequest: RequestSendForgotPasswordVerificationCodeRequestDto = {
+		email: data.email ?? '',
+		clientLanguage: data.clientLanguage,
+	}
+
+	ctx.body = await requestSendForgotPasswordVerificationCodeService(requestSendForgotPasswordVerificationCodeRequest)
+	await next()
+}
+
+/**
+ * 找回密码（更新密码）
+ * @param ctx context
+ * @param next context
+ * @return 更新结果，如果更新成功则 success: true，不成功则 success: false
+ */
+export const forgotPasswordController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<ForgotPasswordRequestDto>
+	const updateUserPasswordRequest: ForgotPasswordRequestDto = {
+		email: data?.email ?? '',
+		newPasswordHash: data?.newPasswordHash ?? '',
+		verificationCode: data?.verificationCode ?? '',
+	}
+
+	const updateUserEmailResponse = await forgotPasswordService(updateUserPasswordRequest)
 	ctx.body = updateUserEmailResponse
 	await next()
 }

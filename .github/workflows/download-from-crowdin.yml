@@ -1,12 +1,7 @@
-name: Sync Crowdin
+name: Download Translations from Crowdin
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - develop
-    paths:
-      - src/locales/English.ts
 
 jobs:
   Sync:
@@ -38,15 +33,6 @@ jobs:
         git checkout develop
         git pull origin develop
         git checkout -b translations
-
-    - name: Upload source files to Crowdin
-      run: |
-        mv src/locales/English.ts src/locales/English.json
-        crowdin upload sources --token ${{ secrets.CROWDIN_PERSONAL_TOKEN }} --project-id ${{ secrets.CROWDIN_PROJECT_ID }} -c crowdin.yml -b "[KIRAKIRA-DOUGA.KIRAKIRA-Rosales] develop"
-      env:
-        CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
-        CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
-
     - name: Download translations from Crowdin
       run: crowdin download translations --token ${{ secrets.CROWDIN_PERSONAL_TOKEN }} --project-id ${{ secrets.CROWDIN_PROJECT_ID }} -c crowdin.yml -b "[KIRAKIRA-DOUGA.KIRAKIRA-Rosales] develop"
       env:
@@ -67,7 +53,7 @@ jobs:
         git fetch origin develop:develop
         echo "由 GitHub Actions 自动生成的翻译更新 PR。" > pr_body.txt
         echo "### 本次更新的翻译文件：" >> pr_body.txt
-        git diff --name-only develop..translations -- src/locales >> pr_body.txt
+        git diff --diff-filter=M --name-only develop..translations -- src/locales | grep -E '\.ts$' >> pr_body.txt || echo "无文件变动" >> pr_body.txt
         echo "" >> pr_body.txt
 
     - name: Commit and push translations

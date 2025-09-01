@@ -1,0 +1,35 @@
+name: Upload Original to Crowdin
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - src/locales/English.ts
+
+jobs:
+  Sync:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0  # 获取完整历史记录，以便删除远程分支
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Crowdin CLI
+      run: npm install -g @crowdin/cli
+
+    - name: Upload source files to Crowdin
+      run: |
+        mv src/locales/English.ts src/locales/English.json
+        crowdin upload sources --token ${{ secrets.CROWDIN_PERSONAL_TOKEN }} --project-id ${{ secrets.CROWDIN_PROJECT_ID }} -c crowdin.yml -b "[KIRAKIRA-DOUGA.KIRAKIRA-Rosales] develop"
+      env:
+        CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+        CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
