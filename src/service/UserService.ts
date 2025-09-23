@@ -869,6 +869,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
 					signature: '$user_info_data.signature', // 用户的个性签名
 					gender: '$user_info_data.gender', // 用户的性别
+					userBirthday: '$user_info_data.userBirthday', // 用户的生日
 					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
 				}
 			}
@@ -970,6 +971,7 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
 					signature: '$user_info_data.signature', // 用户的个性签名
 					gender: '$user_info_data.gender', // 用户的性别
+					userBirthday: '$user_info_data.userBirthday', // 用户的生日
 					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
 				}
 			}
@@ -2254,7 +2256,7 @@ export const requestSendForgotPasswordVerificationCodeService = async (requestSe
 
 		try {
 			const forgotPasswordVerificationCodeHistoryResult = await selectDataFromMongoDB<UserForgotPasswordVerificationCode>(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeSelect, schemaInstance, collectionName, { session })
-			
+
 			if (!forgotPasswordVerificationCodeHistoryResult.success) {
 				await abortAndEndSession(session)
 				const message = '请求发送忘记密码的验证码失败，获取验证码失败'
@@ -2294,7 +2296,7 @@ export const requestSendForgotPasswordVerificationCodeService = async (requestSe
 				editDateTime: nowTime,
 			}
 			const updateResult = await findOneAndUpdateData4MongoDB(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeUpdate, schemaInstance, collectionName, { session })
-			
+
 			if (!updateResult.success) {
 				await abortAndEndSession(session)
 				const message = '请求发送忘记密码的验证码失败，更新或新增验证码失败'
@@ -2400,7 +2402,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 
 		try {
 			const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
-			
+
 			if (!updateResult.success) {
 				await abortAndEndSession(session)
 				const message = '找回密码失败，更新密码失败'
