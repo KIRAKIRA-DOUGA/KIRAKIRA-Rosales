@@ -10,7 +10,7 @@
 		"start": "tsc --noEmitOnError --sourceMap --outDir .kirakira && npm run copy-assets-dev && node ./.kirakira/app.js",
 		"dev": "npm start",
 		"serve": "npm start",
-		"dev-hot": "nodemon --watch src/**/* --delay 1500ms -e ts --exec npm start",
+		"dev-hot": "nodemon --watch src --delay 2 -e ts --exec \"npm start\"",
 		"build": "tsc --removeComments --declaration && npm run copy-assets-build",
 		"copy-assets-dev": "npx cpx2 \"src/assets/**/*\" .kirakira/",
 		"copy-assets-build": "npx cpx2 \"src/assets/**/*\" dist/"

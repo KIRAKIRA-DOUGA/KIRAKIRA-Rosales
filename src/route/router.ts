@@ -150,7 +150,7 @@ router.post('/user/update/email', updateUserEmailController) // 更新用户邮�
 
 router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或创建用户信息
 // https://localhost:9999/user/update/info
-// cookie: uid, token
+// cookie: uuid, token
 // {
 // 	"username": "XXXXXXXXX",
 // 	"avatar": "https://xxx.xxx.xxx/xxx.png",
@@ -163,7 +163,7 @@ router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或�
 // 					"labelName": "bbbbbb"
 // 			}
 // 	],
-// 	"userBirthday": '',
+// 	"userBirthday": "",
 // 	"userProfileMarkdown": "### 小作文时间！",
 // 	"userLinkAccounts": [
 // 			{

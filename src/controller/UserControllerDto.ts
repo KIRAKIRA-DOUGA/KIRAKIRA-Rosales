@@ -260,7 +260,7 @@ export type GetSelfUserInfoResponseDto = {
 			/** 用户的角色 */
 			roles?: string[];
 			/** 2FA 的类型 */
-			typeOf2FA?: string;
+			authenticatorType?: string;
 			/** 使用的邀请码 */
 			invitationCode?: string;
 		}

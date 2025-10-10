@@ -705,61 +705,57 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
  * @param token 用户 token
  * @returns 更新或创建用户信息的请求结果
  */
-export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto, uid: number, token: string): Promise<UpdateOrCreateUserInfoResponseDto> => {
+export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto, uuid: string, token: string): Promise<UpdateOrCreateUserInfoResponseDto> => {
 	try {
-		if (await checkUserToken(uid, token)) {
-			if (checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
-				const { collectionName, schemaInstance } = UserInfoSchema
-				type UserInfo = InferSchemaType<typeof schemaInstance>
-				const { username, userNickname } = updateOrCreateUserInfoRequest
+		if (!checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
+			console.error('ERROR', '更新用户信息时失败，参数校验未通过', { updateOrCreateUserInfoRequest, uuid })
+			return { success: false, message: '更新用户数据时失败，参数校验未通过' }
+		}
 
-				const usernameStandardized = username.trim().normalize();
-
-				if (usernameStandardized) {
-					const checkUserNameResult = await checkUsernameService({ username: usernameStandardized })
-					if (!checkUserNameResult.success || !checkUserNameResult.isAvailableUsername) {
-						console.error('ERROR', '更新用户信息失败，用户重名', { updateOrCreateUserInfoRequest, uid })
-						return { success: false, message: '更新用户信息失败，用户重名' }
-					}
-				}
-
-				if (userNickname && !validateNameField(userNickname)) {
-					console.error('ERROR', '更新用户信息失败，用户昵称不合法，用户 UID:', uid)
-					return { success: false, message: '更新用户信息失败，用户昵称不合法' }
-				}
-
-				const editOperatorUUID = await getUserUuid(uid)
-				if (!editOperatorUUID) {
-					console.error('ERROR', '更新或创建用户信息失败，UUID 不存在', { updateOrCreateUserInfoRequest, uid })
-					return { success: false, message: '更新或创建用户信息失败，UUID 不存在' }
-				}
-
-				const updateUserInfoWhere: QueryType<UserInfo> = {
-					uid,
-				}
-				const updateUserInfoUpdate: UpdateType<UserInfo> = {
-					...updateOrCreateUserInfoRequest,
-					label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
-					userLinkedAccounts: updateOrCreateUserInfoRequest.userLinkedAccounts as UserInfo['userLinkedAccounts'], // TODO: Mongoose issue: #12420
-					isUpdatedAfterReview: true,
-					editOperatorUUID,
-					editDateTime: new Date().getTime(),
-				}
-				const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
-				if (updateResult && updateResult.success && updateResult.result) {
-					return { success: true, message: '更新用户信息成功', result: updateResult.result }
-				} else {
-					console.error('ERROR', '更新用户信息失败，没有返回用户数据', { updateOrCreateUserInfoRequest, uid })
-					return { success: false, message: '更新用户信息失败，没有返回用户数据' }
-				}
-			} else {
-				console.error('ERROR', '更新用户信息时失败，未找到必要的数据，或者关联账户平台类型不合法：', { updateOrCreateUserInfoRequest, uid })
-				return { success: false, message: '更新用户数据时失败，必要的数据为空或关联平台信息出错' }
-			}
-		} else {
-			console.error('ERROR', '更新用户数据时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uid })
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			console.error('ERROR', '更新用户信息时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uuid })
 			return { success: false, message: '更新用户数据时失败，非法用户！' }
 		}
+
+		const { collectionName, schemaInstance } = UserInfoSchema
+		type UserInfo = InferSchemaType<typeof schemaInstance>
+		const { username, userNickname } = updateOrCreateUserInfoRequest
+
+		const usernameStandardized = username.trim().normalize();
+
+		if (usernameStandardized) {
+			const checkUserNameResult = await checkUsernameService({ username: usernameStandardized }, [uuid]) // exclude self when check duplicate username
+			if (!checkUserNameResult.success || !checkUserNameResult.isAvailableUsername) {
+				console.error('ERROR', '更新用户信息失败，用户重名', { updateOrCreateUserInfoRequest, uuid })
+				return { success: false, message: '更新用户信息失败，用户重名' }
+			}
+		}
+
+		if (userNickname && !validateNameField(userNickname)) {
+			console.error('ERROR', '更新用户信息失败，用户昵称不合法，用户 UUID:', uuid)
+			return { success: false, message: '更新用户信息失败，用户昵称不合法' }
+		}
+
+		const updateUserInfoWhere: QueryType<UserInfo> = {
+			UUID: uuid,
+		}
+		const updateUserInfoUpdate: UpdateType<UserInfo> = {
+			...updateOrCreateUserInfoRequest,
+			username: usernameStandardized, // username 经过了特殊处理，所以需要覆盖前面展开的 updateOrCreateUserInfoRequest
+			label: updateOrCreateUserInfoRequest.label as UserInfo['label'], // TODO: Mongoose issue: #12420
+			userLinkedAccounts: updateOrCreateUserInfoRequest.userLinkedAccounts as UserInfo['userLinkedAccounts'], // TODO: Mongoose issue: #12420
+			isUpdatedAfterReview: true,
+			editOperatorUUID: uuid,
+			editDateTime: new Date().getTime(),
+		}
+		const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
+
+		if (!updateResult || !updateResult.success || !updateResult.result) {
+			console.error('ERROR', '更新用户信息失败，没有返回用户数据', { updateOrCreateUserInfoRequest, uuid })
+			return { success: false, message: '更新用户信息失败，没有返回用户数据' }
+		}
+
+		return { success: true, message: '更新用户信息成功', result: updateResult.result }
 	} catch (error) {
 		console.error('ERROR', '更新用户信息时失败，未知异常', error)
 		return { success: false, message: '更新用户数据时失败，未知异常' }
@@ -873,6 +869,7 @@ export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUser
 					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
 					signature: '$user_info_data.signature', // 用户的个性签名
 					gender: '$user_info_data.gender', // 用户的性别
+					userBirthday: '$user_info_data.userBirthday', // 用户的生日
 					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
 				}
 			}
@@ -974,6 +971,7 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
 					signature: '$user_info_data.signature', // 用户的个性签名
 					gender: '$user_info_data.gender', // 用户的性别
+					userBirthday: '$user_info_data.userBirthday', // 用户的生日
 					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
 				}
 			}
@@ -2258,7 +2256,7 @@ export const requestSendForgotPasswordVerificationCodeService = async (requestSe
 
 		try {
 			const forgotPasswordVerificationCodeHistoryResult = await selectDataFromMongoDB<UserForgotPasswordVerificationCode>(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeSelect, schemaInstance, collectionName, { session })
-			
+
 			if (!forgotPasswordVerificationCodeHistoryResult.success) {
 				await abortAndEndSession(session)
 				const message = '请求发送忘记密码的验证码失败，获取验证码失败'
@@ -2298,7 +2296,7 @@ export const requestSendForgotPasswordVerificationCodeService = async (requestSe
 				editDateTime: nowTime,
 			}
 			const updateResult = await findOneAndUpdateData4MongoDB(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeUpdate, schemaInstance, collectionName, { session })
-			
+
 			if (!updateResult.success) {
 				await abortAndEndSession(session)
 				const message = '请求发送忘记密码的验证码失败，更新或新增验证码失败'
@@ -2404,7 +2402,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 
 		try {
 			const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
-			
+
 			if (!updateResult.success) {
 				await abortAndEndSession(session)
 				const message = '找回密码失败，更新密码失败'
@@ -2433,7 +2431,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
  * @param checkUsernameRequest 检查用户名是否可用的请求载荷
  * @returns 检查用户名是否可用的请求响应，可用返回 true，否则返回 false
  */
-export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRequestDto): Promise<CheckUsernameResponseDto> => {
+export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRequestDto, excluedUuid: 'none' | string[] = 'none'): Promise<CheckUsernameResponseDto> => {
 	try {
 		if (checkCheckUsernameRequest(checkUsernameRequest)) {
 			const { username } = checkUsernameRequest
@@ -2448,6 +2446,9 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 			type UserInfo = InferSchemaType<typeof schemaInstance>
 			const checkUsernameWhere: QueryType<UserInfo> = {
 				username: { $regex: new RegExp(`\\b${usernameStandardized}\\b`, 'iu') },
+			}
+			if (excluedUuid && excluedUuid !== 'none') { // 如果 excluedUuid 存在且不是 'none'，则在检查用户名可用性时增加排除用户（修改自己用户名时排除自己，或者排除一些官方号等...）
+				checkUsernameWhere.UUID = { $nin: excluedUuid }
 			}
 			const checkUsernameSelete: SelectType<UserInfo> = {
 				uid: 1,
