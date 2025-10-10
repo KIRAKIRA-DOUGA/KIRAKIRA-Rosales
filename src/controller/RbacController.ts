@@ -1,3 +1,4 @@
+import { limitPageSize, parseInteger } from '../common/ValidTool.js'
 import { isPassRbacCheck, createRbacApiPathService, createRbacRoleService, updateApiPathPermissionsForRoleService, getRbacApiPathService, deleteRbacApiPathService, deleteRbacRoleService, getRbacRoleService, adminGetUserRolesByUidService, adminUpdateUserRoleService } from '../service/RbacService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminGetUserRolesByUidRequestDto, AdminUpdateUserRoleRequestDto, CreateRbacApiPathRequestDto, CreateRbacRoleRequestDto, DeleteRbacApiPathRequestDto, DeleteRbacRoleRequestDto, GetRbacApiPathRequestDto, GetRbacRoleRequestDto, UpdateApiPathPermissionsForRoleRequestDto } from './RbacControllerDto.js'
@@ -61,8 +62,8 @@ export const getRbacApiPathController = async (ctx: koaCtx, next: koaNext) => {
 	const apiPathType = ctx.query.apiPathType as string
 	const apiPathColor = ctx.query.apiPathColor as string
 	const apiPathDescription = ctx.query.apiPathDescription as string
-	const page = parseInt(ctx.query.page as string, 10)
-	const pageSize = parseInt(ctx.query.pageSize as string, 10) 
+	const page = parseInteger(ctx.query.page as string)
+	const finalPageSize = limitPageSize(ctx.query.pageSize as string)
 
 	const uuid = ctx.cookies.get('uuid') ?? ''
 	const token = ctx.cookies.get('token') ?? ''
@@ -81,7 +82,7 @@ export const getRbacApiPathController = async (ctx: koaCtx, next: koaNext) => {
 		},
 		pagination: {
 			page,
-			pageSize,
+			pageSize: finalPageSize ?? 50,
 		},
 	}
 	const getRbacApiPathResponse = await getRbacApiPathService(getRbacApiPathRequest, uuid, token)
@@ -148,8 +149,8 @@ export const getRbacRoleController = async (ctx: koaCtx, next: koaNext) => {
 	const roleType = ctx.query.roleType as string
 	const roleColor = ctx.query.roleColor as string
 	const roleDescription = ctx.query.roleDescription as string
-	const page = parseInt(ctx.query.page as string, 10)
-	const pageSize = parseInt(ctx.query.pageSize as string, 10) 
+	const page = parseInteger(ctx.query.page as string)
+	const finalPageSize = limitPageSize(ctx.query.pageSize as string)
 
 	const uuid = ctx.cookies.get('uuid') ?? ''
 	const token = ctx.cookies.get('token') ?? ''
@@ -168,7 +169,7 @@ export const getRbacRoleController = async (ctx: koaCtx, next: koaNext) => {
 		},
 		pagination: {
 			page,
-			pageSize,
+			pageSize: finalPageSize ?? 50,
 		},
 	}
 	const getRbacRoleResponse = await getRbacRoleService(getRbacRoleRequest, uuid, token)
@@ -247,7 +248,7 @@ export const adminUpdateUserRoleController = async (ctx: koaCtx, next: koaNext) 
  * @param next context
  */
 export const adminGetUserRolesByUidController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.query.uid as string, 10) 
+	const uid = parseInteger(ctx.query.uid as string)
 
 	const adminUuid = ctx.cookies.get('uuid') ?? ''
 	const adminToken = ctx.cookies.get('token') ?? ''

@@ -1,4 +1,5 @@
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
+import { limitPageSize, parseInteger } from '../common/ValidTool.js'
 import { isPassRbacCheck } from '../service/RbacService.js'
 import {
 	adminClearUserInfoService,
@@ -317,7 +318,7 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 		passwordHash: data?.passwordHash,
 		verificationCode: data?.verificationCode,
 	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	const updateUserEmailResponse = await updateUserEmailService(updateUserEmailRequest, uid, token)
@@ -344,7 +345,7 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateOrCreateUserInfoRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
@@ -378,7 +379,7 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<GetSelfUserInfoRequestDto>
 
-	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const uid = parseInteger(ctx.cookies.get('uid')) || data?.uid
 	const token = ctx.cookies.get('token') || data?.token
 
 	const getSelfUserInfoRequest: GetSelfUserInfoRequestDto = {
@@ -416,7 +417,7 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = ctx.query.uid as string
 	const getUserInfoByUidRequest: GetUserInfoByUidRequestDto = {
-		uid: uid ? parseInt(uid, 10) : -1, // WARN -1 代表这个 UID 是永远无法查找到结果
+		uid: uid ? parseInteger(uid) : -1, // WARN -1 代表这个 UID 是永远无法查找到结果
 	}
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
@@ -434,7 +435,7 @@ export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => 
 export const userExistsCheckByUIDController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = ctx.query.uid as string
 	const userExistsCheckRequest: UserExistsCheckByUIDRequestDto = {
-		uid: uid ? parseInt(uid, 10) : -1,
+		uid: uid ? parseInteger(uid) : -1,
 	}
 	ctx.body = await checkUserExistsByUIDService(userExistsCheckRequest)
 	await next()
@@ -449,7 +450,7 @@ export const userExistsCheckByUIDController = async (ctx: koaCtx, next: koaNext)
  */
 export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 	const uidString = ctx.cookies.get('uid')
-	const uid = parseInt(uidString, 10)
+	const uid = parseInteger(uidString)
 	const token = ctx.cookies.get('token')
 
 	const checkUserTokenResponse = await checkUserTokenService(uid, token)
@@ -508,7 +509,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
 	await next()
@@ -522,7 +523,7 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
 export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<GetUserSettingsRequestDto>
 
-	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const uid = parseInteger(ctx.cookies.get('uid')) || data?.uid
 	const token = ctx.cookies.get('token') || data?.token
 
 	ctx.body = await getUserSettingsService(uid, token)
@@ -538,7 +539,7 @@ export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateOrCreateUserSettingsRequestDto>
 
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	const updateOrCreateUserSettingsRequest: UpdateOrCreateUserSettingsRequestDto = {
@@ -572,7 +573,7 @@ export const requestSendVerificationCodeController = async (ctx: koaCtx, next: k
  * @param next context
  */
 export const createInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await createInvitationCodeService(uid, token)
@@ -585,7 +586,7 @@ export const createInvitationCodeController = async (ctx: koaCtx, next: koaNext)
  * @param next context
  */
 export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await getMyInvitationCodeService(uid, token)
@@ -638,7 +639,7 @@ export const requestSendChangeEmailVerificationCodeController = async (ctx: koaC
 		newEmail: data.newEmail,
 		clientLanguage: data.clientLanguage,
 	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await requestSendChangeEmailVerificationCodeService(requestSendChangeEmailVerificationCodeRequest, uid, token)
@@ -656,7 +657,7 @@ export const requestSendChangePasswordVerificationCodeController = async (ctx: k
 	const requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto = {
 		clientLanguage: data.clientLanguage,
 	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await requestSendChangePasswordVerificationCodeService(requestSendChangePasswordVerificationCodeRequest, uid, token)
@@ -676,7 +677,7 @@ export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) =
 		newPasswordHash: data?.newPasswordHash ?? '',
 		verificationCode: data?.verificationCode ?? '',
 	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uid, token)
@@ -754,7 +755,7 @@ export const getBlockedUserController = async (ctx: koaCtx, next: koaNext) => {
 
 	const sortBy = ctx.query.sortBy as string
 	const sortOrder = ctx.query.sortOrder as string
-	const uid = parseInt(ctx.query.uid as string, 10)
+	const uid = parseInteger(ctx.query.uid as string)
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
 
@@ -763,8 +764,8 @@ export const getBlockedUserController = async (ctx: koaCtx, next: koaNext) => {
 		sortOrder: sortOrder ?? 'ascend',
 		uid: uid ?? -1,
 		pagination: {
-			page: parseInt(page || '1', 10) ?? 1,
-			pageSize: Number.isFinite(parseInt(pageSize, 10)) ? parseInt(pageSize, 10) : Number.MAX_SAFE_INTEGER,
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: Number.isFinite(parseInteger(pageSize)) ? parseInteger(pageSize) : Number.MAX_SAFE_INTEGER,
 		},
 	}
 
@@ -791,9 +792,10 @@ export const adminGetUserInfoController = async (ctx: koaCtx, next: koaNext) => 
 	const isOnlyShowUserInfoUpdatedAfterReviewString = ctx.query.isOnlyShowUserInfoUpdatedAfterReview as string
 	const sortBy = ctx.query.sortBy as string
 	const sortOrder = ctx.query.sortOrder as string
-	const uid = parseInt(ctx.query.uid as string || '-1', 10)
+	const uid = parseInteger(ctx.query.uid as string || '-1')
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
+	const finalPageSize = limitPageSize(pageSize)
 
 	const adminGetUserInfoRequest: AdminGetUserInfoRequestDto = {
 		isOnlyShowUserInfoUpdatedAfterReview: typeof isOnlyShowUserInfoUpdatedAfterReviewString === 'string' && isOnlyShowUserInfoUpdatedAfterReviewString === 'true',
@@ -801,8 +803,8 @@ export const adminGetUserInfoController = async (ctx: koaCtx, next: koaNext) => 
 		sortOrder: sortOrder ?? 'ascend',
 		uid: uid ?? -1,
 		pagination: {
-			page: parseInt(page || '1', 10) ?? 1,
-			pageSize: parseInt(pageSize, 10) ?? Number.MAX_SAFE_INTEGER,
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: finalPageSize ?? 50,
 		},
 	}
 
