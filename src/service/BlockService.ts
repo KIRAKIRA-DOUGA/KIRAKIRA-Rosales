@@ -6,6 +6,7 @@ import { QueryType, SelectType } from "../dbPool/DbClusterPoolTypes.js";
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
 import { selectDataFromMongoDB, insertData2MongoDB, deleteDataFromMongoDB, selectDataByAggregateFromMongoDB } from "../dbPool/DbClusterPool.js";
 import { BlockListSchema, UnblockListSchema } from "../dbPool/schema/BlockSchema.js";
+import { parseInteger } from '../common/ValidTool.js'
 
 const MAX_KEYWORD_LENGTH = 30; // 关键词长度限制
 const MAX_REGEX_LENGTH = 30; // 正则表达式长度限制
@@ -1053,7 +1054,7 @@ export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?:
 					keywordList.push(block.value)
 					break
 				case 'tag':
-					tagIdList.push(parseInt(block.value ?? '-1', 10))
+					tagIdList.push(parseInteger(block.value ?? '-1'))
 					break
 				case 'regex':
 					regexList.push(block.value)

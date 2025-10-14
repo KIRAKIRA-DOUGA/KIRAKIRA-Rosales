@@ -1,3 +1,4 @@
+import { limitPageSize, parseInteger } from '../common/ValidTool.js'
 import { addRegexService, blockKeywordService, blockTagService, blockUserByUidService, getBlockListService, hideUserByUidService, removeRegexService, showUserService, unBlockKeywordService, unBlockTagService, unBlockUserService } from '../service/BlockService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AddRegexRequestDto, BlockKeywordRequestDto, BlockTagRequestDto, BlockUserByUidRequestDto, GetBlockListRequestDto, HideUserByUidRequestDto, RemoveRegexRequestDto, ShowUserByUidRequestDto, UnblockKeywordRequestDto, UnblockTagRequestDto, UnblockUserByUidRequestDto } from './BlockControllerDto.js'
@@ -179,14 +180,15 @@ export const removeRegexController = async (ctx: koaCtx, next: koaNext) => {
 export const getBlockListController = async (ctx: koaCtx, next: koaNext) => {
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
+	const finalPageSize = limitPageSize(pageSize)
 	const type = ctx.query.type as string
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const getBlockListRequest: GetBlockListRequestDto = {
 		type: type ?? '',
 		pagination: {
-			page: parseInt(page || '1', 10) ?? 1,
-			pageSize: parseInt(pageSize, 10) ?? Number.MAX_SAFE_INTEGER,
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: finalPageSize ?? 50,
 		},
 	}
 

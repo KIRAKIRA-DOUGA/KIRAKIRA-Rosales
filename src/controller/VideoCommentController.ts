@@ -2,6 +2,7 @@ import { isPassRbacCheck } from '../service/RbacService.js'
 import { adminDeleteVideoCommentService, cancelVideoCommentDownvoteService, cancelVideoCommentUpvoteService, deleteSelfVideoCommentService, emitVideoCommentDownvoteService, emitVideoCommentService, emitVideoCommentUpvoteService, getVideoCommentListByKvidService } from '../service/VideoCommentService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminDeleteVideoCommentRequestDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentUpvoteRequestDto, DeleteSelfVideoCommentRequestDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentRequestDto, EmitVideoCommentUpvoteRequestDto, GetVideoCommentByKvidRequestDto } from './VideoCommentControllerDto.js'
+import { parseInteger } from '../common/ValidTool.js'
 
 /**
  * 用户发送视频评论
@@ -39,10 +40,10 @@ export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koa
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
 	const getVideoCommentByKvidRequest: GetVideoCommentByKvidRequestDto = {
-		videoId: videoId ? parseInt(videoId, 10) : -1, // WARN -1 means you can't find any video
+		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
 		pagination: {
-			page: parseInt(page || '1', 10) ?? 1,
-			pageSize: parseInt(pageSize, 10) ?? Number.MAX_SAFE_INTEGER,
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: parseInteger(pageSize) ?? Number.MAX_SAFE_INTEGER,
 		},
 	}
 	const UUID = ctx.cookies.get('uuid')
@@ -59,7 +60,7 @@ export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koa
  */
 export const emitVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<EmitVideoCommentUpvoteRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const emitVideoCommentUpvoteRequest: EmitVideoCommentUpvoteRequestDto = {
 		/** KVID 视频 ID */
@@ -79,7 +80,7 @@ export const emitVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNex
  */
 export const emitVideoCommentDownvoteController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<EmitVideoCommentDownvoteRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const emitVideoCommentUpvoteRequest: EmitVideoCommentDownvoteRequestDto = {
 		/** KVID 视频 ID */
@@ -99,7 +100,7 @@ export const emitVideoCommentDownvoteController = async (ctx: koaCtx, next: koaN
  */
 export const cancelVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CancelVideoCommentUpvoteRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const cancelVideoCommentUpvoteRequest: CancelVideoCommentUpvoteRequestDto = {
 		/** KVID 视频 ID */
@@ -119,7 +120,7 @@ export const cancelVideoCommentUpvoteController = async (ctx: koaCtx, next: koaN
  */
 export const cancelVideoCommentDownvoteController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CancelVideoCommentDownvoteRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const cancelVideoCommentDownvoteRequest: CancelVideoCommentDownvoteRequestDto = {
 		/** KVID 视频 ID */
@@ -139,7 +140,7 @@ export const cancelVideoCommentDownvoteController = async (ctx: koaCtx, next: ko
  */
 export const deleteSelfVideoCommentController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<DeleteSelfVideoCommentRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const deleteSelfVideoCommentRequest: DeleteSelfVideoCommentRequestDto = {
 		/** KVID 视频 ID */
@@ -159,7 +160,7 @@ export const deleteSelfVideoCommentController = async (ctx: koaCtx, next: koaNex
  */
 export const adminDeleteVideoCommentController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<AdminDeleteVideoCommentRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证

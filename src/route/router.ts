@@ -78,8 +78,8 @@ router.post('/user/login', userLoginController) // 用户登录
 // {
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-// 	"clientOtp": "XXXXXX" //非必须
-//  "verificationCode": "XXXXXX" //非必须
+// 	"clientOtp": "XXXXXX" // 非必须
+//  "verificationCode": "XXXXXX" // 非必须
 // }
 
 router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorController) // 用户创建 TOTP 身份验证器
@@ -865,54 +865,6 @@ router.get('/rbac/adminGetUserRolesByUid', adminGetUserRolesByUidController) // 
 router.get('/secret/getStgEnvBackEndSecret', getStgEnvBackEndSecretController) // 获取预生产环境后端环境变量机密
 // https://localhost:9999/secret/getStgEnvBackEndSecret
 // cookie: uuid, token
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// router.post('/02/koa/user/settings/userSettings/save', saveUserSettingsByUUID)
-// // http://localhost:9999/02/koa/user/settings/userSettings/save
-// //
-// // {
-// // 	"uuid": "u00001",
-// // 	"systemStyle": "s1",
-// // 	"systemColor": "#66CCFF",
-// // 	"backgroundAnimation": "true",
-// // 	"settingPageLastEnter": "PornHub"
-// // }
-
-// router.put('/02/koa/user/settings/userSettings/update', updateUserSettingsByUUID)
-// // http://localhost:9999/02/koa/user/settings/userSettings/update
-// //
-// // {
-// // 	"uuid": "u00001",
-// // 	"systemStyle": "s1",
-// // 	"systemColor": "#66CCFF",
-// // 	"backgroundAnimation": "true",
-// // 	"settingPageLastEnter": "PornHub"
-// // }
-
-// router.get('/02/koa/user/settings/userSettings/get', getUserSettingsByUUID)
-// // http://localhost:9999/02/koa/user/settings/userSettings/get?uuid=u00001
-
-
 
 
 // router-end

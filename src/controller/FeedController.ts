@@ -1,3 +1,4 @@
+import { limitPageSize, parseInteger } from "../common/ValidTool.js";
 import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
@@ -28,7 +29,7 @@ export const followingUploaderController = async (ctx: koaCtx, next: koaNext) =>
 	const feedingUploaderRequest: FollowingUploaderRequestDto = {
 		followingUid: data.followingUid ?? -1
 	}
-	
+
 	const feedingUploaderResult = await followingUploaderService(feedingUploaderRequest, uuid, token)
 	ctx.body = feedingUploaderResult
 	await next()
@@ -48,7 +49,7 @@ export const unfollowingUploaderController = async (ctx: koaCtx, next: koaNext) 
 	const unfeedingUploaderRequest: UnfollowingUploaderRequestDto = {
 		unfollowingUid: data.unfollowingUid ?? -1
 	}
-	
+
 	const feedingUploaderResult = await unfollowingUploaderService(unfeedingUploaderRequest, uuid, token)
 	ctx.body = feedingUploaderResult
 	await next()
@@ -264,15 +265,16 @@ export const getFeedContentController = async (ctx: koaCtx, next: koaNext) => {
 
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
+	const finalPageSize = limitPageSize(pageSize)
 
 	const getFeedContentRequest: GetFeedContentRequestDto = {
 		feedGroupUuid: uuid ?? "",
 		pagination: {
-			page: parseInt(page || '1', 10) ?? 1,
-			pageSize: parseInt(pageSize, 10) ?? 50,
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: finalPageSize ?? 50,
 		},
 	}
-	
+
 	ctx.body = await getFeedContentService(getFeedContentRequest, uuid, token)
 	await next()
 }
