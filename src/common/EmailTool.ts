@@ -73,7 +73,7 @@ export const sendMail = async (to: string, title: string, body: EmailBodyType) =
 		user: smtpUsername, // 你的 SMTP 用户名
 		password: smtpPassword, // 你的 SMTP 密码
 		host: smtpHost, // 根据你的区域选择合适的 SMTP 服务器地址
-	port: parseInteger(smtpPort), // 指定端口（例如 587 或 465）
+		port: parseInteger(smtpPort), // 指定端口（例如 587 或 465）
 		tls: true, // 启用 TLS
 		ssl: false,
 	})
