@@ -75,6 +75,23 @@ import {
 	UserRegistrationRequestDto
 } from './UserControllerDto.js'
 
+const cookieOption = {
+	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+	secure: true,
+	sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+	maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
+	domain: getCorrectCookieDomain(),
+}
+
+const logoutCookieOption = {
+	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+	secure: true,
+	sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+	maxAge: 0, // 立即过期
+	expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
+	domain: getCorrectCookieDomain(),
+}
+
 /**
  * 用户注册
  * @param ctx context
@@ -94,13 +111,6 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		domain: getCorrectCookieDomain(),
-	}
 	ctx.cookies.set('token', userRegistrationResult.token, cookieOption)
 	ctx.cookies.set('email', data?.email, cookieOption)
 	ctx.cookies.set('uid', `${userRegistrationResult.uid}`, cookieOption)
@@ -125,13 +135,6 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const userLoginResult = await userLoginService(userLoginRequest)
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		domain: getCorrectCookieDomain(),
-	}
 	ctx.cookies.set('token', userLoginResult.token, cookieOption)
 	ctx.cookies.set('email', userLoginResult.email, cookieOption)
 	ctx.cookies.set('uid', `${userLoginResult.uid}`, cookieOption)
@@ -312,24 +315,18 @@ export const userEmailExistsCheckController = async (ctx: koaCtx, next: koaNext)
 export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateUserEmailRequestDto>
 	const updateUserEmailRequest: UpdateUserEmailRequestDto = {
-		uid: data?.uid,
 		oldEmail: data?.oldEmail,
 		newEmail: data?.newEmail,
 		passwordHash: data?.passwordHash,
-		verificationCode: data?.verificationCode,
+		verificationMethod: data?.verificationMethod,
+		changeEmailVerificationCode: data?.changeEmailVerificationCode,
+		changeEmailNewEmailVerificationCode: data?.changeEmailNewEmailVerificationCode,
 	}
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	const updateUserEmailResponse = await updateUserEmailService(updateUserEmailRequest, uid, token)
+	const updateUserEmailResponse = await updateUserEmailService(updateUserEmailRequest, uuid, token)
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		domain: getCorrectCookieDomain(),
-	}
 	if (updateUserEmailResponse.success) {
 		ctx.cookies.set('email', data?.newEmail ?? '', cookieOption)
 	}
@@ -388,19 +385,10 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const selfUserInfo = await getSelfUserInfoService(getSelfUserInfoRequest)
 	if (!selfUserInfo.success) {
-		const cookieOption = {
-			httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-			secure: true,
-			sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-			maxAge: 0, // 立即过期
-			expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
-			domain: getCorrectCookieDomain(),
-		}
-
-		ctx.cookies.set('token', '', cookieOption)
-		ctx.cookies.set('email', '', cookieOption)
-		ctx.cookies.set('uid', '', cookieOption)
-		ctx.cookies.set('uuid', '', cookieOption)
+		ctx.cookies.set('token', '', logoutCookieOption)
+		ctx.cookies.set('email', '', logoutCookieOption)
+		ctx.cookies.set('uid', '', logoutCookieOption)
+		ctx.cookies.set('uuid', '', logoutCookieOption)
 	}
 	ctx.body = selfUserInfo
 	await next()
@@ -459,13 +447,6 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 	if (checkUserTokenResponse.success && checkUserTokenResponse.userTokenOk) {
 		const uuid = await getUserUuid(uid)
 		if (uuid) {
-			const cookieOption = {
-				httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-				secure: true,
-				sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-				maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-				domain: getCorrectCookieDomain(),
-			}
 			ctx.cookies.set('uuid', uuid, cookieOption)
 			ctx.cookies.set('uid', uidString, cookieOption)
 			ctx.cookies.set('token', token, cookieOption)
@@ -484,19 +465,11 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	// TODO 理论上这里还可以做一些操作，比如说记录用户登出事件...
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 0, // 立即过期
-		expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
-		domain: getCorrectCookieDomain(),
-	}
 
-	ctx.cookies.set('token', '', cookieOption)
-	ctx.cookies.set('email', '', cookieOption)
-	ctx.cookies.set('uid', '', cookieOption)
-	ctx.cookies.set('uuid', '', cookieOption)
+	ctx.cookies.set('token', '', logoutCookieOption)
+	ctx.cookies.set('email', '', logoutCookieOption)
+	ctx.cookies.set('uid', '', logoutCookieOption)
+	ctx.cookies.set('uuid', '', logoutCookieOption)
 
 	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
 

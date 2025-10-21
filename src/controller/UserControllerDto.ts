@@ -116,16 +116,18 @@ export type UserEmailExistsCheckResponseDto = {
  * 用户更改邮箱的请求的参数
  */
 export type UpdateUserEmailRequestDto = {
-	/** 用户 ID */
-	uid: number;
 	/** 用户的旧邮箱 */
 	oldEmail: string;
 	/** 用户的新邮箱 */
 	newEmail: string;
 	/** 经过一次 Hash 的用户密码 */
 	passwordHash: string;
-	/** 验证码 */
-	verificationCode: string;
+	/** 验证的模式 */
+	verificationMethod: 'no-2fa' | '2fa-email' | '2fa-totp';
+	/** 旧邮箱中验证码 / 2FA 验证码 */
+	changeEmailVerificationCode: string;
+	/** 新邮箱中的验证码 */
+	changeEmailNewEmailVerificationCode: string;
 }
 
 /**

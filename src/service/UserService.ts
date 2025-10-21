@@ -553,144 +553,131 @@ export const userEmailExistsCheckService = async (userEmailExistsCheckRequest: U
 /**
  * 修改用户的 email
  * @param updateUserEmailRequest 修改用户的 email 的请求参数
- * @param uid 用户 ID
- * @param token 用户 token
+ * @param cookieUuid 用户 uuid
+ * @param cookieToken 用户 token
  * @returns 修改用户的 email 的请求响应
  */
-export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserEmailRequestDto, cookieUid: number, cookieToken: string): Promise<UpdateUserEmailResponseDto> => {
+export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserEmailRequestDto, cookieUuid: string, cookieToken: string): Promise<UpdateUserEmailResponseDto> => {
 	try {
-		// TODO: 向旧邮箱发送邮件以验证
-		if (await checkUserToken(cookieUid, cookieToken)) {
-			if (checkUpdateUserEmailRequest(updateUserEmailRequest)) {
-				const { uid, oldEmail, newEmail, passwordHash, verificationCode } = updateUserEmailRequest
-				const now = new Date().getTime()
+		if (!checkUpdateUserEmailRequest(updateUserEmailRequest)) {
+			console.error('ERROR', '更新用户邮箱时失败，请求参数不合法')
+			return { success: false, message: '用户邮箱更新失败，请求参数不合法' }
+		}
 
-				if (cookieUid !== uid) {
-					console.error('ERROR', '更新用户邮箱失败，cookie 中的 UID 与修改邮箱时使用的 UID 不同', { cookieUid, uid, oldEmail })
-					return { success: false, message: '更新用户邮箱失败，未指定正确的用户' }
-				}
-
-				const oldEmailLowerCase = oldEmail.toLowerCase()
-				const newEmailLowerCase = newEmail.toLowerCase()
-
-				// 启动事务
-				const session = await mongoose.startSession()
-				session.startTransaction()
-
-				const { collectionName, schemaInstance } = UserAuthSchema
-				type UserAuth = InferSchemaType<typeof schemaInstance>
-
-				const userAuthWhere: QueryType<UserAuth> = { uid, emailLowerCase: oldEmailLowerCase, cookieToken } // 使用 uid, emailLowerCase 和 token 确保用户更新的是自己的邮箱，而不是其他用户的
-				const userAuthSelect: SelectType<UserAuth> = { passwordHashHash: 1, emailLowerCase: 1 }
-				try {
-					const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
-					const userAuthData = userAuthResult.result
-					if (userAuthData) {
-						if (userAuthData.length !== 1) { // 确保只更新一个用户的邮箱
-							if (session.inTransaction()) {
-								await session.abortTransaction()
-							}
-							session.endSession()
-							console.error('ERROR', '更新用户邮箱失败，匹配到零个或多个用户', { uid, oldEmail })
-							return { success: false, message: '更新用户邮箱失败，无法找到正确的用户' }
-						}
-
-						const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData[0].passwordHashHash) // 确保更新邮箱时输入的密码正确
-						if (!isCorrectPassword) {
-							console.error('ERROR', '更新用户邮箱失败，用户密码不正确', { uid, oldEmail })
-							if (session.inTransaction()) {
-								await session.abortTransaction()
-							}
-							session.endSession()
-							return { success: false, message: '更新用户邮箱失败，用户密码不正确' }
-						}
-					}
-				} catch (error) {
-					console.error('ERROR', '更新用户邮箱失败，校验用户密码时程序出现异常', error, { uid, oldEmail })
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					return { success: false, message: '用户注册失败：校验用户密码失败' }
-				}
-
-				try {
-					const { collectionName: userChangeEmailVerificationCodeCollectionName, schemaInstance: userChangeEmailVerificationCodeSchemaInstance } = UserChangeEmailVerificationCodeSchema
-					type UserChangeEmailVerificationCode = InferSchemaType<typeof userChangeEmailVerificationCodeSchemaInstance>
-					const verificationCodeWhere: QueryType<UserChangeEmailVerificationCode> = {
-						emailLowerCase: oldEmailLowerCase,
-						verificationCode,
-						overtimeAt: { $gte: now },
-					}
-
-					const verificationCodeSelect: SelectType<UserChangeEmailVerificationCode> = {
-						emailLowerCase: 1, // 用户邮箱
-					}
-
-					const verificationCodeResult = await selectDataFromMongoDB<UserChangeEmailVerificationCode>(verificationCodeWhere, verificationCodeSelect, userChangeEmailVerificationCodeSchemaInstance, userChangeEmailVerificationCodeCollectionName, { session })
-					if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						console.error('ERROR', '修改邮箱失败：验证失败')
-						return { success: false, message: '修改邮箱失败：验证失败' }
-					}
-				} catch (error) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					console.error('ERROR', '修改邮箱失败：请求验证失败')
-					return { success: false, message: '修改邮箱失败：请求验证失败' }
-				}
-
-				const updateUserEmailWhere: QueryType<UserAuth> = {
-					uid,
-				}
-				const updateUserEmailUpdate: QueryType<UserAuth> = {
-					email: newEmail,
-					emailLowerCase: newEmailLowerCase,
-					editDateTime: new Date().getTime(),
-				}
-				try {
-					const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
-					if (updateResult && updateResult.success && updateResult.result) {
-						if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
-							await session.commitTransaction()
-							session.endSession()
-							return { success: true, message: '用户邮箱更新成功' }
-						} else {
-							console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail })
-							if (session.inTransaction()) {
-								await session.abortTransaction()
-							}
-							session.endSession()
-							return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
-						}
-					} else {
-						console.error('ERROR', '更新用户邮箱时，更新数量为 0', { uid, oldEmail, newEmail })
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
-					}
-				} catch (error) {
-					console.error('ERROR', '更新用户邮箱出错', { uid, oldEmail, newEmail }, error)
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
-				}
-			} else {
-				console.error('ERROR', '更新用户邮箱时失败，未获取到原始数据')
-				return { success: false, message: '用户邮箱更新失败，无法获取用户原始信息，数据可能为空' }
-			}
-		} else {
+		if (!await checkUserTokenByUUID(cookieUuid, cookieToken)) {
 			console.error('ERROR', '更新用户邮箱时失败，用户不合法')
 			return { success: false, message: '用户邮箱更新失败，用户不合法' }
+		}
+
+		const { oldEmail, newEmail, passwordHash, verificationMethod, changeEmailVerificationCode, changeEmailNewEmailVerificationCode } = updateUserEmailRequest
+		const now = new Date().getTime()
+
+		const oldEmailLowerCase = oldEmail.toLowerCase()
+		const newEmailLowerCase = newEmail.toLowerCase()
+
+		// 启动事务
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
+		const { collectionName, schemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof schemaInstance>
+		const userAuthWhere: QueryType<UserAuth> = { UUID: cookieUuid, emailLowerCase: oldEmailLowerCase, cookieToken } // 使用 uuid, emailLowerCase 和 token 确保用户更新的是自己的邮箱，而不是其他用户的
+		const userAuthSelect: SelectType<UserAuth> = { passwordHashHash: 1, emailLowerCase: 1 }
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
+		const userAuthData = userAuthResult.result
+
+		if (!userAuthData) {
+			const errorMessage = '更新用户邮箱失败，未能获取用户信息'
+			console.error('ERROR', errorMessage, { cookieUuid, oldEmail })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+
+		if (userAuthData.length !== 1) { // 确保只更新一个用户的邮箱
+			console.error('ERROR', '更新用户邮箱失败，匹配到零个或多个用户', { cookieUuid, oldEmail })
+			await abortAndEndSession(session)
+			return { success: false, message: '更新用户邮箱失败，无法找到正确的用户' }
+		}
+
+		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData[0].passwordHashHash) // 确保更新邮箱时输入的密码正确
+		if (!isCorrectPassword) {
+			console.error('ERROR', '更新用户邮箱失败，用户密码不正确', { cookieUuid, oldEmail })
+			await abortAndEndSession(session)
+			return { success: false, message: '更新用户邮箱失败，用户密码不正确' }
+		}
+
+		// TODO: 验证用户
+
+		switch (verificationMethod) {
+			case 'no-2fa':
+				{
+				// try {
+				// 	const { collectionName: userChangeEmailVerificationCodeCollectionName, schemaInstance: userChangeEmailVerificationCodeSchemaInstance } = UserChangeEmailVerificationCodeSchema
+				// 	type UserChangeEmailVerificationCode = InferSchemaType<typeof userChangeEmailVerificationCodeSchemaInstance>
+				// 	const verificationCodeWhere: QueryType<UserChangeEmailVerificationCode> = {
+				// 		emailLowerCase: oldEmailLowerCase,
+				// 		verificationCode,
+				// 		overtimeAt: { $gte: now },
+				// 	}
+
+				// 	const verificationCodeSelect: SelectType<UserChangeEmailVerificationCode> = {
+				// 		emailLowerCase: 1, // 用户邮箱
+				// 	}
+
+				// 	const verificationCodeResult = await selectDataFromMongoDB<UserChangeEmailVerificationCode>(verificationCodeWhere, verificationCodeSelect, userChangeEmailVerificationCodeSchemaInstance, userChangeEmailVerificationCodeCollectionName, { session })
+				// 	if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
+				// 		if (session.inTransaction()) {
+				// 			await session.abortTransaction()
+				// 		}
+				// 		session.endSession()
+				// 		console.error('ERROR', '修改邮箱失败：验证失败')
+				// 		return { success: false, message: '修改邮箱失败：验证失败' }
+				// 	}
+				// } catch (error) {
+				// 	if (session.inTransaction()) {
+				// 		await session.abortTransaction()
+				// 	}
+				// 	session.endSession()
+				// 	console.error('ERROR', '修改邮箱失败：请求验证失败')
+				// 	return { success: false, message: '修改邮箱失败：请求验证失败' }
+				// }
+				}
+				break
+			case '2fa-email':
+				{
+					// TODO: 通用 2FA Email 验证方法
+				}
+				break
+			case '2fa-totp':
+				{
+					// TODO: 通用 2FA TOTP 验证方法
+				}
+				break
+		}
+		
+		const updateUserEmailWhere: QueryType<UserAuth> = {
+			UUID: cookieUuid,
+		}
+		const updateUserEmailUpdate: QueryType<UserAuth> = {
+			email: newEmail,
+			emailLowerCase: newEmailLowerCase,
+			editDateTime: now,
+		}
+		try {
+			const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
+
+			if (!updateResult || !updateResult.success || !updateResult.result) {
+				console.error('ERROR', '更新用户邮箱时，更新数量为 0', { cookieUuid, oldEmail, newEmail })
+				await abortAndEndSession(session)
+				return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
+			}
+
+			await commitAndEndSession(session)
+			return { success: true, message: '用户邮箱更新成功' }
+		} catch (error) {
+			console.error('ERROR', '更新用户邮箱出错', { cookieUuid, oldEmail, newEmail }, error)
+			await abortAndEndSession(session)
+			return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
 		}
 	} catch (error) {
 		console.error('ERROR', '修改用户邮箱失败，未知错误：', error)
@@ -4347,11 +4334,13 @@ const checkUserLoginRequest = (userLoginRequest: UserLoginRequestDto): boolean =
 const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequestDto): boolean => {
 	// TODO // WARN 这里可能需要更安全的校验机制
 	return (
-		updateUserEmailRequest.uid !== null && updateUserEmailRequest.uid !== undefined
+		true
 		&& !!updateUserEmailRequest.oldEmail && !isInvalidEmail(updateUserEmailRequest.oldEmail)
 		&& !!updateUserEmailRequest.newEmail && !isInvalidEmail(updateUserEmailRequest.newEmail)
 		&& !!updateUserEmailRequest.passwordHash
-		&& !!updateUserEmailRequest.verificationCode
+		&& !!updateUserEmailRequest.verificationMethod
+		&& !!updateUserEmailRequest.changeEmailVerificationCode
+		&& !!updateUserEmailRequest.changeEmailNewEmailVerificationCode
 	)
 }
 
