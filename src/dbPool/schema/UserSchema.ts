@@ -445,3 +445,35 @@ class UserForgotPasswordVerificationCodeSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserForgotPasswordVerificationCodeSchema = new UserForgotPasswordVerificationCodeSchemaFactory()
+
+
+/**
+ * 通用 2FA 邮箱验证码
+ */
+class General2FAEmailVerificationCodeSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 用户的 UUID - 非空 - 唯一 */
+		uuid: { type: String, required: true, unique: true },
+		/** 用户的验证码 - 非空 */
+		verificationCode: { type: String, required: true },
+		/** 用户创建验证码的时间 - 非空 */
+		verificationCreatedDate: { type: Number, required: true, unique: true },
+		/** 用户今日请求的次数，用于防止滥用 - 非空 */
+		attemptsTimes: { type: Number, required: true },
+		/** 系统专用字段-创建时间 - 非空 */
+		createdDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建者 - 非空 */
+		createdBy: { type: String, required: true },
+		/** 系统专用字段-最后编辑时间 - 非空 */
+		editedDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑者 - 非空 */
+		editedBy: { type: String, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'general-2fa-email-verification-code'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const General2FAEmailVerificationCodeSchema = new General2FAEmailVerificationCodeSchemaFactory()
+

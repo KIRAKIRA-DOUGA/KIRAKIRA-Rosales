@@ -487,6 +487,30 @@ export type RequestSendVerificationCodeResponseDto = {
 }
 
 /**
+ * 发送通用 2FA 邮箱验证码的请求载荷
+ */
+export type SendGeneral2FAEmailVerificationCodeRequestDto = {
+	/** 用户客户端使用的语言 */
+	clientLanguage: string;
+}
+
+/**
+ * 发送通用 2FA 邮箱验证码的请求响应
+ */
+export type SendGeneral2FAEmailVerificationCodeResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
+	success: boolean;
+	/** 是否冷却中（每次尝试发送验证码之间都会有一些间隔时间） */
+	isCoolingDown: boolean;
+	/** Maximum number of consecutive attempts reached today */
+	isMaxDailyConsecutiveAttemptsReached: boolean;
+	/** 用户是否未开启 2FA 邮箱 */
+	is2faEmailDisabled: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
  * 邀请码类型
  */
 type InvitationCode = {

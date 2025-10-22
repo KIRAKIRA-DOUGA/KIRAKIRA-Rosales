@@ -1,9 +1,9 @@
-import mongoose, { InferSchemaType, PipelineStage, ClientSession, startSession } from 'mongoose'
+import mongoose, { InferSchemaType, PipelineStage, ClientSession } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
-import { validateNameField } from '../common/ValidTool.js'
+import { parseInteger, validateNameField } from '../common/ValidTool.js'
 import { generateRandomString, generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
 import {
 	AdminClearUserInfoRequestDto,
@@ -77,11 +77,13 @@ import {
 	ForgotPasswordRequestDto,
 	RequestSendForgotPasswordVerificationCodeRequestDto,
 	ForgotPasswordResponseDto,
-	RequestSendForgotPasswordVerificationCodeResponseDto
+	RequestSendForgotPasswordVerificationCodeResponseDto,
+	SendGeneral2FAEmailVerificationCodeRequestDto,
+	SendGeneral2FAEmailVerificationCodeResponseDto
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserEmailAuthenticatorSchema, UserEmailAuthenticatorVerificationCodeSchema, UserForgotPasswordVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserEmailAuthenticatorSchema, UserEmailAuthenticatorVerificationCodeSchema, UserForgotPasswordVerificationCodeSchema, General2FAEmailVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { authenticator } from 'otplib'
 import { getI18nLanguagePack } from '../common/i18n.js'
@@ -89,6 +91,7 @@ import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '
 import { StorageClassAnalysisSchemaVersion } from '@aws-sdk/client-s3'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
+import { isToday } from '../common/DateTool.js'
 
 authenticator.options = { window: 1 } // 设置 TOTP 宽裕一个窗口
 
@@ -1444,6 +1447,144 @@ export const requestSendVerificationCodeService = async (requestSendVerification
 	}
 }
 
+export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
+	try {
+		if (!checkSendGeneral2FAEmailVerificationCodeRequest(sendGeneral2FAEmailVerificationCodeRequest)) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，参数不合法'
+			console.error('ERROR', errorMessage, { uuid })
+			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
+
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户校验未通过'
+			console.error('ERROR', errorMessage, { uuid })
+			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
+
+		const session = await createAndStartSession()
+		
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+		const getUserAuthWhere: QueryType<UserAuth> = {
+			UUID: uuid,
+		}
+		const getUserAuthSelect: SelectType<UserAuth> = {
+			email: 1,
+			authenticatorType: 1,
+		}
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(getUserAuthWhere, getUserAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
+		
+		if (!userAuthResult.success || !userAuthResult.result || userAuthResult.result.length !== 1) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，获取用户信息失败'
+			console.error('ERROR', errorMessage, { uuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
+
+		const userEmail = userAuthResult.result[0].email
+		const userAuthenticatorType = userAuthResult.result[0].authenticatorType
+
+		if (!userEmail || !userAuthenticatorType ) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户邮箱或 2FA 类型不存在'
+			console.error('ERROR', errorMessage, { uuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
+
+		if (userAuthenticatorType !== 'email') {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户未启用邮箱 2FA'
+			console.error('ERROR', errorMessage, { uuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage, is2faEmailDisabled: true, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
+
+		const { collectionName: general2FAEmailVerificationCodeCollectionName, schemaInstance: general2FAEmailVerificationCodeSchemaInstance } = General2FAEmailVerificationCodeSchema
+		type General2FAEmailVerificationCode = InferSchemaType<typeof general2FAEmailVerificationCodeSchemaInstance>
+		const getGeneral2FAEmailVerificationCodeHistoryWhere: QueryType<General2FAEmailVerificationCode> = {
+			UUID: uuid,
+		}
+		const getGeneral2FAEmailVerificationCodeHistorySelect: SelectType<General2FAEmailVerificationCode> = {
+			verificationCreatedDate: 1,
+			attemptsTimes: 1,
+		}
+		const getGeneral2FAEmailVerificationCodeResult = await selectDataFromMongoDB<General2FAEmailVerificationCode>(getGeneral2FAEmailVerificationCodeHistoryWhere, getGeneral2FAEmailVerificationCodeHistorySelect, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
+		
+		const now = new Date().getTime()
+		let isVerificationCodeCreatedDateToday = false
+		let attemptsTimes: 'NA' | number = 'NA'
+
+		if (
+			getGeneral2FAEmailVerificationCodeResult.success
+			&& getGeneral2FAEmailVerificationCodeResult.result && getGeneral2FAEmailVerificationCodeResult.result.length === 1
+			&& getGeneral2FAEmailVerificationCodeResult.result[0].verificationCreatedDate
+			&& getGeneral2FAEmailVerificationCodeResult.result[0].attemptsTimes !== undefined && getGeneral2FAEmailVerificationCodeResult.result[0].attemptsTimes !== null
+		) {
+			const verificationCreatedDate = getGeneral2FAEmailVerificationCodeResult.result[0].verificationCreatedDate
+			attemptsTimes = getGeneral2FAEmailVerificationCodeResult.result[0].attemptsTimes
+			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CONSECUTIVE_ATTEMPTS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CONSECUTIVE_ATTEMPTS, 10) || 10 // 默认每天最多允许连续发送 10 次验证码，设计上，验证通过后应重置次数
+			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS, 55) || 55 // 默认冷却时间 55 秒，这里没使用 60 秒是为了给前端留出时间差
+			
+			isVerificationCodeCreatedDateToday = isToday(verificationCreatedDate)
+			if (isVerificationCodeCreatedDateToday && attemptsTimes >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CONSECUTIVE_ATTEMPTS) {
+				const errorMessage = '发送通用 2FA 邮箱验证码失败，已达今日发送上限，请明日再试'
+				console.error('ERROR', errorMessage, { uuid })
+				await abortAndEndSession(session)
+				return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: true }
+			}
+
+			const isCoolingDown = (verificationCreatedDate + GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS * 1000) > now
+			if (isCoolingDown) {
+				const errorMessage = '发送通用 2FA 邮箱验证码失败，操作过于频繁，请稍后再试'
+				console.error('ERROR', errorMessage, { uuid })
+				await abortAndEndSession(session)
+				return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: true, isMaxDailyConsecutiveAttemptsReached: false }
+			}
+		}
+		
+		const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
+		const { clientLanguage } = sendGeneral2FAEmailVerificationCodeRequest
+
+		// FIXME: SendGeneral2FAEmailVerificationCode 是占位符，后续需要替换为真实的的邮件模板
+		const mail = getI18nLanguagePack(clientLanguage, "SendGeneral2FAEmailVerificationCode")
+		const correctMailTitle = mail?.mailTitle
+		const correctMailHTML = mail?.mailHtml?.replaceAll('{{verificationCode}}', verificationCode)
+		const sendMailResult = await sendMail(userEmail, correctMailTitle, { html: correctMailHTML })
+
+		if (!sendMailResult.success) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，邮件发送失败'
+			console.error('ERROR', errorMessage, { uuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
+
+		const general2FAEmailVerificationCodeUpdate: General2FAEmailVerificationCode = {
+			uuid,
+			verificationCode,
+			verificationCreatedDate: now,
+			attemptsTimes: isVerificationCodeCreatedDateToday && attemptsTimes !== 'NA' ? (attemptsTimes as number) + 1 : 1,
+			createdDateTime: now,
+			createdBy: uuid,
+			editedDateTime: now,
+			editedBy: uuid,
+		}
+		const updateResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(getGeneral2FAEmailVerificationCodeHistoryWhere, general2FAEmailVerificationCodeUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
+							
+		if (!updateResult.success) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，存储验证码失败'
+			console.error('ERROR', errorMessage, { uuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
+
+		await commitAndEndSession(session)
+		return { success: true, message: '发送通用 2FA 邮箱验证码成功', is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+	} catch (error) {
+		const errorMessage = '发送通用 2FA 邮箱验证码失败，未知错误'
+		console.error('ERROR', errorMessage, error)
+		return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+	}
+}
+
 /**
  * 生成邀请码
  * @param uid 申请生成邀请码的用户
@@ -2522,7 +2663,7 @@ export const getBlockedUserService = async (adminUUID: string, adminToken: strin
 	try {
 		if (await checkUserTokenByUUID(adminUUID, adminToken)) {
 			const { sortBy, sortOrder } = GetBlockedUserRequest
-			if (!checkSortVariables(sortBy, sortOrder)) {
+			if (!checkSortVariablesForGetBlockedUserService(sortBy, sortOrder)) {
 				console.error('ERROR', '获取所有被封禁用户的信息失败，排序参数不合法')
 				return { success: false, message: '获取所有被封禁用户的信息失败，排序参数不合法', totalCount: 0 }
 			}
@@ -2644,7 +2785,7 @@ export const adminGetUserInfoService = async (adminGetUserInfoRequest: AdminGetU
 			return { success: false, message: '管理员获取用户信息失败，用户校验未通过', totalCount: 0 }
 		}
 		const { sortBy, sortOrder } = adminGetUserInfoRequest
-		if (!checkSortVariables(sortBy, sortOrder)) {
+		if (!checkSortVariablesForAdminGetUserInfoService(sortBy, sortOrder)) {
 			console.error('ERROR', '管理员获取用户信息失败，排序参数不合法')
 			return { success: false, message: '管理员获取用户信息失败，排序参数不合法', totalCount: 0 }
 		}
@@ -4628,12 +4769,12 @@ const checkCheckUserExistsByUuidRequest = (checkUserExistsByUuidRequest: CheckUs
 }
 
 /**
- * 检查排序相关的变量
+ * 检查获取封禁用户排序相关的变量
  * @param sortBy 排序字段
  * @param sortOrder 排序顺序
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
-const checkSortVariables = (sortBy: string, sortOrder: string): boolean => {
+const checkSortVariablesForGetBlockedUserService = (sortBy: string, sortOrder: string): boolean => {
 	const allowedSortFields = ['createDateTime', 'editDateTime', 'username', 'userNickname', 'uid'] // 允许的排序方式
 	if (!allowedSortFields.includes(sortBy)) {
 		return false
@@ -4642,4 +4783,30 @@ const checkSortVariables = (sortBy: string, sortOrder: string): boolean => {
 		return false
 	}
 	return true
+}
+
+/**
+ * 检查管理员获取用户信息排序相关的变量
+ * @param sortBy 排序字段
+ * @param sortOrder 排序顺序
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkSortVariablesForAdminGetUserInfoService = (sortBy: string, sortOrder: string): boolean => {
+	const allowedSortFields = ['createDateTime', 'editDateTime', 'username', 'userNickname', 'uid'] // 允许的排序方式
+	if (!allowedSortFields.includes(sortBy)) {
+		return false
+	}
+	if (sortOrder !== 'ascend' && sortOrder !== 'descend') {
+		return false
+	}
+	return true
+}
+
+/**
+ * 检查发送通用 2FA 邮箱验证码的请求载荷
+ * @param sendGeneral2FAEmailVerificationCodeRequest 
+ * @returns 
+ */
+const checkSendGeneral2FAEmailVerificationCodeRequest = (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto): boolean => {
+	return ( !!sendGeneral2FAEmailVerificationCodeRequest.clientLanguage )
 }
