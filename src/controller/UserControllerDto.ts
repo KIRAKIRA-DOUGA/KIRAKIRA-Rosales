@@ -492,6 +492,8 @@ export type RequestSendVerificationCodeResponseDto = {
 export type SendGeneral2FAEmailVerificationCodeRequestDto = {
 	/** 用户客户端使用的语言 */
 	clientLanguage: string;
+	/** 目标邮件模板 */
+	mailTemplate: string;
 }
 
 /**
@@ -504,8 +506,8 @@ export type SendGeneral2FAEmailVerificationCodeResponseDto = {
 	isCoolingDown: boolean;
 	/** Maximum number of consecutive attempts reached today */
 	isMaxDailyConsecutiveAttemptsReached: boolean;
-	/** 用户是否未开启 2FA 邮箱 */
-	is2faEmailDisabled: boolean;
+	/** 用户使用邮箱之外其他验证方式 */
+	isUsingOtherVerificationMethodOtherThanEmail: boolean;
 	/** 附加的文本消息 */
 	message?: string;
 }

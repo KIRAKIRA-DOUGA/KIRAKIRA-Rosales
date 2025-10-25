@@ -24,6 +24,9 @@ const languagePacks = {
 	"vi": Vietnamese,
 };
 
+/** 可用的语言列表 */
+export const supportedLanguageList = Object.keys(languagePacks);
+
 /**
  * 判断客户端的语言并返回对应的语言包
  * @param clientLanguage 客户端的语言

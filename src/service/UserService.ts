@@ -86,7 +86,7 @@ import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/
 import { UserAuthSchema, UserTotpAuthenticatorSchema, UserChangeEmailVerificationCodeSchema, UserChangePasswordVerificationCodeSchema, UserInfoSchema, UserInvitationCodeSchema, UserSettingsSchema, UserVerificationCodeSchema, UserEmailAuthenticatorSchema, UserEmailAuthenticatorVerificationCodeSchema, UserForgotPasswordVerificationCodeSchema, General2FAEmailVerificationCodeSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { authenticator } from 'otplib'
-import { getI18nLanguagePack } from '../common/i18n.js'
+import { getI18nLanguagePack, supportedLanguageList } from '../common/i18n.js'
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js'
 import { StorageClassAnalysisSchemaVersion } from '@aws-sdk/client-s3'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
@@ -1447,18 +1447,25 @@ export const requestSendVerificationCodeService = async (requestSendVerification
 	}
 }
 
-export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
+/**
+ * 发送通用 2FA 邮箱验证码
+ * @param sendGeneral2FAEmailVerificationCodeRequest 发送通用 2FA 邮箱验证码的请求载荷
+ * @param uuid
+ * @param token 
+ * @returns 发送通用 2FA 邮箱验证码的请求响应
+ */
+export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = { clientLanguage: 'en', mailTemplate: 'SendGeneral2FAEmailVerificationCode' }, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendGeneral2FAEmailVerificationCodeRequest(sendGeneral2FAEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，参数不合法'
 			console.error('ERROR', errorMessage, { uuid })
-			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户校验未通过'
 			console.error('ERROR', errorMessage, { uuid })
-			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 		}
 
 		const session = await createAndStartSession()
@@ -1478,7 +1485,7 @@ export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FA
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，获取用户信息失败'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 		}
 
 		const userEmail = userAuthResult.result[0].email
@@ -1488,14 +1495,14 @@ export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FA
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户邮箱或 2FA 类型不存在'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 		}
 
-		if (userAuthenticatorType !== 'email') {
-			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户未启用邮箱 2FA'
+		if (['email', 'none'].includes(userAuthenticatorType)) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户使用的非邮箱 2FA 或 2FA 未启用'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, is2faEmailDisabled: true, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: true, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 		}
 
 		const { collectionName: general2FAEmailVerificationCodeCollectionName, schemaInstance: general2FAEmailVerificationCodeSchemaInstance } = General2FAEmailVerificationCodeSchema
@@ -1521,7 +1528,7 @@ export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FA
 		) {
 			const verificationCreatedDate = getGeneral2FAEmailVerificationCodeResult.result[0].verificationCreatedDate
 			attemptsTimes = getGeneral2FAEmailVerificationCodeResult.result[0].attemptsTimes
-			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CONSECUTIVE_ATTEMPTS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CONSECUTIVE_ATTEMPTS, 10) || 10 // 默认每天最多允许连续发送 10 次验证码，设计上，验证通过后应重置次数
+			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CONSECUTIVE_ATTEMPTS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CONSECUTIVE_ATTEMPTS, 5) || 5 // 默认每天最多允许连续发送验证码直到成功验证的次数，默认 5。请注意：在验证通过后应手动重置次数。
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS, 55) || 55 // 默认冷却时间 55 秒，这里没使用 60 秒是为了给前端留出时间差
 			
 			isVerificationCodeCreatedDateToday = isToday(verificationCreatedDate)
@@ -1529,7 +1536,7 @@ export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FA
 				const errorMessage = '发送通用 2FA 邮箱验证码失败，已达今日发送上限，请明日再试'
 				console.error('ERROR', errorMessage, { uuid })
 				await abortAndEndSession(session)
-				return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: true }
+				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: true }
 			}
 
 			const isCoolingDown = (verificationCreatedDate + GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS * 1000) > now
@@ -1537,24 +1544,29 @@ export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FA
 				const errorMessage = '发送通用 2FA 邮箱验证码失败，操作过于频繁，请稍后再试'
 				console.error('ERROR', errorMessage, { uuid })
 				await abortAndEndSession(session)
-				return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: true, isMaxDailyConsecutiveAttemptsReached: false }
+				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: true, isMaxDailyConsecutiveAttemptsReached: false }
 			}
 		}
 		
 		const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
-		const { clientLanguage } = sendGeneral2FAEmailVerificationCodeRequest
+		const { clientLanguage, mailTemplate } = sendGeneral2FAEmailVerificationCodeRequest
 
-		// FIXME: SendGeneral2FAEmailVerificationCode 是占位符，后续需要替换为真实的的邮件模板
-		const mail = getI18nLanguagePack(clientLanguage, "SendGeneral2FAEmailVerificationCode")
-		const correctMailTitle = mail?.mailTitle
-		const correctMailHTML = mail?.mailHtml?.replaceAll('{{verificationCode}}', verificationCode)
-		const sendMailResult = await sendMail(userEmail, correctMailTitle, { html: correctMailHTML })
+		const mail = getI18nLanguagePack(clientLanguage, mailTemplate)
+		if (!mail || !mail.mailTitle || !mail.mailHtml) {
+			const errorMessage = '发送通用 2FA 邮箱验证码失败，获取邮件模板失败'
+			console.error('ERROR', errorMessage, { uuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		}
 
+		const { mailTitle, mailHtml } = mail
+		const correctMailHTML = mailHtml.replaceAll('{{verificationCode}}', verificationCode)
+		const sendMailResult = await sendMail(userEmail, mailTitle, { html: correctMailHTML })
 		if (!sendMailResult.success) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，邮件发送失败'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 		}
 
 		const general2FAEmailVerificationCodeUpdate: General2FAEmailVerificationCode = {
@@ -1573,15 +1585,191 @@ export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FA
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，存储验证码失败'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 		}
 
 		await commitAndEndSession(session)
-		return { success: true, message: '发送通用 2FA 邮箱验证码成功', is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		return { success: true, message: '发送通用 2FA 邮箱验证码成功', isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
 	} catch (error) {
 		const errorMessage = '发送通用 2FA 邮箱验证码失败，未知错误'
 		console.error('ERROR', errorMessage, error)
-		return { success: false, message: errorMessage, is2faEmailDisabled: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+		return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyConsecutiveAttemptsReached: false }
+	}
+}
+
+/**
+ * 通用 2FA 邮箱验证码验证器
+ */
+export namespace General2FAEmailVerifier {
+	/** 验证邮箱验证码的参数 */
+	export type VerifyOptions = {
+		/** 是否在验证成功后立即重置尝试次数 */
+		isResetAttemptsImmediately: boolean,
+		/** 可选的 Mongoose 事务 session，如果不提供，则内部创建一个事务，在成功重置尝试次数后这个内部事务会被提交 */
+		session?: mongoose.ClientSession,
+	}
+
+	/** 验证邮箱验证码的结果 */
+	export type VerifyResult = {
+		/** 是否验证成功 */
+		success: boolean,
+		/** 是否因为超时未验证成功 */
+		isTimeout: boolean,
+		/** 附加的文本消息 */
+		message: string,
+		/** 如果 isResetAttemptsImmediately 为假，则不会在验证通过后立即重置尝试次数，而是返回一个用于稍后重置尝试次数的回调函数（这样可以在用户验证通过，且后续业务也成功完成的情况下才重置尝试次数） */
+		resetAttemptsCallback?: () => Promise<{
+			/** 是否重置次数成功 */
+			success: boolean,
+			/** 附加的文本消息 */
+			message: string,
+		}>,
+	}
+}
+
+/**
+ * 通用 2FA 邮箱验证码验证器
+ */
+export class General2FAEmailVerifier {
+	/** 用户 UUID */
+	#uuid: string
+	/** 用户 Token */
+	#token?: string
+	/** 验证码 */
+	#verificationCode: string
+	/** 可选的 Mongoose 事务 session */
+	#session?: mongoose.ClientSession
+	/** 指示是否为内部 session (如果是的话，则在重置验证后被 commit) */
+	#isInternalSession: boolean
+
+	/**
+	 * 构造函数，用于初始化通用 2FA 邮箱验证码验证器
+	 * @param uuid 用户 UUID
+	 * @param token 用户 Token
+	 * @param verificationCode 验证码
+	 * @param session 使用传入的 session 覆盖 class 内部维护的 session
+	 */
+	constructor(uuid: string, token: string, verificationCode: string) {
+		this.#uuid = uuid
+		this.#token = token
+		this.#verificationCode = verificationCode
+	}
+	
+	/**
+	 * 验证用户的邮箱验证码
+	 * @param options 验证选项
+	 * @returns 验证结果
+	 */
+	async verify(options: General2FAEmailVerifier.VerifyOptions): Promise<General2FAEmailVerifier.VerifyResult> {
+		try {
+			const { isResetAttemptsImmediately, session: outsideSession } = options
+
+			if (!await checkUserTokenByUUID(this.#uuid, this.#token)) {
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，用户校验未通过'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				return { success: false, isTimeout: false, message: errorMessage }
+			}
+
+			if (outsideSession) {
+				this.#isInternalSession = true
+				this.#session = await createAndStartSession()
+			} else {
+				this.#isInternalSession = false
+				this.#session = outsideSession
+			}
+			const session = this.#session
+
+			const { collectionName: general2FAEmailVerificationCodeCollectionName, schemaInstance: general2FAEmailVerificationCodeSchemaInstance } = General2FAEmailVerificationCodeSchema
+			type General2FAEmailVerificationCode = InferSchemaType<typeof general2FAEmailVerificationCodeSchemaInstance>
+			const verifyWhere: QueryType<General2FAEmailVerificationCode> = {
+				uuid: this.#uuid,
+				verificationCode: this.#verificationCode,
+			}
+			const verifySelect: SelectType<General2FAEmailVerificationCode> = {
+				verificationCreatedDate: 1,
+			}
+
+			const verifyResult = await selectDataFromMongoDB<General2FAEmailVerificationCode>(verifyWhere, verifySelect, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
+			if (!verifyResult.success || !verifyResult.result || verifyResult.result.length !== 1) {
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码错误或不存在'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				await abortAndEndSession(session)
+				return { success: false, isTimeout: false, message: errorMessage }
+			}
+
+			const verificationCreatedDate = verifyResult.result[0].verificationCreatedDate
+			const now = new Date().getTime()
+			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS, 1800000) || 1800000 // 默认验证码超时为 30 分钟
+			
+			if (verificationCreatedDate + GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS < now) {
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码已超时'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				await abortAndEndSession(session)
+				return { success: false, isTimeout: true, message: errorMessage }
+			}
+
+			if (!isResetAttemptsImmediately) {
+				return { success: true, isTimeout: false, message: '通用 2FA 邮箱验证码验证成功，请别忘记稍后重置尝试次数。', resetAttemptsCallback: this.#resetAttempts.bind(this) }
+			}
+
+			const resetAttemptsResult = await this.#resetAttempts()
+			if (!resetAttemptsResult.success) {
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，重置尝试次数失败'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				await abortAndEndSession(session)
+				return { success: false, isTimeout: false, message: errorMessage }
+			}
+
+			return { success: true, isTimeout: false, message: '通用 2FA 邮箱验证码验证成功，尝试次数已重置' }
+		} catch (error) {
+			const errorMessage = '通用 2FA 邮箱验证码验证失败，未知错误'
+			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			return { success: false, isTimeout: false, message: errorMessage }
+		}
+	}
+
+	/**
+	 * 重置尝试次数的私有方法
+	 * @returns 重置尝试次数的结果
+	 */
+	async #resetAttempts(): Promise<{ success: boolean, message: string }> {
+		const session = this.#session
+		if (!session) {
+			const errorMessage = '通用 2FA 邮箱验证码尝试次数重置失败，内部 session 不存在'
+			console.error('ERROR', errorMessage, { uuid: this.#uuid })
+			return { success: false, message: errorMessage }
+		}
+
+		try {
+			const { collectionName: general2FAEmailVerificationCodeCollectionName, schemaInstance: general2FAEmailVerificationCodeSchemaInstance } = General2FAEmailVerificationCodeSchema
+			type General2FAEmailVerificationCode = InferSchemaType<typeof general2FAEmailVerificationCodeSchemaInstance>
+			const resetAttemptsWhere: QueryType<General2FAEmailVerificationCode> = {
+				uuid: this.#uuid,
+			}
+			const resetAttemptsUpdate: UpdateType<General2FAEmailVerificationCode> = {
+				attemptsTimes: 0,
+			}
+
+			const resetAttemptsResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(resetAttemptsWhere, resetAttemptsUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
+			if (!resetAttemptsResult.success) {
+				const errorMessage = '通用 2FA 邮箱验证码尝试次数重置失败，存储尝试次数失败'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				await abortAndEndSession(session)
+				return { success: false, message: errorMessage }
+			}
+
+			if (this.#isInternalSession) {
+				await commitAndEndSession(session)
+			}
+			return { success: true, message: '通用 2FA 邮箱验证码尝试次数重置成功' }
+		} catch (error) {
+			let errorMessage = '通用 2FA 邮箱验证码尝试次数重置失败，未知错误'
+			try { await abortAndEndSession(session) } catch {
+				errorMessage += '，且在中止事务时发生错误'
+			}
+			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			return { success: false, message: errorMessage }
+		}
 	}
 }
 
@@ -4808,5 +4996,5 @@ const checkSortVariablesForAdminGetUserInfoService = (sortBy: string, sortOrder:
  * @returns 
  */
 const checkSendGeneral2FAEmailVerificationCodeRequest = (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto): boolean => {
-	return ( !!sendGeneral2FAEmailVerificationCodeRequest.clientLanguage )
+	return ( !!sendGeneral2FAEmailVerificationCodeRequest.clientLanguage && supportedLanguageList.includes(sendGeneral2FAEmailVerificationCodeRequest.clientLanguage) )
 }
