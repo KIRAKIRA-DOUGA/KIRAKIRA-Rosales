@@ -455,12 +455,18 @@ class General2FAEmailVerificationCodeSchemaFactory {
 	schema = {
 		/** 用户的 UUID - 非空 - 唯一 */
 		uuid: { type: String, required: true, unique: true },
+		/** 传入该验证码独占的业务名（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
+		exclusive: { type: String },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
 		/** 用户创建验证码的时间 - 非空 */
 		verificationCreatedDate: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
+		/** 用户今日连续请求创建验证码的次数，用于防止滥用 - 非空 */
+		totalCreateTimesToday: { type: Number, required: true },
+		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
+		totalVerifierTimesToday: { type: Number, required: true },
+		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
+		used: { type: Boolean, required: true },
 		/** 系统专用字段-创建时间 - 非空 */
 		createdDateTime: { type: Number, required: true },
 		/** 系统专用字段-创建者 - 非空 */

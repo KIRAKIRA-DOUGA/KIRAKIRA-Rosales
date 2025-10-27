@@ -494,6 +494,8 @@ export type SendGeneral2FAEmailVerificationCodeRequestDto = {
 	clientLanguage: string;
 	/** 目标邮件模板 */
 	mailTemplate: string;
+	/** 业务名称，用于“独占”验证码 */
+	exclusiveBusinessName?: string;
 }
 
 /**
@@ -504,8 +506,10 @@ export type SendGeneral2FAEmailVerificationCodeResponseDto = {
 	success: boolean;
 	/** 是否冷却中（每次尝试发送验证码之间都会有一些间隔时间） */
 	isCoolingDown: boolean;
-	/** Maximum number of consecutive attempts reached today */
-	isMaxDailyConsecutiveAttemptsReached: boolean;
+	/** 是否达到今日创建尝试次数 */
+	isMaxDailyCreateAttempts: boolean;
+	/** 已达到今日创建最大次数 */
+	isMaxDailyVerifierAttempts: boolean;
 	/** 用户使用邮箱之外其他验证方式 */
 	isUsingOtherVerificationMethodOtherThanEmail: boolean;
 	/** 附加的文本消息 */
