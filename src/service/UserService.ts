@@ -1644,7 +1644,7 @@ export class General2FAEmailVerifier {
 	#token?: string
 	/** 验证码 */
 	#verificationCode: string
-	/** 可选的 Mongoose 事务 session */
+	/** 可选的 Mongoose 事务 session。使用外部传入的 session 覆盖 class 内部维护的 session */
 	#session?: mongoose.ClientSession
 	/** 指示是否为内部 session (如果是的话，则在重置验证后被 commit) */
 	#isInternalSession: boolean
@@ -1654,7 +1654,6 @@ export class General2FAEmailVerifier {
 	 * @param uuid 用户 UUID
 	 * @param verificationCode 验证码
 	 * @param token 用户 Token，可选，为空时不会进行用户校验
-	 * @param session 使用传入的 session 覆盖 class 内部维护的 session
 	 */
 	constructor(uuid: string, verificationCode: string, token?: string) {
 		this.#uuid = uuid
