@@ -467,7 +467,7 @@ export type UpdateOrCreateUserSettingsResponseDto = {
 /**
  * 请求发送用户注册邮箱验证码的请求载荷
  */
-export type RequestSendVerificationCodeRequestDto = {
+export type RequestSendRegistrationVerificationCodeRequestDto = {
 	/** 用户的邮箱 - 非空 - 唯一 */
 	email: string;
 	/** 用户客户端使用的语言 */
@@ -475,9 +475,9 @@ export type RequestSendVerificationCodeRequestDto = {
 }
 
 /**
- * 请求发送用户邮箱验证码的请求响应
+ * 请求发送用户注册邮箱验证码的请求响应
  */
-export type RequestSendVerificationCodeResponseDto = {
+export type RequestSendRegistrationVerificationCodeResponseDto = {
 	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
 	success: boolean;
 	/** 是否达到超时时间 */
@@ -619,48 +619,6 @@ export type CheckInvitationCodeResponseDto = {
 	success: boolean;
 	/** 是否是可用的邀请码 */
 	isAvailableInvitationCode: boolean;
-	/** 附加的文本消息 */
-	message?: string;
-}
-
-/**
- * 请求发送用户更改邮箱验证码的请求载荷
- */
-export type RequestSendChangeEmailVerificationCodeRequestDto = {
-	/** 用户客户端使用的语言 */
-	clientLanguage: string;
-	/** 用户的新邮箱 */
-	newEmail: string;
-}
-
-/**
- * 请求发送用户更改邮箱验证码的请求响应
- */
-export type RequestSendChangeEmailVerificationCodeResponseDto = {
-	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
-	success: boolean;
-	/** 是否达到超时时间 */
-	isCoolingDown: boolean;
-	/** 附加的文本消息 */
-	message?: string;
-}
-
-/**
- * 请求发送用户更改密码的验证码的请求载荷
- */
-export type RequestSendChangePasswordVerificationCodeRequestDto = {
-	/** 用户客户端使用的语言 */
-	clientLanguage: string;
-}
-
-/**
- * 请求发送用户更改密码的验证码的请求响应
- */
-export type RequestSendChangePasswordVerificationCodeResponseDto = {
-	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
-	success: boolean;
-	/** 是否达到超时时间 */
-	isCoolingDown: boolean;
 	/** 附加的文本消息 */
 	message?: string;
 }
@@ -994,63 +952,6 @@ export type ConfirmUserTotpAuthenticatorResponseDto = {
 		/** 验证器恢复码 */
 		recoveryCode?: string;
 	};
-	/** 附加的文本消息 */
-	message?: string;
-}
-
-/**
- * 用户发送 Email 身份验证器验证邮件的请求载荷
- */
-export type SendUserEmailAuthenticatorVerificationCodeRequestDto = {
-	/** 用户邮箱 */
-	email: string;
-	/** 在前端已经 Hash 过一次的的密码 */
-	passwordHash: string;
-	/** 用户客户端使用的语言 */
-	clientLanguage: string;
-}
-
-/**
- * 用户发送 Email 身份验证器验证邮件的请求响应
- */
-export type SendUserEmailAuthenticatorVerificationCodeResponseDto = {
-	/** 执行结果 */
-	success: boolean;
-	/** 是否达到超时时间 */
-	isCoolingDown: boolean;
-	/** 附加的文本消息 */
-	message?: string;
-}
-
-/**
- * 用户发送删除 Email 身份验证器验证邮件的请求载荷
- */
-export type SendDeleteUserEmailAuthenticatorVerificationCodeRequestDto = {
-	/** 用户客户端使用的语言 */
-	clientLanguage: string;
-}
-
-/**
- * 用户发送删除 Email 身份验证器验证邮件的请求响应
- */
-export type SendDeleteUserEmailAuthenticatorVerificationCodeResponseDto = {} & SendUserEmailAuthenticatorVerificationCodeResponseDto
-
-/**
- * 验证 Email 身份验证器的验证码是否正确的请求载荷
- */
-export type CheckEmailAuthenticatorVerificationCodeRequestDto = {
-	/** 用户的邮箱 */
-	email: string;
-	/** 邮箱验证码 */
-	verificationCode: string;
-}
-
-/**
- * 验证 Email 身份验证器的验证码是否正确的请求响应
- */
-export type CheckEmailAuthenticatorVerificationCodeResponseDto = {
-	/** 执行结果 */
-	success: boolean;
 	/** 附加的文本消息 */
 	message?: string;
 }

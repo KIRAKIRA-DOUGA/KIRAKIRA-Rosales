@@ -17,9 +17,7 @@ import {
 	getUserAvatarUploadSignedUrlController,
 	getUserInfoByUidController,
 	getUserSettingsController,
-	requestSendChangeEmailVerificationCodeController,
-	requestSendChangePasswordVerificationCodeController,
-	requestSendVerificationCodeController,
+	requestSendRegistrationVerificationCodeController,
 	updateOrCreateUserInfoController,
 	updateOrCreateUserSettingsController,
 	updateUserEmailController,
@@ -34,9 +32,7 @@ import {
 	confirmUserTotpAuthenticatorController,
 	checkUserHave2FAByUUIDController,
 	createUserEmailAuthenticatorController,
-	sendUserEmailAuthenticatorController,
 	deleteUserEmailAuthenticatorController,
-	sendDeleteUserEmailAuthenticatorController,
 	userExistsCheckByUIDController,
 	adminEditUserInfoController,
 	adminGetUserByInvitationCodeController,
@@ -103,21 +99,6 @@ router.delete('/user/deleteTotpAuthenticatorByTotpVerificationCodeController', d
 router.post('/user/createEmailAuthenticator', createUserEmailAuthenticatorController) // 用户创建 Email 身份验证器
 // https://localhost:9999/user/createEmailAuthenticator
 // cookie: uuid, token
-
-router.post('/user/sendUserEmailAuthenticator', sendUserEmailAuthenticatorController) // 用户发送 Email 身份验证器验证码
-// https://localhost:9999/user/sendUserEmailAuthenticator
-// {
-// 	 "email": "aaa@aaa.aaa",
-// 	 "passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-//   "clientLanguage": "zh-Hans-CN",
-// }
-
-router.post('/user/sendDeleteUserEmailAuthenticator', sendDeleteUserEmailAuthenticatorController) // 用户发送删除 Email 身份验证器验证码
-// https://localhost:9999/user/sendDeleteUserEmailAuthenticator
-// cookie: uuid, token
-// {
-//   "clientLanguage": "zh-Hans-CN",
-// }
 
 router.delete('/user/deleteUserEmailAuthenticator', deleteUserEmailAuthenticatorController) // 用户删除 Email 2FA
 // https://localhost:9999/user/deleteUserEmailAuthenticator
@@ -225,7 +206,7 @@ router.post('/user/settings/update', updateOrCreateUserSettingsController) // �
 // 	"coloredSideBar": "true"
 // }
 
-router.post('/user/requestSendVerificationCode', requestSendVerificationCodeController) // 请求发送验证码，用于注册时验证用户邮箱
+router.post('/user/requestSendRegistrationVerificationCode', requestSendRegistrationVerificationCodeController) // 请求发送注册验证码，用于注册时验证用户邮箱
 // https://localhost:9999/user/requestSendVerificationCode
 // {
 // 	"email": "aaa@bbb.com",
@@ -249,20 +230,6 @@ router.post('/user/checkInvitationCode', checkInvitationCodeController) // 检�
 router.get('/user/getUserByInvitationCode', adminGetUserByInvitationCodeController) // 管理员根据邀请码查询用户 // WARN: 仅限管理员
 // https://localhost:9999/user/getUserByInvitationCode?invitationCode=KIRA-XXXX-XXXX
 // cookie: uuid, token
-
-router.post('/user/requestSendChangeEmailVerificationCode', requestSendChangeEmailVerificationCodeController) // 请求发送验证码，用于修改邮箱
-// https://localhost:9999/user/requestSendChangeEmailVerificationCode
-// cookie: uid, token
-// {
-// 	"clientLanguage": "zh-Hans-CN"
-// }
-
-router.post('/user/requestSendChangePasswordVerificationCode', requestSendChangePasswordVerificationCodeController) // 请求发送验证码，用于修改密码
-// https://localhost:9999/user/requestSendChangePasswordVerificationCode
-// cookie: uid, token
-// {
-// 	"clientLanguage": "zh-Hans-CN"
-// }
 
 router.post('/user/update/password', updateUserPasswordController) // 更新用户密码
 // https://localhost:9999/user/update/password

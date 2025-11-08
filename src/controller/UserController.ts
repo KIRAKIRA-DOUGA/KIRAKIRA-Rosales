@@ -16,9 +16,7 @@ import {
 	getUserAvatarUploadSignedUrlService,
 	getUserInfoByUidService,
 	getUserSettingsService,
-	requestSendChangeEmailVerificationCodeService,
-	requestSendChangePasswordVerificationCodeService,
-	requestSendVerificationCodeService,
+	requestSendRegistrationVerificationCodeService,
 	updateOrCreateUserInfoService,
 	updateOrCreateUserSettingsService,
 	updateUserEmailService,
@@ -31,9 +29,7 @@ import {
 	checkUserHave2FAByEmailService,
 	checkUserHave2FAByUUIDService,
 	createUserEmailAuthenticatorService,
-	sendUserEmailAuthenticatorService,
 	deleteUserEmailAuthenticatorService,
-	sendDeleteUserEmailAuthenticatorService,
 	checkUserExistsByUIDService,
 	userEmailExistsCheckService,
 	adminEditUserInfoService,
@@ -58,12 +54,8 @@ import {
 	GetSelfUserInfoRequestDto,
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
-	RequestSendChangeEmailVerificationCodeRequestDto,
-	RequestSendChangePasswordVerificationCodeRequestDto,
 	RequestSendForgotPasswordVerificationCodeRequestDto,
-	RequestSendVerificationCodeRequestDto,
-	SendDeleteUserEmailAuthenticatorVerificationCodeRequestDto,
-	SendUserEmailAuthenticatorVerificationCodeRequestDto,
+	RequestSendRegistrationVerificationCodeRequestDto,
 	UpdateOrCreateUserInfoRequestDto,
 	UpdateOrCreateUserSettingsRequestDto,
 	UpdateUserEmailRequestDto,
@@ -205,42 +197,6 @@ export const createUserEmailAuthenticatorController = async (ctx: koaCtx, next: 
 	const token = ctx.cookies.get('token')
 	const result = await createUserEmailAuthenticatorService(uuid, token)
 	ctx.body = result
-	await next()
-}
-
-/**
- * 请求发送验证码，用于登录时验证身份验证器
- * @param ctx context
- * @param next context
- */
-export const sendUserEmailAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<SendUserEmailAuthenticatorVerificationCodeRequestDto>
-
-	const sendUserEmailAuthenticatorVerificationCodeRequest: SendUserEmailAuthenticatorVerificationCodeRequestDto = {
-		email: data?.email || '',
-		passwordHash: data?.passwordHash || '',
-		clientLanguage: data?.clientLanguage,
-	}
-
-	ctx.body = await sendUserEmailAuthenticatorService(sendUserEmailAuthenticatorVerificationCodeRequest)
-	await next()
-}
-
-/**
- * 请求发送验证码，用于删除 Email 2FA
- * @param ctx context
- * @param next context
- */
-export const sendDeleteUserEmailAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<SendUserEmailAuthenticatorVerificationCodeRequestDto>
-
-	const sendDeleteUserEmailAuthenticatorVerificationCodeRequest: SendDeleteUserEmailAuthenticatorVerificationCodeRequestDto = {
-		clientLanguage: data?.clientLanguage,
-	}
-
-	const uuid = ctx.cookies.get('uuid')
-	const token = ctx.cookies.get('token')
-	ctx.body = await sendDeleteUserEmailAuthenticatorService(sendDeleteUserEmailAuthenticatorVerificationCodeRequest, uuid, token)
 	await next()
 }
 
@@ -524,19 +480,19 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 }
 
 /**
- * 请求发送验证码，用于注册时验证用户邮箱
+ * 请求发送注册验证码，用于注册时验证用户邮箱
  * @param ctx context
  * @param next context
  */
-export const requestSendVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+export const requestSendRegistrationVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<RequestSendRegistrationVerificationCodeRequestDto>
 
-	const requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto = {
+	const requestSendVerificationCodeRequest: RequestSendRegistrationVerificationCodeRequestDto = {
 		email: data.email || '',
 		clientLanguage: data.clientLanguage,
 	}
 
-	ctx.body = await requestSendVerificationCodeService(requestSendVerificationCodeRequest)
+	ctx.body = await requestSendRegistrationVerificationCodeService(requestSendVerificationCodeRequest)
 	await next()
 }
 
@@ -597,43 +553,6 @@ export const adminGetUserByInvitationCodeController = async (ctx: koaCtx, next: 
 	const invitationCode = ctx.query.invitationCode as string ?? ''
 
 	ctx.body = await adminGetUserByInvitationCodeService(invitationCode, adminUUID, adminToken)
-	await next()
-}
-
-/**
- * 请求发送验证码，用于修改邮箱
- * @param ctx context
- * @param next context
- */
-export const requestSendChangeEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendChangeEmailVerificationCodeRequestDto>
-
-	const requestSendChangeEmailVerificationCodeRequest: RequestSendChangeEmailVerificationCodeRequestDto = {
-		newEmail: data.newEmail,
-		clientLanguage: data.clientLanguage,
-	}
-	const uid = parseInteger(ctx.cookies.get('uid'))
-	const token = ctx.cookies.get('token')
-
-	ctx.body = await requestSendChangeEmailVerificationCodeService(requestSendChangeEmailVerificationCodeRequest, uid, token)
-	await next()
-}
-
-/**
- * 请求发送验证码，用于修改密码
- * @param ctx context
- * @param next context
- */
-export const requestSendChangePasswordVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendChangePasswordVerificationCodeRequestDto>
-
-	const requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto = {
-		clientLanguage: data.clientLanguage,
-	}
-	const uid = parseInteger(ctx.cookies.get('uid'))
-	const token = ctx.cookies.get('token')
-
-	ctx.body = await requestSendChangePasswordVerificationCodeService(requestSendChangePasswordVerificationCodeRequest, uid, token)
 	await next()
 }
 
