@@ -33,8 +33,11 @@ jobs:
         git checkout develop
         git pull origin develop
         git checkout -b translations
+        
     - name: Download translations from Crowdin
-      run: crowdin download translations --token ${{ secrets.CROWDIN_PERSONAL_TOKEN }} --project-id ${{ secrets.CROWDIN_PROJECT_ID }} -c crowdin.yml -b "[KIRAKIRA-DOUGA.KIRAKIRA-Rosales] develop"
+      run: |
+        mv src/locales/English.ts src/locales/English.json
+        crowdin download translations --token ${{ secrets.CROWDIN_PERSONAL_TOKEN }} --project-id ${{ secrets.CROWDIN_PROJECT_ID }} -c crowdin.yml -b "[KIRAKIRA-DOUGA.KIRAKIRA-Rosales] develop"
       env:
         CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
         CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
