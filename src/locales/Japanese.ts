@@ -2,10 +2,10 @@
 
 
 export default {
-	SendVerificationCode: {
-		mailTitle: "KIRAKIRA-登録認証コード",
-		mailHeading: "登録確認用のコードは",
-		mailText: "KIRAKIRA へようこそ！このコードを使ってアカウントを登録しましょう。\nコードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
+	SendRegistrationVerificationCode: {
+		mailTitle: "KIRAKIRA-登録用認証コード",
+		mailHeading: "登録用確認のコードは",
+		mailText: "KIRAKIRA へようこそ！このコードを使ってアカウント登録を完了しましょう。\nコードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendChangeEmailVerificationCode: {
 		mailTitle: "KIRAKIRA - メールアドレス変更の確認コード",
@@ -18,8 +18,8 @@ export default {
 		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendResetPasswordVerificationCode: {
-		mailTitle: "KIRAKira - パスワード認証コードをリセットする",
-		mailHeading: "パスワードをリセットするコードは",
+		mailTitle: "KIRAKira - パスワードリセット用認証コード",
+		mailHeading: "パスワードリセット用のコードは",
 		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendLoginVerificationCode: {

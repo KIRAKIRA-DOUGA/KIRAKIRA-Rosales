@@ -2,7 +2,7 @@
 
 
 export default {
-	SendVerificationCode: {},
+	SendRegistrationVerificationCode: {},
 	SendChangeEmailVerificationCode: {},
 	SendChangePasswordVerificationCode: {},
 	SendResetPasswordVerificationCode: {},

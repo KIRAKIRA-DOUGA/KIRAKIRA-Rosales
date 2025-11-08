@@ -2,10 +2,10 @@
 
 
 export default {
-	SendVerificationCode: {
-		mailTitle: "crwdns3620:0crwdne3620:0",
-		mailHeading: "crwdns3157:0crwdne3157:0",
-		mailText: "crwdns3159:0crwdne3159:0",
+	SendRegistrationVerificationCode: {
+		mailTitle: "crwdns3786:0crwdne3786:0",
+		mailHeading: "crwdns3788:0crwdne3788:0",
+		mailText: "crwdns3790:0crwdne3790:0",
 	},
 	SendChangeEmailVerificationCode: {
 		mailTitle: "crwdns3161:0crwdne3161:0",
