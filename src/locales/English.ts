@@ -1,5 +1,5 @@
 export default {
-	SendVerificationCode: {
+	SendRegistrationVerificationCode: {
 		mailTitle: "KIRAKIRA - Register Verification Code",
 		mailHeading: "Your registration verification code is",
 		mailText: "Welcome to KIRAKIRA. You can use this verification code to register your account.\nVerification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.\nTo stop receiving notifications, please contact the KIRAKIRA support team.",
