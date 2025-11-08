@@ -2,7 +2,7 @@
 
 
 export default {
-	SendVerificationCode: {
+	SendRegistrationVerificationCode: {
 		mailTitle: "KIRAKIRA - Kode Verifikasi Pendaftaran",
 		mailHeading: "Kode verifikasi pendaftaran Anda adalah",
 		mailText: "Selamat datang di KIRAKIRA. Anda bisa menggunakan kode verifikasi ini untuk mendaftar.\nKode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
@@ -18,6 +18,8 @@ export default {
 		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
 	},
 	SendResetPasswordVerificationCode: {
+		mailTitle: "KIRAKIRA - Kode Verifikasi Atur Ulang Kata Sandi",
+		mailHeading: "Kode verifikasi atur ulang kata sandi Anda adalah",
 		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
 	},
 	SendLoginVerificationCode: {

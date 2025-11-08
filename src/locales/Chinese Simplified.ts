@@ -2,7 +2,7 @@
 
 
 export default {
-	SendVerificationCode: {
+	SendRegistrationVerificationCode: {
 		mailTitle: "KIRAKIRA - 注册验证码",
 		mailHeading: "你的注册验证码是",
 		mailText: "欢迎来到KIRAKIRA，使用这个验证码来注册你的账号吧！\n验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
