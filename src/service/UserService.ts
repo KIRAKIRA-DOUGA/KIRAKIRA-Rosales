@@ -93,7 +93,7 @@ import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { isToday } from '../common/DateTool.js'
 
-authenticator.options = { window: 1 } // 设置 TOTP 宽裕一个窗口
+authenticator.options = { window: parseInteger(process.env.TOTP_ADDITIONAL_WINDOWS, 1) || 1 } // 设置 TOTP 宽裕窗口，默认为 1
 
 /**
  * 用户注册
