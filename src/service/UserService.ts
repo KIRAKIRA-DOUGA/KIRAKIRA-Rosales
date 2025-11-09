@@ -285,7 +285,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			return { success: false, message: '用户信息校验未通过' }
 		}
 
-		const { email, passwordHash, clientOtp } = userLoginRequest
+		const { email, passwordHash, clientOtp, verificationCode } = userLoginRequest
 		const emailLowerCase = email.toLowerCase()
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
@@ -323,163 +323,22 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		}
 
 		// 4. 判断用户是否启用了 2FA
-		if (authenticatorType === 'totp') { // 4.1 TOTP
-			const maxAttempts	 = 5 // 最大尝试次数
-			const lockTime = 60 * 60 * 1000 // 冷却时间
-			const now = new Date().getTime()
-
+		if (authenticatorType === 'totp') { // 4.1 TOTP 2FA
 			if (!clientOtp) {
 				console.error('登录失败，启用了 TOTP 但用户未提供验证码', authenticatorType )
 				return { success: false, message:"登录失败，启用了 TOTP 但用户未提供验证码", authenticatorType }
 			}
 
-			const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
-			type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
-			const userTotpAuthenticatorWhere: QueryType<UserAuthenticator> = {
-				UUID: uuid,
-				enabled: true,
+			const TotpVerifier = new General2FATotpVerifier(uuid, clientOtp)
+			const verificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: true, isAllowRecoveryCodeAndDeleteTotp: true })
+			if (!verificationResult.success) {
+				const errorMessage = `登录失败，TOTP 验证失败：${verificationResult.message}`
+				console.error('ERROR', errorMessage)
+				return { success: false, message: errorMessage, authenticatorType }
 			}
 
-			if (clientOtp.length > 6) { // 大于六位时，视为使用 TOTP 恢复码进行登录（登录成功后会删除 TOTP 2FA）
-				const userTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
-					recoveryCodeHash: 1,
-				}
-
-				const selectResult = await selectDataFromMongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
-
-				if (!selectResult.success || selectResult.result.length !== 1) {
-					console.error('ERROR', '登录失败，获取验证数据失败 - 1')
-					return { success: false, message: '登录失败，获取验证数据失败 - 1', authenticatorType }
-				}
-
-				const recoveryCodeHash = selectResult.result[0].recoveryCodeHash
-				const isCorrectRecoveryCode = comparePasswordSync(clientOtp, recoveryCodeHash)
-
-				if (!isCorrectRecoveryCode) {
-					console.error('ERROR', '登录失败，恢复码错误')
-					return { success: false, message: '登录失败，恢复码错误', authenticatorType }
-				}
-
-				const session = await mongoose.startSession()
-				session.startTransaction()
-
-				const deleteTotpAuthenticatorByRecoveryCodeData: DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
-					email,
-					recoveryCodeHash,
-					session
-				}
-				const deleteResult = await deleteTotpAuthenticatorByRecoveryCode(deleteTotpAuthenticatorByRecoveryCodeData) // 如果使用恢复码登陆成功，则删除 TOTP 2FA
-
-				if (!deleteResult.success) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					console.error('ERROR', '登录失败，未能删除 TOTP 2FA')
-					return { success: false, message: '登录失败，未能删除 TOTP 2FA', authenticatorType }
-				}
-
-				await session.commitTransaction()
-				session.endSession()
-				return { success: true, email, uid, token, UUID: uuid, message: '使用恢复码登录成功，你的 TOTP 2FA 已删除', authenticatorType }
-			} else { // 不大于六位数时，视为使用 TOTP 验证码或 TOTP 备份码进行登录，先视为 TOTP 验证码尝试，如果验证失败，则视为 TOTP 备份码尝试，如果都失败，则响应登陆失败
-				const userTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
-					secret: 1,
-					backupCodeHash: 1,
-					lastAttemptTime: 1,
-					attempts: 1,
-				}
-
-				const selectResult = await selectDataFromMongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
-
-				if (!selectResult.success || selectResult.result.length !== 1) {
-					console.error('ERROR', '登录失败，获取验证数据失败 - 2')
-					return { success: false, message: '登录失败，获取验证数据失败 - 2', authenticatorType }
-				}
-
-				let attempts = selectResult.result[0].attempts
-
-				const totpSecret = selectResult.result[0].secret
-				const listOfBackupCodeHash = selectResult.result[0].backupCodeHash
-
-				// 限制用户的登录频率
-				if (selectResult.result[0].attempts >= maxAttempts) {
-					const lastAttemptTime = new Date(selectResult.result[0].lastAttemptTime).getTime();
-					if (now - lastAttemptTime < lockTime) {
-						attempts += 1
-						console.warn('WARN', 'WARNING', '用户登录失败，已达最大尝试次数，请稍后再试');
-						return { success: false, message: '登录失败，已达最大尝试次数，请稍后再试', isCoolingDown: true, authenticatorType };
-					} else {
-						attempts = 0
-					}
-
-					//启动事务
-					const session = await mongoose.startSession()
-					session.startTransaction()
-
-					const userLoginByBackupCodeUpdate: UpdateType<UserAuthenticator> = {
-						attempts: attempts,
-						lastAttemptTime: now,
-					}
-					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
-
-					if (!updateAuthenticatorResult.success) {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						console.error('ERROR', '登录失败，更新最后尝试时间或尝试次数失败')
-						return { success: false, message: '登录失败，更新最后尝试时间或尝试次数失败', isCoolingDown: true, authenticatorType }
-					}
-				}
-
-				if (!authenticator.check(clientOtp, totpSecret)) {
-					attempts += 1
-					let useCorrectBackupCode = false // 用户是否使用了一个正确的备用码。
-					const newBackupCodeHash = []
-					listOfBackupCodeHash.forEach( backupCodeHash => {
-						const isCorrectBackupCode = comparePasswordSync(clientOtp, backupCodeHash)
-						if (isCorrectBackupCode) {
-							useCorrectBackupCode = true
-						} else {
-							newBackupCodeHash.push(backupCodeHash)
-						}
-					})
-
-					if (!useCorrectBackupCode) {
-						console.error('ERROR', '登录失败，验证码或备份码不正确');
-						return { success: false, message: '登录失败，验证码或备份码不正确', authenticatorType };
-					}
-					const session = await mongoose.startSession()
-					session.startTransaction()
-
-					const userLoginByBackupCodeUpdate: UpdateType<UserAuthenticator> = {
-						backupCodeHash: newBackupCodeHash,
-						editDateTime: now,
-						attempts,
-						lastAttemptTime: now,
-					}
-
-					// 使用备份码登录后，将除了已使用的备份码之外的备份码写回数据库（这样一来，备份码就无法被重复使用了）
-					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
-
-					if (!updateAuthenticatorResult.success) {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						console.error('ERROR', '登录失败，更新备份码失败')
-						return { success: false, message: '登录失败，更新备份码失败', authenticatorType }
-					}
-
-					await commitAndEndSession(session)
-					return { success: true, email, uid, token, UUID: uuid, message: '用户使用备用码登录成功', authenticatorType }
-				} else {
-					return { success: true, email, uid, token, UUID: uuid, message: '用户使用 TOTP 验证码登录成功', authenticatorType }
-				}
-			}
-		} else if (authenticatorType === 'email') {
-			const { verificationCode } = userLoginRequest
+			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
+		} else if (authenticatorType === 'email') { // 4.2 Email 2FA
 			if (!verificationCode) {
 				console.error('ERROR', '登录失败，启用了邮箱验证但用户未提供验证码')
 				return { success: false, message: '登录失败，启用了邮箱验证但用户未提供验证码', authenticatorType }
@@ -493,13 +352,13 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			const EmailVerifier = new General2FAEmailVerifier(uuid, verificationCode)
 			const verificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'login' })
 			if (!verificationResult.success) {
-				const errorMessage = `登录失败，邮箱验证码验证失败${verificationResult.message}`
+				const errorMessage = `登录失败，邮箱验证码验证失败：${verificationResult.message}`
 				console.error('ERROR', errorMessage)
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
 			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
-		} else {
+		} else { // 4.3 未启用 2FA
 			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType: 'none' }
 		}
 	} catch (error) {
@@ -610,6 +469,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 
 		switch (verificationMethod) {
 			case 'no-2fa':
+				break
 			case '2fa-email':
 				{
 					{
@@ -621,13 +481,13 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 							return { success: false, message: errorMessage }
 						}
 					}
+					break
 				}
-				break
 			case '2fa-totp':
 				{
 					// TODO: 通用 2FA TOTP 验证方法
+					break
 				}
-				break
 		}
 		
 		// TODO: 验证新邮箱的验证码
@@ -1639,9 +1499,8 @@ export class General2FAEmailVerifier {
 			const { isResetAttemptsImmediately, exclusiveBusinessName, session: outsideSession } = options
 
 			if (this.#uuid && this.#token && !await checkUserTokenByUUID(this.#uuid, this.#token)) {
-				let errorMessage = '通用 2FA 邮箱验证码验证失败，用户校验未通过'
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，用户校验未通过'
 				console.error('ERROR', errorMessage, { uuid: this.#uuid })
-				try { await this.#accumulatedVerificationFailuresTimes() } catch (error) { errorMessage += '；累计验证失败次数时也出错' }
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1658,25 +1517,24 @@ export class General2FAEmailVerifier {
 			type General2FAEmailVerificationCode = InferSchemaType<typeof general2FAEmailVerificationCodeSchemaInstance>
 			const verifyWhere: QueryType<General2FAEmailVerificationCode> = {
 				uuid: this.#uuid,
-				verificationCode: this.#verificationCode,
 				used: false,
 				exclusive: exclusiveBusinessName || undefined,
 			}
 			const verifySelect: SelectType<General2FAEmailVerificationCode> = {
+				verificationCode: 1,
 				verificationCreatedDate: 1,
 				totalVerifierTimesToday: 1,
 			}
 
 			const verifyResult = await selectDataFromMongoDB<General2FAEmailVerificationCode>(verifyWhere, verifySelect, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
 			if (!verifyResult.success || !verifyResult.result || verifyResult.result.length !== 1) {
-				let errorMessage = '通用 2FA 邮箱验证码验证失败，验证码错误或不存在'
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码错误或不存在'
 				console.error('ERROR', errorMessage, { uuid: this.#uuid })
-				try { await this.#accumulatedVerificationFailuresTimes() } catch (error) { errorMessage += '；累计验证失败次数时也出错' }
 				if (this.#isInternalSession) await abortAndEndSession(session)
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
-			const { verificationCreatedDate, totalVerifierTimesToday } = verifyResult.result[0]
+			const { verificationCode, verificationCreatedDate, totalVerifierTimesToday } = verifyResult.result[0]
 			const now = new Date().getTime()
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS, 1800000) || 1800000 // 默认验证码超时为 30 分钟
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 默认每天最多允许连续验证验证码直到成功验证的次数，默认 5。请注意：在验证通过后应手动重置次数。
@@ -1685,9 +1543,8 @@ export class General2FAEmailVerifier {
 				verificationCreatedDate === undefined || verificationCreatedDate === null
 				|| verificationCreatedDate + GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS < now
 			) {
-				let errorMessage = '通用 2FA 邮箱验证码验证失败，验证码已超时'
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码已超时'
 				console.error('ERROR', errorMessage, { uuid: this.#uuid })
-				try { await this.#accumulatedVerificationFailuresTimes() } catch (error) { errorMessage += '；累计验证失败次数时也出错' }
 				if (this.#isInternalSession) await abortAndEndSession(session)
 				return { success: false, isTimeout: true, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
@@ -1697,22 +1554,44 @@ export class General2FAEmailVerifier {
 				totalVerifierTimesToday === undefined || totalVerifierTimesToday === null
 				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
 			) {
-				let errorMessage = '通用 2FA 邮箱验证码验证失败，已达今日验证上限，请明日再试'
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，已达今日验证上限，请明日再试'
 				console.error('ERROR', errorMessage, { uuid: this.#uuid })
-				try { await this.#accumulatedVerificationFailuresTimes() } catch (error) { errorMessage += '；累计验证失败次数时也出错' }
 				if (this.#isInternalSession) await abortAndEndSession(session)
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: true, message: errorMessage }
+			}
+
+
+			/* 尝试增加尝试次数，尽力而为，不需要使用事务 */
+			try {
+				const accumulatedVerificationFailuresTimesUpdate: UpdateType<General2FAEmailVerificationCode> = {
+					totalVerifierTimesToday: isVerificationCodeCreatedDateToday ? 1 : totalVerifierTimesToday + 1
+				}
+				const accumulatedVerificationFailuresTimesResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(verifyWhere, accumulatedVerificationFailuresTimesUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName)
+				if (!accumulatedVerificationFailuresTimesResult.success) {
+					const errorMessage = '通用 2FA 邮箱验证码验证失败，增加尝试次数失败'
+					console.error('ERROR', errorMessage, { uuid: this.#uuid })
+					return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
+				}
+			} catch (error) {
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，增加尝试次数时出错'
+				console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
+			}
+
+			if (!verificationCode || verificationCode !== this.#verificationCode) {
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码错误'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				if (this.#isInternalSession) await abortAndEndSession(session)
+				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
 			const verifyUpdate: UpdateType<General2FAEmailVerificationCode> = {
 				used: true,
 			}
-
 			const verifyUpdateResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(verifyWhere, verifyUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
 			if (!verifyUpdateResult.success) {
-				let errorMessage = '通用 2FA 邮箱验证码验证失败，更新验证码使用状态失败'
+				const errorMessage = '通用 2FA 邮箱验证码验证失败，更新验证码使用状态失败'
 				console.error('ERROR', errorMessage, { uuid: this.#uuid })
-				try { await this.#accumulatedVerificationFailuresTimes() } catch (error) { errorMessage += '；累计验证失败次数时也出错' }
 				if (this.#isInternalSession) await abortAndEndSession(session)
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
@@ -1729,10 +1608,10 @@ export class General2FAEmailVerifier {
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
+			// 若 resetAttempts 成功，则已经提交事务，所以这里不需要再提交
 			return { success: true, isTimeout: false, isMaxVerifierTimesToday: false, message: '通用 2FA 邮箱验证码验证成功，并且尝试次数已重置' }
 		} catch (error) {
-			let errorMessage = '通用 2FA 邮箱验证码验证失败，未知错误'
-			try { await this.#accumulatedVerificationFailuresTimes() } catch { errorMessage += '；累计验证失败次数时也出错' }
+			const errorMessage = '通用 2FA 邮箱验证码验证失败，未知错误'
 			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 		}
@@ -1780,25 +1659,289 @@ export class General2FAEmailVerifier {
 			return { success: false, message: errorMessage }
 		}
 	}
+}
+
+/**
+ * 通用 TOTP 2FA 验证码验证器的类型
+ */
+export namespace General2FATotpVerifier {
+	/** 验证 TOTP 验证码的参数 */
+	export type VerifyOptions = {
+		/** 是否在验证成功后立即重置尝试次数 */
+		isResetAttemptsImmediately: boolean,
+		/** 是否允许使用备份码 */
+		isAllowBackupCode: boolean,
+		/** 是否允许使用恢复码，并且使用后删除 TOTP 验证器 */
+		isAllowRecoveryCodeAndDeleteTotp: boolean,
+		/** 可选的 Mongoose 事务 session，如果不提供，则内部创建一个事务，在成功重置尝试次数后这个内部事务会被提交 */
+		session?: mongoose.ClientSession,
+	}
+
+	/** 验证 TOTP 验证码的结果 */
+	export type VerifyResult = {
+		/** 是否验证成功 */
+		success: boolean,
+		/** 是否以达到规定时间内连续验证次数上限 */
+		isMaxAttemptsReachedWithinTime: boolean,
+		/** 是否不允许使用备份码 */
+		isNotAllowBackupCode: boolean,
+		/** 是否不允许使用恢复码并删除 TOTP */
+		isNotAllowRecoveryCodeAndDeleteTotp: boolean,
+		/** 附加的文本消息 */
+		message: string,
+		/** 如果 isResetAttemptsImmediately 为假，则不会在验证通过后立即重置尝试次数，而是返回一个用于稍后重置尝试次数的回调函数（这样可以在用户验证通过，且后续业务也成功完成的情况下才重置尝试次数） */
+		resetAttemptsCallback?: () => Promise<{
+			/** 是否重置次数成功 */
+			success: boolean,
+			/** 附加的文本消息 */
+			message: string,
+		}>,
+	}
+}
+
+
+/**
+ * 通用 TOTP 2FA 验证码验证器
+ */
+export class General2FATotpVerifier {
+	/** 用户 UUID */
+	#uuid: string
+	/** 用户 Token */
+	#token?: string
+	/** TOTP 验证码 */
+	#clientOtp: string
+	/** 可选的 Mongoose 事务 session。使用外部传入的 session 覆盖 class 内部维护的 session */
+	#session?: mongoose.ClientSession
+	/** 指示是否为内部 session (如果是的话，则在重置验证后被 commit) */
+	#isInternalSession: boolean
 
 	/**
-	 * （如果可能的话）累计验证失败次数的私有方法
+	 * 构造函数，用于初始化通用 2FA TOTP 验证码验证器
+	 * @param uuid 用户 UUID
+	 * @param clientOtp 验证码
+	 * @param token 用户 Token，可选，为空时不会进行用户校验
 	 */
-	async #accumulatedVerificationFailuresTimes(): Promise<void> {
+	constructor(uuid: string, clientOtp: string, token?: string) {
+		this.#uuid = uuid
+		this.#clientOtp = clientOtp
+		this.#token = token
+	}
+	
+	/**
+	 * 验证用户的 TOTP 2FA 验证码
+	 * @param options 
+	 * @returns 
+	 */
+	async verify(options: General2FATotpVerifier.VerifyOptions): Promise<General2FATotpVerifier.VerifyResult> {
 		try {
-			const { collectionName: general2FAEmailVerificationCodeCollectionName, schemaInstance: general2FAEmailVerificationCodeSchemaInstance } = General2FAEmailVerificationCodeSchema
-			type General2FAEmailVerificationCode = InferSchemaType<typeof general2FAEmailVerificationCodeSchemaInstance>
-			const accumulatedVerificationFailuresTimesWhere: QueryType<General2FAEmailVerificationCode> = {
-				uuid: this.#uuid,
+			const maxAttempts	= parseInteger(process.env.GENERAL_2FA_TOTP_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 最大尝试次数
+			const lockTime = parseInteger(process.env.GENERAL_2FA_TOTP_VERIFICATION_CODE_TIMEOUT_MILLISECONDS, 1800000) || 1800000 // 冷却时间
+			const { isResetAttemptsImmediately, isAllowBackupCode, isAllowRecoveryCodeAndDeleteTotp, session: outsideSession } = options
+			const now = new Date().getTime()
+
+			if (outsideSession) {
+				this.#isInternalSession = true
+				this.#session = await createAndStartSession()
+			} else {
+				this.#isInternalSession = false
+				this.#session = outsideSession
+			}
+			const session = this.#session
+
+			if (!this.#clientOtp) {
+				const errorMessage = '验证 TOTP 2FA 失败，未提供 TOTP 验证码'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
-			const accumulatedVerificationFailuresTimesUpdate: UpdateType<General2FAEmailVerificationCode> = {
-				$inc: { totalVerifierTimesToday: 1 },
+			if (this.#uuid && this.#token && !await checkUserTokenByUUID(this.#uuid, this.#token)) {
+				const errorMessage = '验证 TOTP 2FA 失败，用户校验未通过'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
-			await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(accumulatedVerificationFailuresTimesWhere, accumulatedVerificationFailuresTimesUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session: this.#session })
+			const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+			type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+			const userTotpAuthenticatorWhere: QueryType<UserTotpAuthenticator> = {
+				UUID: this.#uuid,
+				enabled: true,
+			}
+			const userTotpAuthenticatorSelect: SelectType<UserTotpAuthenticator> = {
+				secret: 1,
+				backupCodeHash: 1,
+				lastAttemptTime: 1,
+				attempts: 1,
+				recoveryCodeHash: 1,
+			}
+
+			const selectResult = await selectDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+			if (!selectResult.success || selectResult.result.length !== 1) {
+				const errorMessage = '验证 TOTP 2FA 失败，获取验证数据失败'
+				console.error('ERROR', errorMessage)
+				if (this.#isInternalSession) await abortAndEndSession(session)
+				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+			}
+
+			const { attempts, secret: totpSecret, backupCodeHash: listOfBackupCodeHash, recoveryCodeHash, lastAttemptTime } = selectResult.result[0]
+			const isTimeout = (now - lastAttemptTime) >= lockTime
+			const isMaxAttemptsReachedWithinTime = selectResult.result[0].attempts >= maxAttempts && isTimeout // 在限定时间内达到最大尝试次数
+
+			// 限制用户的登录频率
+			if (isMaxAttemptsReachedWithinTime) {
+				const warningMessage = '用户登录失败，已达最大尝试次数，请稍后再试';
+				console.warn('WARN', 'WARNING', warningMessage);
+				if (this.#isInternalSession) await abortAndEndSession(session)
+				return { success: false, message: warningMessage, isMaxAttemptsReachedWithinTime, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp };
+			}
+			
+			const updateTotpAttemptsTimesUpdate: UpdateType<UserTotpAuthenticator> = {
+				attempts: isTimeout ? 1 : attempts + 1,
+				lastAttemptTime: now,
+			}
+			// 更新尝试次数和最后尝试时间，尽力而为，不应添加事务
+			const updateTotpAttemptsTimesResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, updateTotpAttemptsTimesUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
+			if (!updateTotpAttemptsTimesResult.success) {
+				const errorMessage = '验证 TOTP 2FA 失败，更新尝试次数失败'
+				console.error('ERROR', errorMessage)
+				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+			}
+
+			if (this.#clientOtp.length > 6) { // 大于六位时，视为使用 TOTP 恢复码进行验证（成功后会删除 TOTP 2FA）
+				if (!isAllowRecoveryCodeAndDeleteTotp) {
+					const errorMessage = '验证 TOTP 2FA 失败，使用恢复码验证未被允许'
+					console.error('ERROR', errorMessage, { uuid: this.#uuid })
+					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+				}
+
+				const isCorrectRecoveryCode = comparePasswordSync(this.#clientOtp, recoveryCodeHash)
+				if (!isCorrectRecoveryCode) {
+					const errorMessage = '验证 TOTP 2FA 失败，恢复码错误'
+					console.error('ERROR', errorMessage)
+					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+				}
+
+				const deleteTotpAuthenticatorByRecoveryCodeData: DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
+					uuid: this.#uuid,
+					recoveryCodeHash,
+					session
+				}
+				const deleteResult = await deleteTotpAuthenticatorByRecoveryCode(deleteTotpAuthenticatorByRecoveryCodeData) // 如果使用恢复码登陆成功，则删除 TOTP 2FA
+				if (!deleteResult.success) {
+					const errorMessage = '验证 TOTP 2FA 失败，未能通过恢复码删除 TOTP 2FA'
+					console.error('ERROR', errorMessage)
+					if (this.#isInternalSession) await abortAndEndSession(session)
+					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+				}
+
+				if (this.#isInternalSession) await commitAndEndSession(session)
+				if (!isResetAttemptsImmediately) {
+					return { success: true, message: '通过恢复码验证 TOTP 2FA 成功，并且你的 TOTP 2FA 已删除，请手动重置尝试次数', isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp, resetAttemptsCallback: this.#resetAttempts.bind(this) }
+				}
+			} else { // 不大于六位数时，视为使用 TOTP 验证码或 TOTP 备份码进行登录。先视为 TOTP 验证码尝试，如果验证失败，则视为 TOTP 备份码尝试，如果都失败，则响应登陆失败
+				if (!authenticator.check(this.#clientOtp, totpSecret)) {
+					// attempts += 1
+					let useCorrectBackupCode = false // 用户是否使用了一个正确的备用码。
+					const newBackupCodeHash = []
+					listOfBackupCodeHash.forEach( backupCodeHash => {
+						const isCorrectBackupCode = comparePasswordSync(this.#clientOtp, backupCodeHash)
+						if (isCorrectBackupCode) {
+							useCorrectBackupCode = true
+						} else {
+							newBackupCodeHash.push(backupCodeHash)
+						}
+					})
+					if (!useCorrectBackupCode) {
+						const errorMessage = '验证 TOTP 2FA 失败，TOTP 验证码或备份码错误'
+						console.error('ERROR', errorMessage);
+						if (this.#isInternalSession) await abortAndEndSession(session)
+						return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp };
+					}
+
+					const userLoginByBackupCodeUpdate: UpdateType<UserTotpAuthenticator> = {
+						backupCodeHash: newBackupCodeHash,
+						editDateTime: now,
+						attempts: 0,
+						lastAttemptTime: now,
+					}
+					// 使用备份码登录后，将除了已使用的备份码之外的备份码写回数据库（这样一来，备份码就无法被重复使用了）
+					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+					if (!updateAuthenticatorResult.success) {
+						const errorMessage = '验证 TOTP 2FA 失败，更新备份码失败'
+						console.error('ERROR', errorMessage)
+						if (this.#isInternalSession) await abortAndEndSession(session)
+						return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+					}
+
+					if (this.#isInternalSession) await commitAndEndSession(session)
+					if (!isResetAttemptsImmediately) {
+						return { success: true, message: '用户使用备用码登录成功，请手动重置尝试次数', isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp, resetAttemptsCallback: this.#resetAttempts.bind(this) }
+					}
+				}
+
+				if (this.#isInternalSession) await commitAndEndSession(session)
+				if (!isResetAttemptsImmediately) {
+					return { success: true, message: '用户使用 TOTP 验证码登录成功，请手动重置尝试次数', isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp, resetAttemptsCallback: this.#resetAttempts.bind(this) }
+				}
+			}
+
+			const resetAttemptsResult = await this.#resetAttempts()
+			if (!resetAttemptsResult.success) {
+				const errorMessage = '验证 TOTP 2FA 失败，重置尝试次数失败'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				if (this.#isInternalSession) await abortAndEndSession(session)
+				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+			}
+
+			// 若 resetAttempts 成功，则已经提交事务，所以这里不需要再提交
+			return { success: true, message: '验证 TOTP 2FA 成功，并且尝试次数已重置', isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 		} catch (error) {
-			console.error('ERROR', '通用 2FA 邮箱验证码验证失败，增加尝试次数时出错', error, { uuid: this.#uuid })
+			let errorMessage = '通用 2FA TOTP 验证码验证失败，未知错误'
+			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: false, isNotAllowRecoveryCodeAndDeleteTotp: false }
+		}
+	}
+
+	
+	/**
+	 * 重置尝试次数的私有方法
+	 * @returns 重置尝试次数的结果
+	 */
+	async #resetAttempts(): Promise<{ success: boolean, message: string }> {
+		const session = this.#session
+		if (!session) {
+			const errorMessage = '通用 2FA TOTP 验证码尝试次数重置失败，内部 session 不存在'
+			console.error('ERROR', errorMessage, { uuid: this.#uuid })
+			return { success: false, message: errorMessage }
+		}
+
+		try {
+			const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+			type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+			const resetAttemptsWhere: QueryType<UserTotpAuthenticator> = {
+				UUID: this.#uuid,
+				enabled: true,
+			}
+			const resetAttemptsUpdate: UpdateType<UserTotpAuthenticator> = {
+				attempts: 0,
+			}
+
+			const resetAttemptsResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(resetAttemptsWhere, resetAttemptsUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+			if (!resetAttemptsResult.success) {
+				const errorMessage = '通用 2FA TOTP 验证码验证码尝试次数重置失败，存储尝试次数失败'
+				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				if (this.#isInternalSession) await abortAndEndSession(session)
+				return { success: false, message: errorMessage }
+			}
+
+			if (this.#isInternalSession) await commitAndEndSession(session)
+			return { success: true, message: '通用 2FA TOTP 验证码验证码尝试次数重置成功' }
+		} catch (error) {
+			let errorMessage = '通用 2FA TOTP 验证码验证码尝试次数重置失败，未知错误'
+			try { if (this.#isInternalSession) await abortAndEndSession(session) } catch {
+				errorMessage += '，且在中止事务时发生错误'
+			}
+			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			return { success: false, message: errorMessage }
 		}
 	}
 }
@@ -3173,8 +3316,8 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 
 /** 通过恢复码删除用户 TOTP 2FA 的参数 */
 type DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
-	/** 用户邮箱 */
-	email: string,
+	/** 用户 UUID */
+	uuid: string,
 	/** 恢复码 */
 	recoveryCodeHash: string,
 	/** 事务 */
@@ -3196,21 +3339,7 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 			return { success: false, message: '通过恢复码删除用户 2FA 失败，参数不合法' }
 		}
 
-		const { email, recoveryCodeHash, session } = deleteTotpAuthenticatorByRecoveryCodeData
-		const emailLowerCase = email.toLowerCase()
-
-		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
-		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
-		const userAuthWhere: QueryType<UserAuth> = { emailLowerCase: emailLowerCase }
-		const userAuthSelect: SelectType<UserAuth> = { UUID: 1 }
-		const userInfo = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
-
-		const uuid = userInfo?.result?.[0]?.UUID
-		if (!uuid) {
-			const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，无法获取用户信息'
-			console.error('ERROR', errorMessage, { emailLowerCase })
-			return { success: false, message: errorMessage }
-		}
+		const { uuid, recoveryCodeHash, session } = deleteTotpAuthenticatorByRecoveryCodeData
 
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
@@ -3219,7 +3348,7 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 
 		if (!deleteResult.success) {
 			const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，删除失败'
-			console.error('ERROR', errorMessage, { emailLowerCase })
+			console.error('ERROR', errorMessage, { uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -3227,7 +3356,7 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 
 		if (!resetResult) {
 			const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，重置用户 TOTP 2FA 数据失败'
-			console.error('ERROR', errorMessage, { emailLowerCase })
+			console.error('ERROR', errorMessage, { uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -3626,29 +3755,33 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		}
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(createUserEmailAuthenticatorUserAuthWhere, createUserEmailAuthenticatorUserAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
 		if (!userAuthResult.success || !userAuthResult?.result || userAuthResult.result?.length !== 1) {
-			console.error('创建 TOTP 身份验证器失败，用户不存在', { uuid })
+			const errorMessage = '创建 Email 2FA 身份验证器失败，用户不存在'
+			console.error(errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, isExists: false, message: '创建 TOTP 身份验证器失败，用户不存在' }
+			return { success: false, isExists: false, message: errorMessage }
 		}
 
 		const email = userAuthResult.result[0].email
 		const emailLowerCase = userAuthResult.result[0].emailLowerCase
 		if (!emailLowerCase) {
-			console.error('创建 TOTP 身份验证器失败，未找到邮箱', { uuid })
+			const errorMessage = '创建 Email 2FA 身份验证器失败，未找到邮箱'
+			console.error(errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, isExists: false, message: '创建 TOTP 身份验证器失败，未找到邮箱' }
+			return { success: false, isExists: false, message: errorMessage }
 		}
 
 		if (userAuthResult.result[0].authenticatorType === 'email') {
-			console.error('创建 TOTP 身份验证器失败，已经开启 Email 2FA', { uuid })
+			const errorMessage = '创建 Email 2FA 身份验证器失败，已经开启 Email 2FA'
+			console.error(errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, isExists: true, existsAuthenticatorType: 'email', message: '创建 TOTP 身份验证器失败，已经开启 Email 2FA' }
+			return { success: false, isExists: true, existsAuthenticatorType: 'email', message: errorMessage }
 		}
 
 		if (userAuthResult.result[0].authenticatorType === 'totp') {
-			console.error('创建 TOTP 身份验证器失败，已经开启 TOTP 2FA', { uuid })
+			const errorMessage = '创建 Email 2FA 身份验证器失败，已经开启 TOTP 2FA'
+			console.error(errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, isExists: true, existsAuthenticatorType: 'totp', message: '创建 TOTP 身份验证器失败，已经开启 TOTP 2FA' }
+			return { success: false, isExists: true, existsAuthenticatorType: 'totp', message: errorMessage }
 		}
 
 		const now = new Date().getTime()
@@ -3663,16 +3796,18 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		const updateUserAuthResult = await findOneAndUpdateData4MongoDB<UserAuth>(userAuthWhere, userAuthUpdate, userAuthSchemaInstance, userAuthCollectionName, { session })
 
 		if (!updateUserAuthResult.success || !updateUserAuthResult.result) {
-			console.error('创建 Email 身份验证器失败，保存数据失败', { uuid })
+			const errorMessage = '创建 Email 2FA 身份验证器失败，保存数据失败'
+			console.error(errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，保存数据失败' }
+			return { success: false, isExists: false, message: errorMessage }
 		}
 
 		await commitAndEndSession(session)
-		return { success: true, isExists: false, message: '创建 Email 身份验证器成功', result: { email, emailLowerCase } }
+		return { success: true, isExists: false, message: '创建 Email 2FA 身份验证器成功', result: { email, emailLowerCase } }
 	} catch (error) {
-		console.error('创建 Email 身份验证器失败时出错，未知错误', error)
-		return { success: false, isExists: false, message: '创建 Email 身份验证器时出错，未知错误' }
+		const errorMessage = '创建 Email 2FA 身份验证器时出错，未知错误'
+		console.error(errorMessage, error)
+		return { success: false, isExists: false, message: errorMessage }
 	}
 }
 
@@ -4113,7 +4248,7 @@ const checkAdminClearUserInfoRequest = (adminClearUserInfoRequest: AdminClearUse
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
 const checkDeleteTotpAuthenticatorByRecoveryCodeData = (deleteTotpAuthenticatorByRecoveryCodeData: DeleteTotpAuthenticatorByRecoveryCodeParametersDto): boolean => {
-	return (!!deleteTotpAuthenticatorByRecoveryCodeData.email && !!deleteTotpAuthenticatorByRecoveryCodeData.recoveryCodeHash)
+	return (!!deleteTotpAuthenticatorByRecoveryCodeData.uuid && !!deleteTotpAuthenticatorByRecoveryCodeData.recoveryCodeHash)
 }
 
 /**
