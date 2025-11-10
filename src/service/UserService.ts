@@ -471,23 +471,25 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 			case 'no-2fa':
 				break
 			case '2fa-email':
-				{
-					{
-						const EmailVerifier = new General2FAEmailVerifier(cookieUuid, changeEmailVerificationCode, cookieToken)
-						const verificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'login' })
-						if (!verificationResult.success) {
-							const errorMessage = `登录失败，邮箱验证码验证失败${verificationResult.message}`
-							console.error('ERROR', errorMessage)
-							return { success: false, message: errorMessage }
-						}
-					}
-					break
+				const EmailVerifier = new General2FAEmailVerifier(cookieUuid, changeEmailVerificationCode, cookieToken)
+				const emailVerificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'login', session })
+				if (!emailVerificationResult.success) {
+					const errorMessage = `登录失败，邮箱验证码验证失败：${emailVerificationResult.message}`
+					console.error('ERROR', errorMessage)
+					await abortAndEndSession(session)
+					return { success: false, message: errorMessage }
 				}
+				break
 			case '2fa-totp':
-				{
-					// TODO: 通用 2FA TOTP 验证方法
-					break
+				const TotpVerifier = new General2FATotpVerifier(cookieUuid, changeEmailVerificationCode, cookieToken)
+				const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: true, isAllowRecoveryCodeAndDeleteTotp: false, session })
+				if (!totpVerificationResult.success) {
+					const errorMessage = `登录失败，2TA TOTP 验证失败：${totpVerificationResult.message}`
+					console.error('ERROR', errorMessage)
+					await abortAndEndSession(session)
+					return { success: false, message: errorMessage }
 				}
+				break
 		}
 		
 		// TODO: 验证新邮箱的验证码
@@ -1561,7 +1563,7 @@ export class General2FAEmailVerifier {
 			}
 
 
-			/* 尝试增加尝试次数，尽力而为，不需要使用事务 */
+			// 尝试增加尝试次数，‘惩罚’ 需尽力而为，不需要使用事务
 			try {
 				const accumulatedVerificationFailuresTimesUpdate: UpdateType<General2FAEmailVerificationCode> = {
 					totalVerifierTimesToday: isVerificationCodeCreatedDateToday ? 1 : totalVerifierTimesToday + 1
@@ -1673,6 +1675,11 @@ export namespace General2FATotpVerifier {
 		isAllowBackupCode: boolean,
 		/** 是否允许使用恢复码，并且使用后删除 TOTP 验证器 */
 		isAllowRecoveryCodeAndDeleteTotp: boolean,
+		/**
+		 * 要对何种启用状态的 TOTP 验证器进行验证。
+		 * 如果为真值或未提供该参数（即使提供的是一个‘假’值），则默认视为对已启用的 TOTP 进行验证，只有显式指定为 false 时才会对 enabled 为 false 的 TOTP 进行验证。其目的是为了用户第一次设置 TOTP 时，允许用户验证未启用的 TOTP 验证器。
+		 */
+		totpEnableStatus?: boolean,
 		/** 可选的 Mongoose 事务 session，如果不提供，则内部创建一个事务，在成功重置尝试次数后这个内部事务会被提交 */
 		session?: mongoose.ClientSession,
 	}
@@ -1736,7 +1743,7 @@ export class General2FATotpVerifier {
 		try {
 			const maxAttempts	= parseInteger(process.env.GENERAL_2FA_TOTP_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 最大尝试次数
 			const lockTime = parseInteger(process.env.GENERAL_2FA_TOTP_VERIFICATION_CODE_TIMEOUT_MILLISECONDS, 1800000) || 1800000 // 冷却时间
-			const { isResetAttemptsImmediately, isAllowBackupCode, isAllowRecoveryCodeAndDeleteTotp, session: outsideSession } = options
+			const { isResetAttemptsImmediately, isAllowBackupCode, isAllowRecoveryCodeAndDeleteTotp, totpEnableStatus, session: outsideSession } = options
 			const now = new Date().getTime()
 
 			if (outsideSession) {
@@ -1764,7 +1771,7 @@ export class General2FATotpVerifier {
 			type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
 			const userTotpAuthenticatorWhere: QueryType<UserTotpAuthenticator> = {
 				UUID: this.#uuid,
-				enabled: true,
+				enabled: totpEnableStatus === false ? false : true,
 			}
 			const userTotpAuthenticatorSelect: SelectType<UserTotpAuthenticator> = {
 				secret: 1,
@@ -1798,7 +1805,8 @@ export class General2FATotpVerifier {
 				attempts: isTimeout ? 1 : attempts + 1,
 				lastAttemptTime: now,
 			}
-			// 更新尝试次数和最后尝试时间，尽力而为，不应添加事务
+
+			// 更新尝试次数和最后尝试时间。‘惩罚’ 需尽力而为，不需要使用事务
 			const updateTotpAttemptsTimesResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, updateTotpAttemptsTimesUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
 			if (!updateTotpAttemptsTimesResult.success) {
 				const errorMessage = '验证 TOTP 2FA 失败，更新尝试次数失败'
@@ -3328,7 +3336,7 @@ type DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
 type DeleteTotpAuthenticatorByRecoveryCodeResultDto = {} & DeleteTotpAuthenticatorByTotpVerificationCodeResponseDto
 
 /**
- * 通过恢复码删除用户 TOTP 2FA，只能在登录时使用
+ * 通过恢复码删除用户 TOTP 2FA
  * @param deleteTotpAuthenticatorByRecoveryCodeData 通过恢复码删除用户 TOTP 2FA 的参数
  * @returns 通过恢复码删除用户 TOTP 2FA 的结果
  */
@@ -3378,26 +3386,26 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (deleteTotpAuthenticatorByTotpVerificationCodeRequest: DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto, uuid: string, token: string): Promise<DeleteTotpAuthenticatorByTotpVerificationCodeResponseDto> => {
 	try {
 		if (!checkDeleteTotpAuthenticatorByTotpVerificationCodeRequest(deleteTotpAuthenticatorByTotpVerificationCodeRequest)) {
-			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，参数不合法')
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器验证器失败，参数不合法' }
+			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，参数不合法'
+			console.error('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户校验未通过')
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器验证器失败，用户校验未通过' }
+			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户校验未通过'
+			console.error('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		const session = await createAndStartSession()
 
-		const now = new Date().getTime()
 		const { clientOtp, passwordHash } = deleteTotpAuthenticatorByTotpVerificationCodeRequest
-		const maxAttempts	 = 5
-		const lockTime = 60 * 60 * 1000
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
-
-		const userLoginWhere: QueryType<UserAuth> = { UUID: uuid }
+		const userLoginWhere: QueryType<UserAuth> = {
+			UUID: uuid
+		}
 		const userLoginSelect: SelectType<UserAuth> = {
 			passwordHashHash: 1,
 		}
@@ -3405,14 +3413,24 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
 		const passwordHashHash = userAuthResult.result?.[0]?.passwordHashHash
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
-			console.error('ERROR', `已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息`)
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息' }
+			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息'
+			console.error('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash)
 		if (!isCorrectPassword) {
-			console.error('ERROR', `已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息`)
+			console.error('ERROR', `已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确`)
 			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确' }
+		}
+
+		const TotpVerifier = new General2FATotpVerifier(uuid, clientOtp, token)
+		const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: false, isAllowBackupCode: true, isAllowRecoveryCodeAndDeleteTotp: false, session })
+		if (!totpVerificationResult.success && totpVerificationResult.resetAttemptsCallback) {
+			const errorMessage = `已登录用户通过密码和 TOTP 验证码删除身份验证器失败：${totpVerificationResult.message}`
+			console.error('ERROR', errorMessage)
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
 		}
 
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
@@ -3421,64 +3439,23 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 			UUID: uuid,
 			enabled: true,
 		}
-		const deleteTotpAuthenticatorByTotpVerificationCodeSelect: SelectType<UserTotpAuthenticator> = {
-			secret: 1,
-			backupCodeHash: 1,
-			lastAttemptTime: 1,
-			attempts: 1,
-		}
-
-		const selectResult = await selectDataFromMongoDB<UserTotpAuthenticator>(deleteTotpAuthenticatorByTotpVerificationCodeWhere, deleteTotpAuthenticatorByTotpVerificationCodeSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
-		if (!selectResult.success || selectResult.result.length !== 1) {
-			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据')
-			await abortAndEndSession(session)
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据' }
-		}
-
-		let attempts = selectResult.result[0].attempts
-		const totpSecret = selectResult.result[0].secret
-
-		// 限制用户尝试删除的频率
-		if (selectResult.result[0].attempts >= maxAttempts) {
-			const lastAttemptTime = new Date(selectResult.result[0].lastAttemptTime).getTime();
-			if (now - lastAttemptTime < lockTime) {
-				attempts += 1
-
-				console.warn('WARN', 'WARNING', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，已达最大尝试次数，请稍后再试');
-				await abortAndEndSession(session)
-				return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，已达最大尝试次数，请稍后再试', isCoolingDown: true }
-			} else {
-				attempts = 0
-			}
-
-			const deleteTotpAuthenticatorByTotpVerificationCodeUpdate: UpdateType<UserTotpAuthenticator> = {
-				attempts: attempts,
-				lastAttemptTime: now,
-				editDateTime: now,
-			}
-			const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(deleteTotpAuthenticatorByTotpVerificationCodeWhere, deleteTotpAuthenticatorByTotpVerificationCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
-
-			if (!updateAuthenticatorResult.success) {
-				console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，更新最后尝试时间或尝试次数失败');
-				await abortAndEndSession(session)
-				return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，更新最后尝试时间或尝试次数失败', isCoolingDown: true }
-			}
-		}
-
-		if (!authenticator.check(clientOtp, totpSecret)) {
-			console.error('ERROR', '已登录用户通过密码和邮 TOTP 证码删除身份验证器失败：删除失败，验证码错误')
-			await abortAndEndSession(session)
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，验证码错误' }
-		}
 
 		// 调用删除函数
 		const deleteResult = await deleteDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 		const resetResult = await resetUser2FATypeByUUID(uuid, session)
 
 		if (!deleteResult.success || deleteResult.result.deletedCount !== 1 || !resetResult) {
-			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败')
+			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败'
+			console.error('ERROR', errorMessage)
 			await abortAndEndSession(session)
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败' }
+			return { success: false, message: errorMessage }
+		}
+
+		const resetAttemptsResult = await totpVerificationResult.resetAttemptsCallback()
+		if (!resetAttemptsResult.success) {
+			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，重置 TOTP 尝试次数失败')
+			await abortAndEndSession(session)
+			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，重置 TOTP 尝试次数失败' }
 		}
 
 		await commitAndEndSession(session)
@@ -3642,45 +3619,22 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthenticatorRequest: ConfirmUserTotpAuthenticatorRequestDto, uuid: string, token: string): Promise<ConfirmUserTotpAuthenticatorResponseDto> => {
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('确认绑定 TOTP 设备失败，非法用户')
-			return { success: false, message: '确认绑定 TOTP 设备失败，非法用户' }
+			const errorMessage = '确认绑定 TOTP 设备失败，非法用户'
+			console.error('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		const { clientOtp, otpAuth } = confirmUserTotpAuthenticatorRequest
 
-		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
-		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
-		const confirmUserTotpAuthenticatorWhere: QueryType<UserAuthenticator> = {
-			UUID: uuid,
-			enabled: false,
-			otpAuth,
-		}
-		const confirmUserTotpAuthenticatorSelect: SelectType<UserAuthenticator> = {
-			secret: 1,
-		}
+		const session = await createAndStartSession()
 
-		const session = await mongoose.startSession()
-		session.startTransaction()
-
-		const selectResult = await selectDataFromMongoDB<UserAuthenticator>(confirmUserTotpAuthenticatorWhere, confirmUserTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
-
-		if (!selectResult.success || selectResult.result.length !== 1) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('确认绑定 TOTP 设备失败，获取验证数据失败')
-			return { success: false, message: '确认绑定 TOTP 设备失败，获取验证数据失败' }
-		}
-
-		const totpSecret = selectResult.result[0].secret
-		if (!authenticator.check(clientOtp, totpSecret)) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('确认绑定 TOTP 设备失败，验证失败')
-			return { success: false, message: '确认绑定 TOTP 设备失败，验证失败' }
+		const TotpVerifier = new General2FATotpVerifier(uuid, clientOtp, token)
+		const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: false, isAllowRecoveryCodeAndDeleteTotp: false, totpEnableStatus: false, session })
+		if (!totpVerificationResult.success && totpVerificationResult.resetAttemptsCallback) {
+			const errorMessage = `确认绑定 TOTP 设备失败，验证失败：${totpVerificationResult.message}`
+			console.error('ERROR', errorMessage)
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
 		}
 
 		const now = new Date().getTime()
@@ -3690,13 +3644,19 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		const backupCode = Array.from({ length: 5 }, () => generateSecureVerificationStringCode(6, charset))
 		const backupCodeHash = backupCode.map(hashPasswordSync)
 
+		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
+		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
+		const confirmUserTotpAuthenticatorWhere: QueryType<UserAuthenticator> = {
+			UUID: uuid,
+			enabled: false,
+			otpAuth,
+		}
 		const confirmUserTotpAuthenticatorUpdate: UpdateType<UserAuthenticator> = {
 			enabled: true,
 			recoveryCodeHash,
 			backupCodeHash,
 			editDateTime: now,
 		}
-
 		const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(confirmUserTotpAuthenticatorWhere, confirmUserTotpAuthenticatorUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
@@ -3712,20 +3672,18 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		const updateUserAuthResult = await findOneAndUpdateData4MongoDB<UserAuthenticator>(userAuthWhere, userAuthUpdate, userAuthSchemaInstance, userAuthCollectionName, { session })
 
 		if (!updateAuthenticatorResult.success || !updateAuthenticatorResult.result || !updateUserAuthResult.success || !updateUserAuthResult.result) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			console.error('确认绑定 TOTP 设备失败，更新失败')
-			return { success: false, message: '确认绑定 TOTP 设备失败，更新失败' }
+			const errorMessage = '确认绑定 TOTP 设备失败，更新失败'
+			console.error('ERROR', errorMessage)
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
 		}
 
-		await session.commitTransaction()
-		session.endSession()
+		await commitAndEndSession(session)
 		return { success: true, result: { backupCode, recoveryCode }, message: '已绑定 TOTP 设备' }
 	} catch (error) {
-		console.error('确认绑定 TOTP 设备时出错，未知错误', error)
-		return { success: false, message: '确认绑定 TOTP 设备时出错，未知错误' }
+		const errorMessage = '确认绑定 TOTP 设备时出错，未知错误'
+		console.error('ERROR', errorMessage, error)
+		return { success: false, message: errorMessage }
 	}
 }
 
