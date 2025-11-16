@@ -115,7 +115,7 @@ export const sendMail = async (to: string, title: string, body: EmailBodyType) =
 }
 
 /**
- * 验证 Email 地址是否合法
+ * 验证 Email 地址是否不合法
  * @param email 被验证的 Email 地址
  * @returns 验证结果，不合法返回 true
  */

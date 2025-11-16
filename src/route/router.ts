@@ -17,7 +17,6 @@ import {
 	getUserAvatarUploadSignedUrlController,
 	getUserInfoByUidController,
 	getUserSettingsController,
-	requestSendRegistrationVerificationCodeController,
 	updateOrCreateUserInfoController,
 	updateOrCreateUserSettingsController,
 	updateUserEmailController,
@@ -204,13 +203,6 @@ router.post('/user/settings/update', updateOrCreateUserSettingsController) // �
 // cookie: uid, token
 // {
 // 	"coloredSideBar": "true"
-// }
-
-router.post('/user/requestSendRegistrationVerificationCode', requestSendRegistrationVerificationCodeController) // 请求发送注册验证码，用于注册时验证用户邮箱
-// https://localhost:9999/user/requestSendVerificationCode
-// {
-// 	"email": "aaa@bbb.com",
-// 	"clientLanguage": "zh-Hans-CN"
 // }
 
 router.post('/user/createInvitationCode', createInvitationCodeController) // 生成邀请码

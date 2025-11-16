@@ -465,28 +465,6 @@ export type UpdateOrCreateUserSettingsResponseDto = {
 }
 
 /**
- * 请求发送用户注册邮箱验证码的请求载荷
- */
-export type RequestSendRegistrationVerificationCodeRequestDto = {
-	/** 用户的邮箱 - 非空 - 唯一 */
-	email: string;
-	/** 用户客户端使用的语言 */
-	clientLanguage: string;
-}
-
-/**
- * 请求发送用户注册邮箱验证码的请求响应
- */
-export type RequestSendRegistrationVerificationCodeResponseDto = {
-	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
-	success: boolean;
-	/** 是否达到超时时间 */
-	isTimeout: boolean;
-	/** 附加的文本消息 */
-	message?: string;
-}
-
-/**
  * 发送通用 2FA 邮箱验证码的请求载荷
  */
 export type SendGeneral2FAEmailVerificationCodeRequestDto = {
@@ -515,6 +493,18 @@ export type SendGeneral2FAEmailVerificationCodeResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+
+/**
+ * 发送通用邮箱验证码的请求载荷
+ */
+export type SendGeneralEmailVerificationCodeRequestDto = SendGeneral2FAEmailVerificationCodeRequestDto & {
+	email: string;
+}
+
+/**
+ * 发送通用邮箱验证码的请求响应
+ */
+export type SendGeneralEmailVerificationCodeResponseDto = SendGeneral2FAEmailVerificationCodeResponseDto
 
 /**
  * 邀请码类型

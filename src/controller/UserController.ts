@@ -16,7 +16,6 @@ import {
 	getUserAvatarUploadSignedUrlService,
 	getUserInfoByUidService,
 	getUserSettingsService,
-	requestSendRegistrationVerificationCodeService,
 	updateOrCreateUserInfoService,
 	updateOrCreateUserSettingsService,
 	updateUserEmailService,
@@ -55,7 +54,6 @@ import {
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
 	RequestSendForgotPasswordVerificationCodeRequestDto,
-	RequestSendRegistrationVerificationCodeRequestDto,
 	UpdateOrCreateUserInfoRequestDto,
 	UpdateOrCreateUserSettingsRequestDto,
 	UpdateUserEmailRequestDto,
@@ -476,23 +474,6 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 	}
 
 	ctx.body = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uid, token)
-	await next()
-}
-
-/**
- * 请求发送注册验证码，用于注册时验证用户邮箱
- * @param ctx context
- * @param next context
- */
-export const requestSendRegistrationVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendRegistrationVerificationCodeRequestDto>
-
-	const requestSendVerificationCodeRequest: RequestSendRegistrationVerificationCodeRequestDto = {
-		email: data.email || '',
-		clientLanguage: data.clientLanguage,
-	}
-
-	ctx.body = await requestSendRegistrationVerificationCodeService(requestSendVerificationCodeRequest)
 	await next()
 }
 
