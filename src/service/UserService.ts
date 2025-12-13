@@ -411,6 +411,11 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		const newEmailLowerCase = newEmail.toLowerCase()
 		const now = new Date().getTime()
 
+		if (oldEmailLowerCase === newEmailLowerCase) {
+			console.error('ERROR', '更新用户邮箱时失败，旧邮箱和新邮箱相同', { cookieUuid, oldEmail, newEmail })
+			return { success: false, message: '更新用户邮箱失败，旧邮箱和新邮箱不能相同' }
+		}
+
 		// 启动事务
 		const session = await mongoose.startSession()
 		session.startTransaction()
