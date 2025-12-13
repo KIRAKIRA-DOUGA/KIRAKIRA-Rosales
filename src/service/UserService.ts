@@ -406,7 +406,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 			return { success: false, message: '用户邮箱更新失败，用户不合法' }
 		}
 
-		const { oldEmail, newEmail, passwordHash, verificationMethod, changeEmailVerificationCode, changeEmailNewEmailVerificationCode } = updateUserEmailRequest
+		const { oldEmail, newEmail, passwordHash, changeEmailVerificationCode, changeEmailNewEmailVerificationCode } = updateUserEmailRequest
 		const oldEmailLowerCase = oldEmail.toLowerCase()
 		const newEmailLowerCase = newEmail.toLowerCase()
 		const now = new Date().getTime()
@@ -418,7 +418,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
 		const userAuthWhere: QueryType<UserAuth> = { UUID: cookieUuid, emailLowerCase: oldEmailLowerCase, cookieToken } // 使用 uuid, emailLowerCase 和 token 确保用户更新的是自己的邮箱，而不是其他用户的
-		const userAuthSelect: SelectType<UserAuth> = { passwordHashHash: 1, emailLowerCase: 1 }
+		const userAuthSelect: SelectType<UserAuth> = { passwordHashHash: 1, emailLowerCase: 1, authenticatorType: 1 }
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { session })
 		const userAuthData = userAuthResult.result
 
@@ -435,12 +435,18 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 			return { success: false, message: '更新用户邮箱失败，无法找到正确的用户' }
 		}
 
-		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData[0].passwordHashHash) // 确保更新邮箱时输入的密码正确
+		const { passwordHashHash, authenticatorType } = userAuthData[0]
+
+		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash) // 确保更新邮箱时输入的密码正确
 		if (!isCorrectPassword) {
 			console.error('ERROR', '更新用户邮箱失败，用户密码不正确', { cookieUuid, oldEmail })
 			await abortAndEndSession(session)
 			return { success: false, message: '更新用户邮箱失败，用户密码不正确' }
 		}
+
+		let verificationMethod = 'no-2fa'
+		if (authenticatorType === 'email') verificationMethod = '2fa-email'
+		if (authenticatorType === 'totp') verificationMethod = '2fa-totp'
 
 		switch (verificationMethod) {
 			case 'no-2fa':
@@ -1557,13 +1563,13 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 		if (!checkSendGeneralEmailVerificationCodeRequest(sendGeneralEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用邮箱验证码失败，参数不合法'
 			console.error('ERROR', errorMessage, { uuid })
-			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		if (uuid && token && !await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '发送通用邮箱验证码失败，用户校验未通过'
 			console.error('ERROR', errorMessage, { uuid })
-			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		const session = await createAndStartSession()
@@ -1607,7 +1613,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 				const errorMessage = '发送通用邮箱验证码失败，已达今日验证上限，请明日再试'
 				console.error('ERROR', errorMessage, { uuid })
 				await abortAndEndSession(session)
-				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: true }
+				return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: true }
 			}
 			if (
 				totalCreateTimesToday === undefined || totalCreateTimesToday === null
@@ -1616,7 +1622,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 				const errorMessage = '发送通用邮箱验证码失败，已达今日创建上限，请明日再试'
 				console.error('ERROR', errorMessage, { uuid })
 				await abortAndEndSession(session)
-				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: true, isMaxDailyVerifierAttempts: false }
+				return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: true, isMaxDailyVerifierAttempts: false }
 			}
 
 			const isCoolingDown = (verificationCreatedDate + GENERAL_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS * 1000) > now
@@ -1624,7 +1630,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 				const errorMessage = '发送通用邮箱验证码失败，操作过于频繁，请稍后再试'
 				console.error('ERROR', errorMessage, { uuid })
 				await abortAndEndSession(session)
-				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: true, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+				return { success: false, message: errorMessage, isCoolingDown: true, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 			}
 		}
 		
@@ -1635,7 +1641,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 			const errorMessage = '发送通用邮箱验证码失败，获取邮件模板失败'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		const { mailTitle, mailHtml } = mail
@@ -1645,7 +1651,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 			const errorMessage = '发送通用邮箱验证码失败，邮件发送失败'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		const generalEmailVerificationCodeUpdate: GeneralEmailVerificationCode = {
@@ -1668,15 +1674,15 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 			const errorMessage = '发送通用邮箱验证码失败，存储验证码失败'
 			console.error('ERROR', errorMessage, { uuid })
 			await abortAndEndSession(session)
-			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		await commitAndEndSession(session)
-		return { success: true, message: '发送通用邮箱验证码成功', isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+		return { success: true, message: '发送通用邮箱验证码成功', isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 	} catch (error) {
 		const errorMessage = '发送通用邮箱验证码失败，未知错误'
 		console.error('ERROR', errorMessage, error)
-		return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+		return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 	}
 }
 
@@ -4256,7 +4262,6 @@ const checkUpdateUserEmailRequest = (updateUserEmailRequest: UpdateUserEmailRequ
 		&& !!updateUserEmailRequest.oldEmail && !isInvalidEmail(updateUserEmailRequest.oldEmail)
 		&& !!updateUserEmailRequest.newEmail && !isInvalidEmail(updateUserEmailRequest.newEmail)
 		&& !!updateUserEmailRequest.passwordHash
-		&& !!updateUserEmailRequest.verificationMethod
 		&& !!updateUserEmailRequest.changeEmailVerificationCode
 		&& !!updateUserEmailRequest.changeEmailNewEmailVerificationCode
 	)

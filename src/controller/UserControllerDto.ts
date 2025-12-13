@@ -122,8 +122,6 @@ export type UpdateUserEmailRequestDto = {
 	newEmail: string;
 	/** 经过一次 Hash 的用户密码 */
 	passwordHash: string;
-	/** 验证的模式 */
-	verificationMethod: 'no-2fa' | '2fa-email' | '2fa-totp';
 	/** 旧邮箱中验证码 / 2FA 验证码 */
 	changeEmailVerificationCode: string;
 	/** 新邮箱中的验证码 */
@@ -504,7 +502,18 @@ export type SendGeneralEmailVerificationCodeRequestDto = SendGeneral2FAEmailVeri
 /**
  * 发送通用邮箱验证码的请求响应
  */
-export type SendGeneralEmailVerificationCodeResponseDto = SendGeneral2FAEmailVerificationCodeResponseDto
+export type SendGeneralEmailVerificationCodeResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
+	success: boolean;
+	/** 是否冷却中（每次尝试发送验证码之间都会有一些间隔时间） */
+	isCoolingDown: boolean;
+	/** 是否达到今日创建尝试次数 */
+	isMaxDailyCreateAttempts: boolean;
+	/** 已达到今日创建最大次数 */
+	isMaxDailyVerifierAttempts: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
 
 /**
  * 邀请码类型

@@ -276,7 +276,6 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 		oldEmail: data?.oldEmail,
 		newEmail: data?.newEmail,
 		passwordHash: data?.passwordHash,
-		verificationMethod: data?.verificationMethod,
 		changeEmailVerificationCode: data?.changeEmailVerificationCode,
 		changeEmailNewEmailVerificationCode: data?.changeEmailNewEmailVerificationCode,
 	}
