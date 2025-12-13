@@ -35,6 +35,8 @@ import {
 	adminGetUserByInvitationCodeService,
 	forgotPasswordService,
 	requestSendForgotPasswordVerificationCodeService,
+	sendGeneral2FAEmailVerificationCodeService,
+	sendGeneralEmailVerificationCodeService,
 } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import {
@@ -54,6 +56,8 @@ import {
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
 	RequestSendForgotPasswordVerificationCodeRequestDto,
+	SendGeneral2FAEmailVerificationCodeRequestDto,
+	SendGeneralEmailVerificationCodeRequestDto,
 	UpdateOrCreateUserInfoRequestDto,
 	UpdateOrCreateUserSettingsRequestDto,
 	UpdateUserEmailRequestDto,
@@ -474,6 +478,47 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 	}
 
 	ctx.body = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uid, token)
+	await next()
+}
+
+/**
+ * 发送通用 2FA 邮箱验证码
+ * @param ctx context
+ * @param next context 
+ */
+export const sendGeneral2FAEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<SendGeneral2FAEmailVerificationCodeRequestDto>
+
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = {
+		clientLanguage: data.clientLanguage ?? '',
+		mailTemplate: data.mailTemplate,
+		exclusiveBusinessName: data.exclusiveBusinessName,
+	}
+
+	ctx.body = await sendGeneral2FAEmailVerificationCodeService(sendGeneral2FAEmailVerificationCodeRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 发送通用邮箱验证码
+ * @param ctx context
+ * @param next context 
+ */
+export const sendGeneralEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<SendGeneralEmailVerificationCodeRequestDto>
+
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = {
+		email: data.email ?? '',
+		clientLanguage: data.clientLanguage,
+		mailTemplate: data.mailTemplate,
+		exclusiveBusinessName: data.exclusiveBusinessName,
+	}
+
+	ctx.body = await sendGeneralEmailVerificationCodeService(sendGeneralEmailVerificationCodeRequest, uuid, token)
 	await next()
 }
 
