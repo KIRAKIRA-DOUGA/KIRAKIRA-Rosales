@@ -37,6 +37,8 @@ import {
 	adminGetUserByInvitationCodeController,
 	forgotPasswordController,
 	requestSendForgotPasswordVerificationCodeController,
+	sendGeneral2FAEmailVerificationCodeController,
+	sendGeneralEmailVerificationCodeController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
@@ -205,6 +207,25 @@ router.post('/user/settings/update', updateOrCreateUserSettingsController) // �
 // 	"coloredSideBar": "true"
 // }
 
+router.post('/user/sendGeneral2FAEmailVerificationCode', sendGeneral2FAEmailVerificationCodeController) // 发送通用 2FA 邮箱验证码
+// https://localhost:9999/user/sendGeneral2FAEmailVerificationCode
+// cookie: uuid, token
+// {
+// 	"clientLanguage": "zh-Hans-CN",
+// 	"mailTemplate": "XXXXXXXX",
+// 	"exclusiveBusinessName": "xxxxxx"
+// }
+
+router.post('/user/sendGeneralEmailVerificationCode', sendGeneralEmailVerificationCodeController) // 发送通用邮箱验证码
+// https://localhost:9999/user/sendGeneralEmailVerificationCode
+// cookie: uuid, token
+// {
+// 	"email": "your-email@website.com",
+// 	"clientLanguage": "zh-Hans-CN",
+// 	"mailTemplate": "XXXXXXXX",
+// 	"exclusiveBusinessName": "xxxxxx"
+// }
+
 router.post('/user/createInvitationCode', createInvitationCodeController) // 生成邀请码
 // https://localhost:9999/user/createInvitationCode
 // cookie: uid, token
@@ -232,6 +253,7 @@ router.post('/user/update/password', updateUserPasswordController) // 更新用�
 // 	"verificationCode": "XXXXXX"
 // }
 
+// DELETE ME: 计划中废弃
 router.post('/user/requestSendForgotPasswordVerificationCode', requestSendForgotPasswordVerificationCodeController) // 请求发送忘记密码的邮箱验证码
 // https://localhost:9999/user/requestSendForgotPasswordVerificationCode
 // {

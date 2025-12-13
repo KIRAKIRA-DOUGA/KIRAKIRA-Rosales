@@ -492,8 +492,8 @@ export const sendGeneral2FAEmailVerificationCodeController = async (ctx: koaCtx,
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = {
-		clientLanguage: data.clientLanguage ?? '',
-		mailTemplate: data.mailTemplate,
+		clientLanguage: data.clientLanguage ?? 'zh-Hans-CN',
+		mailTemplate: data.mailTemplate ?? 'SendGeneral2FAEmailVerificationCode',
 		exclusiveBusinessName: data.exclusiveBusinessName,
 	}
 
@@ -513,8 +513,8 @@ export const sendGeneralEmailVerificationCodeController = async (ctx: koaCtx, ne
 	const token = ctx.cookies.get('token')
 	const sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = {
 		email: data.email ?? '',
-		clientLanguage: data.clientLanguage,
-		mailTemplate: data.mailTemplate,
+		clientLanguage: data.clientLanguage ?? 'zh-Hans-CN',
+		mailTemplate: data.mailTemplate ?? 'SendGeneralEmailVerificationCode',
 		exclusiveBusinessName: data.exclusiveBusinessName,
 	}
 
@@ -605,6 +605,7 @@ export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) =
 
 /**
  * 请求发送忘记密码的邮箱验证码
+ * // DELETE ME: 计划中废弃
  * @param ctx context
  * @param next context
  */

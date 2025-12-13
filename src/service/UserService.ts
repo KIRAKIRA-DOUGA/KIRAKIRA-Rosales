@@ -1151,7 +1151,7 @@ export const checkUserTokenByUuidService = async (UUID: string, token: string): 
  * @param token 
  * @returns 发送通用 2FA 邮箱验证码的请求响应
  */
-export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = { clientLanguage: 'en', mailTemplate: 'SendGeneral2FAEmailVerificationCode' }, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
+export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = { clientLanguage: 'zh-Hans-CN', mailTemplate: 'SendGeneral2FAEmailVerificationCode' }, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendGeneral2FAEmailVerificationCodeRequest(sendGeneral2FAEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，参数不合法'
@@ -1552,7 +1552,7 @@ export class General2FAEmailVerifier {
  * @param token 
  * @returns 发送通用邮箱验证码的请求响应
  */
-export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = { email: '', clientLanguage: 'en', mailTemplate: 'SendGeneralEmailVerificationCode' }, uuid?: string, token?: string): Promise<SendGeneralEmailVerificationCodeResponseDto> => {
+export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = { email: '', clientLanguage: 'zh-Hans-CN', mailTemplate: 'SendGeneralEmailVerificationCode' }, uuid?: string, token?: string): Promise<SendGeneralEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendGeneralEmailVerificationCodeRequest(sendGeneralEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用邮箱验证码失败，参数不合法'
@@ -2664,6 +2664,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 
 /**
  * 请求发送忘记密码的邮箱验证码
+ * // DELETE ME: 计划中废弃
  * @param requestSendForgotPasswordVerificationCodeRequest 请求发送忘记密码的邮箱验证码的请求载荷
  * @returns 请求发送忘记密码的邮箱验证码的请求响应
  */
