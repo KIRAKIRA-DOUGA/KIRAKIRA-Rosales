@@ -1145,13 +1145,13 @@ export const checkUserTokenByUuidService = async (UUID: string, token: string): 
 
 /**
  * 发送通用 2FA 邮箱验证码
- * 有别于函数 sendGeneralEmailVerificationCodeSearvice，本函数专门用于 2FA 邮箱验证码发送
+ * 有别于函数 sendGeneralEmailVerificationCodeService，本函数专门用于 2FA 邮箱验证码发送
  * @param sendGeneral2FAEmailVerificationCodeRequest 发送通用 2FA 邮箱验证码的请求载荷
  * @param uuid
  * @param token 
  * @returns 发送通用 2FA 邮箱验证码的请求响应
  */
-export const sendGeneral2FAEmailVerificationCodeSearvice = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = { clientLanguage: 'en', mailTemplate: 'SendGeneral2FAEmailVerificationCode' }, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
+export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = { clientLanguage: 'en', mailTemplate: 'SendGeneral2FAEmailVerificationCode' }, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendGeneral2FAEmailVerificationCodeRequest(sendGeneral2FAEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，参数不合法'
@@ -1546,13 +1546,13 @@ export class General2FAEmailVerifier {
 
 /**
  * 发送通用邮箱验证码
- * 有别于函数 sendGeneral2FAEmailVerificationCodeSearvice，本函数用于发送非 2FA 场景下的通用邮箱验证码
+ * 有别于函数 sendGeneral2FAEmailVerificationCodeService，本函数用于发送非 2FA 场景下的通用邮箱验证码
  * @param sendGeneralEmailVerificationCodeRequest 发送通用邮箱验证码的请求载荷
  * @param uuid
  * @param token 
  * @returns 发送通用邮箱验证码的请求响应
  */
-export const sendGeneralEmailVerificationCodeSearvice = async (sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = { email: '', clientLanguage: 'en', mailTemplate: 'SendGeneralEmailVerificationCode' }, uuid?: string, token?: string): Promise<SendGeneralEmailVerificationCodeResponseDto> => {
+export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = { email: '', clientLanguage: 'en', mailTemplate: 'SendGeneralEmailVerificationCode' }, uuid?: string, token?: string): Promise<SendGeneralEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendGeneralEmailVerificationCodeRequest(sendGeneralEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用邮箱验证码失败，参数不合法'
