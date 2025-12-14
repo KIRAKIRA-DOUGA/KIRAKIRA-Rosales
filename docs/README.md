@@ -91,34 +91,37 @@ npm run dev-hot
 │  └ workflows - 存放 Github 工作流
 ├ .vscode - VSCode 相关配置
 ├ docs - 存放说明文档（本文档就存放于该目录下）
-├ old - 存放不舍得删除的旧代码
 ├ src - 存放源代码
-│  ├ cloudflare - 存放了 Cloudflare 相关的共通代码
-│  ├ common - 存放了共通函数
-│  ├ controller - controller 层，用于处理接受的请求载荷数据和丰富请求响应数据
+│  ├ assets - 存放静态资源，打包时该文件夹下的文件会原封不动复制到打包目标文件夹下
+│  ├ cloudflare - 存放了 Cloudflare 相关代码
+│  ├ common - 存放了通用函数
+│  ├ controller - controller 层，处理请求载荷/响应，鉴权。也存放了接口数据类型定义文件
 │  ├ dbPool - 存放了 MongoDB 相关的共通代码
+│     └ schema - 存放了 MongoDB Schema
 │  ├ elasticsearchPool - 存放了 Elasticsearch 相关的共通代码
+│  ├ locales - 存放了国际化文本
 │  ├ middleware - 存放了服务器中间件相关代码
 │  ├ route - 存放了路由代码
 │  ├ service - service 层，用于处理业务逻辑
 │  ├ ssl - SSL 相关配置
-│  ├ store - 存放了“状态管理”或“运行时全局变量”相关代码
 │  ├ type - 存放了共通的类型定义代码
 │  └ app.ts - 该文件为程序入口
 ├ .dockerignore - 该文件用于配置执行 docker build 命令时忽略的文件
 ├ .editorconfig - 该文件定义了编码风格
-├ .env.powershell.temp - 该文件是环境变量模板及说明文档
-├ .eslintignore - 该文件定义了 Eslint 忽略的内容
-├ .eslintrc.cjs - 该文件定义了 ESLint 配置
+├ .env.template - 该文件是完整环境变量模板及说明文档
 ├ .gitattributes - 该文件定义了 Git 相关配置
 ├ .gitignore - 该文件定义了 Git 忽略的文件
+├ ℩ɘvoↄ.svg - 该文件为封面图（图片内容是前端 cover.svg 文件的镜像，因此文件名反写。只是为了好玩。）
+├ crowdin.yml - 该文件定义了在线国际化翻译工具 Crowdin 的相关配置
 ├ Dockerfile - 该文件描述了构建 Docker 容器镜像的过程
+├ eslint.config.js - 该文件定义了 ESLint 配置
 ├ LICENSE - 许可证
-├ README.md - 该文件为自述文件
 ├ package-lock.json - 该文件固定了 npm install 是安装的依赖包的版本
 ├ package.json - 该文件定义了元数据、脚本和依赖包列表
-├ tsconfig.json - 该文件为 TypeScript 配置文件
-└ ℩ɘvoↄ.svg - 该文件为封面图
+├ pr_body.txt - 该文件定义了 Crowdin 相关 GitHub PR 模板
+├ README.md - 该文件为自述文件
+└ tsconfig.json - 该文件为 TypeScript 配置文件
+
 ```
 ### 从 Hello World 开始
 第一个程序总是从 Hello World 开始，KIRAKIRA-Rosales 也不例外。
