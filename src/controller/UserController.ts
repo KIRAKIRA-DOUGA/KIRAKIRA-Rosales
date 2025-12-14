@@ -483,7 +483,7 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 /**
  * 发送通用 2FA 邮箱验证码
  * @param ctx context
- * @param next context 
+ * @param next context
  */
 export const sendGeneral2FAEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<SendGeneral2FAEmailVerificationCodeRequestDto>
@@ -503,7 +503,7 @@ export const sendGeneral2FAEmailVerificationCodeController = async (ctx: koaCtx,
 /**
  * 发送通用邮箱验证码
  * @param ctx context
- * @param next context 
+ * @param next context
  */
 export const sendGeneralEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<SendGeneralEmailVerificationCodeRequestDto>

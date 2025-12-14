@@ -123,11 +123,11 @@ router.post('/user/update/email', updateUserEmailController) // 更新用户邮�
 // https://localhost:9999/user/update/email
 // cookie: uid, token
 // {
-// 	"uid": "XXXXXXXXX",
 // 	"oldEmail": "aaa@aaa.aaa",
 // 	"newEmail": "bbb@bbb.bbb",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-// 	"verificationCode": "XXXXXX"
+// 	"changeEmailVerificationCode": "XXXXXX",
+// 	"changeEmailNewEmailVerificationCode": "XXXXXX"
 // }
 
 router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或创建用户信息
