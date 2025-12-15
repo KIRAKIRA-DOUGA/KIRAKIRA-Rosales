@@ -48,7 +48,7 @@ git clone https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales.git
 ### 2. 设置环境变量
 > [!IMPORTANT]
 > 下方的示例代码中并不包含全部环境变量，在实际使用时必须为每一个环境变量赋值。
-> 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)。
+> 全部环境变量及其作用请参阅：[.env.template](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.template)。
 ``` powershell
 # 对于不同操作系统，设置环境变量的方式也不同。以下为 Windows PowerShell 的示例
 $env:SERVER_PORT="9999"
@@ -60,7 +60,7 @@ $env:SERVER_ROOT_URL="kirakira.moe"
 
 ### 3. 启动后端开发服务器
 > [!IMPORTANT]
-> 以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。
+> 默认情况下，以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。
 ```sh
 # 安装依赖
 npm install
@@ -68,12 +68,11 @@ npm install
 # 启动开发服务器
 npm run dev
 
-# 或者,您可以以热重载方式启动开发服务器
+# 或者，您可以启动开发服务器，并启用自动重载
 npm run dev-hot
 ```
-如果您需要修改开发服务器的默认打包位置，需要修改 package.json 文件里 `scripts.start` 的值。
-`scripts.start` 的值是一句启动命令，您需要将该命令中所有 `.kirakira` 替换为您的自定义目录。
-例如 `tsc --noEmitOnError --sourceMap --outDir .foo && node ./.foo/app.js` 将会导致开发服务器的打包目录改为 `.foo`
+如果您需要修改开发服务器的默认打包位置，需要修改 package.json 文件里的 `scripts.start` 和 `scripts.copy-assets-dev` 配置。您需要将这些命令中所有 `.kirakira` 替换为您的自定义目录。
+
 
 ### 4. 检查
 成功执行以上命令后，您应该会获得一个监听 9999（或您在环境变量中自定义的）端口的 KIRAKIRA-Rosales 开发服务器。🎉
@@ -413,8 +412,9 @@ try {
 
 2.构建并预览
 > [!IMPORTANT]
-> 默认会将代码打包至项目根目录的 `dist` 目录内
-> 如有必要，您可以在 tsconfig.json 中修改打包路径。相应地，也要修改下方第三步启动服务器命令中的路径。
+> 默认会将代码打包至 `./dist` 路径，你可以在 tsconfig.json 中修改打包目标路径。  
+> 请注意，其他依赖于默认打包路径的业务也要更改配置，因此并不建议修改打包路径。
+
 ```sh
 # 1. 安装依赖
 npm install
