@@ -342,8 +342,8 @@ class General2FAEmailVerificationCodeSchemaFactory {
 	schema = {
 		/** 用户的 UUID - 非空 - 唯一 */
 		uuid: { type: String, required: true, unique: true },
-		/** 传入该验证码独占的业务名（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
-		exclusive: { type: String },
+		/** 传入该验证码独占的业务名 - 非空 -（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
+		exclusive: { type: String, required: true },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
 		/** 用户创建验证码的时间 - 非空 */
@@ -380,8 +380,8 @@ class GeneralEmailVerificationCodeSchemaFactory {
 		email: { type: String, required: true, unique: true },
 		/** 用户的全小写 email - 非空 - 唯一 */
 		emailLowerCase: { type: String, required: true, unique: true },
-		/** 传入该验证码独占的业务名（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
-		exclusive: { type: String },
+		/** 传入该验证码独占的业务名 - 非空（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
+		exclusive: { type: String, required: true },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
 		/** 用户创建验证码的时间 - 非空 */

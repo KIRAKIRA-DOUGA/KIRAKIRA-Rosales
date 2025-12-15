@@ -1135,7 +1135,7 @@ export const checkUserTokenByUuidService = async (UUID: string, token: string): 
  * @param token
  * @returns 发送通用 2FA 邮箱验证码的请求响应
  */
-export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = { clientLanguage: 'zh-Hans-CN', mailTemplate: 'SendGeneral2FAEmailVerificationCode' }, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
+export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = { clientLanguage: 'zh-Hans-CN', mailTemplate: 'SendGeneral2FAEmailVerificationCode', exclusiveBusinessName: 'unknown' }, uuid: string, token: string): Promise<SendGeneral2FAEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendGeneral2FAEmailVerificationCodeRequest(sendGeneral2FAEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，参数不合法'
@@ -1524,7 +1524,7 @@ export class General2FAEmailVerifier {
  * @param token
  * @returns 发送通用邮箱验证码的请求响应
  */
-export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = { email: '', clientLanguage: 'zh-Hans-CN', mailTemplate: 'SendGeneralEmailVerificationCode' }, uuid?: string, token?: string): Promise<SendGeneralEmailVerificationCodeResponseDto> => {
+export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = { email: '', clientLanguage: 'zh-Hans-CN', mailTemplate: 'SendGeneralEmailVerificationCode', exclusiveBusinessName: 'unknown' }, uuid?: string, token?: string): Promise<SendGeneralEmailVerificationCodeResponseDto> => {
 	try {
 		if (!checkSendGeneralEmailVerificationCodeRequest(sendGeneralEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用邮箱验证码失败，参数不合法'
@@ -4632,7 +4632,11 @@ const checkSortVariablesForAdminGetUserInfoService = (sortBy: string, sortOrder:
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
 const checkSendGeneral2FAEmailVerificationCodeRequest = (sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto): boolean => {
-	return ( !!sendGeneral2FAEmailVerificationCodeRequest.clientLanguage && supportedLanguageList.includes(sendGeneral2FAEmailVerificationCodeRequest.clientLanguage) )
+	return (
+		true
+		&& !!sendGeneral2FAEmailVerificationCodeRequest.clientLanguage && supportedLanguageList.includes(sendGeneral2FAEmailVerificationCodeRequest.clientLanguage)
+		&& !!sendGeneral2FAEmailVerificationCodeRequest.exclusiveBusinessName && sendGeneral2FAEmailVerificationCodeRequest.exclusiveBusinessName !== 'unknown'
+	)
 }
 
 /**
@@ -4645,5 +4649,6 @@ const checkSendGeneralEmailVerificationCodeRequest = (sendGeneralEmailVerificati
 		true
 		&& !!sendGeneralEmailVerificationCodeRequest.clientLanguage && supportedLanguageList.includes(sendGeneralEmailVerificationCodeRequest.clientLanguage)
 		&& !!sendGeneralEmailVerificationCodeRequest.email && !isInvalidEmail(sendGeneralEmailVerificationCodeRequest.email)
+		&& !!sendGeneralEmailVerificationCodeRequest.exclusiveBusinessName && sendGeneralEmailVerificationCodeRequest.exclusiveBusinessName !== 'unknown'
 	)
 }

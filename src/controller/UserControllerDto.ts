@@ -471,7 +471,7 @@ export type SendGeneral2FAEmailVerificationCodeRequestDto = {
 	/** 目标邮件模板 */
 	mailTemplate: string;
 	/** 业务名称，用于“独占”验证码 */
-	exclusiveBusinessName?: string;
+	exclusiveBusinessName: string;
 }
 
 /**
