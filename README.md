@@ -31,7 +31,7 @@ npm install
 > [!IMPORTANT]
 > 下方的示例代码中并没有包含全部环境变量。
 > 对于不同操作系统，设置环境变量的方式也不同。
-> 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)，该文件中列出的大多数环境变量都是必需的。
+> 全部环境变量及其作用请参阅：[.env.template](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.template)，该文件中列出的大多数环境变量都是必需的。
 
 如果你使用的是 ```Windows``` 操作系统
 ```powershell
