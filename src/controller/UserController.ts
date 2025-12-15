@@ -12,7 +12,6 @@ import {
 	createInvitationCodeService,
 	getBlockedUserService,
 	getMyInvitationCodeService,
-	getSelfUserInfoService,
 	getUserAvatarUploadSignedUrlService,
 	getUserInfoByUidService,
 	getUserSettingsService,
@@ -37,6 +36,7 @@ import {
 	requestSendForgotPasswordVerificationCodeService,
 	sendGeneral2FAEmailVerificationCodeService,
 	sendGeneralEmailVerificationCodeService,
+	getSelfUserInfoByUuidService,
 } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import {
@@ -52,7 +52,7 @@ import {
 	DeleteUserEmailAuthenticatorRequestDto,
 	ForgotPasswordRequestDto,
 	GetBlockedUserRequestDto,
-	GetSelfUserInfoRequestDto,
+	GetSelfUserInfoByUuidRequestDto,
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
 	RequestSendForgotPasswordVerificationCodeRequestDto,
@@ -331,16 +331,16 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
  * @return GetSelfUserInfoResponseDto 当前登录的用户信息，如果获取成功则 success: true，不成功则 success: false
  */
 export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<GetSelfUserInfoRequestDto>
+	const data = ctx.request.body as Partial<GetSelfUserInfoByUuidRequestDto>
 
-	const uid = parseInteger(ctx.cookies.get('uid')) || data?.uid
+	const uuid = ctx.cookies.get('uuid') || data?.uuid
 	const token = ctx.cookies.get('token') || data?.token
 
-	const getSelfUserInfoRequest: GetSelfUserInfoRequestDto = {
-		uid,
+	const getSelfUserInfoByUuidRequest: GetSelfUserInfoByUuidRequestDto = {
+		uuid,
 		token,
 	}
-	const selfUserInfo = await getSelfUserInfoService(getSelfUserInfoRequest)
+	const selfUserInfo = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
 	if (!selfUserInfo.success) {
 		ctx.cookies.set('token', '', logoutCookieOption)
 		ctx.cookies.set('email', '', logoutCookieOption)
@@ -453,7 +453,7 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
 export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<GetUserSettingsRequestDto>
 
-	const uid = parseInteger(ctx.cookies.get('uid')) || data?.uid
+	const uid = ctx.cookies.get('uuid') || data?.uuid
 	const token = ctx.cookies.get('token') || data?.token
 
 	ctx.body = await getUserSettingsService(uid, token)
@@ -594,10 +594,10 @@ export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) =
 		newPasswordHash: data?.newPasswordHash ?? '',
 		verificationCode: data?.verificationCode ?? '',
 	}
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uid, token)
+	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uuid, token)
 	ctx.body = updateUserEmailResponse
 	await next()
 }

@@ -166,10 +166,10 @@ router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或�
 
 router.post('/user/self', getSelfUserInfoController) // 获取当前登录的用户信息，可以通过 cookie 传递，也可以通过请求体
 // https://localhost:9999/user/self
-// cookie: uid, token
+// cookie: uuid, token
 // or
 // {
-// 	"uid": "XXXXXXXXX",
+// 	"uuid": "XXXXXXXXX",
 // 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 // }
 
@@ -193,7 +193,7 @@ router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 
 
 router.post('/user/settings', getUserSettingsController) // 在服务端或客户端获取用户设置信息用以正确渲染页面
 // https://localhost:9999/user/settings
-// cookie: uid, token
+// cookie: uuid, token
 // or
 // {
 // 	"uid": "XXXXXXXXX",

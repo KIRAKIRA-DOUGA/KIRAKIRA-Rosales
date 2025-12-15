@@ -18,6 +18,8 @@ class UserAuthSchemaFactory {
 		passwordHashHash: { type: String, required: true },
 		/** 用户的身分令牌 - 非空 */
 		token: { type: String, required: true },
+		/** 密码最后更新的时间戳 - 非空 */
+		passwordUpdateDateTime: { type: Number, required: true },
 		/** 密码提示 */
 		passwordHint: String, // TODO: 如何确保密码提示的安全性？
 		// /** 用户的角色 */

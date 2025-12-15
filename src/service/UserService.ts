@@ -21,8 +21,6 @@ import {
 	DeleteTotpAuthenticatorByTotpVerificationCodeResponseDto,
 	GetBlockedUserResponseDto,
 	GetMyInvitationCodeResponseDto,
-	GetSelfUserInfoRequestDto,
-	GetSelfUserInfoResponseDto,
 	CheckUserHave2FAResponseDto,
 	GetUserAvatarUploadSignedUrlResponseDto,
 	GetUserInfoByUidRequestDto,
@@ -165,6 +163,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			emailLowerCase,
 			passwordHashHash,
 			token,
+			passwordUpdateDateTime: now,
 			passwordHint,
 			roles: ['user'], // newbie will always has a 'user' roles.
 			authenticatorType: 'none', // 刚注册的用户默认没有开启 2FA
@@ -499,9 +498,9 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 }
 
 /**
- * 根据 UID 更新或创建用户信息
+ * 根据 UUID 更新或创建用户信息
  * @param updateUserInfoRequest 更新或创建用户信息时的请求参数
- * @param uid 用户 ID
+ * @param uuid 用户 UUID
  * @param token 用户 token
  * @returns 更新或创建用户信息的请求结果
  */
@@ -597,111 +596,6 @@ export const checkUserExistsByUIDService = async (userExistsCheckByUIDRequest: U
 }
 
 /**
- * 【已废弃】通过 uid 获取当前登录的用户信息
- * // DELETE ME: 禁止使用！该 API 应随着 UUID 普及逐渐被替换
- * @param getSelfUserInfoRequest 获取当前登录的用户信息的请求参数
- * @returns 获取到的当前登录的用户信息
- */
-export const getSelfUserInfoService = async (getSelfUserInfoRequest: GetSelfUserInfoRequestDto): Promise<GetSelfUserInfoResponseDto> => {
-	try {
-		const { uid, token } = getSelfUserInfoRequest
-		if (!uid || !token) {
-			console.error('ERROR', '通过 UID 获取用户信息失败，uid 或 token 为空')
-			return { success: false, message: '通过 UID 获取用户信息失败，必要的参数为空' }
-		}
-
-		const UUID = await getUserUuid(uid) // DELETE ME: 此为 UID 兼容性代码，随着 UUID 的普及，uid 将被逐渐废弃
-
-		if (!await checkUserToken(uid, token)) {
-			console.error('ERROR', '通过 UID 获取用户信息时失败，用户的 token 校验未通过，非法用户！')
-			return { success: false, message: '通过 UID 获取用户信息时失败，非法用户！' }
-		}
-
-		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
-		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
-
-		const selfUserInfoPipeline: PipelineStage[] = [
-			{
-				$match: {
-					UUID
-				},
-			},
-			{
-				$lookup: {
-					from: 'user-infos',
-					localField: 'UUID',
-					foreignField: 'UUID',
-					as: 'user_info_data'
-				}
-			},
-			{
-				$unwind: {
-					path: '$user_info_data',
-					preserveNullAndEmptyArrays: true // 保留没有用户信息的用户
-				},
-			},
-			{
-				$lookup: {
-					from: 'user-invitation-codes',
-					localField: 'UUID',
-					foreignField: 'assigneeUUID',
-					as: 'invitation_codes_data'
-				},
-			},
-			{
-				$unwind: {
-					path: '$invitation_codes_data',
-					preserveNullAndEmptyArrays: true
-				},
-			},
-			{
-				$project: {
-					email: 1, // 用户邮箱
-					userCreateDateTime: 1, // 用户创建日期
-					roles: 1, // 用户的角色
-					uid: 1, // 用户 UID
-					UUID: 1, // UUID
-					authenticatorType: 1, // 2FA 的类型
-					userNickname: '$user_info_data.userNickname', // 用户昵称
-					username: '$user_info_data.username', // 用户名
-					label: '$user_info_data.label', // 用户标签
-					avatar: '$user_info_data.avatar', // 用户头像
-					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
-					signature: '$user_info_data.signature', // 用户的个性签名
-					gender: '$user_info_data.gender', // 用户的性别
-					userBirthday: '$user_info_data.userBirthday', // 用户的生日
-					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
-				}
-			}
-		]
-
-		try {
-			const userSelfInfoResult = await selectDataByAggregateFromMongoDB<UserAuth>(userAuthSchemaInstance, userAuthCollectionName, selfUserInfoPipeline)
-			if (userSelfInfoResult && userSelfInfoResult.success) {
-				const userInfo = userSelfInfoResult?.result
-				if (userInfo?.length === 0) {
-					return { success: true, message: '用户未填写用户信息', result: undefined }
-				} else if (userInfo?.length === 1 && userInfo?.[0]) {
-					return { success: true, message: '获取用户信息成功', result: { ...userInfo[0], email: userInfo[0].email, userCreateDateTime: userInfo[0].userCreateDateTime, roles: userInfo[0].roles } }
-				} else {
-					console.error('ERROR', '通过 UID 获取用户信息时失败，获取到的结果长度不为 1')
-					return { success: false, message: '通过 UID 获取用户信息时失败，结果异常' }
-				}
-			} else {
-				console.error('ERROR', '通过 UUID 获取用户信息时失败，获取到的结果为空')
-				return { success: false, message: '通过 UID 获取用户信息时失败，结果为空' }
-			}
-		} catch (error) {
-			console.error('ERROR', '通过 UID 获取用户信息时出错，查询数据时出错：', error)
-			return { success: false, message: '通过 UID 获取用户信息时出错' }
-		}
-	} catch (error) {
-		console.error('ERROR', '通过 UID 获取用户信息时出错，未知错误：', error)
-		return { success: false, message: '通过 UID 获取用户信息时出错，未知错误' }
-	}
-}
-
-/**
  * 通过 UUID 获取当前登录的用户信息
  * @param getSelfUserInfoRequest 通过 UUID 获取当前登录的用户信息的请求参数
  * @returns 通过 UUID 获取当前登录的用户信息的请求响应
@@ -710,13 +604,15 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 	try {
 		const { uuid, token } = getSelfUserInfoByUuidRequest
 		if (!uuid || !token) {
-			console.error('ERROR', '通过 UUID 获取用户信息失败，uuid 或 token 为空')
-			return { success: false, message: '通过 UUID 获取用户信息失败，必要的参数为空' }
+			const errorMessage = '通过 UUID 获取用户信息失败，uuid 或 token 为空'
+			console.error('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('ERROR', '通过 UUID 获取用户信息时失败，用户的 token 校验未通过，非法用户！')
-			return { success: false, message: '通过 UUID 获取用户信息时失败，非法用户！' }
+			const errorMessage = '通过 UUID 获取用户信息时失败，用户的 token 校验未通过，非法用户！'
+			console.error('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
@@ -758,48 +654,58 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 			},
 			{
 				$project: {
+					uid: 1, // 用户 UID
+					uuid: '$UUID', // 用户 UUID
 					email: 1, // 用户邮箱
 					userCreateDateTime: 1, // 用户创建日期
+					passwordUpdateDateTime: 1, // 密码最后更新时间
 					roles: 1, // 用户的角色
-					uid: 1, // 用户 UID
-					UUID: 1, // UUID
 					authenticatorType: 1, // 2FA 的类型
-					userNickname: '$user_info_data.userNickname', // 用户昵称
+					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
 					username: '$user_info_data.username', // 用户名
-					label: '$user_info_data.label', // 用户标签
+					userNickname: '$user_info_data.userNickname', // 用户昵称
 					avatar: '$user_info_data.avatar', // 用户头像
 					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
 					signature: '$user_info_data.signature', // 用户的个性签名
 					gender: '$user_info_data.gender', // 用户的性别
+					label: '$user_info_data.label', // 用户标签
 					userBirthday: '$user_info_data.userBirthday', // 用户的生日
-					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
+					// userProfileMarkdown: '$user_info_data.userProfileMarkdown', // 用户主页 Markdown
+					// userLinkedAccounts: '$user_info_data.userLinkedAccounts', // 用户的关联账户
+					// userWebsite: '$user_info_data.userWebsite', // 用户的关联网站
 				}
 			}
 		]
 
 		try {
 			const userSelfInfoResult = await selectDataByAggregateFromMongoDB<UserAuth>(userAuthSchemaInstance, userAuthCollectionName, selfUserInfoPipeline)
-			if (userSelfInfoResult && userSelfInfoResult.success) {
-				const userInfo = userSelfInfoResult?.result
-				if (!userInfo || userInfo.length === 0) {
-					return { success: true, message: '用户未填写用户信息', result: undefined }
-				} else if (userInfo?.length === 1 && userInfo?.[0]) {
-					return { success: true, message: '获取用户信息成功', result: { ...userInfo[0], email: userInfo[0].email, userCreateDateTime: userInfo[0].userCreateDateTime, roles: userInfo[0].roles } }
-				} else {
-					console.error('ERROR', '通过 UUID 获取用户信息时失败，获取到的结果长度不为 1')
-					return { success: false, message: '通过 UUID 获取用户信息时失败，结果异常' }
-				}
-			} else {
-				console.error('ERROR', '通过 UUID 获取用户信息时失败，获取到的结果为空')
-				return { success: false, message: '通过 UUID 获取用户信息时失败，结果为空' }
+			if (
+				false
+				|| !userSelfInfoResult
+				|| !userSelfInfoResult.success
+				|| !userSelfInfoResult.result
+				|| userSelfInfoResult.result.length !== 1
+			) {
+				const errorMessage = '通过 UID 获取用户信息时失败，查询数据时出错'
+				console.error('ERROR', errorMessage)
+				return { success: false, message: errorMessage }
+			}
+
+			const userInfo = userSelfInfoResult.result[0]
+			return {
+				success: true,
+				message: '获取用户信息成功',
+				result: userInfo,
 			}
 		} catch (error) {
-			console.error('ERROR', '通过 UUID 获取用户信息时出错，查询数据时出错：', error)
-			return { success: false, message: '通过 UUID 获取用户信息时出错' }
+			const errorMessage = '通过 UUID 获取用户信息时出错，查询数据时出错。'
+			console.error('ERROR', errorMessage, error)
+			return { success: false, message: errorMessage }
 		}
 	} catch (error) {
-		console.error('ERROR', '通过 UUID 获取用户信息时出错，未知错误：', error)
-		return { success: false, message: '通过 UUID 获取用户信息时出错，未知错误' }
+		const errorMessage = '通过 UUID 获取用户信息时出错，未知错误。'
+		console.error('ERROR', errorMessage, error)
+		return { success: false, message: errorMessage }
 	}
 }
 
@@ -967,60 +873,60 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
  * @param token 用户 token
  * @returns 用户个性设置数据
  */
-export const getUserSettingsService = async (uid: number, token: string): Promise<GetUserSettingsResponseDto> => {
+export const getUserSettingsService = async (uuid: string, token: string): Promise<GetUserSettingsResponseDto> => {
 	try {
-		if (await checkUserToken(uid, token)) {
-			const { collectionName, schemaInstance } = UserSettingsSchema
-			type UserSettings = InferSchemaType<typeof schemaInstance>
-			const getUserSettingsWhere: QueryType<UserSettings> = {
-				uid,
-			}
-			const getUserSettingsSelect: SelectType<UserSettings> = {
-				uid: 1,
-				enableCookie: 1,
-				themeType: 1,
-				themeColor: 1,
-				themeColorCustom: 1,
-				wallpaper: 1,
-				coloredSideBar: 1,
-				dataSaverMode: 1,
-				noSearchRecommendations: 1,
-				noRelatedVideos: 1,
-				noRecentSearch: 1,
-				noViewHistory: 1,
-				openInNewWindow: 1,
-				currentLocale: 1,
-				timezone: 1,
-				unitSystemType: 1,
-				devMode: 1,
-				showCssDoodle: 1,
-				sharpAppearanceMode: 1,
-				flatAppearanceMode: 1,
-				userPrivaryVisibilitiesSetting: 1,
-				userLinkedAccountsVisibilitiesSetting: 1,
-				userWebsitePrivacySetting: 1,
-				editDateTime: 1,
-			}
-			try {
-				const userSettingsResult = await selectDataFromMongoDB(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
-				const userSettings = userSettingsResult?.result?.[0]
-				if (userSettingsResult?.success && userSettings) {
-					return { success: true, message: '获取用户设置成功！', userSettings }
-				} else {
-					console.error('ERROR', '获取用户个性设置失败，查询成功，但获取数据失败或数据为空：', { uid })
-					return { success: false, message: '获取用户个性设置失败，数据查询未成功' }
-				}
-			} catch (error) {
-				console.error('ERROR', '获取用户个性设置失败，查询数据时出错：', { uid })
-				return { success: false, message: '获取用户个性设置失败，查询数据时出错' }
-			}
-		} else {
-			console.error('ERROR', '获取用户个性设置失败，用户验证时未通过：', { uid })
-			return { success: false, message: '获取用户个性设置失败，用户验证时未通过' }
+		if (!await checkUserTokenByUUID(uuid, token)) {
+			const errorMessage = '获取用户个性设置失败，用户验证时未通过'
+			console.error('ERROR', errorMessage, { uuid })
+			return { success: false, message: errorMessage }
 		}
+
+		const { collectionName, schemaInstance } = UserSettingsSchema
+		type UserSettings = InferSchemaType<typeof schemaInstance>
+		const getUserSettingsWhere: QueryType<UserSettings> = {
+			UUID: uuid,
+		}
+		const getUserSettingsSelect: SelectType<UserSettings> = {
+			uid: 1,
+			enableCookie: 1,
+			themeType: 1,
+			themeColor: 1,
+			themeColorCustom: 1,
+			wallpaper: 1,
+			coloredSideBar: 1,
+			dataSaverMode: 1,
+			noSearchRecommendations: 1,
+			noRelatedVideos: 1,
+			noRecentSearch: 1,
+			noViewHistory: 1,
+			openInNewWindow: 1,
+			currentLocale: 1,
+			timezone: 1,
+			unitSystemType: 1,
+			devMode: 1,
+			showCssDoodle: 1,
+			sharpAppearanceMode: 1,
+			flatAppearanceMode: 1,
+			userPrivaryVisibilitiesSetting: 1,
+			userLinkedAccountsVisibilitiesSetting: 1,
+			userWebsitePrivacySetting: 1,
+			editDateTime: 1,
+		}
+
+		const userSettingsResult = await selectDataFromMongoDB(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
+
+		if (!userSettingsResult.success || !userSettingsResult.result || userSettingsResult.result.length !== 1) {
+			const errorMessage = '获取用户个性设置失败，查询未成功'
+			console.error('ERROR', errorMessage, { uuid })
+			return { success: false, message: errorMessage }
+		}
+
+		const userSettings = userSettingsResult.result[0]
+		return { success: true, message: '获取用户设置成功！', userSettings }
 	} catch (error) {
-		console.error('ERROR', '获取用户个性设置失败，未知异常：', error)
-		return { success: false, message: '获取用户个性设置失败，未知异常' }
+		const errorMessage = '获取用户个性设置失败，未知异常！'
+		console.error('ERROR', errorMessage, error)
+		return { success: false, message: errorMessage }
 	}
 }
 
@@ -2164,7 +2070,7 @@ namespace General2FAVerifier {
 		isResetAttemptsImmediately: boolean,
 		/** 可选的业务名称，用于标识验证码的专用性（仅 Email 验证时生效） */
 		exclusiveBusinessName?: string,
-		/** 是否启用严格模式，在严格模式下，即使没有开启 2FA 的用户也会验证邮箱 */
+		/** 是否启用严格模式，在严格模式下，即使没有开启 2FA 的用户也会验证邮箱，只有显式声明 isStrictMode: false 才会关闭严格模式，否则默认开启 */
 		isStrictMode: boolean
 	}
 
@@ -2223,7 +2129,9 @@ export class General2FAVerifier {
 	 */
 	async verify(options: General2FAVerifier.VerifyOptions): Promise<General2FAVerifier.VerifyResult> {
 		try {
-			const { isResetAttemptsImmediately, exclusiveBusinessName, isStrictMode } = options
+			const { isResetAttemptsImmediately, exclusiveBusinessName } = options
+			let { isStrictMode } = options
+			if (isStrictMode !== false) isStrictMode = true // 只要不是显式的 false 都视为 true
 
 			this.#session = await createAndStartSession()
 			const session = this.#session
@@ -2335,11 +2243,11 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 
 				// 检查用户上一次创建时间是否在七天内
 				try {
-					const getSelfUserInfoRequest: GetSelfUserInfoRequestDto = {
-						uid,
+					const getSelfUserInfoByUuidRequest: GetSelfUserInfoByUuidRequestDto = {
+						uuid: UUID,
 						token,
 					}
-					const selfUserInfo = await getSelfUserInfoService(getSelfUserInfoRequest)
+					const selfUserInfo = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
 					if (!selfUserInfo.success || selfUserInfo.result.userCreateDateTime > nowTime - sevenDaysInMillis) {
 						console.warn('WARN', 'WARNING', '生成邀请码失败，未超出邀请码生成期限，正在冷却中（第一次）', { uid })
 						return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中（第一次）' }
@@ -2617,7 +2525,6 @@ export const adminGetUserByInvitationCodeService = async (invitationCode: string
 	}
 }
 
-// TODO: 需要重构
 /**
  * 更新密码
  * @param updateUserPasswordRequest 更新密码的请求载荷
@@ -2625,132 +2532,93 @@ export const adminGetUserByInvitationCodeService = async (invitationCode: string
  * @param token 用户 token
  * @returns 更新密码的请求响应
  */
-export const changePasswordService = async (updateUserPasswordRequest: UpdateUserPasswordRequestDto, uid: number, token: string): Promise<UpdateUserPasswordResponseDto> => {
+export const changePasswordService = async (updateUserPasswordRequest: UpdateUserPasswordRequestDto, cookieUuid: string, cookieToken: string): Promise<UpdateUserPasswordResponseDto> => {
 	try {
-		if (checkUpdateUserPasswordRequest(updateUserPasswordRequest)) {
-			if (await checkUserToken(uid, token)) {
-				const { oldPasswordHash, newPasswordHash, verificationCode } = updateUserPasswordRequest
-				const now = new Date().getTime()
-
-				const { collectionName: userChangePasswordVerificationCodeCollectionName, schemaInstance: userChangePasswordVerificationCodeInstance } = UserChangePasswordVerificationCodeSchema
-				type UserChangePasswordVerificationCode = InferSchemaType<typeof userChangePasswordVerificationCodeInstance>
-
-				const userChangePasswordVerificationCodeWhere: QueryType<UserChangePasswordVerificationCode> = {
-					uid,
-					verificationCode,
-					overtimeAt: { $gte: now },
-				}
-				const userChangePasswordVerificationCodeSelect: SelectType<UserChangePasswordVerificationCode> = {
-					emailLowerCase: 1, // 用户邮箱
-				}
-
-				// 启动事务
-				const session = await mongoose.startSession()
-				session.startTransaction()
-
-				try {
-					const verificationCodeResult = await selectDataFromMongoDB<UserChangePasswordVerificationCode>(userChangePasswordVerificationCodeWhere, userChangePasswordVerificationCodeSelect, userChangePasswordVerificationCodeInstance, userChangePasswordVerificationCodeCollectionName, { session })
-					if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						console.error('ERROR', '修改密码时出错，验证失败')
-						return { success: false, message: '修改密码时出错，验证失败' }
-					}
-				} catch (error) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					console.error('ERROR', '修改密码时出错，请求验证失败')
-					return { success: false, message: '修改密码时出错，请求验证失败' }
-				}
-
-				const { collectionName, schemaInstance } = UserAuthSchema
-				type UserAuth = InferSchemaType<typeof schemaInstance>
-
-				const changePasswordWhere: QueryType<UserAuth> = { uid }
-				const changePasswordSelect: SelectType<UserAuth> = {
-					email: 1,
-					uid: 1,
-					passwordHashHash: 1,
-				}
-
-				try {
-					const userAuthResult = await selectDataFromMongoDB<UserAuth>(changePasswordWhere, changePasswordSelect, schemaInstance, collectionName, { session })
-					if (userAuthResult?.result && userAuthResult.result?.length === 1) {
-						const userAuthInfo = userAuthResult.result[0]
-						const isCorrectPassword = comparePasswordSync(oldPasswordHash, userAuthInfo.passwordHashHash)
-						if (isCorrectPassword) {
-							const newPasswordHashHash = hashPasswordSync(newPasswordHash)
-							if (newPasswordHashHash) {
-								const changePasswordUpdate: UpdateType<UserAuth> = {
-									passwordHashHash: newPasswordHashHash,
-									editDateTime: now,
-								}
-								try {
-									const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
-									if (updateResult.success) {
-										await session.commitTransaction()
-										session.endSession()
-										return { success: true, message: '密码已更新！' }
-									} else {
-										if (session.inTransaction()) {
-											await session.abortTransaction()
-										}
-										session.endSession()
-										console.error('ERROR', '修改密码失败，更新密码失败', { uid })
-										return { success: false, message: '修改密码时出错，更新密码失败' }
-									}
-								} catch (error) {
-									if (session.inTransaction()) {
-										await session.abortTransaction()
-									}
-									session.endSession()
-									console.error('ERROR', '修改密码时出错，更新密码时出错', { uid, error })
-									return { success: false, message: '修改密码时出错，更新密码时出错' }
-								}
-							} else {
-								if (session.inTransaction()) {
-									await session.abortTransaction()
-								}
-								session.endSession()
-								console.error('ERROR', '修改密码失败，未能散列新密码', { uid })
-								return { success: false, message: '修改密码失败，未能散列新密码' }
-							}
-						} else {
-							if (session.inTransaction()) {
-								await session.abortTransaction()
-							}
-							session.endSession()
-							console.error('ERROR', '修改密码失败，密码校验未通过', { uid })
-							return { success: false, message: '修改密码失败，密码校验未通过' }
-						}
-					} else {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						console.error('ERROR', '修改密码失败，密码校验结果为空或不为一！', { uid })
-						return { success: false, message: '修改密码失败，密码校验结果不正确' }
-					}
-				} catch (error) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					console.error('ERROR', '修改密码时出错，密码校验时出错！', { uid, error })
-					return { success: false, message: '修改密码时出错，密码校验时出错！' }
-				}
-			} else {
-				console.error('ERROR', '修改密码失败，非法用户！', { uid })
-				return { success: false, message: '修改密码失败，非法用户！' }
-			}
-		} else {
-			console.error('ERROR', '修改密码失败，参数不合法！', { uid })
-			return { success: false, message: '修改密码失败，参数不合法！' }
+		if (!checkUpdateUserPasswordRequest(updateUserPasswordRequest)) {
+			const errorMessage = '修改密码失败，参数不合法！'
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			return { success: false, message: errorMessage }
 		}
+
+		if (!await checkUserTokenByUUID(cookieUuid, cookieToken)) {
+			const errorMessage = '修改密码失败，用户验证未通过！'
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			return { success: false, message: errorMessage }
+		}
+
+		const { oldPasswordHash, newPasswordHash, verificationCode } = updateUserPasswordRequest
+		const now = new Date().getTime()
+
+		// 启动事务
+		const session = await createAndStartSession()
+
+		// 验证 2FA 验证码
+		const general2FAVerifier = new General2FAVerifier(cookieUuid, verificationCode, cookieToken)
+		const verify2FAResult = await general2FAVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'update-password', isStrictMode: true })
+		if (!verify2FAResult.success) {
+			const errorMessage = `修改密码失败，2FA 验证未通过：${verify2FAResult.message}`
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+
+		const { collectionName, schemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof schemaInstance>
+
+		const changePasswordWhere: QueryType<UserAuth> = {
+			UUID: cookieUuid
+		}
+		const changePasswordSelect: SelectType<UserAuth> = {
+			passwordHashHash: 1,
+		}
+
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(changePasswordWhere, changePasswordSelect, schemaInstance, collectionName, { session })
+		if (!userAuthResult.success || !userAuthResult.result || !userAuthResult.result.length || userAuthResult.result.length !== 1) {
+			const errorMessage = '修改密码失败，未能获取用户认证信息'
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+
+		const { passwordHashHash } = userAuthResult.result[0]
+		const isCorrectPassword = comparePasswordSync(oldPasswordHash, passwordHashHash)
+		if (!isCorrectPassword) {
+			const errorMessage = '修改密码失败，旧密码不正确'
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+
+		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
+		if (!newPasswordHashHash) {
+			const errorMessage = '修改密码失败，未能散列新密码'
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+		if (newPasswordHashHash === passwordHashHash) {
+			const errorMessage = '修改密码失败，新密码不能与旧密码相同'
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+
+		const changePasswordUpdate: UpdateType<UserAuth> = {
+			passwordHashHash: newPasswordHashHash,
+			passwordUpdateDateTime: now,
+			editDateTime: now,
+		}
+
+		const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
+		if (!updateResult.success) {
+			const errorMessage = '修改密码时出错，更新密码失败'
+			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+
+		await commitAndEndSession(session)
+		return { success: true, message: '密码已更新！' }
 	} catch (error) {
 		console.error('ERROR', '修改密码时出错，未知错误', error)
 		return { success: false, message: '修改密码时出错，未知错误' }
