@@ -36,7 +36,6 @@ import {
 	adminEditUserInfoController,
 	adminGetUserByInvitationCodeController,
 	forgotPasswordController,
-	requestSendForgotPasswordVerificationCodeController,
 	sendGeneral2FAEmailVerificationCodeController,
 	sendGeneralEmailVerificationCodeController,
 } from '../controller/UserController.js'
