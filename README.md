@@ -75,7 +75,7 @@ npm run dev
 npm run dev-hot
 ```
 
-也可以按下键盘按键 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，然后选择 `npm: dev`。
+也可以按下键盘按键 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，然后选择 `npm: dev-hot`。
 
 成功执行以上命令后，你应该会获得一个监听 9999 端口的 KIRAKIRA-Rosales 开发服务器。🎉  
 在此基础上，你可以审阅、编写或贡献代码，参与 KIRAKIRA 项目开发。
