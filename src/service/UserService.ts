@@ -61,9 +61,7 @@ import {
 	GetBlockedUserRequestDto,
 	AdminGetUserByInvitationCodeResponseDto,
 	ForgotPasswordRequestDto,
-	RequestSendForgotPasswordVerificationCodeRequestDto,
 	ForgotPasswordResponseDto,
-	RequestSendForgotPasswordVerificationCodeResponseDto,
 	SendGeneral2FAEmailVerificationCodeRequestDto,
 	SendGeneral2FAEmailVerificationCodeResponseDto,
 	SendGeneralEmailVerificationCodeRequestDto,
@@ -74,11 +72,9 @@ import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/
 import {
 	UserAuthSchema,
 	UserTotpAuthenticatorSchema,
-	UserChangePasswordVerificationCodeSchema,
 	UserInfoSchema,
 	UserInvitationCodeSchema,
 	UserSettingsSchema,
-	UserForgotPasswordVerificationCodeSchema,
 	General2FAEmailVerificationCodeSchema,
 	GeneralEmailVerificationCodeSchema
 } from '../dbPool/schema/UserSchema.js'
@@ -2626,128 +2622,6 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 }
 
 /**
- * 请求发送忘记密码的邮箱验证码
- * // DELETE ME: 计划中废弃
- * @param requestSendForgotPasswordVerificationCodeRequest 请求发送忘记密码的邮箱验证码的请求载荷
- * @returns 请求发送忘记密码的邮箱验证码的请求响应
- */
-export const requestSendForgotPasswordVerificationCodeService = async (requestSendForgotPasswordVerificationCodeRequest: RequestSendForgotPasswordVerificationCodeRequestDto): Promise<RequestSendForgotPasswordVerificationCodeResponseDto> => {
-	try {
-		if (!checkRequestSendForgotPasswordVerificationCodeRequest(requestSendForgotPasswordVerificationCodeRequest)) {
-			const message = '请求发送忘记密码的验证码失败，参数不合法！'
-			console.error('ERROR', message)
-			return { success: false, isCoolingDown: false, message }
-		}
-		const { clientLanguage, email } = requestSendForgotPasswordVerificationCodeRequest
-
-		const emailLowerCase = email.toLowerCase()
-		const nowTime = new Date().getTime()
-		const todayStart = new Date()
-		todayStart.setHours(0, 0, 0, 0)
-
-		const { collectionName, schemaInstance } = UserForgotPasswordVerificationCodeSchema
-		type UserForgotPasswordVerificationCode = InferSchemaType<typeof schemaInstance>
-		const requestSendForgotPasswordVerificationCodeWhere: QueryType<UserForgotPasswordVerificationCode> = {
-			emailLowerCase,
-		}
-
-		const requestSendForgotPasswordVerificationCodeSelect: SelectType<UserForgotPasswordVerificationCode> = {
-			emailLowerCase: 1, // 用户邮箱
-			attemptsTimes: 1,
-			lastRequestDateTime: 1, // 用户上一次请求验证码的时间，用于防止滥用
-		}
-
-		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
-
-		try {
-			const forgotPasswordVerificationCodeHistoryResult = await selectDataFromMongoDB<UserForgotPasswordVerificationCode>(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeSelect, schemaInstance, collectionName, { session })
-
-			if (!forgotPasswordVerificationCodeHistoryResult.success) {
-				await abortAndEndSession(session)
-				const message = '请求发送忘记密码的验证码失败，获取验证码失败'
-				console.error('ERROR', message)
-				return { success: false, isCoolingDown: false, message }
-			}
-
-			const lastRequestDateTime = forgotPasswordVerificationCodeHistoryResult.result?.[0]?.lastRequestDateTime ?? 0
-			const attemptsTimes = forgotPasswordVerificationCodeHistoryResult.result?.[0]?.attemptsTimes ?? 0
-			if (forgotPasswordVerificationCodeHistoryResult.result.length > 0 && lastRequestDateTime + 55000 >= nowTime) { // 前端 60 秒，后端 55 秒
-				await abortAndEndSession(session)
-				const message = '请求发送忘记密码的验证码失败，未超过邮件超时时间，请稍后再试'
-				console.warn('WARN', message)
-				return { success: false, isCoolingDown: true, message }
-			}
-
-			const lastRequestDate = new Date(lastRequestDateTime)
-			if (forgotPasswordVerificationCodeHistoryResult.result.length > 0 && todayStart < lastRequestDate && attemptsTimes > 3) { // ! 每天三次机会
-				await abortAndEndSession(session)
-				const message = '请求发送忘记密码的验证码失败，已达本日重试次数上限，请稍后再试'
-				console.warn('WARN', 'WARNING', message)
-				return { success: false, isCoolingDown: true, message }
-			}
-
-			const verificationCode = generateSecureVerificationNumberCode(6) // 生成六位随机数验证码
-			let newAttemptsTimes = attemptsTimes + 1
-			if (todayStart > lastRequestDate) {
-				newAttemptsTimes = 0
-			}
-
-			const requestSendForgotPasswordVerificationCodeUpdate: UserForgotPasswordVerificationCode = {
-				emailLowerCase,
-				verificationCode,
-				overtimeAt: nowTime + 1800000, // 当前时间加上 1800000 毫秒（30 分钟）作为新的过期时间
-				attemptsTimes: newAttemptsTimes,
-				lastRequestDateTime: nowTime,
-				editDateTime: nowTime,
-			}
-			const updateResult = await findOneAndUpdateData4MongoDB(requestSendForgotPasswordVerificationCodeWhere, requestSendForgotPasswordVerificationCodeUpdate, schemaInstance, collectionName, { session })
-
-			if (!updateResult.success) {
-				await abortAndEndSession(session)
-				const message = '请求发送忘记密码的验证码失败，更新或新增验证码失败'
-				console.error('ERROR', message)
-				return { success: false, isCoolingDown: false, message }
-			}
-
-			try {
-				const mail = getI18nLanguagePack(clientLanguage, "SendResetPasswordVerificationCode")
-				const correctMailTitle = mail?.mailTitle
-				const correctMailHTML = mail?.mailHtml?.replaceAll('{{verificationCode}}', verificationCode)
-
-				const sendMailResult = await sendMail(email, correctMailTitle, { html: correctMailHTML })
-
-				if (!sendMailResult.success) {
-					await abortAndEndSession(session)
-					const message = '请求发送忘记密码的验证码失败，邮件发送失败'
-					console.error('ERROR', message)
-					return { success: false, isCoolingDown: true, message }
-				}
-
-				await commitAndEndSession(session)
-				return { success: true, isCoolingDown: false, message: '忘记密码的验证码已发送至你注册时使用的邮箱，请注意查收，如未收到，请检查垃圾箱或联系 KIRAKIRA 客服。' }
-
-			} catch (error) {
-				await abortAndEndSession(session)
-				const message = '请求发送忘记密码的验证码失败，邮件发送时出错'
-				console.error('ERROR', message, error)
-				return { success: false, isCoolingDown: true, message }
-			}
-		} catch (error) {
-			await abortAndEndSession(session)
-			const message = '请求发送忘记密码的验证码失败，检查超时时间时出错'
-			console.error('ERROR', message, error)
-			return { success: false, isCoolingDown: false, message }
-		}
-	} catch (error) {
-		const message = '请求发送忘记密码的验证码失败，未知错误'
-		console.error('ERROR', message, error)
-		return { success: false, isCoolingDown: false, message }
-	}
-}
-
-/**
  * 找回密码（更新密码）
  * @param forgotPasswordRequest 忘记密码（更新密码）的请求载荷
  * @returns 忘记密码（更新密码）的请求响应
@@ -2764,29 +2638,17 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 		const emailLowerCase = email.toLowerCase()
 		const now = new Date().getTime()
 
-		const { collectionName: userForgotPasswordVerificationCodeCollectionName, schemaInstance: userForgotPasswordVerificationCodeInstance } = UserForgotPasswordVerificationCodeSchema
-		type UserForgotPasswordVerificationCode = InferSchemaType<typeof userForgotPasswordVerificationCodeInstance>
-
-		const userForgoPasswordVerificationCodeWhere: QueryType<UserForgotPasswordVerificationCode> = {
-			emailLowerCase,
-			verificationCode,
-			overtimeAt: { $gte: now },
-		}
-		const userForgotPasswordVerificationCodeSelect: SelectType<UserForgotPasswordVerificationCode> = {
-			emailLowerCase: 1, // 用户邮箱
+		const EmailVerifier = new GeneralEmailVerifier(emailLowerCase, verificationCode)
+		const emailVerificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'forgot-password' })
+		if (!emailVerificationResult.success) {
+			const errorMessage = `找回密码时出错，验证失败：${emailVerificationResult.message}`
+			console.error('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		// 启动事务
 		const session = await mongoose.startSession()
 		session.startTransaction()
-
-		const verificationCodeResult = await selectDataFromMongoDB<UserForgotPasswordVerificationCode>(userForgoPasswordVerificationCodeWhere, userForgotPasswordVerificationCodeSelect, userForgotPasswordVerificationCodeInstance, userForgotPasswordVerificationCodeCollectionName, { session })
-		if (!verificationCodeResult.success || verificationCodeResult.result?.length !== 1) {
-			await abortAndEndSession(session)
-			const message = '找回密码时出错，验证失败'
-			console.error('ERROR', message)
-			return { success: false, message }
-		}
 
 		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
 		if (!newPasswordHashHash) {
@@ -2817,8 +2679,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 				return { success: false, message }
 			}
 
-			await session.commitTransaction()
-			session.endSession()
+			await commitAndEndSession(session)
 			return { success: true, message: '找回密码成功，密码已更新！' }
 		} catch (error) {
 			await abortAndEndSession(session)
@@ -2827,7 +2688,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 			return { success: false, message }
 		}
 	} catch (error) {
-		const message = '找回密码时出错，未知错误'
+		const message = '找回密码时出错，未知错误。'
 		console.error('ERROR', message, error)
 		return { success: false, message }
 	}
@@ -4338,18 +4199,6 @@ const checkUpdateUserPasswordRequest = (updateUserPasswordRequest: UpdateUserPas
 		&& !!updateUserPasswordRequest.newPasswordHash
 		&& !!updateUserPasswordRequest.oldPasswordHash
 		&& !!updateUserPasswordRequest.verificationCode && updateUserPasswordRequest.verificationCode.length === 6
-	)
-}
-
-/**
- * 验证请求发送忘记密码的邮箱验证码的请求载荷
- * @param requestSendForgotPasswordVerificationCodeRequest 请求发送忘记密码的邮箱验证码的请求载荷
- * @returns 检查结果，合法返回 true，不合法返回 false
- */
-const checkRequestSendForgotPasswordVerificationCodeRequest = (requestSendForgotPasswordVerificationCodeRequest: RequestSendForgotPasswordVerificationCodeRequestDto): boolean => {
-	return (
-		true
-		&& !!requestSendForgotPasswordVerificationCodeRequest.email
 	)
 }
 

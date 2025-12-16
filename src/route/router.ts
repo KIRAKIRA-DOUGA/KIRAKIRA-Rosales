@@ -253,14 +253,6 @@ router.post('/user/update/password', updateUserPasswordController) // 更新用�
 // 	"verificationCode": "XXXXXX"
 // }
 
-// DELETE ME: 计划中废弃
-router.post('/user/requestSendForgotPasswordVerificationCode', requestSendForgotPasswordVerificationCodeController) // 请求发送忘记密码的邮箱验证码
-// https://localhost:9999/user/requestSendForgotPasswordVerificationCode
-// {
-// 	"clientLanguage": "zh-Hans-CN",
-// 	"email": "your-email@website.com"
-// }
-
 router.post('/user/forgot/password', forgotPasswordController) // 找回密码（更新密码）
 // https://localhost:9999/user/forgot/password
 // {

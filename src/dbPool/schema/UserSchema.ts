@@ -241,36 +241,6 @@ class UserInvitationCodeSchemaFactory {
 export const UserInvitationCodeSchema = new UserInvitationCodeSchemaFactory()
 
 /**
- * 用户更改密码的邮箱验证码
- */
-class UserChangePasswordVerificationCodeSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
-		UUID: { type: String, required: true },
-		/** 用户 ID - 非空 */
-		uid: { type: Number, required: true },
-		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, required: true, unique: true },
-		/** 用户的验证码 - 非空 */
-		verificationCode: { type: String, required: true },
-		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
-		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
-		lastRequestDateTime: { type: Number, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'user-change-password-verification-code'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-export const UserChangePasswordVerificationCodeSchema = new UserChangePasswordVerificationCodeSchemaFactory()
-
-/**
  * 用户 TOTP 身份验证器
  */
 class UserTotpAuthenticatorSchemaFactory {
@@ -310,31 +280,31 @@ class UserTotpAuthenticatorSchemaFactory {
 }
 export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()
 
-/**
- * 用户找回密码的邮箱验证码
- */
-class UserForgotPasswordVerificationCodeSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, required: true, unique: true },
-		/** 用户的验证码 - 非空 */
-		verificationCode: { type: String, required: true },
-		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
-		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
-		lastRequestDateTime: { type: Number, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'user-reset-password-verification-code'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-export const UserForgotPasswordVerificationCodeSchema = new UserForgotPasswordVerificationCodeSchemaFactory()
+// /**
+//  * 用户找回密码的邮箱验证码
+//  */
+// class UserForgotPasswordVerificationCodeSchemaFactory {
+// 	/** MongoDB Schema */
+// 	schema = {
+// 		/** 用户的邮箱 - 非空 - 唯一 */
+// 		emailLowerCase: { type: String, required: true, unique: true },
+// 		/** 用户的验证码 - 非空 */
+// 		verificationCode: { type: String, required: true },
+// 		/** 用户的验证码过期时间 - 非空 */
+// 		overtimeAt: { type: Number, required: true, unique: true },
+// 		/** 用户今日请求的次数，用于防止滥用 - 非空 */
+// 		attemptsTimes: { type: Number, required: true },
+// 		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
+// 		lastRequestDateTime: { type: Number, required: true },
+// 		/** 系统专用字段-最后编辑时间 - 非空 */
+// 		editDateTime: { type: Number, required: true },
+// 	}
+// 	/** MongoDB 集合名 */
+// 	collectionName = 'user-reset-password-verification-code'
+// 	/** Mongoose Schema 实例 */
+// 	schemaInstance = new Schema(this.schema)
+// }
+// export const UserForgotPasswordVerificationCodeSchema = new UserForgotPasswordVerificationCodeSchemaFactory()
 
 /**
  * 通用 2FA 邮箱验证码

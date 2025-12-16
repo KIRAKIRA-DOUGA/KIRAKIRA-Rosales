@@ -33,7 +33,6 @@ import {
 	adminEditUserInfoService,
 	adminGetUserByInvitationCodeService,
 	forgotPasswordService,
-	requestSendForgotPasswordVerificationCodeService,
 	sendGeneral2FAEmailVerificationCodeService,
 	sendGeneralEmailVerificationCodeService,
 	getSelfUserInfoByUuidService,
@@ -55,7 +54,6 @@ import {
 	GetSelfUserInfoByUuidRequestDto,
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
-	RequestSendForgotPasswordVerificationCodeRequestDto,
 	SendGeneral2FAEmailVerificationCodeRequestDto,
 	SendGeneralEmailVerificationCodeRequestDto,
 	UpdateOrCreateUserInfoRequestDto,
@@ -599,24 +597,6 @@ export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) =
 
 	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uuid, token)
 	ctx.body = updateUserEmailResponse
-	await next()
-}
-
-/**
- * 请求发送忘记密码的邮箱验证码
- * // DELETE ME: 计划中废弃
- * @param ctx context
- * @param next context
- */
-export const requestSendForgotPasswordVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendForgotPasswordVerificationCodeRequestDto>
-
-	const requestSendForgotPasswordVerificationCodeRequest: RequestSendForgotPasswordVerificationCodeRequestDto = {
-		email: data.email ?? '',
-		clientLanguage: data.clientLanguage,
-	}
-
-	ctx.body = await requestSendForgotPasswordVerificationCodeService(requestSendForgotPasswordVerificationCodeRequest)
 	await next()
 }
 
