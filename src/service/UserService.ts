@@ -3475,8 +3475,6 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 			return { success: false, message: errorMessage }
 		}
 
-		const session = await createAndStartSession()
-
 		const { clientOtp, passwordHash } = deleteTotpAuthenticatorByTotpVerificationCodeRequest
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
@@ -3488,7 +3486,7 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 			passwordHashHash: 1,
 		}
 
-		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, userAuthSchemaInstance, userAuthCollectionName)
 		const passwordHashHash = userAuthResult.result?.[0]?.passwordHashHash
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
 			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息'
@@ -3503,11 +3501,11 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		}
 
 		const TotpVerifier = new General2FATotpVerifier(uuid, clientOtp, token)
-		const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: false, isAllowBackupCode: true, isAllowRecoveryCodeAndDeleteTotp: false })
+		// ↓ isResetAttemptsImmediately 不能设置为 false，因为重置尝试次数和删除 TOTP 身份验证器操作的同一个集合的同一条记录，但未在同一个事务，会报错。
+		const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: true, isAllowRecoveryCodeAndDeleteTotp: false })
 		if (!totpVerificationResult.success && totpVerificationResult.resetAttemptsCallback) {
 			const errorMessage = `已登录用户通过密码和 TOTP 验证码删除身份验证器失败：${totpVerificationResult.message}`
 			console.error('ERROR', errorMessage)
-			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
 
@@ -3517,6 +3515,8 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 			UUID: uuid,
 			enabled: true,
 		}
+
+		const session = await createAndStartSession()
 
 		// 调用删除函数
 		const deleteResult = await deleteDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
@@ -3529,18 +3529,11 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 			return { success: false, message: errorMessage }
 		}
 
-		const resetAttemptsResult = await totpVerificationResult.resetAttemptsCallback()
-		if (!resetAttemptsResult.success) {
-			console.error('ERROR', '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，重置 TOTP 尝试次数失败')
-			await abortAndEndSession(session)
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，重置 TOTP 尝试次数失败' }
-		}
-
 		await commitAndEndSession(session)
 		return { success: true, message: '删除 TOTP 身份验证器成功' }
 	} catch (error) {
-		console.error('已登录用户通过密码和 TOTP 验证码删除身份验证器失败时出错，未知错误', error)
-		return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败时出错，未知错误' }
+		console.error('已登录用户通过密码和 TOTP 验证码删除身份验证器时出错，未知错误', error)
+		return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器时出错，未知错误' }
 	}
 }
 
