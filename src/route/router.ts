@@ -844,80 +844,10 @@ router.get('/feed/getFeedContent', getFeedContentController) // 获取动态分�
 
 
 
-// 屏蔽功能相关路由
-router.post('/block/user', blockUserByUidController) // 屏蔽用户
-// https://localhost:9999/block/user
-// cookie: uuid, token
-// {
-// 	"blockUid": 123
-// }
 
-router.post('/block/user/hide', hideUserByUidController) // 隐藏用户
-// https://localhost:9999/block/user/hide
-// cookie: uuid, token
-// {
-// 	"hideUid": 123
-// }
 
-router.post('/block/keyword', blockKeywordController) // 屏蔽关键词
-// https://localhost:9999/block/keyword
-// cookie: uuid, token
-// {
-// 	"blockKeyword": "关键词"
-// }
 
-router.post('/block/tag', blockTagController) // 屏蔽标签
-// https://localhost:9999/block/tag
-// cookie: uuid, token
-// {
-// 	"tagId": 123
-// }
 
-router.post('/block/regex', addRegexController) // 添加正则表达式
-// https://localhost:9999/block/regex
-// cookie: uuid, token
-// {
-// 	"blockRegex": "正则表达式"
-// }
-
-router.post('/unblock/user', unblockUserByUidController) // 解封用户
-// https://localhost:9999/unblock/user
-// cookie: uuid, token
-// {
-// 	"blockUid": 123
-// }
-
-router.post('/unblock/user/show', showUserByUidController) // 显示用户
-// https://localhost:9999/unblock/user/show
-// cookie: uuid, token
-// {
-// 	"hideUid": 123
-// }
-
-router.post('/unblock/keyword', unblockKeywordController) // 解封关键词
-// https://localhost:9999/unblock/keyword
-// cookie: uuid, token
-// {
-// 	"blockKeyword": "关键词"
-// }
-
-router.post('/unblock/tag', unblockTagController) // 解封标签
-// https://localhost:9999/unblock/tag
-// cookie: uuid, token
-// {
-// 	"tagId": 123
-// }
-
-router.post('/unblock/regex', removeRegexController) // 删除正则表达式
-// https://localhost:9999/unblock/regex
-// cookie: uuid, token
-// {
-// 	"blockRegex": "正则表达式"
-// }
-
-router.get('/block/list', getBlockListController) // 获取用户的黑名单列表
-// https://localhost:9999/block/list?type=block&page=1&pageSize=50
-// cookie: uuid, token
 
 
 
