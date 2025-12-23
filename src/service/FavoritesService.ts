@@ -544,15 +544,99 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 		session.startTransaction()
 
 		try {
-			// 批量更新排序顺序
+			// 1) 取出当前收藏夹内所有内容的原始排序
+			const whereAll: QueryType<FavoritesDetailType> = {
+				favoritesListId: reorderFavoritesDetailRequest.favoritesListId,
+			}
+			const selectAll: SelectType<FavoritesDetailType> = {
+				category: 1,
+				id: 1,
+				sortOrder: 1,
+				addedDateTime: 1,
+			}
+			const existingResult = await selectDataFromMongoDB<FavoritesDetailType>(whereAll, selectAll, schemaInstance, collectionName, { session })
+			if (!existingResult.success) {
+				await session.abortTransaction()
+				session.endSession()
+				console.error('ERROR', '调整收藏夹内部排序失败，读取现有数据失败')
+				return { success: false, message: '调整收藏夹内部排序失败，读取现有数据失败' }
+			}
+
+			const existing = existingResult.result ?? []
+			if (existing.length === 0) {
+				await session.commitTransaction()
+				session.endSession()
+				return { success: true, message: '调整收藏夹内部排序成功（列表为空）' }
+			}
+
+			// 2) 将请求中的目标排序写入内存模型（不落库），其他项保持原排序
+			type WorkingItem = {
+				category: string
+				id: string
+				currentOrder: number
+				desiredOrder: number
+				addedDateTime?: number
+			}
+			const keyOf = (c: string, id: string) => `${c}__${id}`
+			const workingMap = new Map<string, WorkingItem>()
+			let maxExistingOrder = 0
+			for (const item of existing) {
+				maxExistingOrder = Math.max(maxExistingOrder, item.sortOrder ?? 0)
+				workingMap.set(
+					keyOf(item.category as any, item.id as any),
+					{
+						category: item.category as any,
+						id: item.id as any,
+						currentOrder: item.sortOrder ?? 0,
+						desiredOrder: item.sortOrder ?? 0,
+						addedDateTime: item.addedDateTime,
+					},
+				)
+			}
+
 			for (const item of reorderFavoritesDetailRequest.items) {
+				const key = keyOf(item.category, item.id)
+				const target = workingMap.get(key)
+				if (!target) {
+					await session.abortTransaction()
+					session.endSession()
+					console.error('ERROR', '调整收藏夹内部排序失败，存在不存在的收藏项')
+					return { success: false, message: '调整收藏夹内部排序失败，存在不存在的收藏项' }
+				}
+
+				const desired = Math.max(1, item.sortOrder || 1)
+				// 如果是当前最大，则置为最大+1；否则先按用户期望排序，稍后统一重排
+				target.desiredOrder = desired > maxExistingOrder ? maxExistingOrder + 1 : desired
+				maxExistingOrder = Math.max(maxExistingOrder, target.desiredOrder)
+				workingMap.set(key, target)
+			}
+
+			// 3) 在内存中计算严格的 1..N 顺序，先按 desired，再按原顺序/时间稳定排序
+			const workingList = Array.from(workingMap.values())
+			workingList.sort((a, b) => {
+				if (a.desiredOrder !== b.desiredOrder) return a.desiredOrder - b.desiredOrder
+				if (a.currentOrder !== b.currentOrder) return a.currentOrder - b.currentOrder
+				return (a.addedDateTime ?? 0) - (b.addedDateTime ?? 0)
+			})
+
+			const finalOrders = new Map<string, number>()
+			for (let i = 0; i < workingList.length; i++) {
+				finalOrders.set(keyOf(workingList[i].category, workingList[i].id), i + 1)
+			}
+
+			// 4) 统一落库（严格 1..N），避免并发累加导致溢出
+			for (const item of workingList) {
+				const finalOrder = finalOrders.get(keyOf(item.category, item.id))!
+				if (finalOrder === item.currentOrder) {
+					continue // 无需更新
+				}
 				const where: QueryType<FavoritesDetailType> = {
 					favoritesListId: reorderFavoritesDetailRequest.favoritesListId,
 					category: item.category,
 					id: item.id,
 				}
 				const update: UpdateType<FavoritesDetailType> = {
-					sortOrder: item.sortOrder,
+					sortOrder: finalOrder,
 					editDateTime: now,
 				}
 				await updateData4MongoDB<FavoritesDetailType>(where, update, schemaInstance, collectionName, { session })
