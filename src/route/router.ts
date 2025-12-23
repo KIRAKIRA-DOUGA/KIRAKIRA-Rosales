@@ -1,7 +1,7 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
-import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
+import { addToFavoritesController, createFavoritesController, deleteFavoritesController, getFavoritesController, getFavoritesDetailController, removeFromFavoritesController, reorderFavoritesDetailController, updateFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
 	adminClearUserInfoController,
@@ -677,6 +677,66 @@ router.post('/favorites/create', createFavoritesController) // 创建收藏夹
 router.get('/favorites', getFavoritesController) // 获取当前登录用户的收藏夹列表
 // https://localhost:9999/favorites
 // cookie: uid, token
+
+router.post('/favorites/add', addToFavoritesController) // 添加内容到收藏夹
+// https://localhost:9999/favorites/add
+// cookie: uid, token
+// {
+// 	"favoritesListId": 1,
+// 	"category": "video",
+// 	"id": "123"
+// }
+
+router.delete('/favorites/remove', removeFromFavoritesController) // 从收藏夹移除内容
+// https://localhost:9999/favorites/remove
+// cookie: uid, token
+// {
+// 	"favoritesListId": 1,
+// 	"category": "video",
+// 	"id": "123"
+// }
+
+router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表
+// https://localhost:9999/favorites/detail?favoritesListId=1&sortOrder=1
+// cookie: uid, token
+// Query: favoritesListId (必填), sortOrder (可选，1 正序，-1 倒序，默认 1)
+
+router.post('/favorites/update', updateFavoritesController) // 更新收藏夹信息
+// https://localhost:9999/favorites/update
+// cookie: uid, token
+// {
+// 	"favoritesId": 1,
+// 	"favoritesTitle": "新标题",
+// 	"favoritesBio": "新简介",
+// 	"favoritesCover": "新封面",
+// 	"favoritesVisibility": 1
+// }
+
+router.delete('/favorites/delete', deleteFavoritesController) // 删除收藏夹
+// https://localhost:9999/favorites/delete
+// cookie: uid, token
+// {
+// 	"favoritesId": 1
+// }
+
+router.post('/favorites/reorder', reorderFavoritesDetailController) // 调整收藏夹内部排序
+// https://localhost:9999/favorites/reorder
+// cookie: uid, token
+// {
+// 	"favoritesListId": 1,
+// 	"items": [
+// 		{
+// 			"category": "video",
+// 			"id": "123",
+// 			"sortOrder": 0
+// 		},
+// 		{
+// 			"category": "video",
+// 			"id": "456",
+// 			"sortOrder": 1
+// 		}
+// 	]
+// }
 
 
 

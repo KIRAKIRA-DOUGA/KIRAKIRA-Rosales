@@ -41,7 +41,7 @@ class FavoritesDetailSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
 		/** 收藏夹唯一 ID - 非空 */
-		favoritesListId: { type: Number, required: true },
+		favoritesListId: { type: Number, required: true, index: true },
 		/** 谁将本条内容添加到收藏夹 - 非空 */
 		operator: { type: Number, required: true },
 		/** 内容的类型，比如说 video, photo 等 - 非空 */
@@ -50,6 +50,8 @@ class FavoritesDetailSchemaFactory {
 		id: { type: String, required: true },
 		/** 添加到收藏的时间 - 非空 */
 		addedDateTime: { type: Number, required: true },
+		/** 排序顺序（用于收藏夹内部排序，数字越小越靠前）- 非空 */
+		sortOrder: { type: Number, required: true, index: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	}
@@ -57,5 +59,11 @@ class FavoritesDetailSchemaFactory {
 	collectionName = 'favorites-detail'
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema)
+
+	// 构造器
+	constructor() {
+		// 添加收藏夹ID和内容ID的组合唯一索引，防止重复添加
+		this.schemaInstance.index({ favoritesListId: 1, category: 1, id: 1 }, { unique: true });
+	}
 }
 export const FavoritesDetailSchema = new FavoritesDetailSchemaFactory()
