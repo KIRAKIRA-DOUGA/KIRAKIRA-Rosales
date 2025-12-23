@@ -17,6 +17,7 @@ import { getNextSequenceValueEjectService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUserUuid } from './UserService.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
+import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 
 /**
  * 上传视频
@@ -482,20 +483,52 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					video.uploaderInfo.isFollowing = true
 				}
 
-				// 7. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
-				if (video.uploaderUUID === selectorUuid) {
-					video.uploaderInfo.isSelf = true
-				}
+			// 7. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
+			if (video.uploaderUUID === selectorUuid) {
+				video.uploaderInfo.isSelf = true
 			}
 
-			return {
-				success: true,
-				message: '视频页 - 获取视频成功',
-				video,
-				isBlocked: false,
-				isBlockedByOther,
-				isHidden,
+			// 8. 计算视频点赞数和点踩数
+			const [upvoteCount, downvoteCount] = await Promise.all([
+				getVideoUpvoteCount(videoId),
+				getVideoDownvoteCount(videoId),
+			])
+			video.upvoteCount = upvoteCount
+			video.downvoteCount = downvoteCount
+
+			// 9. 检查当前用户是否点赞/点踩
+			const selectorUid = await getUserUid(selectorUuid)
+			if (selectorUid !== undefined && selectorUid !== null && selectorUid >= 1) {
+				const [isUpvoted, isDownvoted] = await Promise.all([
+					checkUserHasUpvoted(videoId, selectorUid),
+					checkUserHasDownvoted(videoId, selectorUid),
+				])
+				video.isUpvoted = isUpvoted
+				video.isDownvoted = isDownvoted
+			} else {
+				video.isUpvoted = false
+				video.isDownvoted = false
 			}
+		} else {
+			// 用户未登录，仍然计算点赞数和点踩数，但不计算用户是否点赞/点踩
+			const [upvoteCount, downvoteCount] = await Promise.all([
+				getVideoUpvoteCount(videoId),
+				getVideoDownvoteCount(videoId),
+			])
+			video.upvoteCount = upvoteCount
+			video.downvoteCount = downvoteCount
+			video.isUpvoted = false
+			video.isDownvoted = false
+		}
+
+		return {
+			success: true,
+			message: '视频页 - 获取视频成功',
+			video,
+			isBlocked: false,
+			isBlockedByOther,
+			isHidden,
+		}
 		} catch (error) {
 			console.error('ERROR', '视频页 - 视频查询失败：', error)
 			return { success: false, message: '视频页 - 视频查询失败', isBlocked: false, isBlockedByOther, isHidden }

@@ -305,12 +305,92 @@ export const cancelVideoDownvoteService = async (videoId: number, uid: number, t
 }
 
 /**
+ * 获取视频的点赞数
+ * @param videoId 视频 ID
+ * @returns 点赞数
+ */
+export const getVideoUpvoteCount = async (videoId: number): Promise<number> => {
+	try {
+		if (!videoId) {
+			console.error('获取视频点赞数失败：视频 ID 为空', { videoId })
+			return 0
+		}
+		
+		const { collectionName, schemaInstance } = VideoUpvoteSchema
+		type VideoUpvote = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<VideoUpvote> = {
+			videoId,
+			invalidFlag: false,
+		}
+
+		const select: SelectType<VideoUpvote> = {
+			videoId: 1,
+		}
+
+		try {
+			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+			if (result.success && result.result) {
+				return result.result.length
+			} else {
+				return 0
+			}
+		} catch (error) {
+			console.error('获取视频点赞数失败：查询失败', error, { videoId })
+			return 0
+		}
+	} catch (error) {
+		console.error('获取视频点赞数失败：', error, { videoId })
+		return 0
+	}
+}
+
+/**
+ * 获取视频的点踩数
+ * @param videoId 视频 ID
+ * @returns 点踩数
+ */
+export const getVideoDownvoteCount = async (videoId: number): Promise<number> => {
+	try {
+		if (!videoId) {
+			console.error('获取视频点踩数失败：视频 ID 为空', { videoId })
+			return 0
+		}
+		
+		const { collectionName, schemaInstance } = VideoDownvoteSchema
+		type VideoDownvote = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<VideoDownvote> = {
+			videoId,
+			invalidFlag: false,
+		}
+
+		const select: SelectType<VideoDownvote> = {
+			videoId: 1,
+		}
+
+		try {
+			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+			if (result.success && result.result) {
+				return result.result.length
+			} else {
+				return 0
+			}
+		} catch (error) {
+			console.error('获取视频点踩数失败：查询失败', error, { videoId })
+			return 0
+		}
+	} catch (error) {
+		console.error('获取视频点踩数失败：', error, { videoId })
+		return 0
+	}
+}
+
+/**
  * 检查用户是否已经对一个视频点赞
  * @param videoId 视频 ID
  * @param uid 用户 UID
  * @returns 校验结果，用户已点赞返回 true, 未点赞返回 false
  */
-const checkUserHasUpvoted = async (videoId: number, uid: number): Promise<boolean> => {
+export const checkUserHasUpvoted = async (videoId: number, uid: number): Promise<boolean> => {
     try {
         if (!videoId || uid === undefined || uid === null) {
             console.error('在验证用户是否已经对某视频点赞时出错：数据校验未通过', { videoId, uid })
@@ -357,7 +437,7 @@ const checkUserHasUpvoted = async (videoId: number, uid: number): Promise<boolea
  * @param uid 用户 UID
  * @returns 校验结果，用户已点踩返回 true, 未点踩返回 false
  */
-const checkUserHasDownvoted = async (videoId: number, uid: number): Promise<boolean> => {
+export const checkUserHasDownvoted = async (videoId: number, uid: number): Promise<boolean> => {
     try {
         if (!videoId || uid === undefined || uid === null) {
             console.error('在验证用户是否已经对某视频点踩时出错：数据校验未通过', { videoId, uid })
