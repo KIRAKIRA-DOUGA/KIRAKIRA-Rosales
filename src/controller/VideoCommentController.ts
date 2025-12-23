@@ -1,7 +1,7 @@
 import { isPassRbacCheck } from '../service/RbacService.js'
-import { adminDeleteVideoCommentService, cancelVideoCommentDownvoteService, cancelVideoCommentUpvoteService, deleteSelfVideoCommentService, emitVideoCommentDownvoteService, emitVideoCommentService, emitVideoCommentUpvoteService, getVideoCommentListByKvidService } from '../service/VideoCommentService.js'
+import { adminDeleteVideoCommentService, cancelVideoCommentDownvoteService, cancelVideoCommentUpvoteService, deleteSelfVideoCommentService, emitVideoCommentDownvoteService, emitVideoCommentService, emitVideoCommentUpvoteService, getSelfVideoCommentListService, getVideoCommentListByKvidService } from '../service/VideoCommentService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { AdminDeleteVideoCommentRequestDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentUpvoteRequestDto, DeleteSelfVideoCommentRequestDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentRequestDto, EmitVideoCommentUpvoteRequestDto, GetVideoCommentByKvidRequestDto } from './VideoCommentControllerDto.js'
+import { AdminDeleteVideoCommentRequestDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentUpvoteRequestDto, DeleteSelfVideoCommentRequestDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentRequestDto, EmitVideoCommentUpvoteRequestDto, GetSelfVideoCommentRequestDto, GetVideoCommentByKvidRequestDto } from './VideoCommentControllerDto.js'
 import { parseInteger } from '../common/ValidTool.js'
 
 /**
@@ -50,6 +50,25 @@ export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koa
 	const token = ctx.cookies.get('token')
 	const videoCommentListResponse = await getVideoCommentListByKvidService(getVideoCommentByKvidRequest, UUID, token)
 	ctx.body = videoCommentListResponse
+	await next()
+}
+
+/**
+ * 获取本人已发布的评论（包含管理员删除或待审核，排除用户自行删除）
+ * @param ctx context
+ * @param next context
+ */
+export const getSelfVideoCommentListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const page = parseInteger(ctx.query.page as string) ?? 1
+	const pageSize = parseInteger(ctx.query.pageSize as string) ?? 20
+	const request: GetSelfVideoCommentRequestDto = {
+		page,
+		pageSize,
+	}
+	const resp = await getSelfVideoCommentListService(request, uuid, token)
+	ctx.body = resp
 	await next()
 }
 

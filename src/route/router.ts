@@ -1,6 +1,6 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
-import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
+import { emitDanmakuController, getDanmakuListByKvidController, getSelfDanmakuListController } from '../controller/DanmakuController.js'
 import { addToFavoritesController, createFavoritesController, deleteFavoritesController, getFavoritesController, getFavoritesDetailController, removeFromFavoritesController, reorderFavoritesDetailController, updateFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
@@ -43,7 +43,7 @@ import {
 	forgotPasswordController,
 	requestSendForgotPasswordVerificationCodeController,
 } from '../controller/UserController.js'
-import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
+import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getSelfVideoCommentListController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { cancelVideoDownvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, emitVideoUpvoteController } from '../controller/VideoVoteController.js'
@@ -500,6 +500,10 @@ router.post('/video/danmaku/emit', emitDanmakuController) // 发送弹幕的接�
 router.get('/video/danmaku', getDanmakuListByKvidController) // 根据视频 ID 获取弹幕
 // https://localhost:9999/video/danmaku?videoId=10
 
+router.get('/video/danmaku/self', getSelfDanmakuListController) // 获取本人已发布的弹幕
+// https://localhost:9999/video/danmaku/self?page=1&pageSize=50
+// cookie: uuid, token
+
 
 router.post('/video/upvote', emitVideoUpvoteController) // 用户为视频点赞
 // https://localhost:9999/video/upvote
@@ -542,6 +546,10 @@ router.post('/video/comment/emit', emitVideoCommentController) // 发送视频�
 router.get('/video/comment', getVideoCommentListByKvidController) // 根据 KVID 获取视频评论列表，并检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应的值会变为 true
 // https://localhost:9999/video/comment?videoId=13
 // 可选：cookie: uid, token
+
+router.get('/video/comment/self', getSelfVideoCommentListController) // 获取本人已发布的评论
+// https://localhost:9999/video/comment/self?page=1&pageSize=20
+// cookie: uuid, token
 
 router.post('/video/comment/upvote', emitVideoCommentUpvoteController) // 用户为视频评论点赞
 // https://localhost:9999/video/comment/upvote

@@ -24,6 +24,12 @@ class DanmakuSchemaFactory {
 		mode: { type: String, enum: ['ltr', 'rtl', 'top', 'bottom'], required: true, default: 'rtl' },
 		/** 是否启用彩虹弹幕 - 非空 */ /** 默认 false —— 不启用 */
 		enableRainbow: { type: Boolean, required: false, default: false },
+		/** 用户删除标记（软删除，默认未删除） */
+		userDeletedFlag: { type: Boolean, required: true, default: false },
+		/** 管理员删除标记（软删除，默认未删除） */
+		adminDeletedFlag: { type: Boolean, required: true, default: false },
+		/** 是否待审核，默认 false 表示已通过审核 */
+		pendingReview: { type: Boolean, required: true, default: false },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
 	}

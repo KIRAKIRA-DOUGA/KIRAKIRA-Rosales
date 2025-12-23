@@ -1,8 +1,8 @@
-import { emitDanmakuService, getDanmakuListByKvidService } from '../service/DanmakuService.js'
+import { emitDanmakuService, getDanmakuListByKvidService, getSelfDanmakuListService } from '../service/DanmakuService.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { isPassRbacCheck } from '../service/RbacService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { EmitDanmakuRequestDto, GetDanmakuByKvidRequestDto } from './DanmakuControllerDto.js'
+import { EmitDanmakuRequestDto, GetDanmakuByKvidRequestDto, GetSelfDanmakuRequestDto } from './DanmakuControllerDto.js'
 
 /**
  * 用户发送弹幕
@@ -49,5 +49,19 @@ export const getDanmakuListByKvidController = async (ctx: koaCtx, next: koaNext)
 	}
 	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest)
 	ctx.body = danmakuListResponse
+	await next()
+}
+
+/**
+ * 获取本人已发布的弹幕（包含管理员删除或待审核，排除用户自行删除）
+ */
+export const getSelfDanmakuListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const page = parseInteger(ctx.query.page as string) ?? 1
+	const pageSize = parseInteger(ctx.query.pageSize as string) ?? 50
+	const request: GetSelfDanmakuRequestDto = { page, pageSize }
+	const resp = await getSelfDanmakuListService(request, uuid, token)
+	ctx.body = resp
 	await next()
 }

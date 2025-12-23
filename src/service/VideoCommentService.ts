@@ -1,6 +1,6 @@
 import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
 import { GetUserInfoByUidRequestDto } from '../controller/UserControllerDto.js'
-import { AdminDeleteVideoCommentRequestDto, AdminDeleteVideoCommentResponseDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, DeleteSelfVideoCommentRequestDto, DeleteSelfVideoCommentResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, GetVideoCommentDownvotePropsDto, GetVideoCommentDownvoteResultDto, GetVideoCommentUpvotePropsDto, GetVideoCommentUpvoteResultDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
+import { AdminDeleteVideoCommentRequestDto, AdminDeleteVideoCommentResponseDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, DeleteSelfVideoCommentRequestDto, DeleteSelfVideoCommentResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetSelfVideoCommentRequestDto, GetSelfVideoCommentResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, GetVideoCommentDownvotePropsDto, GetVideoCommentDownvoteResultDto, GetVideoCommentUpvotePropsDto, GetVideoCommentUpvoteResultDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
 import { findOneAndPlusByMongodbId, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, deleteDataFromMongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { RemovedVideoCommentSchema, VideoCommentDownvoteSchema, VideoCommentSchema, VideoCommentUpvoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
@@ -88,6 +88,9 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 			downvoteCount: 0,
 			subComments: [] as VideoComment['subComments'], // TODO: Mongoose issue: #12420
 			subCommentsCount: 0,
+			userDeletedFlag: false,
+			adminDeletedFlag: false,
+			pendingReview: false,
 			editDateTime: nowDate,
 		}
 		try {
@@ -210,7 +213,10 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			// 1. 查询评论信息
 			{
 				$match: {
-					videoId // 通过 videoId 筛选评论
+					videoId, // 通过 videoId 筛选评论
+					userDeletedFlag: { $ne: true },
+					adminDeletedFlag: { $ne: true },
+					pendingReview: { $ne: true },
 				},
 			},
 			...blockListFilter.filter,
@@ -225,7 +231,10 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			// 1. 查询评论信息
 			{
 				$match: {
-					videoId // 通过 videoId 筛选评论
+					videoId, // 通过 videoId 筛选评论
+					userDeletedFlag: { $ne: true },
+					adminDeletedFlag: { $ne: true },
+					pendingReview: { $ne: true },
 				},
 			},
 			...blockListFilter.filter,
@@ -864,6 +873,92 @@ const checkUserHasDownvoted = async (commentId: string, uid: number): Promise<bo
 	} catch (error) {
 		console.error('在验证用户是否已经对某评论点踩时出错：', error, { commentId, uid })
 		return false
+	}
+}
+
+/**
+ * 获取本人已发布的评论（包含管理员删除或待审核，排除用户自行删除）
+ */
+export const getSelfVideoCommentListService = async (getSelfVideoCommentRequest: GetSelfVideoCommentRequestDto, uuid: string, token: string): Promise<GetSelfVideoCommentResponseDto> => {
+	try {
+		if (!uuid || !token) {
+			return { success: false, message: '获取评论失败，缺少鉴权信息', videoCommentCount: 0, videoCommentList: [] }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			return { success: false, message: '获取评论失败，用户校验未通过', videoCommentCount: 0, videoCommentList: [] }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			return { success: false, message: '获取评论失败，用户 UID 不存在', videoCommentCount: 0, videoCommentList: [] }
+		}
+
+		const page = getSelfVideoCommentRequest.page ?? 1
+		const pageSize = getSelfVideoCommentRequest.pageSize ?? 20
+		const skip = page > 0 && pageSize > 0 ? (page - 1) * pageSize : 0
+		const limitStage = page > 0 && pageSize > 0 ? [{ $limit: pageSize }] : []
+
+		const { collectionName, schemaInstance } = VideoCommentSchema
+		type VideoComment = InferSchemaType<typeof schemaInstance>
+
+		const matchStage: PipelineStage = {
+			$match: {
+				uid,
+				userDeletedFlag: { $ne: true }, // 用户自行删除的不返回
+			},
+		}
+
+		const projectStage: PipelineStage = {
+			$project: {
+				_id: 1,
+				commentRoute: 1,
+				videoId: 1,
+				UUID: 1,
+				uid: 1,
+				emitTime: 1,
+				text: 1,
+				upvoteCount: 1,
+				downvoteCount: 1,
+				commentIndex: 1,
+				subCommentsCount: 1,
+				editDateTime: 1,
+				userDeletedFlag: 1,
+				adminDeletedFlag: 1,
+				pendingReview: 1,
+			},
+		}
+
+		const sortStage: PipelineStage = { $sort: { emitTime: -1 } }
+		const skipStage: PipelineStage = { $skip: skip }
+
+		const listPipeline: PipelineStage[] = [
+			matchStage,
+			sortStage,
+			skipStage,
+			...limitStage,
+			projectStage,
+		]
+
+		const countPipeline: PipelineStage[] = [
+			matchStage,
+			{ $count: 'totalCount' },
+		]
+
+		const countResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, countPipeline)
+		const listResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, listPipeline)
+
+		if (!countResult.success || !listResult.success) {
+			return { success: false, message: '获取评论失败，查询失败', videoCommentCount: 0, videoCommentList: [] }
+		}
+
+		const total = countResult.result?.[0]?.totalCount ?? 0
+		const list = (listResult.result as unknown as VideoCommentResult[]) ?? []
+
+		return { success: true, message: '获取本人评论成功', videoCommentCount: total, videoCommentList: list }
+	} catch (error) {
+		console.error('ERROR', '获取本人评论失败：', error, { getSelfVideoCommentRequest, uuid })
+		return { success: false, message: '获取本人评论失败，未知错误', videoCommentCount: 0, videoCommentList: [] }
 	}
 }
 

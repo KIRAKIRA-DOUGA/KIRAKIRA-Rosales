@@ -62,3 +62,27 @@ export type GetDanmakuByKvidResponseDto = {
 	/** 发送成功的话，返回弹幕的数据列表（不包含用户 ID，包含最后编辑时间） */
 	danmaku?: (GetDanmakuByKvidDto & { isBlockedByOther?: boolean })[];
 }
+
+/**
+ * 获取本人已发布的弹幕的请求载荷
+ */
+export type GetSelfDanmakuRequestDto = {
+	/** 分页：页码（可选，默认 1） */
+	page?: number;
+	/** 分页：每页大小（可选，默认 50） */
+	pageSize?: number;
+}
+
+/**
+ * 获取本人已发布的弹幕的响应
+ */
+export type GetSelfDanmakuResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 发送成功的话，返回弹幕的数据列表（包含用户自己的弹幕，可见被管理员删除或待审核的记录） */
+	danmaku?: GetDanmakuByKvidDto[];
+	/** 返回的弹幕总数 */
+	danmakuCount?: number;
+}

@@ -1,5 +1,5 @@
 import { InferSchemaType, PipelineStage } from 'mongoose'
-import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidDto, GetDanmakuByKvidRequestDto, GetDanmakuByKvidResponseDto } from '../controller/DanmakuControllerDto.js'
+import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidDto, GetDanmakuByKvidRequestDto, GetDanmakuByKvidResponseDto, GetSelfDanmakuRequestDto, GetSelfDanmakuResponseDto } from '../controller/DanmakuControllerDto.js'
 import { insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { DanmakuSchema } from '../dbPool/schema/DanmakuSchema.js'
@@ -57,6 +57,9 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 			UUID: uuid,
 			uid,
 			...emitDanmakuRequest,
+			userDeletedFlag: false,
+			adminDeletedFlag: false,
+			pendingReview: false,
 			editDateTime: nowDate,
 		}
 		try {
@@ -119,6 +122,9 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 				{
 					$match: {
 						videoId,
+						userDeletedFlag: { $ne: true },
+						adminDeletedFlag: { $ne: true },
+						pendingReview: { $ne: true },
 					}
 				},
 				...blockListFilter.filter,
@@ -168,6 +174,90 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 	} catch (error) {
 		console.error('ERROR', '获取弹幕列表失败，错误信息：', error, getDanmakuByKvidRequest)
 		return { success: false, message: '获取弹幕列表失败，未知原因' }
+	}
+}
+
+/**
+ * 获取本人已发布的弹幕（包含管理员删除或待审核，排除用户自行删除）
+ */
+export const getSelfDanmakuListService = async (getSelfDanmakuRequest: GetSelfDanmakuRequestDto, uuid: string, token: string): Promise<GetSelfDanmakuResponseDto> => {
+	try {
+		if (!uuid || !token) {
+			return { success: false, message: '获取弹幕失败，缺少鉴权信息', danmakuCount: 0, danmaku: [] }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			return { success: false, message: '获取弹幕失败，用户校验未通过', danmakuCount: 0, danmaku: [] }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			return { success: false, message: '获取弹幕失败，用户 UID 不存在', danmakuCount: 0, danmaku: [] }
+		}
+
+		const page = getSelfDanmakuRequest.page ?? 1
+		const pageSize = getSelfDanmakuRequest.pageSize ?? 50
+		const skip = page > 0 && pageSize > 0 ? (page - 1) * pageSize : 0
+		const limitStage = page > 0 && pageSize > 0 ? [{ $limit: pageSize }] : []
+
+		const { collectionName, schemaInstance } = DanmakuSchema
+		type Danmaku = InferSchemaType<typeof schemaInstance>
+
+		const matchStage: PipelineStage = {
+			$match: {
+				uid,
+				userDeletedFlag: { $ne: true }, // 用户自行删除的不返回
+			},
+		}
+
+		const projectStage: PipelineStage = {
+			$project: {
+				videoId: 1,
+				UUID: 1,
+				uid: 1,
+				time: 1,
+				text: 1,
+				color: 1,
+				fontSize: 1,
+				mode: 1,
+				enableRainbow: 1,
+				editDateTime: 1,
+				userDeletedFlag: 1,
+				adminDeletedFlag: 1,
+				pendingReview: 1,
+			},
+		}
+
+		const sortStage: PipelineStage = { $sort: { editDateTime: -1 } }
+		const skipStage: PipelineStage = { $skip: skip }
+
+		const listPipeline: PipelineStage[] = [
+			matchStage,
+			sortStage,
+			skipStage,
+			...limitStage,
+			projectStage,
+		]
+
+		const countPipeline: PipelineStage[] = [
+			matchStage,
+			{ $count: 'totalCount' },
+		]
+
+		const countResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, countPipeline)
+		const listResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, listPipeline)
+
+		if (!countResult.success || !listResult.success) {
+			return { success: false, message: '获取弹幕失败，查询失败', danmakuCount: 0, danmaku: [] }
+		}
+
+		const total = countResult.result?.[0]?.totalCount ?? 0
+		const list = (listResult.result as unknown as GetDanmakuByKvidDto[]) ?? []
+
+		return { success: true, message: '获取本人弹幕成功', danmakuCount: total, danmaku: list }
+	} catch (error) {
+		console.error('ERROR', '获取本人弹幕失败：', error, { getSelfDanmakuRequest, uuid })
+		return { success: false, message: '获取本人弹幕失败，未知错误', danmakuCount: 0, danmaku: [] }
 	}
 }
 
