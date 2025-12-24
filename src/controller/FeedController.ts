@@ -1,8 +1,8 @@
 import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, getFollowingVideosService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
-import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowingListRequestDto, GetFollowerListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
+import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowingListRequestDto, GetFollowerListRequestDto, GetFollowStatsRequestDto, GetFollowingVideosRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
 
 /**
  * 用户关注一个创作者
@@ -368,5 +368,40 @@ export const getFollowStatsController = async (ctx: koaCtx, next: koaNext) => {
 	}
 
 	ctx.body = await getFollowStatsService(getFollowStatsRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 获取我关注对象的最新视频
+ * @param ctx context
+ * @param next context
+ * @return 获取我关注对象的最新视频的请求响应
+ */
+export const getFollowingVideosController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	
+	const numStr = ctx.query.num as string
+	const offsetStr = ctx.query.offset as string
+
+	const num = parseInteger(numStr)
+	const offset = parseInteger(offsetStr)
+
+	if (!num || offset === undefined) {
+		ctx.body = { success: false, message: '参数不合法', videosCount: 0, videos: [] }
+		return
+	}
+
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const getFollowingVideosRequest: GetFollowingVideosRequestDto = {
+		num,
+		offset,
+	}
+
+	ctx.body = await getFollowingVideosService(getFollowingVideosRequest, uuid, token)
 	await next()
 }

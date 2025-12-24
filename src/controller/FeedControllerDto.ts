@@ -385,3 +385,55 @@ export type GetFollowStatsResponseDto = {
 	/** 粉丝数 */
 	followerCount?: number;
 }
+
+/**
+ * 获取我关注对象的最新视频的请求载荷
+ */
+export type GetFollowingVideosRequestDto = {
+	/** 分页参数：返回数量 */
+	num: number;
+	/** 分页参数：偏移量 */
+	offset: number;
+}
+
+/**
+ * 视频信息（用于关注对象视频列表）
+ */
+export type VideoInfoForFollowingList = {
+	/** 视频 ID (KVID) */
+	videoId: number;
+	/** 视频标题 */
+	title: string;
+	/** 封面图链接 */
+	image?: string;
+	/** 视频上传的日期，时间戳格式 */
+	uploadDate?: number;
+	/** 视频播放量 */
+	watchedCount?: number;
+	/** 视频作者名 */
+	uploader?: string;
+	/** 视频作者昵称 */
+	uploaderNickname?: string;
+	/** 创作者 UID */
+	uploaderId?: number;
+	/** 视频时长，单位 ms */
+	duration?: number;
+	/** 视频描述 */
+	description?: string;
+	/** 是否被屏蔽 */
+	isBlockedByOther?: boolean;
+}
+
+/**
+ * 获取我关注对象的最新视频的请求响应
+ */
+export type GetFollowingVideosResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 获取到的视频数量 */
+	videosCount: number;
+	/** 视频列表 */
+	videos: VideoInfoForFollowingList[];
+}

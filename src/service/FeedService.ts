@@ -1,5 +1,5 @@
 import { InferSchemaType, PipelineStage } from "mongoose";
-import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowingListRequestDto, GetFollowingListResponseDto, GetFollowerListRequestDto, GetFollowerListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto, UserInfoForFollowList} from "../controller/FeedControllerDto.js";
+import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowingListRequestDto, GetFollowingListResponseDto, GetFollowerListRequestDto, GetFollowerListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, GetFollowingVideosRequestDto, GetFollowingVideosResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto, UserInfoForFollowList} from "../controller/FeedControllerDto.js";
 import { FeedGroupSchema, FollowingSchema, UnfollowingSchema } from "../dbPool/schema/FeedSchema.js";
 import { checkUserExistsByUuidService, checkUserTokenByUuidService, getUserUuid } from "./UserService.js";
 import { QueryType, SelectType, UpdateType } from "../dbPool/DbClusterPoolTypes.js";
@@ -996,6 +996,159 @@ const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequest
 		!!getFeedContentRequest.pagination
 		&& getFeedContentRequest.pagination.page >= 0 && getFeedContentRequest.pagination.pageSize > 0 && getFeedContentRequest.pagination.pageSize <= 200
 	);
+}
+
+/**
+ * 获取我关注对象的最新视频
+ * @param getFollowingVideosRequest 获取我关注对象的最新视频的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 获取我关注对象的最新视频的请求响应
+ */
+export const getFollowingVideosService = async (getFollowingVideosRequest: GetFollowingVideosRequestDto, uuid: string, token: string): Promise<GetFollowingVideosResponseDto> => {
+	try {
+		if (!checkGetFollowingVideosRequest(getFollowingVideosRequest)) {
+			console.error('ERROR', '获取关注对象最新视频失败：参数不合法')
+			return { success: false, message: '获取关注对象最新视频失败：参数不合法', videosCount: 0, videos: [] }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			console.error('ERROR', '获取关注对象最新视频失败：用户验证失败')
+			return { success: false, message: '获取关注对象最新视频失败：用户验证失败', videosCount: 0, videos: [] }
+		}
+
+		const { num, offset } = getFollowingVideosRequest
+
+		// 1. 获取当前用户关注的所有用户 UUID 列表
+		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+		type Following = InferSchemaType<typeof followingSchemaInstance>
+		const followingWhere: QueryType<Following> = {
+			followerUuid: uuid,
+		}
+		const followingSelect: SelectType<Following> = {
+			followingUuid: 1,
+		}
+		const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
+		
+		if (!followingResult.success || !followingResult.result || followingResult.result.length === 0) {
+			return { success: true, message: '获取关注对象最新视频成功，您还没有关注任何用户', videosCount: 0, videos: [] }
+		}
+
+		const followingUuidList = followingResult.result.map(f => f.followingUuid)
+
+		// 2. 查询这些用户上传的视频，按时间排序
+		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+		type Video = InferSchemaType<typeof videoSchemaInstance>
+
+		// 获取总数
+		const countPipeline: PipelineStage[] = [
+			{
+				$match: {
+					uploaderUUID: { $in: followingUuidList },
+				},
+			},
+			{
+				$count: 'total',
+			},
+		]
+		const countResult = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, countPipeline)
+		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
+
+		// 获取视频列表
+		const listPipeline: PipelineStage[] = [
+			{
+				$match: {
+					uploaderUUID: { $in: followingUuidList },
+				},
+			},
+			{
+				$lookup: {
+					from: 'user-infos',
+					localField: 'uploaderUUID',
+					foreignField: 'UUID',
+					as: 'uploader_info',
+				},
+			},
+			{
+				$unwind: {
+					path: '$uploader_info',
+					preserveNullAndEmptyArrays: true,
+				},
+			},
+			{
+				$sort: {
+					uploadDate: -1, // 按上传时间降序排序（最新的在前）
+				},
+			},
+			{
+				$skip: offset,
+			},
+			{
+				$limit: num,
+			},
+			{
+				$project: {
+					videoId: 1,
+					title: 1,
+					image: 1,
+					uploadDate: 1,
+					watchedCount: 1,
+					uploaderId: 1,
+					duration: 1,
+					description: 1,
+					uploader: '$uploader_info.username',
+					uploaderNickname: '$uploader_info.userNickname',
+				},
+			},
+		]
+		const listResult = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, listPipeline)
+
+		if (!listResult.success) {
+			console.error('ERROR', '获取关注对象最新视频失败：查询失败')
+			return { success: false, message: '获取关注对象最新视频失败：查询失败', videosCount: 0, videos: [] }
+		}
+
+		const videos: GetFollowingVideosResponseDto['videos'] = (listResult.result || []).map((item: any) => ({
+			videoId: item.videoId || 0,
+			title: item.title || '',
+			image: item.image,
+			uploadDate: item.uploadDate,
+			watchedCount: item.watchedCount,
+			uploader: item.uploader,
+			uploaderNickname: item.uploaderNickname,
+			uploaderId: item.uploaderId,
+			duration: item.duration,
+			description: item.description,
+			isBlockedByOther: false, // 这里可以根据需要添加屏蔽检查
+		}))
+
+		return {
+			success: true,
+			message: '获取关注对象最新视频成功',
+			videosCount: totalCount,
+			videos,
+		}
+	} catch (error) {
+		console.error('ERROR', '获取关注对象最新视频失败：未知错误', error)
+		return { success: false, message: '获取关注对象最新视频失败：未知错误', videosCount: 0, videos: [] }
+	}
+}
+
+/**
+ * 校验获取我关注对象的最新视频的请求载荷
+ * @param getFollowingVideosRequest 获取我关注对象的最新视频的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkGetFollowingVideosRequest = (getFollowingVideosRequest: GetFollowingVideosRequestDto): boolean => {
+	return (
+		getFollowingVideosRequest.num !== undefined &&
+		getFollowingVideosRequest.num !== null &&
+		getFollowingVideosRequest.num > 0 &&
+		getFollowingVideosRequest.num <= 200 &&
+		getFollowingVideosRequest.offset !== undefined &&
+		getFollowingVideosRequest.offset !== null &&
+		getFollowingVideosRequest.offset >= 0
+	)
 }
 
 /**
