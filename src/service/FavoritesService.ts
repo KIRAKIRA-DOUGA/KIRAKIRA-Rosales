@@ -17,11 +17,24 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 	try {
 		if (checkCreateFavoritesRequest(createFavoritesRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
+				// 检查用户已创建的收藏夹数量是否达到上限（100个）
+				const { collectionName: favoritesCollectionName, schemaInstance: favoritesSchemaInstance } = FavoritesSchema
+				type FavoritesType = InferSchemaType<typeof favoritesSchemaInstance>
+				const countWhere: QueryType<FavoritesType> = {
+					creator: uid,
+				}
+				const countSelect: SelectType<FavoritesType> = {
+					favoritesId: 1,
+				}
+				const countResult = await selectDataFromMongoDB<FavoritesType>(countWhere, countSelect, favoritesSchemaInstance, favoritesCollectionName)
+				if (countResult.success && countResult.result && countResult.result.length >= 100) {
+					console.error('ERROR', '创建收藏夹失败，收藏夹数量已达上限（100个）')
+					return { success: false, message: '创建收藏夹失败，收藏夹数量已达上限（100个）' }
+				}
+
 				const { favoritesTitle, favoritesBio, favoritesCover, favoritesVisibility } = createFavoritesRequest
 				const { collectionName, schemaInstance } = FavoritesSchema
 				const now = new Date().getTime()
-
-				type FavoritesType = InferSchemaType<typeof schemaInstance>
 
 				// 启动事务
 				const session = await mongoose.startSession()
@@ -205,6 +218,19 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 		const checkResult = await selectDataFromMongoDB<FavoritesDetailType>(checkWhere, { _id: 1 } as any, schemaInstance, collectionName)
 		if (checkResult.success && checkResult.result && checkResult.result.length > 0) {
 			return { success: false, message: '该内容已存在于收藏夹中' }
+		}
+
+		// 检查收藏夹内的内容数量是否达到上限（5000个）
+		const countWhere: QueryType<FavoritesDetailType> = {
+			favoritesListId: addToFavoritesRequest.favoritesListId,
+		}
+		const countSelect: any = {
+			_id: 1,
+		}
+		const countResult = await selectDataFromMongoDB<FavoritesDetailType>(countWhere, countSelect, schemaInstance, collectionName)
+		if (countResult.success && countResult.result && countResult.result.length >= 5000) {
+			console.error('ERROR', '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）')
+			return { success: false, message: '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）' }
 		}
 
 		// 获取当前收藏夹中的最大 sortOrder
