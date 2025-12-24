@@ -1,8 +1,8 @@
 import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
-import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
+import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowingListRequestDto, GetFollowerListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
 
 /**
  * 用户关注一个创作者
@@ -276,5 +276,97 @@ export const getFeedContentController = async (ctx: koaCtx, next: koaNext) => {
 	}
 
 	ctx.body = await getFeedContentService(getFeedContentRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 获取用户关注列表
+ * @param ctx context
+ * @param next context
+ * @return 获取用户关注列表的请求响应
+ */
+export const getFollowingListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	
+	const targetUidStr = ctx.query.targetUid as string
+	const numStr = ctx.query.num as string
+	const offsetStr = ctx.query.offset as string
+
+	const targetUid = parseInteger(targetUidStr)
+	const num = parseInteger(numStr)
+	const offset = parseInteger(offsetStr)
+
+	if (!targetUid || !num || offset === undefined) {
+		ctx.body = { success: false, message: '参数不合法' }
+		return
+	}
+
+	const getFollowingListRequest: GetFollowingListRequestDto = {
+		targetUid,
+		num,
+		offset,
+	}
+
+	ctx.body = await getFollowingListService(getFollowingListRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 获取用户粉丝列表
+ * @param ctx context
+ * @param next context
+ * @return 获取用户粉丝列表的请求响应
+ */
+export const getFollowerListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	
+	const targetUidStr = ctx.query.targetUid as string
+	const numStr = ctx.query.num as string
+	const offsetStr = ctx.query.offset as string
+
+	const targetUid = parseInteger(targetUidStr)
+	const num = parseInteger(numStr)
+	const offset = parseInteger(offsetStr)
+
+	if (!targetUid || !num || offset === undefined) {
+		ctx.body = { success: false, message: '参数不合法' }
+		return
+	}
+
+	const getFollowerListRequest: GetFollowerListRequestDto = {
+		targetUid,
+		num,
+		offset,
+	}
+
+	ctx.body = await getFollowerListService(getFollowerListRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 获取用户关注数和粉丝数
+ * @param ctx context
+ * @param next context
+ * @return 获取用户关注数和粉丝数的请求响应
+ */
+export const getFollowStatsController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	
+	const targetUidStr = ctx.query.targetUid as string
+	const targetUid = parseInteger(targetUidStr)
+
+	if (!targetUid) {
+		ctx.body = { success: false, message: '参数不合法' }
+		return
+	}
+
+	const getFollowStatsRequest: GetFollowStatsRequestDto = {
+		targetUid,
+	}
+
+	ctx.body = await getFollowStatsService(getFollowStatsRequest, uuid, token)
 	await next()
 }

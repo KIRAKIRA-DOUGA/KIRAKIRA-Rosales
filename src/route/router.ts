@@ -48,7 +48,7 @@ import { approvePendingReviewVideoController, checkVideoExistController, deleteV
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
-import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
+import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowingListController, getFollowerListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
 
 const router = new Router()
@@ -674,6 +674,21 @@ router.post('/feed/unfollowing', unfollowingUploaderController) // 取消关注�
 // {
 // 	"unfollowingUid": 999
 // }
+
+router.get('/feed/following/list', getFollowingListController) // 获取用户关注列表
+// https://localhost:9999/feed/following/list?targetUid=999&num=20&offset=0
+// cookie: uuid, token (可选，用于隐私检查)
+// Query: targetUid (目标用户 UID), num (返回数量，最大200), offset (偏移量)
+
+router.get('/feed/follower/list', getFollowerListController) // 获取用户粉丝列表
+// https://localhost:9999/feed/follower/list?targetUid=999&num=20&offset=0
+// cookie: uuid, token (可选，用于隐私检查)
+// Query: targetUid (目标用户 UID), num (返回数量，最大200), offset (偏移量)
+
+router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和粉丝数
+// https://localhost:9999/feed/stats?targetUid=999
+// cookie: uuid, token (可选)
+// Query: targetUid (目标用户 UID)
 
 router.post('/feed/createFeedGroup', createFeedGroupController) // 创建动态分组
 // https://localhost:9999/feed/createFeedGroup

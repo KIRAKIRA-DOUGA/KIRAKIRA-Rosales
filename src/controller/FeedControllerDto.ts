@@ -291,3 +291,97 @@ export type GetFeedContentResponseDto = {
 		content: ThumbVideoResponseDto['videos'];
 	};
 }
+
+/**
+ * 用户信息（用于关注/粉丝列表）
+ */
+export type UserInfoForFollowList = {
+	/** 用户 UID */
+	uid: number;
+	/** 用户 UUID */
+	uuid: string;
+	/** 用户名 */
+	username?: string;
+	/** 用户昵称 */
+	userNickname?: string;
+	/** 用户头像 */
+	avatar?: string;
+	/** 关注时间（仅用于关注列表） */
+	followingCreateTime?: number;
+	/** 是否已关注该用户（仅用于粉丝列表，表示当前查看者是否关注了该粉丝） */
+	isFollowing?: boolean;
+}
+
+/**
+ * 获取用户关注列表的请求载荷
+ */
+export type GetFollowingListRequestDto = {
+	/** 目标用户的 UID */
+	targetUid: number;
+	/** 分页参数：返回数量 */
+	num: number;
+	/** 分页参数：偏移量 */
+	offset: number;
+}
+
+/**
+ * 获取用户关注列表的请求响应
+ */
+export type GetFollowingListResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 总数 */
+	totalCount?: number;
+	/** 结果列表 */
+	result?: UserInfoForFollowList[];
+}
+
+/**
+ * 获取用户粉丝列表的请求载荷
+ */
+export type GetFollowerListRequestDto = {
+	/** 目标用户的 UID */
+	targetUid: number;
+	/** 分页参数：返回数量 */
+	num: number;
+	/** 分页参数：偏移量 */
+	offset: number;
+}
+
+/**
+ * 获取用户粉丝列表的请求响应
+ */
+export type GetFollowerListResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 总数 */
+	totalCount?: number;
+	/** 结果列表 */
+	result?: UserInfoForFollowList[];
+}
+
+/**
+ * 获取用户关注数和粉丝数的请求载荷
+ */
+export type GetFollowStatsRequestDto = {
+	/** 目标用户的 UID */
+	targetUid: number;
+}
+
+/**
+ * 获取用户关注数和粉丝数的请求响应
+ */
+export type GetFollowStatsResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 关注数 */
+	followingCount?: number;
+	/** 粉丝数 */
+	followerCount?: number;
+}
