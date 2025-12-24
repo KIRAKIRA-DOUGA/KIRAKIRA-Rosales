@@ -16,6 +16,7 @@ import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.j
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUserUuid } from './UserService.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
+import { FavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { recordVideoWatchAndIncrementCount } from './VideoWatchService.js'
@@ -496,13 +497,15 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				video.uploaderInfo.isSelf = true
 			}
 
-			// 9. 计算视频点赞数和点踩数
-			const [upvoteCount, downvoteCount] = await Promise.all([
+			// 9. 计算视频点赞数、点踩数和被收藏数
+			const [upvoteCount, downvoteCount, favoritesCount] = await Promise.all([
 				getVideoUpvoteCount(videoId),
 				getVideoDownvoteCount(videoId),
+				getVideoFavoritesCount(videoId),
 			])
 			video.upvoteCount = upvoteCount
 			video.downvoteCount = downvoteCount
+			video.favoritesCount = favoritesCount
 
 			// 10. 检查当前用户是否点赞/点踩
 			const selectorUid = await getUserUid(selectorUuid)
@@ -528,6 +531,10 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 			video.isUpvoted = false
 			video.isDownvoted = false
 		}
+
+		// 计算视频被收藏数（一个用户创建再多含有这个视频的收藏夹也只能算一次收藏）
+		const favoritesCount = await getVideoFavoritesCount(videoId)
+		video.favoritesCount = favoritesCount
 
 		return {
 			success: true,
@@ -1222,5 +1229,48 @@ const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boo
  */
 const checkApprovePendingReviewVideoRequest = (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto) => {
 	return (!!approvePendingReviewVideoRequest.videoId && typeof approvePendingReviewVideoRequest.videoId === 'number' && approvePendingReviewVideoRequest.videoId >= 0)
+}
+
+/**
+ * 获取视频被收藏数（一个用户创建再多含有这个视频的收藏夹也只能算一次收藏）
+ * @param videoId 视频 ID
+ * @returns 视频被收藏数（去重后的用户数）
+ */
+export const getVideoFavoritesCount = async (videoId: number): Promise<number> => {
+	try {
+		if (!videoId || videoId < 1) {
+			return 0
+		}
+
+		const { collectionName, schemaInstance } = FavoritesDetailSchema
+		type FavoritesDetailType = InferSchemaType<typeof schemaInstance>
+
+		// 使用聚合管道统计：找到所有收藏该视频的记录，按 operator（用户ID）去重，然后计数
+		const pipeline: PipelineStage[] = [
+			{
+				$match: {
+					category: 'video',
+					id: String(videoId),
+				},
+			},
+			{
+				$group: {
+					_id: '$operator', // 按用户ID分组去重
+				},
+			},
+			{
+				$count: 'total',
+			},
+		]
+
+		const result = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, pipeline)
+		if (result.success && result.result && result.result.length > 0) {
+			return result.result[0].total || 0
+		}
+		return 0
+	} catch (error) {
+		console.error('ERROR', '获取视频被收藏数失败：', error)
+		return 0
+	}
 }
 

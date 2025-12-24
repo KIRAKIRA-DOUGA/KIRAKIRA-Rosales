@@ -180,6 +180,8 @@ export type GetVideoByKvidResponseDto = {
 		isUpvoted?: boolean;
 		/** 当前用户是否点踩（根据 uuid 和 token） */
 		isDownvoted?: boolean;
+		/** 视频被收藏数（一个用户创建再多含有这个视频的收藏夹也只能算一次收藏） */
+		favoritesCount?: number;
 	};
 } & BlockState
 
