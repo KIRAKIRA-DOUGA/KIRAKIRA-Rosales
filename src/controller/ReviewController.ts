@@ -39,7 +39,7 @@ export const getPendingReviewVideoListController = async (ctx: koaCtx, next: koa
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -79,7 +79,7 @@ export const getPendingReviewCommentListController = async (ctx: koaCtx, next: k
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -119,7 +119,7 @@ export const getPendingReviewDanmakuListController = async (ctx: koaCtx, next: k
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -159,7 +159,7 @@ export const approveVideoReviewController = async (ctx: koaCtx, next: koaNext) =
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -188,7 +188,7 @@ export const rejectVideoReviewController = async (ctx: koaCtx, next: koaNext) =>
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -217,7 +217,7 @@ export const approveCommentReviewController = async (ctx: koaCtx, next: koaNext)
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -246,7 +246,7 @@ export const rejectCommentReviewController = async (ctx: koaCtx, next: koaNext) 
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -275,7 +275,7 @@ export const approveDanmakuReviewController = async (ctx: koaCtx, next: koaNext)
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -304,7 +304,7 @@ export const rejectDanmakuReviewController = async (ctx: koaCtx, next: koaNext) 
 		return
 	}
 
-	// RBAC 权限验证（需要 developer 角色）
+	// RBAC 权限验证（需要 admin 角色）
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}

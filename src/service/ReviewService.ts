@@ -29,11 +29,11 @@ import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserTokenByUuidService } from './UserService.js'
 
 /**
- * 检查用户是否有 developer 角色
+ * 检查用户是否有 admin 角色
  * @param uuid 用户的 UUID
- * @returns 有 developer 角色返回 true，否则返回 false
+ * @returns 有 admin 角色返回 true，否则返回 false
  */
-const checkUserHasDeveloperRole = async (uuid: string): Promise<boolean> => {
+const checkUserHasAdminRole = async (uuid: string): Promise<boolean> => {
 	try {
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
@@ -50,9 +50,9 @@ const checkUserHasDeveloperRole = async (uuid: string): Promise<boolean> => {
 		}
 
 		const userRoles = result.result[0].roles || []
-		return userRoles.includes('developer')
+		return userRoles.includes('admin')
 	} catch (error) {
-		console.error('ERROR', '检查用户 developer 角色失败：', error)
+		console.error('ERROR', '检查用户 admin 角色失败：', error)
 		return false
 	}
 }
@@ -80,8 +80,8 @@ export const getPendingReviewVideoListService = async (
 			return { success: false, message: '获取待审核视频列表失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '获取待审核视频列表失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '获取待审核视频列表失败：用户没有 admin 角色')
 			return { success: false, message: '获取待审核视频列表失败：权限不足' }
 		}
 
@@ -207,8 +207,8 @@ export const getPendingReviewCommentListService = async (
 			return { success: false, message: '获取待审核评论列表失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '获取待审核评论列表失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '获取待审核评论列表失败：用户没有 admin 角色')
 			return { success: false, message: '获取待审核评论列表失败：权限不足' }
 		}
 
@@ -324,8 +324,8 @@ export const getPendingReviewDanmakuListService = async (
 			return { success: false, message: '获取待审核弹幕列表失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '获取待审核弹幕列表失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '获取待审核弹幕列表失败：用户没有 admin 角色')
 			return { success: false, message: '获取待审核弹幕列表失败：权限不足' }
 		}
 
@@ -441,8 +441,8 @@ export const approveVideoReviewService = async (
 			return { success: false, message: '通过视频审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '通过视频审核失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '通过视频审核失败：用户没有 admin 角色')
 			return { success: false, message: '通过视频审核失败：权限不足' }
 		}
 
@@ -512,8 +512,8 @@ export const rejectVideoReviewService = async (
 			return { success: false, message: '退回视频审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '退回视频审核失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '退回视频审核失败：用户没有 admin 角色')
 			return { success: false, message: '退回视频审核失败：权限不足' }
 		}
 
@@ -569,8 +569,8 @@ export const approveCommentReviewService = async (
 			return { success: false, message: '通过评论审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '通过评论审核失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '通过评论审核失败：用户没有 admin 角色')
 			return { success: false, message: '通过评论审核失败：权限不足' }
 		}
 
@@ -644,8 +644,8 @@ export const rejectCommentReviewService = async (
 			return { success: false, message: '退回评论审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '退回评论审核失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '退回评论审核失败：用户没有 admin 角色')
 			return { success: false, message: '退回评论审核失败：权限不足' }
 		}
 
@@ -702,8 +702,8 @@ export const approveDanmakuReviewService = async (
 			return { success: false, message: '通过弹幕审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '通过弹幕审核失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '通过弹幕审核失败：用户没有 admin 角色')
 			return { success: false, message: '通过弹幕审核失败：权限不足' }
 		}
 
@@ -777,8 +777,8 @@ export const rejectDanmakuReviewService = async (
 			return { success: false, message: '退回弹幕审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasDeveloperRole(uuid))) {
-			console.error('ERROR', '退回弹幕审核失败：用户没有 developer 角色')
+		if (!(await checkUserHasAdminRole(uuid))) {
+			console.error('ERROR', '退回弹幕审核失败：用户没有 admin 角色')
 			return { success: false, message: '退回弹幕审核失败：权限不足' }
 		}
 
