@@ -30,6 +30,9 @@ await connectMongoDBCluster().catch(error => {
 	process.exit()
 })
 
+const logLevel = process.env.LOG_LEVEL
+console.info(`Set log level to: '${logLevel}'`)
+
 // 配置证书
 if (SERVER_ENV && SERVER_ENV !== 'dev') { // dev 环境，使用自签名证书，非开发环境，从环境变量中读取证书
 	const SSL_KEY = process.env.SSL_KEY || ''
@@ -44,3 +47,4 @@ if (SERVER_ENV && SERVER_ENV !== 'dev') { // dev 环境，使用自签名证书�
 		cert: fs.readFileSync('src/ssl/cert.pem', 'utf8'),
 	}, app.callback()).listen(SERVER_PORT)
 }
+console.info(`KIRAKIRA-Rosales is running at https://localhost:${SERVER_PORT} \n`)

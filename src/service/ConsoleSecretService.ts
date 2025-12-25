@@ -17,7 +17,7 @@ if (!!SERVER_ENV && ['dev', 'prod'].includes(SERVER_ENV)) {
 			console.error("ERROR", "缺少 AWS 认证信息，请检查环境变量 AWS_SECRET_REGION、AWS_SECRET_ACCESS_KEY 和 AWS_SECRET_ACCESS_SECRET")
 			process.exit()
 		}
-	
+
 		// 创建 AWS Secrets Manager 客户端
 		client = new SecretsManagerClient({
 			region: AWS_SECRET_REGION, // 自定义 AWS 区域
@@ -26,16 +26,13 @@ if (!!SERVER_ENV && ['dev', 'prod'].includes(SERVER_ENV)) {
 				secretAccessKey: AWS_SECRET_ACCESS_SECRET, // 自定义 Secret Key
 			},
 		})
-	
-		console.info()
-		console.info('Created an AWS Sercret Manager Client base on the environment variables you provided!')
+		console.info('\nCreated an AWS Secrets Manager Client base on the environment variables you provided!\n')
 	} catch(error) {
 		console.error('ERROR', '创建 AWS Secrets Manager 客户端失败：', error)
 		process.exit()
 	}
 } else {
-	console.info()
-	console.info('Now starting the server without created an AWS Sercret Manager Client.')
+	console.info('\nNow starting the server without created an AWS Secrets Manager Client.\n')
 }
 
 /**
@@ -65,7 +62,7 @@ export async function getStgEnvBackEndSecretService(uuid: string, token: string)
 			console.error('ERROR', '获取预生产环境后端环境变量机密失败，环境变量中未提供机密名，请设置 AWS_SECRET_REGION 环境变量。')
 			return { success: false, message: '获取预生产环境后端环境变量机密失败，环境变量中未提供机密名', result: {} }
 		}
-		
+
 		try {
 			const command = new GetSecretValueCommand({ SecretId: AWS_SECRET_NAME });
 			const response = await client.send(command);

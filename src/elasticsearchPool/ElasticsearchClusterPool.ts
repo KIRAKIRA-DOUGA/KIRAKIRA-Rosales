@@ -54,9 +54,8 @@ export const connectElasticSearchCluster = async (): Promise<Client> => {
 
 		try {
 			const elasticsearchClusterInfoResult = await client.info()
-			console.info()
 			console.info('Elasticsearch Cluster Connect successfully!')
-			console.info(`cluster_name: ${elasticsearchClusterInfoResult?.cluster_name}, cluster_uuid: ${elasticsearchClusterInfoResult?.cluster_uuid}, current_connect_name: ${elasticsearchClusterInfoResult?.name}, version: ${elasticsearchClusterInfoResult?.version?.number}, tagline: ${elasticsearchClusterInfoResult?.tagline}`)
+			console.info(`cluster_name: ${elasticsearchClusterInfoResult?.cluster_name}, cluster_uuid: ${elasticsearchClusterInfoResult?.cluster_uuid}, current_connect_name: ${elasticsearchClusterInfoResult?.name}, version: ${elasticsearchClusterInfoResult?.version?.number}, tagline: ${elasticsearchClusterInfoResult?.tagline}\n`)
 		} catch (error) {
 			console.error('ERROR', '创建或连接搜索引擎集群失败：INFO 返回了一个错误的结果：', error)
 			process.exit()

@@ -118,8 +118,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
 			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
 
-			console.info()
-			console.info('MongoDB Cluster Connect successfully!')
+			console.info('MongoDB Cluster Connect successfully!\n')
 		} catch (error) {
 			console.error('ERROR', '创建数据库连接失败：', error)
 			process.exit()
