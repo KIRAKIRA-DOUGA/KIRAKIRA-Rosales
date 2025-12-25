@@ -50,6 +50,7 @@ import { adminGetUserRolesByUidController, adminUpdateUserRoleController, create
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
 import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
+import { sendMessageController, getConversationListController, getMessageListController, markMessageReadController, deleteConversationController, deleteMessageController, getUnreadMessageCountController, recallMessageController } from '../controller/ImController.js'
 
 const router = new Router()
 
@@ -865,6 +866,65 @@ router.get('/rbac/adminGetUserRolesByUid', adminGetUserRolesByUidController) // 
 router.get('/secret/getStgEnvBackEndSecret', getStgEnvBackEndSecretController) // 获取预生产环境后端环境变量机密
 // https://localhost:9999/secret/getStgEnvBackEndSecret
 // cookie: uuid, token
+
+
+router.post('/im/sendMessage', sendMessageController) // 发送消息
+// https://localhost:9999/im/sendMessage
+// cookie: uuid, token
+// {
+// 	"receiverUid": 999,
+// 	"messageType": "text",
+// 	"content": "你好"
+// }
+
+router.get('/im/getConversationList', getConversationListController) // 获取会话列表
+// https://localhost:9999/im/getConversationList
+// cookie: uuid, token
+// Query:
+// page
+// pageSize
+
+router.get('/im/getMessageList', getMessageListController) // 获取消息列表
+// https://localhost:9999/im/getMessageList
+// cookie: uuid, token
+// Query:
+// conversationId
+// page
+// pageSize
+// markAsRead (true/false)
+
+router.post('/im/markMessageRead', markMessageReadController) // 标记消息已读
+// https://localhost:9999/im/markMessageRead
+// cookie: uuid, token
+// {
+// 	"conversationId": "conv_xxx_yyy",
+// 	"messageIds": ["msg_xxx"] // 可选，如果为空则标记该会话所有未读消息为已读
+// }
+
+router.post('/im/deleteConversation', deleteConversationController) // 删除会话
+// https://localhost:9999/im/deleteConversation
+// cookie: uuid, token
+// {
+// 	"conversationId": "conv_xxx_yyy"
+// }
+
+router.post('/im/deleteMessage', deleteMessageController) // 删除消息
+// https://localhost:9999/im/deleteMessage
+// cookie: uuid, token
+// {
+// 	"messageId": "msg_xxx"
+// }
+
+router.get('/im/getUnreadMessageCount', getUnreadMessageCountController) // 获取未读消息总数
+// https://localhost:9999/im/getUnreadMessageCount
+// cookie: uuid, token
+
+router.post('/im/recallMessage', recallMessageController) // 撤回消息（2分钟内可撤回）
+// https://localhost:9999/im/recallMessage
+// cookie: uuid, token
+// {
+// 	"messageId": "msg_xxx"
+// }
 
 
 // router-end
