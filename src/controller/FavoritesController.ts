@@ -10,8 +10,12 @@ import { AddToFavoritesRequestDto, CreateFavoritesRequestDto, DeleteFavoritesReq
  */
 export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CreateFavoritesRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
 	const createFavoritesRequest: CreateFavoritesRequestDto = {
 		/** 收藏夹标题 - 非空 */
 		favoritesTitle: data?.favoritesTitle ?? '',
@@ -22,7 +26,7 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 		/** 收藏夹可见性，默认 -1（私有） */
 		favoritesVisibility: data.favoritesVisibility ?? -1,
 	}
-	const createFavoritesResponse = await createFavoritesService(createFavoritesRequest, uid, token)
+	const createFavoritesResponse = await createFavoritesService(createFavoritesRequest, uuid, token)
 	ctx.body = createFavoritesResponse
 	await next()
 }
@@ -33,9 +37,13 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	const getFavoritesResponse = await getFavoritesService(uid, token)
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
+	const getFavoritesResponse = await getFavoritesService(uuid, token)
 	ctx.body = getFavoritesResponse
 	await next()
 }
@@ -47,14 +55,18 @@ export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const addToFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<AddToFavoritesRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
 	const addToFavoritesRequest: AddToFavoritesRequestDto = {
 		favoritesListId: data.favoritesListId ?? -1,
 		category: data.category ?? 'video',
 		id: data.id ?? '',
 	}
-	const addToFavoritesResponse = await addToFavoritesService(addToFavoritesRequest, uid, token)
+	const addToFavoritesResponse = await addToFavoritesService(addToFavoritesRequest, uuid, token)
 	ctx.body = addToFavoritesResponse
 	await next()
 }
@@ -66,14 +78,18 @@ export const addToFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const removeFromFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<RemoveFromFavoritesRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
 	const removeFromFavoritesRequest: RemoveFromFavoritesRequestDto = {
 		favoritesListId: data.favoritesListId ?? -1,
 		category: data.category ?? 'video',
 		id: data.id ?? '',
 	}
-	const removeFromFavoritesResponse = await removeFromFavoritesService(removeFromFavoritesRequest, uid, token)
+	const removeFromFavoritesResponse = await removeFromFavoritesService(removeFromFavoritesRequest, uuid, token)
 	ctx.body = removeFromFavoritesResponse
 	await next()
 }
@@ -86,13 +102,17 @@ export const removeFromFavoritesController = async (ctx: koaCtx, next: koaNext) 
 export const getFavoritesDetailController = async (ctx: koaCtx, next: koaNext) => {
 	const favoritesListId = parseInteger(ctx.query.favoritesListId as string)
 	const sortOrder = parseInteger(ctx.query.sortOrder as string) as 1 | -1 | undefined
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
 	const getFavoritesDetailRequest: GetFavoritesDetailRequestDto = {
 		favoritesListId: favoritesListId ?? -1,
 		sortOrder: sortOrder === 1 || sortOrder === -1 ? sortOrder : 1,
 	}
-	const getFavoritesDetailResponse = await getFavoritesDetailService(getFavoritesDetailRequest, uid, token)
+	const getFavoritesDetailResponse = await getFavoritesDetailService(getFavoritesDetailRequest, uuid, token)
 	ctx.body = getFavoritesDetailResponse
 	await next()
 }
@@ -104,8 +124,12 @@ export const getFavoritesDetailController = async (ctx: koaCtx, next: koaNext) =
  */
 export const updateFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateFavoritesRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
 	const updateFavoritesRequest: UpdateFavoritesRequestDto = {
 		favoritesId: data.favoritesId ?? -1,
 		favoritesTitle: data.favoritesTitle,
@@ -113,7 +137,7 @@ export const updateFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 		favoritesCover: data.favoritesCover,
 		favoritesVisibility: data.favoritesVisibility,
 	}
-	const updateFavoritesResponse = await updateFavoritesService(updateFavoritesRequest, uid, token)
+	const updateFavoritesResponse = await updateFavoritesService(updateFavoritesRequest, uuid, token)
 	ctx.body = updateFavoritesResponse
 	await next()
 }
@@ -125,12 +149,16 @@ export const updateFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const deleteFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<DeleteFavoritesRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
 	const deleteFavoritesRequest: DeleteFavoritesRequestDto = {
 		favoritesId: data.favoritesId ?? -1,
 	}
-	const deleteFavoritesResponse = await deleteFavoritesService(deleteFavoritesRequest, uid, token)
+	const deleteFavoritesResponse = await deleteFavoritesService(deleteFavoritesRequest, uuid, token)
 	ctx.body = deleteFavoritesResponse
 	await next()
 }
@@ -142,13 +170,17 @@ export const deleteFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  */
 export const reorderFavoritesDetailController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<ReorderFavoritesDetailRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
 	const reorderFavoritesDetailRequest: ReorderFavoritesDetailRequestDto = {
 		favoritesListId: data.favoritesListId ?? -1,
 		items: data.items ?? [],
 	}
-	const reorderFavoritesDetailResponse = await reorderFavoritesDetailService(reorderFavoritesDetailRequest, uid, token)
+	const reorderFavoritesDetailResponse = await reorderFavoritesDetailService(reorderFavoritesDetailRequest, uuid, token)
 	ctx.body = reorderFavoritesDetailResponse
 	await next()
 }

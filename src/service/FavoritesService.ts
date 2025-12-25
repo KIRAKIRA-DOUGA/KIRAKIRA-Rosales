@@ -4,7 +4,7 @@ import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesDetailSchema, FavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-import { checkUserTokenService } from './UserService.js'
+import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
 
 /**
  * 创建收藏夹
@@ -13,10 +13,15 @@ import { checkUserTokenService } from './UserService.js'
  * @param token 用户安全令牌
  * @returns 创建收藏夹的请求响应
  */
-export const createFavoritesService = async (createFavoritesRequest: CreateFavoritesRequestDto, uid: number, token: string): Promise<CreateFavoritesResponseDto> => {
+export const createFavoritesService = async (createFavoritesRequest: CreateFavoritesRequestDto, uuid: string, token: string): Promise<CreateFavoritesResponseDto> => {
 	try {
 		if (checkCreateFavoritesRequest(createFavoritesRequest)) {
-			if ((await checkUserTokenService(uid, token)).success) {
+			if ((await checkUserTokenByUuidService(uuid, token)).success) {
+				const uid = await getUserUid(uuid)
+				if (!uid) {
+					console.error('ERROR', '创建收藏夹失败，用户ID不存在')
+					return { success: false, message: '创建收藏夹失败，用户ID不存在' }
+				}
 				// 检查用户已创建的收藏夹数量是否达到上限（100个）
 				const { collectionName: favoritesCollectionName, schemaInstance: favoritesSchemaInstance } = FavoritesSchema
 				type FavoritesType = InferSchemaType<typeof favoritesSchemaInstance>
@@ -97,9 +102,14 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
  * @param token 用户安全令牌
  * @returns 获取当前登录用户的收藏夹列表的请求响应
  */
-export const getFavoritesService = async (uid: number, token: string): Promise<GetFavoritesResponseDto> => {
+export const getFavoritesService = async (uuid: string, token: string): Promise<GetFavoritesResponseDto> => {
 	try {
-		if ((await checkUserTokenService(uid, token)).success) {
+		if ((await checkUserTokenByUuidService(uuid, token)).success) {
+			const uid = await getUserUid(uuid)
+			if (!uid) {
+				console.error('ERROR', '获取收藏夹列表失败，用户ID不存在')
+				return { success: false, message: '获取收藏夹列表失败，用户ID不存在' }
+			}
 			const { collectionName, schemaInstance } = FavoritesSchema
 
 			type FavoritesType = InferSchemaType<typeof schemaInstance>
@@ -187,16 +197,22 @@ const checkFavoritesPermission = async (favoritesId: number, uid: number): Promi
  * @param token 用户安全令牌
  * @returns 添加内容到收藏夹的请求响应
  */
-export const addToFavoritesService = async (addToFavoritesRequest: AddToFavoritesRequestDto, uid: number, token: string): Promise<AddToFavoritesResponseDto> => {
+export const addToFavoritesService = async (addToFavoritesRequest: AddToFavoritesRequestDto, uuid: string, token: string): Promise<AddToFavoritesResponseDto> => {
 	try {
 		if (!checkAddToFavoritesRequest(addToFavoritesRequest)) {
 			console.error('ERROR', '添加内容到收藏夹失败，参数校验失败')
 			return { success: false, message: '添加内容到收藏夹失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '添加内容到收藏夹失败，用户校验失败')
 			return { success: false, message: '添加内容到收藏夹失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			console.error('ERROR', '添加内容到收藏夹失败，用户ID不存在')
+			return { success: false, message: '添加内容到收藏夹失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
@@ -279,16 +295,22 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
  * @param token 用户安全令牌
  * @returns 从收藏夹移除内容的请求响应
  */
-export const removeFromFavoritesService = async (removeFromFavoritesRequest: RemoveFromFavoritesRequestDto, uid: number, token: string): Promise<RemoveFromFavoritesResponseDto> => {
+export const removeFromFavoritesService = async (removeFromFavoritesRequest: RemoveFromFavoritesRequestDto, uuid: string, token: string): Promise<RemoveFromFavoritesResponseDto> => {
 	try {
 		if (!checkRemoveFromFavoritesRequest(removeFromFavoritesRequest)) {
 			console.error('ERROR', '从收藏夹移除内容失败，参数校验失败')
 			return { success: false, message: '从收藏夹移除内容失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '从收藏夹移除内容失败，用户校验失败')
 			return { success: false, message: '从收藏夹移除内容失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			console.error('ERROR', '从收藏夹移除内容失败，用户ID不存在')
+			return { success: false, message: '从收藏夹移除内容失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
@@ -330,16 +352,22 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
  * @param token 用户安全令牌
  * @returns 获取收藏夹内容的请求响应
  */
-export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFavoritesDetailRequestDto, uid: number, token: string): Promise<GetFavoritesDetailResponseDto> => {
+export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFavoritesDetailRequestDto, uuid: string, token: string): Promise<GetFavoritesDetailResponseDto> => {
 	try {
 		if (!checkGetFavoritesDetailRequest(getFavoritesDetailRequest)) {
 			console.error('ERROR', '获取收藏夹内容失败，参数校验失败')
 			return { success: false, message: '获取收藏夹内容失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '获取收藏夹内容失败，用户校验失败')
 			return { success: false, message: '获取收藏夹内容失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			console.error('ERROR', '获取收藏夹内容失败，用户ID不存在')
+			return { success: false, message: '获取收藏夹内容失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限查看该收藏夹
@@ -392,16 +420,22 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
  * @param token 用户安全令牌
  * @returns 更新收藏夹信息的请求响应
  */
-export const updateFavoritesService = async (updateFavoritesRequest: UpdateFavoritesRequestDto, uid: number, token: string): Promise<UpdateFavoritesResponseDto> => {
+export const updateFavoritesService = async (updateFavoritesRequest: UpdateFavoritesRequestDto, uuid: string, token: string): Promise<UpdateFavoritesResponseDto> => {
 	try {
 		if (!checkUpdateFavoritesRequest(updateFavoritesRequest)) {
 			console.error('ERROR', '更新收藏夹信息失败，参数校验失败')
 			return { success: false, message: '更新收藏夹信息失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '更新收藏夹信息失败，用户校验失败')
 			return { success: false, message: '更新收藏夹信息失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			console.error('ERROR', '更新收藏夹信息失败，用户ID不存在')
+			return { success: false, message: '更新收藏夹信息失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
@@ -472,16 +506,22 @@ export const updateFavoritesService = async (updateFavoritesRequest: UpdateFavor
  * @param token 用户安全令牌
  * @returns 删除收藏夹的请求响应
  */
-export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavoritesRequestDto, uid: number, token: string): Promise<DeleteFavoritesResponseDto> => {
+export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavoritesRequestDto, uuid: string, token: string): Promise<DeleteFavoritesResponseDto> => {
 	try {
 		if (!checkDeleteFavoritesRequest(deleteFavoritesRequest)) {
 			console.error('ERROR', '删除收藏夹失败，参数校验失败')
 			return { success: false, message: '删除收藏夹失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '删除收藏夹失败，用户校验失败')
 			return { success: false, message: '删除收藏夹失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			console.error('ERROR', '删除收藏夹失败，用户ID不存在')
+			return { success: false, message: '删除收藏夹失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹（只有创建者可以删除）
@@ -543,16 +583,22 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
  * @param token 用户安全令牌
  * @returns 调整收藏夹内部排序的请求响应
  */
-export const reorderFavoritesDetailService = async (reorderFavoritesDetailRequest: ReorderFavoritesDetailRequestDto, uid: number, token: string): Promise<ReorderFavoritesDetailResponseDto> => {
+export const reorderFavoritesDetailService = async (reorderFavoritesDetailRequest: ReorderFavoritesDetailRequestDto, uuid: string, token: string): Promise<ReorderFavoritesDetailResponseDto> => {
 	try {
 		if (!checkReorderFavoritesDetailRequest(reorderFavoritesDetailRequest)) {
 			console.error('ERROR', '调整收藏夹内部排序失败，参数校验失败')
 			return { success: false, message: '调整收藏夹内部排序失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '调整收藏夹内部排序失败，用户校验失败')
 			return { success: false, message: '调整收藏夹内部排序失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			console.error('ERROR', '调整收藏夹内部排序失败，用户ID不存在')
+			return { success: false, message: '调整收藏夹内部排序失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
