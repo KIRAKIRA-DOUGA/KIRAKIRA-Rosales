@@ -4,8 +4,27 @@ import { insertData2MongoDB } from "../dbPool/DbClusterPool.js";
 
 /** 输出的日志等级 */
 type LogLevel = 'error' | 'warn' | 'info' | 'ERROR' | 'WARN' | 'INFO';
+/** 日志记录的选项 */
+type LoggingOptions = {
+	/** 是否持久化存储日志 */
+	recordingLogs: boolean
+}
+/** 日志记录选项的默认值 */
+const defaultLoggingOptions = {
+	/** 默认持久存储数据 */
+	recordingLogs: true
+}
 
-export function logging(logLevel: LogLevel, message: string, error?: Error, meta?: unknown) {
+/**
+ * 日志记录
+ * @param logLevel 日志等级
+ * @param message 日志信息
+ * @param error 错误
+ * @param meta 元数据
+ * @param options 日志记录的选项
+ * @returns nothing
+ */
+export function logging(logLevel: LogLevel, message: string, error?: Error, meta?: unknown, options: LoggingOptions = defaultLoggingOptions) {
 	try {
 		const ALLOWED_LOG_LEVEL = ['error', 'warn', 'info']
 		const logLevelLowerCase = logLevel.toLowerCase()
@@ -14,6 +33,7 @@ export function logging(logLevel: LogLevel, message: string, error?: Error, meta
 		const now = nowDate.getTime()
 		const nowISOString = nowDate.toISOString()
 		const serverEnv = process.env.SERVER_ENV
+		const { recordingLogs } = options
 		let errorStackString = ''
 
 		if (!ALLOWED_LOG_LEVEL.includes(logLevelLowerCase)) {
@@ -37,7 +57,7 @@ export function logging(logLevel: LogLevel, message: string, error?: Error, meta
 					}
 				}
 
-				if (serverEnv !== 'dev') {
+				if (serverEnv !== 'dev' && recordingLogs) {
 					const { collectionName: LogCollectionName, schemaInstance: logSchemaInstance } = LogSchema
 					type Log = InferSchemaType<typeof logSchemaInstance>
 					const log: Log = {
