@@ -1,6 +1,7 @@
 import { SMTPClient } from 'emailjs'
 import { parseInteger } from './ValidTool.js'
 import { resolve } from 'path'
+import { logging } from '../service/loggingService.js';
 
 /**
  * 邮件正文数据， text 和 html 二者至少一个不能为空
@@ -25,46 +26,46 @@ export const sendMail = async (to: string, title: string, body: EmailBodyType) =
 	const KIRAKIRA_EMAIL_SENDER_ADDRESS = 'KIRAKIRA <no-reply@kirakira.moe>'
 
 	if (!smtpHost) {
-		console.error('ERROR', '发送邮件失败，环境变量中的 smtpHost 为空')
+		logging('ERROR', '发送邮件失败，环境变量中的 smtpHost 为空')
 		throw new Error('Unable send email because the smtpHost is null')
 	}
 
 	if (smtpPort === undefined || smtpPort === null) {
-		console.error('ERROR', '发送邮件失败，环境变量中的 smtpPort 为空或不是合法的端口')
+		logging('ERROR', '发送邮件失败，环境变量中的 smtpPort 为空或不是合法的端口')
 		throw new Error('Unable send email because the smtpPort is null')
 	}
 
 	if (!smtpUsername) {
-		console.error('ERROR', '发送邮件失败，环境变量中的 smtpUsername 为空')
+		logging('ERROR', '发送邮件失败，环境变量中的 smtpUsername 为空')
 		throw new Error('Unable send email because the smtpUsername is null')
 	}
 
 	if (!smtpPassword) {
-		console.error('ERROR', '发送邮件失败，环境变量中的 smtpPassword 为空')
+		logging('ERROR', '发送邮件失败，环境变量中的 smtpPassword 为空')
 		throw new Error('Unable send email because the smtpPassword is null')
 	}
 
 	if (!to) {
-		console.error('ERROR', '发送邮件失败，收件人为空')
+		logging('ERROR', '发送邮件失败，收件人为空')
 		throw new Error('Unable to send the mail, Recipient(TO) is empty')
 	}
 
 	if (!title) {
-		console.error('ERROR', '发送邮件失败，邮件标题 (subject) 为空')
+		logging('ERROR', '发送邮件失败，邮件标题 (subject) 为空')
 		throw new Error('Unable to send the mail, email title (subject) is empty')
 	}
 
 	if (title.length > 200) {
-		console.warn('WARN', 'WARNING', '警告：当前邮件标题 (subject) 长度超过 200 字，请降低长度，长度超过 1000 字的邮件无法发送。')
+		logging('WARN', '警告：当前邮件标题 (subject) 长度超过 200 字，请降低长度，长度超过 1000 字的邮件无法发送。')
 	}
 
 	if (title.length > 1000) {
-		console.error('ERROR', '发送邮件失败，邮件标题 (subject) 过长')
+		logging('ERROR', '发送邮件失败，邮件标题 (subject) 过长')
 		throw new Error('Unable to send the mail, title (subject) is too long')
 	}
 
 	if (!body.text && !body.html) {
-		console.error('ERROR', '发送邮件失败，邮件体 body 中的 text 和 html 为空，请至少提供一个正文数据')
+		logging('ERROR', '发送邮件失败，邮件体 body 中的 text 和 html 为空，请至少提供一个正文数据')
 		throw new Error('Unable to send the mail, text and html in body in null')
 	}
 
@@ -109,7 +110,7 @@ export const sendMail = async (to: string, title: string, body: EmailBodyType) =
 		const result = await client.sendAsync(message)
 		return { success: true, result, message: '邮件发送成功' }
 	} catch (error) {
-		console.error('ERROR', '发送邮件失败，发送出错', error)
+		logging('ERROR', '发送邮件失败，发送出错', error)
 		return { success: false, result: undefined, message: '邮件发送失败' }
 	}
 }

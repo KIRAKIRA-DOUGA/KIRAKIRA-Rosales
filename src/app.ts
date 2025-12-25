@@ -8,6 +8,7 @@ import { connectMongoDBCluster } from './dbPool/DbClusterPool.js'
 import elasticsearchMiddleware from './middleware/elasticsearchMiddleware.js'
 import router from './route/router.js'
 import { parseInteger } from './common/ValidTool.js'
+import { logging } from './service/loggingService.js'
 
 const SERVER_PORT = process.env.SERVER_PORT ? parseInteger(process.env.SERVER_PORT) : 9999 // 从环境变量中获取端口号，如果没获取到，则使用 9999
 const SERVER_ENV = process.env.SERVER_ENV
@@ -26,7 +27,7 @@ app
 
 // 连接 MongoDB
 await connectMongoDBCluster().catch(error => {
-	console.error('ERROR', '无法连接到 MongoDB, 错误原因：', error)
+	logging('ERROR', '无法连接到 MongoDB', error, {}, { recordingLogs: false })
 	process.exit()
 })
 

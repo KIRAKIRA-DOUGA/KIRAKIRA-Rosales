@@ -329,7 +329,7 @@ const user: User = { // 构建用户数据
 try {
 	await insertData2MongoDB<User>(user, schemaInstance, collectionName) // 插入数据
 } catch(error) {
-	console.error('ERROR', "插入数据出错：", error)
+	logging('ERROR', "插入数据出错：", error)
 }
 
 
@@ -337,9 +337,9 @@ const userWhere: QueryType<User> = { uid: 1 } // 查询 UID 为 1 的用户数�
 const userSelect: SelectType<User> = { username: 1 } // 只查询 username 字段
 try {
 	const userResult = await selectDataFromMongoDB<User>(userWhere, userSelect, schemaInstance, collectionName) // 查询数据
-	console.oog('RESULT', useResult)
+	console.log('Result is: ', useResult)
 } catch (error) {
-	console.error('ERROR', "查询数据出错：", error)
+	logging('ERROR', "查询数据出错：", error)
 }
 ```
 > [!IMPORTANT]
@@ -381,7 +381,7 @@ try {
 	const refreshFlag = true // 是否立即刷新索引（刷新后该数据方能搜索，如果刷新过于频繁，可能会影响性能）
 	await insertData2ElasticsearchCluster(esClient, esIndexName, videoEsSchema, videoEsData, refreshFlag) // 插入数据
 } catch (error) {
-	console.error("ERROR", "索引数据出错："，error)
+	logging("ERROR", "索引数据出错："，error)
 }
 
 const esQuery = { // 构造搜索条件
@@ -392,9 +392,9 @@ const esQuery = { // 构造搜索条件
 
 try {
 	const esSearchResult = await searchDataFromElasticsearchCluster(esClient, esIndexName, videoEsSchema, esQuery) // 开始搜索数据
-	console.log('RESULT', esSearchResult)
+	console.log('Result is: ', esSearchResult)
 } catch (error) {
-	console.error("ERROR", "搜索数据出错："，error)
+	logging("ERROR", "搜索数据出错："，error)
 }
 ```
 

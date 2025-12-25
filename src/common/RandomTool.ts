@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { logging } from '../service/loggingService.js'
 
 /**
  * 生成不可预测的随机字符串，性能较差
@@ -23,11 +24,11 @@ export const generateSecureRandomString = (length: number): string => {
 			}
 			return result
 		} else {
-			console.error('something error in function generateSecureRandomString, required data length is empty or not > 0 or not Integer')
+			logging('ERROR', 'something error in function generateSecureRandomString, required data length is empty or not > 0 or not Integer')
 			return ''
 		}
-	} catch (e) {
-		console.error('something error in function generateSecureRandomString', e)
+	} catch (error) {
+		logging('ERROR', 'something error in function generateSecureRandomString', error)
 		return ''
 	}
 }
@@ -49,11 +50,11 @@ export const generateRandomString = (length: number): string => {
 
 			return text
 		} else {
-			console.error('something error in function generateSecureRandomString, required data length is empty or not > 0 or not Integer')
+			logging('ERROR', 'something error in function generateSecureRandomString, required data length is empty or not > 0 or not Integer')
 			return ''
 		}
 	} catch (e) {
-		console.error('something error in function generateRandomString', e)
+		logging('ERROR', 'something error in function generateRandomString', e)
 		return ''
 	}
 }

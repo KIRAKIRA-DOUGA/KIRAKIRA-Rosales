@@ -86,6 +86,7 @@ import { StorageClassAnalysisSchemaVersion } from '@aws-sdk/client-s3'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { isToday } from '../common/DateTool.js'
+import { logging } from './loggingService.js'
 
 authenticator.options = { window: parseInteger(process.env.TOTP_ADDITIONAL_WINDOWS, 1) || 1 } // 设置 TOTP 宽裕窗口，默认为 1
 
@@ -98,7 +99,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 	try {
 		if (!checkUserRegistrationData(userRegistrationRequest)) {
 			const errorMessage = '用户注册失败：提交的用户信息不合法'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -109,7 +110,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 
 		if (!invitationCode || !(await checkInvitationCodeService({ invitationCode })).isAvailableInvitationCode) { // DELETEME 仅在 beta 测试中使用
 			const errorMessage = '用户注册失败：未提供邀请码或邀请码无效'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -127,13 +128,13 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			const useAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
 			if (useAuthResult.result && useAuthResult.result.length >= 1) {
 				const errorMessage = '用户注册失败：用户邮箱重复'
-				console.error('ERROR', errorMessage, { email, emailLowerCase })
+				logging('ERROR', errorMessage, undefined, { email, emailLowerCase })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage }
 			}
 		} catch (error) {
 			const errorMessage = '用户注册失败：用户邮箱查重时出现异常'
-			console.error('ERROR', errorMessage, error, { email, emailLowerCase })
+			logging('ERROR', errorMessage, error, { email, emailLowerCase })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -142,7 +143,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 		const emailVerificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'registration' })
 		if (!emailVerificationResult.success) {
 			const errorMessage = `用户注册失败：用户邮箱查重时出现异常：${emailVerificationResult.message}`
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -199,7 +200,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 
 			if (!saveUserAuthResult.success || !saveUserInfoResult.success || !saveUserSettingsResult.success) {
 				const errorMessage = '用户注册失败：保存用户数据失败'
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage }
 			}
@@ -213,10 +214,10 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				try {
 					const useInvitationCodeResult = await useInvitationCode(useInvitationCodeDto)
 					if (!useInvitationCodeResult.success) {
-						console.error('ERROR', '用户使用邀请码时出错：更新邀请码使用者失败')
+						logging('ERROR', '用户使用邀请码时出错：更新邀请码使用者失败')
 					}
 				} catch (error) {
-					console.error('ERROR', '用户使用邀请码时出错：更新邀请码使用者时出错：', error)
+					logging('ERROR', '用户使用邀请码时出错：更新邀请码使用者时出错：', error)
 				}
 			}
 
@@ -224,13 +225,13 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			return { success: true, uid, token, UUID: uuid, message: '用户注册成功' }
 		} catch (error) {
 			const errorMessage = '用户注册失败：无法保存用户资料'
-			console.error('ERROR', errorMessage, error)
+			logging('ERROR', errorMessage, error)
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
 	} catch (error) {
 		const errorMessage = '用户注册失败，未知错误'
-		console.error('ERROR', errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, message: errorMessage }
 	}
 }
@@ -245,7 +246,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		// 1. 检查请求参数是否合法
 		if (!checkUserLoginRequest(userLoginRequest)) {
 			const errorMessage = '用户登录失败：提交的用户信息不合法'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -269,7 +270,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
 			const warningMessage = '用户登录失败：用户未注册或信息异常'
-			console.warn('ERROR', warningMessage, `用户邮箱：【${email}】`)
+			logging('warn', warningMessage, undefined, { email })
 			return { success: false, email, message: warningMessage }
 		}
 
@@ -277,7 +278,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		const { token, uid, UUID: uuid, authenticatorType } = userAuthData
 		if (!token || uid === null || uid === undefined || !uuid) {
 			const errorMessage = '登录失败，未能获取用户安全信息'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -285,7 +286,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData.passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '登录失败'
-			console.warn('ERROR', errorMessage, `[UUID: ${uuid}], 密码错误`)
+			logging('warn', errorMessage, undefined, { uuid })
 			return { success: false, email, passwordHint: userAuthData.passwordHint, message: errorMessage }
 		}
 
@@ -293,7 +294,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		if (authenticatorType === 'totp') { // 4.1 TOTP 2FA
 			if (!clientOtp) {
 				const errormMessage = '登录失败，启用了 TOTP 但用户未提供验证码'
-				console.error('ERROR', errormMessage, authenticatorType )
+				logging('ERROR', errormMessage, undefined, { authenticatorType } )
 				return { success: false, message: errormMessage, authenticatorType }
 			}
 
@@ -301,7 +302,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			const verificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: true, isAllowRecoveryCodeAndDeleteTotp: true })
 			if (!verificationResult.success) {
 				const errorMessage = `登录失败，TOTP 验证失败：${verificationResult.message}`
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
@@ -309,13 +310,13 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		} else if (authenticatorType === 'email') { // 4.2 Email 2FA
 			if (!verificationCode) {
 				const errorMessage = '登录失败，启用了邮箱验证但用户未提供验证码'
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
 			if (verificationCode.length !== 6) {
 				const errorMessage = '登录失败，验证码长度错误'
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
@@ -323,7 +324,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			const verificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'login' })
 			if (!verificationResult.success) {
 				const errorMessage = `登录失败，邮箱验证码验证失败：${verificationResult.message}`
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
@@ -333,7 +334,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		}
 	} catch (error) {
 		const errormMessage = '登录失败，用户登录时程序异常'
-		console.error('ERROR', errormMessage, error)
+		logging('ERROR', errormMessage, error)
 		return { success: false, message: errormMessage }
 	}
 }
@@ -359,7 +360,7 @@ export const userEmailExistsCheckService = async (userEmailExistsCheckRequest: U
 			try {
 				result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 			} catch (error) {
-				console.error('ERROR', '验证用户邮箱是否存在（查询用户）时出现异常：', error)
+				logging('ERROR', '验证用户邮箱是否存在（查询用户）时出现异常：', error)
 				return { success: false, exists: false, message: '验证用户邮箱是否存在时出现异常' }
 			}
 
@@ -373,11 +374,11 @@ export const userEmailExistsCheckService = async (userEmailExistsCheckRequest: U
 				return { success: false, exists: false, message: '邮箱查询失败' }
 			}
 		} else {
-			console.error('ERROR', '查询用户邮箱是否存在时失败：参数不合法')
+			logging('ERROR', '查询用户邮箱是否存在时失败：参数不合法')
 			return { success: false, exists: false, message: '查询用户邮箱是否存在时失败：参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '查询用户邮箱是否存在时出错：未知错误', error)
+		logging('ERROR', '查询用户邮箱是否存在时出错：未知错误', error)
 		return { success: false, exists: false, message: '查询用户邮箱是否存在时出错：未知错误' }
 	}
 }
@@ -392,12 +393,12 @@ export const userEmailExistsCheckService = async (userEmailExistsCheckRequest: U
 export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserEmailRequestDto, cookieUuid: string, cookieToken: string): Promise<UpdateUserEmailResponseDto> => {
 	try {
 		if (!checkUpdateUserEmailRequest(updateUserEmailRequest)) {
-			console.error('ERROR', '更新用户邮箱时失败，请求参数不合法')
+			logging('ERROR', '更新用户邮箱时失败，请求参数不合法')
 			return { success: false, message: '用户邮箱更新失败，请求参数不合法' }
 		}
 
 		if (!await checkUserTokenByUUID(cookieUuid, cookieToken)) {
-			console.error('ERROR', '更新用户邮箱时失败，用户不合法')
+			logging('ERROR', '更新用户邮箱时失败，用户不合法')
 			return { success: false, message: '用户邮箱更新失败，用户不合法' }
 		}
 
@@ -407,7 +408,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		const now = new Date().getTime()
 
 		if (oldEmailLowerCase === newEmailLowerCase) {
-			console.error('ERROR', '更新用户邮箱时失败，旧邮箱和新邮箱相同', { cookieUuid, oldEmail, newEmail })
+			logging('ERROR', '更新用户邮箱时失败，旧邮箱和新邮箱相同', undefined, { cookieUuid, oldEmail, newEmail })
 			return { success: false, message: '更新用户邮箱失败，旧邮箱和新邮箱不能相同' }
 		}
 
@@ -424,14 +425,14 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 
 		if (!userAuthData) {
 			const errorMessage = '更新用户邮箱失败，未能获取用户信息'
-			console.error('ERROR', errorMessage, { cookieUuid, oldEmail })
+			logging('ERROR', errorMessage, undefined, { cookieUuid, oldEmail })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
 
 		if (userAuthData.length !== 1) { // 确保只更新一个用户的邮箱
 			const errorMessage = '更新用户邮箱失败，无法找到正确的用户'
-			console.error('ERROR', errorMessage, { cookieUuid, oldEmail })
+			logging('ERROR', errorMessage, undefined, { cookieUuid, oldEmail })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -440,7 +441,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash) // 确保更新邮箱时输入的密码正确
 		if (!isCorrectPassword) {
 			const errorMessage = '更新用户邮箱失败，用户密码不正确'
-			console.error('ERROR', errorMessage, { cookieUuid, oldEmail })
+			logging('ERROR', errorMessage, undefined, { cookieUuid, oldEmail })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -449,7 +450,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		const verificationResult = await Verifier.verify({ isResetAttemptsImmediately: true, isStrictMode: true, exclusiveBusinessName: 'update-email' })
 		if (!verificationResult.success) {
 			const errorMessage = `更新用户邮箱失败，用户验证失败：${verificationResult.message}`
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -458,7 +459,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		const newEmailVerificationResult = await NewEmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'update-email' })
 		if (!newEmailVerificationResult.success) {
 			const errorMessage = `更新用户邮箱失败，新邮箱验证码验证失败：${newEmailVerificationResult.message}`
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -475,7 +476,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 			const updateResult = await updateData4MongoDB(updateUserEmailWhere, updateUserEmailUpdate, schemaInstance, collectionName)
 
 			if (!updateResult || !updateResult.success || !updateResult.result) {
-				console.error('ERROR', '更新用户邮箱时，更新数量为 0', { cookieUuid, oldEmail, newEmail })
+				logging('ERROR', '更新用户邮箱时，更新数量为 0', undefined, { cookieUuid, oldEmail, newEmail })
 				await abortAndEndSession(session)
 				return { success: false, message: '用户邮箱更新失败，无法更新用户邮箱' }
 			}
@@ -483,12 +484,12 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 			await commitAndEndSession(session)
 			return { success: true, message: '用户邮箱更新成功' }
 		} catch (error) {
-			console.error('ERROR', '更新用户邮箱出错', { cookieUuid, oldEmail, newEmail }, error)
+			logging('ERROR', '更新用户邮箱出错', undefined, { cookieUuid, oldEmail, newEmail }, error)
 			await abortAndEndSession(session)
 			return { success: false, message: '用户邮箱更新失败，更新用户身份时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '修改用户邮箱失败，未知错误：', error)
+		logging('ERROR', '修改用户邮箱失败，未知错误：', error)
 		return { success: false, message: '修改用户邮箱失败，未知错误' }
 	}
 }
@@ -503,12 +504,12 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto, uuid: string, token: string): Promise<UpdateOrCreateUserInfoResponseDto> => {
 	try {
 		if (!checkUpdateOrCreateUserInfoRequest(updateOrCreateUserInfoRequest)) {
-			console.error('ERROR', '更新用户信息时失败，参数校验未通过', { updateOrCreateUserInfoRequest, uuid })
+			logging('ERROR', '更新用户信息时失败，参数校验未通过', undefined, { updateOrCreateUserInfoRequest, uuid })
 			return { success: false, message: '更新用户数据时失败，参数校验未通过' }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('ERROR', '更新用户信息时失败，token 校验失败，非法用户！', { updateOrCreateUserInfoRequest, uuid })
+			logging('ERROR', '更新用户信息时失败，token 校验失败，非法用户！', undefined, { updateOrCreateUserInfoRequest, uuid })
 			return { success: false, message: '更新用户数据时失败，非法用户！' }
 		}
 
@@ -521,13 +522,13 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 		if (usernameStandardized) {
 			const checkUserNameResult = await checkUsernameService({ username: usernameStandardized }, [uuid]) // exclude self when check duplicate username
 			if (!checkUserNameResult.success || !checkUserNameResult.isAvailableUsername) {
-				console.error('ERROR', '更新用户信息失败，用户重名', { updateOrCreateUserInfoRequest, uuid })
+				logging('ERROR', '更新用户信息失败，用户重名', undefined, { updateOrCreateUserInfoRequest, uuid })
 				return { success: false, message: '更新用户信息失败，用户重名' }
 			}
 		}
 
 		if (userNickname && !validateNameField(userNickname)) {
-			console.error('ERROR', '更新用户信息失败，用户昵称不合法，用户 UUID:', uuid)
+			logging('ERROR', '更新用户信息失败，用户昵称不合法，用户 UUID:', undefined, { uuid })
 			return { success: false, message: '更新用户信息失败，用户昵称不合法' }
 		}
 
@@ -546,13 +547,13 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 		const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
 
 		if (!updateResult || !updateResult.success || !updateResult.result) {
-			console.error('ERROR', '更新用户信息失败，没有返回用户数据', { updateOrCreateUserInfoRequest, uuid })
+			logging('ERROR', '更新用户信息失败，没有返回用户数据', undefined, { updateOrCreateUserInfoRequest, uuid })
 			return { success: false, message: '更新用户信息失败，没有返回用户数据' }
 		}
 
 		return { success: true, message: '更新用户信息成功', result: updateResult.result }
 	} catch (error) {
-		console.error('ERROR', '更新用户信息时失败，未知异常', error)
+		logging('ERROR', '更新用户信息时失败，未知异常', error)
 		return { success: false, message: '更新用户数据时失败，未知异常' }
 	}
 }
@@ -578,15 +579,15 @@ export const checkUserExistsByUIDService = async (userExistsCheckByUIDRequest: U
 					return { success: true, exists: false, message: '用户不存在' }
 				}
 			} else {
-				console.error('ERROR', '获取用户是否存在时失败，查询失败')
+				logging('ERROR', '获取用户是否存在时失败，查询失败')
 				return { success: false, exists: false, message: '获取用户是否存在时失败，查询失败' }
 			}
 		} else {
-			console.error('ERROR', '获取用户是否存在时失败，请求参数不合法')
+			logging('ERROR', '获取用户是否存在时失败，请求参数不合法')
 			return { success: false, exists: false, message: '获取用户是否存在时失败，请求参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取用户是否存在时失败，未知异常', error)
+		logging('ERROR', '获取用户是否存在时失败，未知异常', error)
 		return { success: false, exists: false, message: '获取用户是否存在时失败，未知异常' }
 	}
 }
@@ -601,13 +602,13 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 		const { uuid, token } = getSelfUserInfoByUuidRequest
 		if (!uuid || !token) {
 			const errorMessage = '通过 UUID 获取用户信息失败，uuid 或 token 为空'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '通过 UUID 获取用户信息时失败，用户的 token 校验未通过，非法用户！'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -683,7 +684,7 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 				|| userSelfInfoResult.result.length !== 1
 			) {
 				const errorMessage = '通过 UID 获取用户信息时失败，查询数据时出错'
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				return { success: false, message: errorMessage }
 			}
 
@@ -695,12 +696,12 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 			}
 		} catch (error) {
 			const errorMessage = '通过 UUID 获取用户信息时出错，查询数据时出错。'
-			console.error('ERROR', errorMessage, error)
+			logging('ERROR', errorMessage, error)
 			return { success: false, message: errorMessage }
 		}
 	} catch (error) {
 		const errorMessage = '通过 UUID 获取用户信息时出错，未知错误。'
-		console.error('ERROR', errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, message: errorMessage }
 	}
 }
@@ -719,7 +720,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 		let isBlockedByOther = false
 
 		if (uid === null || uid === undefined) {
-			console.error('ERROR', '获取用户信息时失败，传入的 uid 或 token 为空')
+			logging('ERROR', '获取用户信息时失败，传入的 uid 或 token 为空')
 			return { success: false, message: '获取用户信息时失败，必要的参数为空', isBlockedByOther, isBlocked: false, isHidden }
 		}
 
@@ -775,7 +776,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 			const [userAuthResult, userInfoResult] = await Promise.all([userAuthPromise, userInfoPromise])
 			if (!userAuthResult || !userAuthResult.success || !userInfoResult || !userInfoResult.success) {
 				await abortAndEndSession(session)
-				console.error('ERROR', '获取用户信息时失败，获取到的结果为空')
+				logging('ERROR', '获取用户信息时失败，获取到的结果为空')
 				return { success: false, message: '获取用户信息时失败，结果为空', isBlockedByOther, isBlocked: false, isHidden }
 			}
 			const userAuth = userAuthResult?.result
@@ -783,7 +784,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 			const userInfo = userInfoResult?.result
 			if (userInfo?.length !== 1 || !userInfo[0] || userAuth?.length !== 1 || !uuid) {
 				await abortAndEndSession(session)
-				console.error('ERROR', '获取用户信息时失败，获取到的结果长度不为 1')
+				logging('ERROR', '获取用户信息时失败，获取到的结果长度不为 1')
 				return { success: false, message: '获取用户信息时失败，结果异常', isBlockedByOther, isBlocked: false, isHidden }
 			}
 
@@ -826,11 +827,11 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 				isHidden,
 			}
 		} catch (error) {
-			console.error('ERROR', '获取用户信息时失败，查询数据时出错：', error)
+			logging('ERROR', '获取用户信息时失败，查询数据时出错：', error)
 			return { success: false, message: '获取用户信息时失败', isBlockedByOther, isBlocked: false, isHidden }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取用户信息时失败，未知错误：', error)
+		logging('ERROR', '获取用户信息时失败，未知错误：', error)
 		return { success: false, message: '获取用户信息时失败，未知错误', isBlockedByOther: false, isBlocked: false, isHidden: false }
 	}
 }
@@ -855,11 +856,11 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 				return { success: false, message: '上传失败，无法生成图片上传 URL，请重新上传头像' }
 			}
 		} else {
-			console.error('ERROR', '获取上传图片用的预签名 URL 失败，用户不合法', { uid })
+			logging('ERROR', '获取上传图片用的预签名 URL 失败，用户不合法', undefined, { uid })
 			return { success: false, message: '上传失败，无法获取上传权限' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取上传图片用的预签名 URL 失败，错误信息', error, { uid })
+		logging('ERROR', '获取上传图片用的预签名 URL 失败，错误信息', error, { uid })
 	}
 }
 
@@ -873,7 +874,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '获取用户个性设置失败，用户验证时未通过'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -913,7 +914,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 
 		if (!userSettingsResult.success || !userSettingsResult.result || userSettingsResult.result.length !== 1) {
 			const errorMessage = '获取用户个性设置失败，查询未成功'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -921,7 +922,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 		return { success: true, message: '获取用户设置成功！', userSettings }
 	} catch (error) {
 		const errorMessage = '获取用户个性设置失败，未知异常！'
-		console.error('ERROR', errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, message: errorMessage }
 	}
 }
@@ -939,7 +940,7 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 		if (await checkUserToken(uid, token)) {
 			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 			if (!UUID) {
-				console.error('ERROR', '更新或创建用户设置失败，UUID 不存在', { updateOrCreateUserSettingsRequest, uid })
+				logging('ERROR', '更新或创建用户设置失败，UUID 不存在', undefined, { updateOrCreateUserSettingsRequest, uid })
 				return { success: false, message: '更新或创建用户设置失败，UUID 不存在' }
 			}
 
@@ -960,19 +961,19 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 				if (updateResult?.success) {
 					return { success: true, message: '更新或创建用户设置成功', userSettings: userSettings || updateOrCreateUserSettingsUpdate }
 				} else {
-					console.error('ERROR', '更新或创建用户设置失败，没有返回用户设置数据', { updateOrCreateUserSettingsRequest, uid })
+					logging('ERROR', '更新或创建用户设置失败，没有返回用户设置数据', undefined, { updateOrCreateUserSettingsRequest, uid })
 					return { success: false, message: '更新或创建用户设置失败，没有返回用户设置数据' }
 				}
 			} else {
-				console.error('ERROR', '更新或创建用户设置失败，未找到必要的数据，或者关联账户平台类型不合法：', { updateOrCreateUserSettingsRequest, uid })
+				logging('ERROR', '更新或创建用户设置失败，未找到必要的数据，或者关联账户平台类型不合法：', undefined, { updateOrCreateUserSettingsRequest, uid })
 				return { success: false, message: '更新或创建用户设置失败，必要的数据为空或关联平台信息出错' }
 			}
 		} else {
-			console.error('ERROR', '更新或创建用户设置失败，token 校验失败，非法用户！', { updateOrCreateUserSettingsRequest, uid })
+			logging('ERROR', '更新或创建用户设置失败，token 校验失败，非法用户！', undefined, { updateOrCreateUserSettingsRequest, uid })
 			return { success: false, message: '更新或创建用户设置失败，非法用户！' }
 		}
 	} catch (error) {
-		console.error('ERROR', '更新或创建用户设置时失败，未知异常', error)
+		logging('ERROR', '更新或创建用户设置时失败，未知异常', error)
 		return { success: false, message: '更新或创建用户设置失败，未知异常' }
 	}
 }
@@ -990,15 +991,15 @@ export const checkUserTokenService = async (uid: number, token: string): Promise
 			if (checkUserTokenResult) {
 				return { success: true, message: '用户校验成功', userTokenOk: true }
 			} else {
-				console.error('ERROR', `用户校验失败！非法用户！用户 UID：${uid}`)
+				logging('ERROR', `用户校验失败！非法用户！用户 UID：${uid}`)
 				return { success: false, message: '用户校验失败！非法用户！', userTokenOk: false }
 			}
 		} else {
-			console.error('ERROR', `用户校验失败！用户 uid 或 token 不存在，用户 UID：${uid}`)
+			logging('ERROR', `用户校验失败！用户 uid 或 token 不存在，用户 UID：${uid}`)
 			return { success: false, message: '用户校验失败！', userTokenOk: false }
 		}
 	} catch {
-		console.error('ERROR', `用户校验异常！用户 UID：${uid}`)
+		logging('ERROR', `用户校验异常！用户 UID：${uid}`)
 		return { success: false, message: '用户校验异常！', userTokenOk: false }
 	}
 }
@@ -1016,15 +1017,15 @@ export const checkUserTokenByUuidService = async (UUID: string, token: string): 
 			if (checkUserTokenResult) {
 				return { success: true, message: '用户校验成功', userTokenOk: true }
 			} else {
-				console.error('ERROR', `用户校验失败！非法用户！用户 UUID：${UUID}`)
+				logging('ERROR', `用户校验失败！非法用户！用户 UUID：${UUID}`)
 				return { success: false, message: '用户校验失败！非法用户！', userTokenOk: false }
 			}
 		} else {
-			console.error('ERROR', `用户校验失败！用户 UUID 或 token 不存在，用户 UUID：${UUID}`)
+			logging('ERROR', `用户校验失败！用户 UUID 或 token 不存在，用户 UUID：${UUID}`)
 			return { success: false, message: '用户校验失败！', userTokenOk: false }
 		}
 	} catch {
-		console.error('ERROR', `用户校验异常！用户 UUID：${UUID}`)
+		logging('ERROR', `用户校验异常！用户 UUID：${UUID}`)
 		return { success: false, message: '用户校验异常！', userTokenOk: false }
 	}
 }
@@ -1041,13 +1042,13 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 	try {
 		if (!checkSendGeneral2FAEmailVerificationCodeRequest(sendGeneral2FAEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，参数不合法'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户校验未通过'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
@@ -1066,7 +1067,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 
 		if (!userAuthResult.success || !userAuthResult.result || userAuthResult.result.length !== 1) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，获取用户信息失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1076,14 +1077,14 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 
 		if (!userEmail || !userAuthenticatorType ) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户邮箱或 2FA 类型不存在'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		if (['totp'].includes(userAuthenticatorType)) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，用户使用的非邮箱 2FA'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: true, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1122,7 +1123,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
 			) {
 				const errorMessage = '发送通用 2FA 邮箱验证码失败，已达今日验证上限，请明日再试'
-				console.error('ERROR', errorMessage, { uuid })
+				logging('ERROR', errorMessage, undefined, { uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: true }
 			}
@@ -1131,7 +1132,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 				|| (isVerificationCodeCreatedDateToday && totalCreateTimesToday >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CREATE_ATTEMPTS)
 			) {
 				const errorMessage = '发送通用 2FA 邮箱验证码失败，已达今日创建上限，请明日再试'
-				console.error('ERROR', errorMessage, { uuid })
+				logging('ERROR', errorMessage, undefined, { uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: true, isMaxDailyVerifierAttempts: false }
 			}
@@ -1139,7 +1140,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 			const isCoolingDown = (verificationCreatedDate + GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS * 1000) > now
 			if (isCoolingDown) {
 				const errorMessage = '发送通用 2FA 邮箱验证码失败，操作过于频繁，请稍后再试'
-				console.error('ERROR', errorMessage, { uuid })
+				logging('ERROR', errorMessage, undefined, { uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: true, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 			}
@@ -1151,7 +1152,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 		const mail = getI18nLanguagePack(clientLanguage, mailTemplate)
 		if (!mail || !mail.mailTitle || !mail.mailHtml) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，获取邮件模板失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1161,7 +1162,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 		const sendMailResult = await sendMail(userEmail, mailTitle, { html: correctMailHTML })
 		if (!sendMailResult.success) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，邮件发送失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1183,7 +1184,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 
 		if (!updateResult.success) {
 			const errorMessage = '发送通用 2FA 邮箱验证码失败，存储验证码失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1192,7 +1193,7 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 		return { success: true, message: '发送通用 2FA 邮箱验证码成功', isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 	} catch (error) {
 		const errorMessage = '发送通用 2FA 邮箱验证码失败，未知错误'
-		console.error('ERROR', errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, message: errorMessage, isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 	}
 }
@@ -1266,7 +1267,7 @@ export class General2FAEmailVerifier {
 
 			if (this.#uuid && this.#token && !await checkUserTokenByUUID(this.#uuid, this.#token)) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，用户校验未通过'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1286,7 +1287,7 @@ export class General2FAEmailVerifier {
 			const verifyResult = await selectDataFromMongoDB<General2FAEmailVerificationCode>(verifyWhere, verifySelect, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName)
 			if (!verifyResult.success || !verifyResult.result || verifyResult.result.length !== 1) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码错误或不存在'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1300,7 +1301,7 @@ export class General2FAEmailVerifier {
 				|| verificationCreatedDate + GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS < now
 			) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码已超时'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: true, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1310,7 +1311,7 @@ export class General2FAEmailVerifier {
 				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
 			) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，已达今日验证上限，请明日再试'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: true, message: errorMessage }
 			}
 
@@ -1322,18 +1323,18 @@ export class General2FAEmailVerifier {
 				const accumulatedVerificationFailuresTimesResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(verifyWhere, accumulatedVerificationFailuresTimesUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName)
 				if (!accumulatedVerificationFailuresTimesResult.success) {
 					const errorMessage = '通用 2FA 邮箱验证码验证失败，增加尝试次数失败'
-					console.error('ERROR', errorMessage, { uuid: this.#uuid })
+					logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 					return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 				}
 			} catch (error) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，增加尝试次数时出错'
-				console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
 			if (!verificationCode || verificationCode !== this.#verificationCode) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，验证码错误'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1346,7 +1347,7 @@ export class General2FAEmailVerifier {
 			const verifyUpdateResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(verifyWhere, verifyUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
 			if (!verifyUpdateResult.success) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，更新验证码使用状态失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
@@ -1358,7 +1359,7 @@ export class General2FAEmailVerifier {
 			const resetAttemptsResult = await this.#resetAttempts()
 			if (!resetAttemptsResult.success) {
 				const errorMessage = '通用 2FA 邮箱验证码验证失败，重置尝试次数失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
@@ -1367,7 +1368,7 @@ export class General2FAEmailVerifier {
 			return { success: true, isTimeout: false, isMaxVerifierTimesToday: false, message: '通用 2FA 邮箱验证码验证成功，并且尝试次数已重置' }
 		} catch (error) {
 			const errorMessage = '通用 2FA 邮箱验证码验证失败，未知错误'
-			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 		}
 	}
@@ -1380,7 +1381,7 @@ export class General2FAEmailVerifier {
 		const session = this.#session
 		if (!session) {
 			const errorMessage = '通用 2FA 邮箱验证码尝试次数重置失败，内部 session 不存在'
-			console.error('ERROR', errorMessage, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -1398,7 +1399,7 @@ export class General2FAEmailVerifier {
 			const resetAttemptsResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(resetAttemptsWhere, resetAttemptsUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
 			if (!resetAttemptsResult.success) {
 				const errorMessage = '通用 2FA 邮箱验证码尝试次数重置失败，存储尝试次数失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage }
 			}
@@ -1412,7 +1413,7 @@ export class General2FAEmailVerifier {
 			} catch {
 				errorMessage += '，且在中止事务时发生错误'
 			}
-			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, message: errorMessage }
 		}
 	}
@@ -1430,13 +1431,13 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 	try {
 		if (!checkSendGeneralEmailVerificationCodeRequest(sendGeneralEmailVerificationCodeRequest)) {
 			const errorMessage = '发送通用邮箱验证码失败，参数不合法'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
 		if (uuid && token && !await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '发送通用邮箱验证码失败，用户校验未通过'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
 
@@ -1479,7 +1480,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
 			) {
 				const errorMessage = '发送通用邮箱验证码失败，已达今日验证上限，请明日再试'
-				console.error('ERROR', errorMessage, { uuid })
+				logging('ERROR', errorMessage, undefined, { uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: true }
 			}
@@ -1488,7 +1489,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 				|| (isVerificationCodeCreatedDateToday && totalCreateTimesToday >= GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_CREATE_ATTEMPTS)
 			) {
 				const errorMessage = '发送通用邮箱验证码失败，已达今日创建上限，请明日再试'
-				console.error('ERROR', errorMessage, { uuid })
+				logging('ERROR', errorMessage, undefined, { uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: true, isMaxDailyVerifierAttempts: false }
 			}
@@ -1496,7 +1497,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 			const isCoolingDown = (verificationCreatedDate + GENERAL_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS * 1000) > now
 			if (isCoolingDown) {
 				const errorMessage = '发送通用邮箱验证码失败，操作过于频繁，请稍后再试'
-				console.error('ERROR', errorMessage, { uuid })
+				logging('ERROR', errorMessage, undefined, { uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage, isCoolingDown: true, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 			}
@@ -1507,7 +1508,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 		const mail = getI18nLanguagePack(clientLanguage, mailTemplate)
 		if (!mail || !mail.mailTitle || !mail.mailHtml) {
 			const errorMessage = '发送通用邮箱验证码失败，获取邮件模板失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1517,7 +1518,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 		const sendMailResult = await sendMail(email, mailTitle, { html: correctMailHTML })
 		if (!sendMailResult.success) {
 			const errorMessage = '发送通用邮箱验证码失败，邮件发送失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1540,7 +1541,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 
 		if (!updateResult.success) {
 			const errorMessage = '发送通用邮箱验证码失败，存储验证码失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 		}
@@ -1549,7 +1550,7 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 		return { success: true, message: '发送通用邮箱验证码成功', isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 	} catch (error) {
 		const errorMessage = '发送通用邮箱验证码失败，未知错误'
-		console.error('ERROR', errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, message: errorMessage, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
 	}
 }
@@ -1627,7 +1628,7 @@ export class GeneralEmailVerifier {
 
 			if (this.#uuid && this.#token && !await checkUserTokenByUUID(this.#uuid, this.#token)) {
 				const errorMessage = '通用邮箱验证码验证失败，用户校验未通过'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1647,7 +1648,7 @@ export class GeneralEmailVerifier {
 			const verifyResult = await selectDataFromMongoDB<GeneralEmailVerificationCode>(verifyWhere, verifySelect, generalEmailVerificationCodeSchemaInstance, generalEmailVerificationCodeCollectionName)
 			if (!verifyResult.success || !verifyResult.result || verifyResult.result.length !== 1) {
 				const errorMessage = '通用邮箱验证码验证失败，验证码错误或不存在'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1661,7 +1662,7 @@ export class GeneralEmailVerifier {
 				|| verificationCreatedDate + GENERAL_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS < now
 			) {
 				const errorMessage = '通用邮箱验证码验证失败，验证码已超时'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: true, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1671,7 +1672,7 @@ export class GeneralEmailVerifier {
 				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
 			) {
 				const errorMessage = '通用邮箱验证码验证失败，已达今日验证上限，请明日再试'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: true, message: errorMessage }
 			}
 
@@ -1683,18 +1684,18 @@ export class GeneralEmailVerifier {
 				const accumulatedVerificationFailuresTimesResult = await findOneAndUpdateData4MongoDB<GeneralEmailVerificationCode>(verifyWhere, accumulatedVerificationFailuresTimesUpdate, generalEmailVerificationCodeSchemaInstance, generalEmailVerificationCodeCollectionName)
 				if (!accumulatedVerificationFailuresTimesResult.success) {
 					const errorMessage = '通用邮箱验证码验证失败，增加尝试次数失败'
-					console.error('ERROR', errorMessage, { uuid: this.#uuid })
+					logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 					return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 				}
 			} catch (error) {
 				const errorMessage = '通用邮箱验证码验证失败，增加尝试次数时出错'
-				console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
 			if (!verificationCode || verificationCode !== this.#verificationCode) {
 				const errorMessage = '通用邮箱验证码验证失败，验证码错误'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
@@ -1707,7 +1708,7 @@ export class GeneralEmailVerifier {
 			const verifyUpdateResult = await findOneAndUpdateData4MongoDB<GeneralEmailVerificationCode>(verifyWhere, verifyUpdate, generalEmailVerificationCodeSchemaInstance, generalEmailVerificationCodeCollectionName, { session })
 			if (!verifyUpdateResult.success) {
 				const errorMessage = '通用邮箱验证码验证失败，更新验证码使用状态失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
@@ -1719,7 +1720,7 @@ export class GeneralEmailVerifier {
 			const resetAttemptsResult = await this.#resetAttempts()
 			if (!resetAttemptsResult.success) {
 				const errorMessage = '通用邮箱验证码验证失败，重置尝试次数失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
@@ -1728,7 +1729,7 @@ export class GeneralEmailVerifier {
 			return { success: true, isTimeout: false, isMaxVerifierTimesToday: false, message: '通用邮箱验证码验证成功，并且尝试次数已重置' }
 		} catch (error) {
 			const errorMessage = '通用邮箱验证码验证失败，未知错误'
-			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 		}
 	}
@@ -1741,7 +1742,7 @@ export class GeneralEmailVerifier {
 		const session = this.#session
 		if (!session) {
 			const errorMessage = '通用邮箱验证码尝试次数重置失败，内部 session 不存在'
-			console.error('ERROR', errorMessage, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -1759,7 +1760,7 @@ export class GeneralEmailVerifier {
 			const resetAttemptsResult = await findOneAndUpdateData4MongoDB<GeneralEmailVerificationCode>(resetAttemptsWhere, resetAttemptsUpdate, generalEmailVerificationCodeSchemaInstance, generalEmailVerificationCodeCollectionName, { session })
 			if (!resetAttemptsResult.success) {
 				const errorMessage = '通用邮箱验证码尝试次数重置失败，存储尝试次数失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage }
 			}
@@ -1773,7 +1774,7 @@ export class GeneralEmailVerifier {
 			} catch {
 				errorMessage += '，且在中止事务时发生错误'
 			}
-			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, message: errorMessage }
 		}
 	}
@@ -1853,19 +1854,19 @@ export class General2FATotpVerifier {
 	async verify(options: General2FATotpVerifier.VerifyOptions): Promise<General2FATotpVerifier.VerifyResult> {
 		try {
 			const maxAttempts	= parseInteger(process.env.GENERAL_2FA_TOTP_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 最大尝试次数
-			const lockTime = parseInteger(process.env.GENERAL_2FA_TOTP_VERIFICATION_CODE_TIMEOUT_MILLISECONDS, 1800000) || 1800000 // 冷却时间
+			const lockTime = parseInteger(process.env.GENERAL_2FA_TOTP_VERIFICATION_CODE_MAX_VERIFIER_COOLINGDOWN_MILLISECONDS, 1800000) || 1800000 // 连续尝试验证 TOTP 验证码达到上限后，多久之后可以重试（毫秒）
 			const { isResetAttemptsImmediately, isAllowBackupCode, isAllowRecoveryCodeAndDeleteTotp, totpEnableStatus } = options
 			const now = new Date().getTime()
 
 			if (!this.#clientOtp) {
 				const errorMessage = '验证 TOTP 2FA 失败，未提供 TOTP 验证码'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
 			if (this.#uuid && this.#token && !await checkUserTokenByUUID(this.#uuid, this.#token)) {
 				const errorMessage = '验证 TOTP 2FA 失败，用户校验未通过'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
@@ -1886,7 +1887,7 @@ export class General2FATotpVerifier {
 			const selectResult = await selectDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
 			if (!selectResult.success || selectResult.result.length !== 1) {
 				const errorMessage = '验证 TOTP 2FA 失败，获取验证数据失败'
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
@@ -1897,7 +1898,7 @@ export class General2FATotpVerifier {
 			// 限制用户的验证频率
 			if (isMaxAttemptsReachedWithinTime) {
 				const warningMessage = '验证 TOTP 2FA 失败，已达最大尝试次数，请稍后再试';
-				console.warn('WARN', 'WARNING', warningMessage);
+				logging('WARN', warningMessage);
 				return { success: false, message: warningMessage, isMaxAttemptsReachedWithinTime, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp };
 			}
 
@@ -1910,7 +1911,7 @@ export class General2FATotpVerifier {
 			const updateTotpAttemptsTimesResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, updateTotpAttemptsTimesUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
 			if (!updateTotpAttemptsTimesResult.success) {
 				const errorMessage = '验证 TOTP 2FA 失败，更新尝试次数失败'
-				console.error('ERROR', errorMessage)
+				logging('ERROR', errorMessage)
 				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
@@ -1920,14 +1921,14 @@ export class General2FATotpVerifier {
 			if (this.#clientOtp.length > 6) { // 大于六位时，视为使用 TOTP 恢复码进行验证（成功后会删除 TOTP 2FA）
 				if (!isAllowRecoveryCodeAndDeleteTotp) {
 					const errorMessage = '验证 TOTP 2FA 失败，使用恢复码验证未被允许'
-					console.error('ERROR', errorMessage, { uuid: this.#uuid })
+					logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 				}
 
 				const isCorrectRecoveryCode = comparePasswordSync(this.#clientOtp, recoveryCodeHash)
 				if (!isCorrectRecoveryCode) {
 					const errorMessage = '验证 TOTP 2FA 失败，恢复码错误'
-					console.error('ERROR', errorMessage)
+					logging('ERROR', errorMessage)
 					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 				}
 
@@ -1939,7 +1940,7 @@ export class General2FATotpVerifier {
 				const deleteResult = await deleteTotpAuthenticatorByRecoveryCode(deleteTotpAuthenticatorByRecoveryCodeData) // 如果使用恢复码验证成功，则删除 TOTP 2FA
 				if (!deleteResult.success) {
 					const errorMessage = '验证 TOTP 2FA 失败，未能通过恢复码删除 TOTP 2FA'
-					console.error('ERROR', errorMessage)
+					logging('ERROR', errorMessage)
 					await abortAndEndSession(session)
 					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 				}
@@ -1963,7 +1964,7 @@ export class General2FATotpVerifier {
 					})
 					if (!useCorrectBackupCode) {
 						const errorMessage = '验证 TOTP 2FA 失败，TOTP 验证码或备份码错误'
-						console.error('ERROR', errorMessage);
+						logging('ERROR', errorMessage);
 						await abortAndEndSession(session)
 						return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp };
 					}
@@ -1978,7 +1979,7 @@ export class General2FATotpVerifier {
 					const updateAuthenticatorResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userLoginByBackupCodeUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 					if (!updateAuthenticatorResult.success) {
 						const errorMessage = '验证 TOTP 2FA 失败，更新备份码失败'
-						console.error('ERROR', errorMessage)
+						logging('ERROR', errorMessage)
 						await abortAndEndSession(session)
 						return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 					}
@@ -1996,7 +1997,7 @@ export class General2FATotpVerifier {
 			const resetAttemptsResult = await this.#resetAttempts()
 			if (!resetAttemptsResult.success) {
 				const errorMessage = '验证 TOTP 2FA 失败，重置尝试次数失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
@@ -2005,7 +2006,7 @@ export class General2FATotpVerifier {
 			return { success: true, message: '验证 TOTP 2FA 成功，并且尝试次数已重置', isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 		} catch (error) {
 			let errorMessage = '通用 2FA TOTP 验证码验证失败，未知错误'
-			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: false, isNotAllowRecoveryCodeAndDeleteTotp: false }
 		}
 	}
@@ -2018,7 +2019,7 @@ export class General2FATotpVerifier {
 		const session = this.#session
 		if (!session) {
 			const errorMessage = '通用 2FA TOTP 验证码尝试次数重置失败，内部 session 不存在'
-			console.error('ERROR', errorMessage, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -2036,7 +2037,7 @@ export class General2FATotpVerifier {
 			const resetAttemptsResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(resetAttemptsWhere, resetAttemptsUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 			if (!resetAttemptsResult.success) {
 				const errorMessage = '通用 2FA TOTP 验证码验证码尝试次数重置失败，存储尝试次数失败'
-				console.error('ERROR', errorMessage, { uuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, message: errorMessage }
 			}
@@ -2050,7 +2051,7 @@ export class General2FATotpVerifier {
 			} catch {
 				errorMessage += '，且在中止事务时发生错误'
 			}
-			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, message: errorMessage }
 		}
 	}
@@ -2134,7 +2135,7 @@ export class General2FAVerifier {
 
 			if (!await checkUserTokenByUUID(this.#uuid, this.#token)) {
 				const errorMessage = '通用 2FA 验证码验证失败，用户校验未通过'
-				console.error('ERROR', errorMessage, { cookieUuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { cookieUuid: this.#uuid })
 				return { success: false, verificationType: 'unknown', message: errorMessage, isMaxAttemptsTime: false }
 			}
 
@@ -2147,7 +2148,7 @@ export class General2FAVerifier {
 
 			if (!userAuthData || userAuthData.length !== 1) {
 				const errorMessage = '通用 2FA 验证码验证失败，未能获取用户信息'
-				console.error('ERROR', errorMessage, { cookieUuid: this.#uuid })
+				logging('ERROR', errorMessage, undefined, { cookieUuid: this.#uuid })
 				await abortAndEndSession(session)
 				return { success: false, verificationType: 'unknown', message: errorMessage, isMaxAttemptsTime: false }
 			}
@@ -2161,7 +2162,7 @@ export class General2FAVerifier {
 				case 'no-2fa': {
 					if (!isStrictMode) {
 						const message = '已跳过通用 2FA 验证码验证，用户未启用 2FA 验证'
-						console.info('INFO', message, { cookieUuid: this.#uuid })
+						logging('INFO', message, undefined, { cookieUuid: this.#uuid })
 						await abortAndEndSession(session)
 						return { success: true, verificationType, message, isMaxAttemptsTime: false }
 					}
@@ -2170,7 +2171,7 @@ export class General2FAVerifier {
 					let message = emailVerificationResult.message
 					if (!emailVerificationResult.success) {
 						message = `通用 2FA 验证码验证失败（严格模式），旧邮箱验证码验证失败：${message}`
-						console.error('ERROR', message)
+						logging('ERROR', message)
 						await abortAndEndSession(session)
 					}
 					return { ...emailVerificationResult, verificationType, message, isMaxAttemptsTime: emailVerificationResult.isMaxVerifierTimesToday }
@@ -2181,7 +2182,7 @@ export class General2FAVerifier {
 					let message = emailVerificationResult.message
 					if (!emailVerificationResult.success) {
 						message = `通用 2FA 验证码验证失败，2FA 邮箱验证码验证失败：${message}`
-						console.error('ERROR', message)
+						logging('ERROR', message)
 						await abortAndEndSession(session)
 					}
 					return { ...emailVerificationResult, verificationType, message, isMaxAttemptsTime: emailVerificationResult.isMaxVerifierTimesToday }
@@ -2192,7 +2193,7 @@ export class General2FAVerifier {
 					let message = totpVerificationResult.message
 					if (!totpVerificationResult.success) {
 						message = `通用 2FA 验证码验证失败，2TA TOTP 验证失败：${message}`
-						console.error('ERROR', message)
+						logging('ERROR', message)
 						await abortAndEndSession(session)
 					}
 					return { ...totpVerificationResult, verificationType, message, isMaxAttemptsTime: totpVerificationResult.isMaxAttemptsReachedWithinTime }
@@ -2200,7 +2201,7 @@ export class General2FAVerifier {
 			}
 		} catch (error) {
 			let errorMessage = '通用 2FA 验证码验证失败，未知错误'
-			console.error('ERROR', errorMessage, error, { uuid: this.#uuid })
+			logging('ERROR', errorMessage, error, { uuid: this.#uuid })
 			return { success: false, verificationType: 'unknown', message: errorMessage, isMaxAttemptsTime: false }
 		}
 	}
@@ -2208,6 +2209,7 @@ export class General2FAVerifier {
 
 /**
  * 生成邀请码
+ * // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
  * @param uid 申请生成邀请码的用户
  * @param token 申请生成邀请码的用户 token
  * @returns 生成的邀请码
@@ -2217,7 +2219,7 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 		if (await checkUserToken(uid, token)) {
 			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 			if (!UUID) {
-				console.error('ERROR', '生成邀请码失败，UUID 不存在', { uid })
+				logging('ERROR', '生成邀请码失败，UUID 不存在', undefined, { uid })
 				return { success: false, isCoolingDown: false, message: '生成邀请码失败，UUID 不存在' }
 			}
 
@@ -2244,12 +2246,12 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 						token,
 					}
 					const selfUserInfo = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
-					if (!selfUserInfo.success || selfUserInfo.result.userCreateDateTime > nowTime - sevenDaysInMillis) {
-						console.warn('WARN', 'WARNING', '生成邀请码失败，未超出邀请码生成期限，正在冷却中（第一次）', { uid })
-						return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中（第一次）' }
+					if (!selfUserInfo.success || selfUserInfo.result.userCreateDateTime > nowTime - sevenDaysInMillis) { // TODO: 临时使用 sevenDaysInMillis，实际上第一次创建冷却应该长于 sevenDaysInMillis
+						logging('WARN', '生成邀请码失败，未超出邀请码生成期限，正在冷却中（用户第一次创建邀请码）', undefined, { uid })
+						return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中（用户第一次创建邀请码）' }
 					}
 				} catch (error) {
-					console.warn('WARN', 'WARNING', '生成邀请码时出错，查询用户信息出错', { error, uid })
+					logging('ERROR', '生成邀请码时出错，查询用户信息出错', error, { uid })
 					return { success: false, isCoolingDown: false, message: '生成邀请码时出错，查询用户信息出错' }
 				}
 
@@ -2295,48 +2297,49 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 								if (insertResult.success) {
 									return { success: true, isCoolingDown: false, message: '生成邀请码成功', invitationCodeResult: userInvitationCode }
 								} else {
-									console.error('ERROR', '生成邀请码失败，存储邀请码失败', { uid })
+									logging('ERROR', '生成邀请码失败，存储邀请码失败', undefined, { uid })
 									return { success: false, isCoolingDown: false, message: '生成邀请码失败，存储邀请码失败' }
 								}
 							} catch (error) {
-								console.error('ERROR', '生成邀请码失败，存储邀请码时出错', error, { uid })
+								logging('ERROR', '生成邀请码失败，存储邀请码时出错', error, { uid })
 								return { success: false, isCoolingDown: false, message: '生成邀请码失败，存储邀请码时出错' }
 							}
 						} else {
-							console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码失败', { uid })
+							logging('ERROR', '生成邀请码失败，生成不重复的新邀请码失败', undefined, { uid })
 							return { success: false, isCoolingDown: false, message: '生成邀请码失败，生成不重复的新邀请码失败' }
 						}
 					} catch (error) {
-						console.error('ERROR', '生成邀请码失败，生成不重复的新邀请码时出错', error, { uid })
+						logging('ERROR', '生成邀请码失败，生成不重复的新邀请码时出错', error, { uid })
 						return { success: false, isCoolingDown: false, message: '生成邀请码失败，生成不重复的新邀请码时出错' }
 					}
 				} else {
-					console.warn('WARN', 'WARNING', '生成邀请码失败，未超出邀请码生成期限，正在冷却中', { uid })
+					logging('WARN', '生成邀请码失败，未超出邀请码生成期限，正在冷却中', undefined, { uid })
 					return { success: true, isCoolingDown: true, message: '生成邀请码失败，未超出邀请码生成期限，正在冷却中' }
 				}
 			} catch (error) {
-				console.error('ERROR', '生成邀请码失败，查询是否超出邀请码生成期限时出错', error, { uid })
+				logging('ERROR', '生成邀请码失败，查询是否超出邀请码生成期限时出错', error, { uid })
 				return { success: false, isCoolingDown: true, message: '生成邀请码失败，查询是否超出邀请码生成期限出错' }
 			}
 		} else {
-			console.error('ERROR', '生成邀请码失败，非法用户！', { uid })
+			logging('ERROR', '生成邀请码失败，非法用户！', undefined, { uid })
 			return { success: false, isCoolingDown: false, message: '生成邀请码失败，非法用户！' }
 		}
 	} catch (error) {
-		console.error('ERROR', '生成邀请码失败，未知错误', error)
+		logging('ERROR', '生成邀请码失败，未知错误', error)
 		return { success: false, isCoolingDown: false, message: '生成邀请码失败，未知错误' }
 	}
 }
 
 /**
  * 获取自己的邀请码列表
+ * // DELETE ME: 应该使用 UUID
  * @param uid 用户 UID
  * @param token 用户 token
  * @returns 获取自己的邀请码列表的请求结果
  */
 export const getMyInvitationCodeService = async (uid: number, token: string): Promise<GetMyInvitationCodeResponseDto> => {
 	try {
-		if (await checkUserToken(uid, token)) {
+		if (await checkUserToken(uid, token)) { // DELETE ME: 应该使用 UUID
 			const { collectionName, schemaInstance } = UserInvitationCodeSchema
 			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
 			const myInvitationCodeWhere: QueryType<UserInvitationCode> = {
@@ -2361,19 +2364,19 @@ export const getMyInvitationCodeService = async (uid: number, token: string): Pr
 						return { success: true, message: '自己的邀请码列表为空', invitationCodeResult: [] }
 					}
 				} else {
-					console.error('ERROR', '获取自己的邀请码失败，请求失败', { uid })
+					logging('ERROR', '获取自己的邀请码失败，请求失败', undefined, { uid })
 					return { success: false, message: '获取自己的邀请码失败，请求失败！', invitationCodeResult: [] }
 				}
 			} catch (error) {
-				console.error('ERROR', '获取自己的邀请码失败，请求时出错', { uid, error })
+				logging('ERROR', '获取自己的邀请码失败，请求时出错', error, { uid })
 				return { success: false, message: '获取自己的邀请码失败，请求时出错！', invitationCodeResult: [] }
 			}
 		} else {
-			console.error('ERROR', '获取自己的邀请码失败，非法用户！', { uid })
+			logging('ERROR', '获取自己的邀请码失败，非法用户！', undefined, { uid })
 			return { success: false, message: '获取自己的邀请码失败，非法用户！', invitationCodeResult: [] }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取自己的邀请码失败，未知错误', error)
+		logging('ERROR', '获取自己的邀请码失败，未知错误', error)
 		return { success: false, message: '获取自己的邀请码失败，未知错误', invitationCodeResult: [] }
 	}
 }
@@ -2407,19 +2410,19 @@ const useInvitationCode = async (useInvitationCodeDto: UseInvitationCodeDto): Pr
 				if (updateResult.success) {
 					return { success: true, message: '已使用邀请码注册' }
 				} else {
-					console.error('ERROR', '使用邀请码注册，使用邀请码失败')
+					logging('ERROR', '使用邀请码注册，使用邀请码失败')
 					return { success: false, message: '使用邀请码注册，使用邀请码失败' }
 				}
 			} catch (error) {
-				console.error('ERROR', '使用邀请码注册，使用邀请码时出错', error)
+				logging('ERROR', '使用邀请码注册，使用邀请码时出错', error)
 				return { success: false, message: '使用邀请码注册，使用邀请码时出错' }
 			}
 		} else {
-			console.error('ERROR', '使用邀请码注册，参数不合法')
+			logging('ERROR', '使用邀请码注册，参数不合法')
 			return { success: false, message: '使用邀请码注册，参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '使用邀请码注册，未知错误', error)
+		logging('ERROR', '使用邀请码注册，未知错误', error)
 		return { success: false, message: '使用邀请码注册，未知错误' }
 	}
 }
@@ -2453,19 +2456,19 @@ export const checkInvitationCodeService = async (checkInvitationCodeRequestDto: 
 						return { success: true, isAvailableInvitationCode: false, message: '邀请码检查未通过' }
 					}
 				} else {
-					console.error('ERROR', '检查邀请码可用性失败，请求失败')
+					logging('ERROR', '检查邀请码可用性失败，请求失败')
 					return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，请求失败！' }
 				}
 			} catch (error) {
-				console.error('ERROR', '检查邀请码可用性失败，请求时出错')
+				logging('ERROR', '检查邀请码可用性失败，请求时出错')
 				return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，请求时出错！' }
 			}
 		} else {
-			console.error('ERROR', '检查邀请码可用性失败，参数不合法')
+			logging('ERROR', '检查邀请码可用性失败，参数不合法')
 			return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '检查邀请码可用性失败，未知错误', error)
+		logging('ERROR', '检查邀请码可用性失败，未知错误', error)
 		return { success: false, isAvailableInvitationCode: false, message: '检查邀请码可用性失败，未知错误' }
 	}
 }
@@ -2479,17 +2482,17 @@ export const checkInvitationCodeService = async (checkInvitationCodeRequestDto: 
 export const adminGetUserByInvitationCodeService = async (invitationCode: string, AdminUUID: string, AdminToken: string): Promise<AdminGetUserByInvitationCodeResponseDto> => {
 	try {
 		if (!invitationCode || !AdminUUID || !AdminToken) {
-			console.error('ERROR', '管理员以邀请码查询用户失败，参数不合法')
+			logging('ERROR', '管理员以邀请码查询用户失败，参数不合法')
 			return { success: false, message: '管理员以邀请码查询用户失败，参数不合法', userInfoResult: {} }
 		}
 		if (!(await checkUserTokenByUuidService(AdminUUID, AdminToken)).success) {
-			console.error('ERROR', '管理员以邀请码查询用户失败，管理员验证失败')
+			logging('ERROR', '管理员以邀请码查询用户失败，管理员验证失败')
 			return { success: false, message: '管理员以邀请码查询用户失败，管理员验证失败', userInfoResult: {} }
 		}
 
 		const checkInvitationCode = await checkInvitationCodeService({ invitationCode })
 		if (!checkInvitationCode.success || !!checkInvitationCode.isAvailableInvitationCode) {
-			console.error('ERROR', '管理员以邀请码查询用户失败，邀请码不可用', { invitationCode })
+			logging('ERROR', '管理员以邀请码查询用户失败，邀请码不可用', undefined, { invitationCode })
 			return { success: false, message: '管理员以邀请码查询用户失败，邀请码不可用', userInfoResult: {} }
 		}
 
@@ -2506,17 +2509,17 @@ export const adminGetUserByInvitationCodeService = async (invitationCode: string
 		const userInvitationCodeResult = await selectDataFromMongoDB<UserInvitationCode>(userInvitationCodeWhere, userInvitationCodeSelect, schemaInstance, collectionName)
 		const userInvitationCodeData = userInvitationCodeResult.result?.[0]
 		if (!userInvitationCodeResult.success) {
-			console.error('ERROR', '管理员以邀请码查询用户失败，查询失败')
+			logging('ERROR', '管理员以邀请码查询用户失败，查询失败')
 			return { success: false, message: '管理员以邀请码查询用户失败，查询失败', userInfoResult: {} }
 		}
 		if (!userInvitationCodeData || !userInvitationCodeData.assignee || !userInvitationCodeData.assigneeUUID) {
-			console.error('ERROR', '管理员以邀请码查询用户失败，未找到用户信息', { invitationCode })
+			logging('ERROR', '管理员以邀请码查询用户失败，未找到用户信息', undefined, { invitationCode })
 			return { success: false, message: '管理员以邀请码查询用户失败，未找到用户信息', userInfoResult: {} }
 		}
 		return { success: true, message: '管理员以邀请码查询用户成功', userInfoResult: { uid: userInvitationCodeData?.assignee, uuid: userInvitationCodeData?.assigneeUUID} }
 
 	} catch (error) {
-		console.error('ERROR', '管理员以邀请码查询用户失败，未知错误', error)
+		logging('ERROR', '管理员以邀请码查询用户失败，未知错误', error)
 		return { success: false, message: '管理员以邀请码查询用户失败，未知错误', userInfoResult: {} }
 	}
 }
@@ -2532,13 +2535,13 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 	try {
 		if (!checkUpdateUserPasswordRequest(updateUserPasswordRequest)) {
 			const errorMessage = '修改密码失败，参数不合法！'
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			return { success: false, message: errorMessage }
 		}
 
 		if (!await checkUserTokenByUUID(cookieUuid, cookieToken)) {
 			const errorMessage = '修改密码失败，用户验证未通过！'
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -2553,7 +2556,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		const verify2FAResult = await general2FAVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'update-password', isStrictMode: true })
 		if (!verify2FAResult.success) {
 			const errorMessage = `修改密码失败，2FA 验证未通过：${verify2FAResult.message}`
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -2571,7 +2574,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(changePasswordWhere, changePasswordSelect, schemaInstance, collectionName, { session })
 		if (!userAuthResult.success || !userAuthResult.result || !userAuthResult.result.length || userAuthResult.result.length !== 1) {
 			const errorMessage = '修改密码失败，未能获取用户认证信息'
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -2580,7 +2583,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		const isCorrectPassword = comparePasswordSync(oldPasswordHash, passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '修改密码失败，旧密码不正确'
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -2588,13 +2591,13 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
 		if (!newPasswordHashHash) {
 			const errorMessage = '修改密码失败，未能散列新密码'
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
 		if (newPasswordHashHash === passwordHashHash) {
 			const errorMessage = '修改密码失败，新密码不能与旧密码相同'
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -2608,7 +2611,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
 		if (!updateResult.success) {
 			const errorMessage = '修改密码时出错，更新密码失败'
-			console.error('ERROR', errorMessage, { uuid: cookieUuid })
+			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -2616,7 +2619,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		await commitAndEndSession(session)
 		return { success: true, message: '密码已更新！' }
 	} catch (error) {
-		console.error('ERROR', '修改密码时出错，未知错误', error)
+		logging('ERROR', '修改密码时出错，未知错误', error)
 		return { success: false, message: '修改密码时出错，未知错误' }
 	}
 }
@@ -2630,7 +2633,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 	try {
 		if (!checkForgotPasswordRequest(forgotPasswordRequest)) {
 			const message = '找回密码失败，参数不合法！'
-			console.error('ERROR', message)
+			logging('ERROR', message)
 			return { success: false, message }
 		}
 
@@ -2642,7 +2645,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 		const emailVerificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'forgot-password' })
 		if (!emailVerificationResult.success) {
 			const errorMessage = `找回密码时出错，验证失败：${emailVerificationResult.message}`
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -2654,7 +2657,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 		if (!newPasswordHashHash) {
 			await abortAndEndSession(session)
 			const message = '找回密码失败，未能散列新密码'
-			console.error('ERROR', message, { email })
+			logging('ERROR', message, undefined, { email })
 			return { success: false, message }
 		}
 
@@ -2675,7 +2678,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 			if (!updateResult.success) {
 				await abortAndEndSession(session)
 				const message = '找回密码失败，更新密码失败'
-				console.error('ERROR', message, { email })
+				logging('ERROR', message, undefined, { email })
 				return { success: false, message }
 			}
 
@@ -2684,12 +2687,12 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 		} catch (error) {
 			await abortAndEndSession(session)
 			const message = '找回密码时出错，更新密码时出错'
-			console.error('ERROR', message, { email, error })
+			logging('ERROR', message, error, { email })
 			return { success: false, message }
 		}
 	} catch (error) {
 		const message = '找回密码时出错，未知错误。'
-		console.error('ERROR', message, error)
+		logging('ERROR', message, error)
 		return { success: false, message }
 	}
 }
@@ -2706,7 +2709,7 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 			const usernameStandardized = username.trim().normalize()
 
 			if (!validateNameField(usernameStandardized)) {
-				console.error('ERROR', '用户名不合法')
+				logging('ERROR', '用户名不合法')
 				return { success: false, message: '用户名不合法', isAvailableUsername: true }
 			}
 
@@ -2730,19 +2733,19 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 						return { success: true, message: '用户名重复', isAvailableUsername: false }
 					}
 				} else {
-					console.error('ERROR', '检查用户名失败，请求用户数据失败')
+					logging('ERROR', '检查用户名失败，请求用户数据失败')
 					return { success: false, message: '检查用户名失败，请求用户数据失败', isAvailableUsername: false }
 				}
 			} catch (error) {
-				console.error('ERROR', '检查用户名时出错，请求用户数据出错', error)
+				logging('ERROR', '检查用户名时出错，请求用户数据出错', error)
 				return { success: false, message: '检查用户名时出错，请求用户数据出错', isAvailableUsername: false }
 			}
 		} else {
-			console.error('ERROR', '检查用户名失败，参数不合法')
+			logging('ERROR', '检查用户名失败，参数不合法')
 			return { success: false, message: '检查用户名失败，参数不合法', isAvailableUsername: false }
 		}
 	} catch (error) {
-		console.error('ERROR', '检查用户名时出错，未知错误', error)
+		logging('ERROR', '检查用户名时出错，未知错误', error)
 		return { success: false, message: '检查用户名时出错，未知错误', isAvailableUsername: false }
 	}
 }
@@ -2755,7 +2758,7 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest: CheckUserExistsByUuidRequestDto): Promise<CheckUserExistsByUuidResponseDto> => {
 	try {
 		if (!checkCheckUserExistsByUuidRequest(checkUserExistsByUuidRequest)) {
-			console.error('ERROR', '查询用户是否存在时失败：参数不合法')
+			logging('ERROR', '查询用户是否存在时失败：参数不合法')
 			return { success: false, exists: false, message: '查询用户是否存在时失败：参数不合法' }
 		}
 
@@ -2773,7 +2776,7 @@ export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest:
 		try {
 			result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
 		} catch (error) {
-			console.error('ERROR', '根据 UUID 校验用户是否已经存在时出错：查询出错', error)
+			logging('ERROR', '根据 UUID 校验用户是否已经存在时出错：查询出错', error)
 			return { success: false, exists: false, message: '根据 UUID 校验用户是否已经存在时出错：查询出错' }
 		}
 
@@ -2787,7 +2790,7 @@ export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest:
 			return { success: false, exists: false, message: '查询失败' }
 		}
 	} catch (error) {
-		console.error('ERROR', '查询用户是否存在时出错：未知错误', error)
+		logging('ERROR', '查询用户是否存在时出错：未知错误', error)
 		return { success: false, exists: false, message: '查询用户是否存在时出错：未知错误' }
 	}
 }
@@ -2804,7 +2807,7 @@ export const getBlockedUserService = async (adminUUID: string, adminToken: strin
 		if (await checkUserTokenByUUID(adminUUID, adminToken)) {
 			const { sortBy, sortOrder } = GetBlockedUserRequest
 			if (!checkSortVariablesForGetBlockedUserService(sortBy, sortOrder)) {
-				console.error('ERROR', '获取所有被封禁用户的信息失败，排序参数不合法')
+				logging('ERROR', '获取所有被封禁用户的信息失败，排序参数不合法')
 				return { success: false, message: '获取所有被封禁用户的信息失败，排序参数不合法', totalCount: 0 }
 			}
 
@@ -2887,21 +2890,21 @@ export const getBlockedUserService = async (adminUUID: string, adminToken: strin
 				const userCountResult = await selectDataByAggregateFromMongoDB(userAuthSchemaInstance, userAuthCollectionName, blockedUserCountPipeline)
 				const userResult = await selectDataByAggregateFromMongoDB(userAuthSchemaInstance, userAuthCollectionName, blockedUserPipeline)
 				if (!userResult.success) {
-					console.error('ERROR', '获取所有被封禁用户的信息失败，查询数据失败')
+					logging('ERROR', '获取所有被封禁用户的信息失败，查询数据失败')
 					return { success: false, message: '获取所有被封禁用户的信息失败，查询数据失败', totalCount: 0 }
 				}
 
 				return { success: true, message: '获取所有被封禁用户的信息成功', result: userResult.result, totalCount: userCountResult.result?.[0]?.totalCount ?? 0 }
 			} catch (error) {
-				console.error('ERROR', '获取所有被封禁用户的信息失败，查询数据时出错：', error)
+				logging('ERROR', '获取所有被封禁用户的信息失败，查询数据时出错：', error)
 				return { success: false, message: '获取所有被封禁用户的信息失败，查询数据时出错', totalCount: 0 }
 			}
 		} else {
-			console.error('ERROR', '获取所有被封禁用户的信息失败，用户校验失败')
+			logging('ERROR', '获取所有被封禁用户的信息失败，用户校验失败')
 			return { success: false, message: '获取所有被封禁用户的信息失败，用户校验失败', totalCount: 0 }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取所有被封禁用户的信息时出错，未知错误：', error)
+		logging('ERROR', '获取所有被封禁用户的信息时出错，未知错误：', error)
 		return { success: false, message: '获取所有被封禁用户的信息时出错，未知错误', totalCount: 0 }
 	}
 }
@@ -2916,17 +2919,17 @@ export const getBlockedUserService = async (adminUUID: string, adminToken: strin
 export const adminGetUserInfoService = async (adminGetUserInfoRequest: AdminGetUserInfoRequestDto, adminUUID: string, adminToken: string): Promise<AdminGetUserInfoResponseDto> => {
 	try {
 		if (!checkAdminGetUserInfoRequest(adminGetUserInfoRequest)) {
-			console.error('ERROR', '管理员获取用户信息失败，请求参数不合法')
+			logging('ERROR', '管理员获取用户信息失败，请求参数不合法')
 			return { success: false, message: '管理员获取用户信息失败，请求参数不合法', totalCount: 0 }
 		}
 
 		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
-			console.error('ERROR', '管理员获取用户信息失败，用户校验未通过')
+			logging('ERROR', '管理员获取用户信息失败，用户校验未通过')
 			return { success: false, message: '管理员获取用户信息失败，用户校验未通过', totalCount: 0 }
 		}
 		const { sortBy, sortOrder } = adminGetUserInfoRequest
 		if (!checkSortVariablesForAdminGetUserInfoService(sortBy, sortOrder)) {
-			console.error('ERROR', '管理员获取用户信息失败，排序参数不合法')
+			logging('ERROR', '管理员获取用户信息失败，排序参数不合法')
 			return { success: false, message: '管理员获取用户信息失败，排序参数不合法', totalCount: 0 }
 		}
 
@@ -3041,17 +3044,17 @@ export const adminGetUserInfoService = async (adminGetUserInfoRequest: AdminGetU
 			const userCountResult = await selectDataByAggregateFromMongoDB(userAuthSchemaInstance, userAuthCollectionName, adminGetUserInfoCountPipeline)
 			const userResult = await selectDataByAggregateFromMongoDB(userAuthSchemaInstance, userAuthCollectionName, adminGetUserInfoPipeline)
 			if (!userResult.success) {
-				console.error('ERROR', '管理员获取用户信息失败，查询数据失败')
+				logging('ERROR', '管理员获取用户信息失败，查询数据失败')
 				return { success: false, message: '管理员获取用户信息失败，查询数据失败', totalCount: 0 }
 			}
 
 			return { success: true, message: '管理员获取用户信息成功', result: userResult.result, totalCount: userCountResult.result?.[0]?.totalCount ?? 0 }
 		} catch (error) {
-			console.error('ERROR', '管理员获取用户信息时出错，查询数据时出错：', error)
+			logging('ERROR', '管理员获取用户信息时出错，查询数据时出错：', error)
 			return { success: false, message: '管理员获取用户信息时出错，查询数据时出错', totalCount: 0 }
 		}
 	} catch (error) {
-		console.error('ERROR', '管理员获取用户信息时出错，未知错误：', error)
+		logging('ERROR', '管理员获取用户信息时出错，未知错误：', error)
 		return { success: false, message: '管理员获取用户信息时出错，未知错误', totalCount: 0 }
 	}
 }
@@ -3066,12 +3069,12 @@ export const adminGetUserInfoService = async (adminGetUserInfoRequest: AdminGetU
 export const approveUserInfoService = async (approveUserInfoRequest: ApproveUserInfoRequestDto, adminUUID: string, adminToken: string): Promise<ApproveUserInfoResponseDto> => {
 	try {
 		if (!checkApproveUserInfoRequest(approveUserInfoRequest)) {
-			console.error('ERROR', '管理员通过用户信息审核失败，参数不合法')
+			logging('ERROR', '管理员通过用户信息审核失败，参数不合法')
 			return { success: false, message: '管理员通过用户信息审核失败，参数不合法' }
 		}
 
 		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
-			console.error('ERROR', '管理员通过用户信息审核失败，用户校验未通过')
+			logging('ERROR', '管理员通过用户信息审核失败，用户校验未通过')
 			return { success: false, message: '管理员通过用户信息审核失败，用户校验未通过' }
 		}
 
@@ -3089,17 +3092,17 @@ export const approveUserInfoService = async (approveUserInfoRequest: ApproveUser
 		try {
 			const updateResult = await findOneAndUpdateData4MongoDB(approveUserInfoWhere, approveUserInfoUpdate, schemaInstance, collectionName)
 			if (!updateResult.success) {
-				console.error('ERROR', '管理员通过用户信息审核失败，向数据库更新数据失败')
+				logging('ERROR', '管理员通过用户信息审核失败，向数据库更新数据失败')
 				return { success: false, message: '管理员通过用户信息审核失败，向数据库更新数据失败' }
 			}
 
 			return { success: true, message: '管理员通过用户信息审核成功' }
 		} catch (error) {
-			console.error('ERROR', '管理员通过用户信息审核时出错，向数据库更新数据时出错：', error)
+			logging('ERROR', '管理员通过用户信息审核时出错，向数据库更新数据时出错：', error)
 			return { success: false, message: '管理员通过用户信息审核时出错，向数据库更新数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '管理员通过用户信息审核时出错，未知错误：', error)
+		logging('ERROR', '管理员通过用户信息审核时出错，未知错误：', error)
 		return { success: false, message: '管理员通过用户信息审核时出错，未知错误' }
 	}
 }
@@ -3114,19 +3117,19 @@ export const approveUserInfoService = async (approveUserInfoRequest: ApproveUser
 export const adminClearUserInfoService = async (adminClearUserInfoRequest: AdminClearUserInfoRequestDto, adminUUID: string, adminToken: string): Promise<AdminClearUserInfoResponseDto> => {
 	try {
 		if (!checkAdminClearUserInfoRequest(adminClearUserInfoRequest)) {
-			console.error('ERROR', '管理员清空某个用户的信息失败，参数不合法')
+			logging('ERROR', '管理员清空某个用户的信息失败，参数不合法')
 			return { success: false, message: '管理员清空某个用户的信息失败，参数不合法' }
 		}
 
 		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
-			console.error('ERROR', '管理员清空某个用户的信息失败，用户校验未通过')
+			logging('ERROR', '管理员清空某个用户的信息失败，用户校验未通过')
 			return { success: false, message: '管理员清空某个用户的信息失败，用户校验未通过' }
 		}
 
 		const uid = adminClearUserInfoRequest.uid
 		const UUID = await getUserUuid(uid)
 		if (!UUID) {
-			console.error('ERROR', '管理员清空某个用户的信息失败，UUID 不存在', { uid })
+			logging('ERROR', '管理员清空某个用户的信息失败，UUID 不存在', undefined, { uid })
 			return { success: false, message: '管理员清空某个用户的信息失败，UUID 不存在' }
 		}
 		let username: string
@@ -3164,17 +3167,17 @@ export const adminClearUserInfoService = async (adminClearUserInfoRequest: Admin
 		try {
 			const updateResult = await findOneAndUpdateData4MongoDB(adminClearUserInfoWhere, adminClearUserInfoUpdate, schemaInstance, collectionName)
 			if (!updateResult.success) {
-				console.error('ERROR', '管理员清空某个用户的信息失败，向数据库更新数据失败')
+				logging('ERROR', '管理员清空某个用户的信息失败，向数据库更新数据失败')
 				return { success: false, message: '管理员清空某个用户的信息失败，向数据库更新数据失败' }
 			}
 
 			return { success: true, message: '管理员清空某个用户的信息成功' }
 		} catch (error) {
-			console.error('ERROR', '管理员清空某个用户的信息时出错，向数据库更新数据时出错：', error)
+			logging('ERROR', '管理员清空某个用户的信息时出错，向数据库更新数据时出错：', error)
 			return { success: false, message: '管理员清空某个用户的信息时出错，向数据库更新数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '管理员清空某个用户的信息时出错，未知错误：', error)
+		logging('ERROR', '管理员清空某个用户的信息时出错，未知错误：', error)
 		return { success: false, message: '管理员清空某个用户的信息时出错，未知错误' }
 	}
 }
@@ -3189,7 +3192,7 @@ export const adminClearUserInfoService = async (adminClearUserInfoRequest: Admin
 export const adminEditUserInfoService = async (adminEditUserInfoRequest: AdminEditUserInfoRequestDto, adminUUID: string, adminToken: string): Promise<AdminEditUserInfoResponseDto> => {
 	try {
 		if (!checkAdminEditUserInfoRequest(adminEditUserInfoRequest)) {
-			console.error('ERROR', '管理员编辑用户信息失败，参数不合法')
+			logging('ERROR', '管理员编辑用户信息失败，参数不合法')
 			return { success: false, message: '管理员编辑用户信息失败，参数不合法' }
 		}
 
@@ -3202,19 +3205,19 @@ export const adminEditUserInfoService = async (adminEditUserInfoRequest: AdminEd
 			const checkResult = await checkUsernameService({ username: usernameStandardized })
 
 			if (!checkResult.success || !checkResult.isAvailableUsername) {
-				console.error('ERROR', '管理员编辑用户信息失败，用户名不可用', { adminEditUserInfoRequest, uid })
+				logging('ERROR', '管理员编辑用户信息失败，用户名不可用', undefined, { adminEditUserInfoRequest, uid })
 				return { success: false, message: '管理员编辑用户信息失败，用户名不可用' }
 			}
 		}
 
 		const UUID = await getUserUuid(uid)
 		if (!UUID) {
-			console.error('ERROR', '管理员编辑用户信息失败，UUID 不存在', { uid })
+			logging('ERROR', '管理员编辑用户信息失败，UUID 不存在', undefined, { uid })
 			return { success: false, message: '管理员编辑用户信息失败，UUID 不存在' }
 		}
 
 		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
-			console.error('ERROR', '管理员编辑用户信息失败，用户校验未通过')
+			logging('ERROR', '管理员编辑用户信息失败，用户校验未通过')
 			return { success: false, message: '管理员编辑用户信息失败，用户校验未通过' }
 		}
 
@@ -3230,13 +3233,13 @@ export const adminEditUserInfoService = async (adminEditUserInfoRequest: AdminEd
 
 		const updateUserInfoResult = await findOneAndUpdateData4MongoDB(adminEditUserInfoWhere, adminEditUserInfoUpdate, userInfoSchemaInstance, userInfoCollectionName)
 		if (!updateUserInfoResult.success) {
-			console.error('ERROR', '管理员编辑用户信息失败，向数据库更新数据失败')
+			logging('ERROR', '管理员编辑用户信息失败，向数据库更新数据失败')
 			return { success: false, message: '管理员编辑用户信息失败，向数据库更新数据失败' }
 		}
 		return { success: true, message: '管理员编辑用户信息成功' }
 
 	} catch (error) {
-		console.error('ERROR', '管理员编辑用户信息时出错，未知错误：', error)
+		logging('ERROR', '管理员编辑用户信息时出错，未知错误：', error)
 		return { success: false, message: '管理员编辑用户信息时出错，未知错误' }
 	}
 }
@@ -3249,7 +3252,7 @@ export const adminEditUserInfoService = async (adminEditUserInfoRequest: AdminEd
 export const getUserUuid = async (uid: number): Promise<string | void> => {
 	try {
 		if (uid === undefined || uid === null || uid <= 0) {
-			console.error('ERROR', '通过 UID 获取 UUID 失败，UID 不合法')
+			logging('ERROR', '通过 UID 获取 UUID 失败，UID 不合法')
 			return
 		}
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaSchemaInstance } = UserAuthSchema
@@ -3267,10 +3270,10 @@ export const getUserUuid = async (uid: number): Promise<string | void> => {
 		if (getUuidResult.success && getUuidResult.result?.length === 1) {
 			return getUuidResult.result[0].UUID
 		} else {
-			console.error('ERROR', '通过 UID 获取 UUID 失败，UUID 不存在或结果长度不为 1')
+			logging('ERROR', '通过 UID 获取 UUID 失败，UUID 不存在或结果长度不为 1')
 		}
 	} catch (error) {
-		console.error('ERROR', '通过 UID 获取 UUID 时出错：', error)
+		logging('ERROR', '通过 UID 获取 UUID 时出错：', error)
 		return
 	}
 }
@@ -3283,7 +3286,7 @@ export const getUserUuid = async (uid: number): Promise<string | void> => {
 export const getUserUid = async (uuid: string): Promise<number | undefined> => {
 	try {
 		if (!uuid) {
-			console.error('ERROR', '通过 UUID 获取 UID 失败，UUID 不合法')
+			logging('ERROR', '通过 UUID 获取 UID 失败，UUID 不合法')
 			return
 		}
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaSchemaInstance } = UserAuthSchema
@@ -3301,10 +3304,10 @@ export const getUserUid = async (uuid: string): Promise<number | undefined> => {
 		if (getUidResult.success && getUidResult.result?.length === 1) {
 			return getUidResult.result[0].uid
 		} else {
-			console.error('ERROR', '通过 UUID 获取 UID 失败，UID 不存在或结果长度不为 1')
+			logging('ERROR', '通过 UUID 获取 UID 失败，UID 不存在或结果长度不为 1')
 		}
 	} catch (error) {
-		console.error('ERROR', '通过 UUID 获取 UID 时出错：', error)
+		logging('ERROR', '通过 UUID 获取 UID 时出错：', error)
 		return undefined
 	}
 }
@@ -3334,23 +3337,23 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 					if (userInfo.result?.length === 1) {
 						return true
 					} else {
-						console.error('ERROR', `查询用户 Token 时，用户信息长度不为 1，用户uid：【${uid}】`)
+						logging('ERROR', `查询用户 Token 时，用户信息长度不为 1，用户uid：【${uid}】`)
 						return false
 					}
 				} else {
-					console.error('ERROR', `查询用户 Token 时未查询到用户信息，用户uid：【${uid}】，错误描述：${userInfo.message}，错误信息：${userInfo.error}`)
+					logging('ERROR', `查询用户 Token 时未查询到用户信息，用户uid：【${uid}】，错误描述：${userInfo.message}，错误信息：${userInfo.error}`)
 					return false
 				}
 			} catch (error) {
-				console.error('ERROR', `查询用户 Token 时出错，用户uid：【${uid}】，错误信息：`, error)
+				logging('ERROR', `查询用户 Token 时出错，用户uid：【${uid}】，错误信息：`, error)
 				return false
 			}
 		} else {
-			console.error('ERROR', `查询用户 Token 时出错，必要的参数 uid 或 token为空：【${uid}】`)
+			logging('ERROR', `查询用户 Token 时出错，必要的参数 uid 或 token为空：【${uid}】`)
 			return false
 		}
 	} catch (error) {
-		console.error('ERROR', '查询用户 Token 时出错，未知错误：', error)
+		logging('ERROR', '查询用户 Token 时出错，未知错误：', error)
 		return false
 	}
 }
@@ -3379,23 +3382,23 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 					if (userInfo.result?.length === 1) {
 						return true
 					} else {
-						console.error('ERROR', `查询用户 Token 时，用户信息长度不为 1，用户 UUID: ${UUID}`)
+						logging('ERROR', `查询用户 Token 时，用户信息长度不为 1，用户 UUID: ${UUID}`)
 						return false
 					}
 				} else {
-					console.error('ERROR', `查询用户 Token 时未查询到用户信息，用户 UUID: ${UUID}，错误描述：${userInfo.message}，错误信息：${userInfo.error}`)
+					logging('ERROR', `查询用户 Token 时未查询到用户信息，用户 UUID: ${UUID}，错误描述：${userInfo.message}，错误信息：${userInfo.error}`)
 					return false
 				}
 			} catch (error) {
-				console.error('ERROR', `查询用户 Token 时出错，用户 UUID: ${UUID}，错误信息：`, error)
+				logging('ERROR', `查询用户 Token 时出错，用户 UUID: ${UUID}，错误信息：`, error)
 				return false
 			}
 		} else {
-			console.error('ERROR', `查询用户 Token 时出错，必要的参数 uid 或 token为空 UUID: ${UUID}`)
+			logging('ERROR', `查询用户 Token 时出错，必要的参数 uid 或 token为空 UUID: ${UUID}`)
 			return false
 		}
 	} catch (error) {
-		console.error('ERROR', '查询用户 Token 时出错，未知错误：', error)
+		logging('ERROR', '查询用户 Token 时出错，未知错误：', error)
 		return false
 	}
 }
@@ -3421,7 +3424,7 @@ type DeleteTotpAuthenticatorByRecoveryCodeResultDto = {} & DeleteTotpAuthenticat
 const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRecoveryCodeData: DeleteTotpAuthenticatorByRecoveryCodeParametersDto): Promise<DeleteTotpAuthenticatorByRecoveryCodeResultDto> => {
 	try {
 		if (!checkDeleteTotpAuthenticatorByRecoveryCodeData(deleteTotpAuthenticatorByRecoveryCodeData)) {
-			console.error('ERROR', '通过恢复码删除用户 2FA 失败，参数不合法')
+			logging('ERROR', '通过恢复码删除用户 2FA 失败，参数不合法')
 			return { success: false, message: '通过恢复码删除用户 2FA 失败，参数不合法' }
 		}
 
@@ -3434,7 +3437,7 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 
 		if (!deleteResult.success) {
 			const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，删除失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage }
 		}
 
@@ -3442,14 +3445,14 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 
 		if (!resetResult) {
 			const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，重置用户 TOTP 2FA 数据失败'
-			console.error('ERROR', errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			return { success: false, message: errorMessage }
 		}
 
 		return { success: true, message: '用户的 TOTP 身份验证器已删除' }
 	} catch (error) {
 		const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，发生未知错误'
-		console.error('ERROR', errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, message: errorMessage }
 	}
 }
@@ -3465,13 +3468,13 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 	try {
 		if (!checkDeleteTotpAuthenticatorByTotpVerificationCodeRequest(deleteTotpAuthenticatorByTotpVerificationCodeRequest)) {
 			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，参数不合法'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户校验未通过'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -3490,14 +3493,15 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		const passwordHashHash = userAuthResult.result?.[0]?.passwordHashHash
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
 			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，无法查询到用户安全信息'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
 		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash)
 		if (!isCorrectPassword) {
-			console.error('ERROR', `已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确`)
-			return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确' }
+			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确'
+			logging('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
 		}
 
 		const TotpVerifier = new General2FATotpVerifier(uuid, clientOtp, token)
@@ -3505,7 +3509,7 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: true, isAllowRecoveryCodeAndDeleteTotp: false })
 		if (!totpVerificationResult.success && totpVerificationResult.resetAttemptsCallback) {
 			const errorMessage = `已登录用户通过密码和 TOTP 验证码删除身份验证器失败：${totpVerificationResult.message}`
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -3524,7 +3528,7 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 
 		if (!deleteResult.success || deleteResult.result.deletedCount !== 1 || !resetResult) {
 			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败：删除失败，未找到匹配的数据或重置用户 2FA 数据失败'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -3532,8 +3536,9 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		await commitAndEndSession(session)
 		return { success: true, message: '删除 TOTP 身份验证器成功' }
 	} catch (error) {
-		console.error('已登录用户通过密码和 TOTP 验证码删除身份验证器时出错，未知错误', error)
-		return { success: false, message: '已登录用户通过密码和 TOTP 验证码删除身份验证器时出错，未知错误' }
+		const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器时出错，未知错误'
+		logging('ERROR', errorMessage, error)
+		return { success: false, message: errorMessage }
 	}
 }
 
@@ -3554,7 +3559,7 @@ const resetUser2FATypeByUUID = async (uuid: string, session: ClientSession): Pro
 
 		return !!updateResult.success
 	} catch (error) {
-		console.error('ERROR', '根据 UUID 重置 user-auth 表中用户的 authenticatorType 字段时出错，未知错误：', error)
+		logging('ERROR', '根据 UUID 重置 user-auth 表中用户的 authenticatorType 字段时出错，未知错误：', error)
 		return false
 	}
 }
@@ -3571,7 +3576,7 @@ const resetUser2FATypeByUUID = async (uuid: string, session: ClientSession): Pro
 export const createUserTotpAuthenticatorService = async (uuid: string, token: string): Promise<CreateUserTotpAuthenticatorResponseDto> => {
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('创建 TOTP 身份验证器失败，非法用户', { uuid })
+			logging('ERROR', '创建 TOTP 身份验证器失败，非法用户', undefined, { uuid })
 			return { success: false, isExists: false, message: '创建 TOTP 身份验证器失败，非法用户' }
 		}
 
@@ -3594,7 +3599,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('创建 TOTP 身份验证器失败，用户不存在', { uuid })
+			logging('ERROR', '创建 TOTP 身份验证器失败，用户不存在', undefined, { uuid })
 			return { success: false, isExists: false, message: '创建 TOTP 身份验证器失败，用户不存在' }
 		}
 
@@ -3603,7 +3608,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('创建 TOTP 身份验证器失败，已经开启 Email 2FA', { uuid })
+			logging('ERROR', '创建 TOTP 身份验证器失败，已经开启 Email 2FA', undefined, { uuid })
 			return { success: false, isExists: true, existsAuthenticatorType: 'email', message: '创建 TOTP 身份验证器失败，已经开启 Email 2FA' }
 		}
 
@@ -3612,7 +3617,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('创建 TOTP 身份验证器失败，已经开启 TOTP 2FA', { uuid })
+			logging('ERROR', '创建 TOTP 身份验证器失败，已经开启 TOTP 2FA', undefined, { uuid })
 			return { success: false, isExists: true, existsAuthenticatorType: 'totp', message: '创建 TOTP 身份验证器失败，已经开启 TOTP 2FA' }
 		}
 
@@ -3627,7 +3632,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('创建 TOTP 身份验证器失败，验证器唯一检查失败', { uuid })
+			logging('ERROR', '创建 TOTP 身份验证器失败，验证器唯一检查失败', undefined, { uuid })
 			return { success: false, isExists: false, message: '创建身份验证器失败，验证器唯一检查失败' }
 		}
 
@@ -3636,7 +3641,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('创建 TOTP 身份验证器失败，数据库中已经存储了一个启用的 TOTP 2FA', { uuid })
+			logging('ERROR', '创建 TOTP 身份验证器失败，数据库中已经存储了一个启用的 TOTP 2FA', undefined, { uuid })
 			return { success: false, isExists: true, existsAuthenticatorType: 'totp', message: '创建 TOTP 身份验证器失败，数据库中已经存储了一个启用的身份验证器' }
 		}
 
@@ -3667,7 +3672,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('创建 TOTP 身份验证器失败，保存数据失败', { uuid })
+			logging('ERROR', '创建 TOTP 身份验证器失败，保存数据失败', undefined, { uuid })
 			return { success: false, isExists: false, message: '创建 TOTP 身份验证器失败，保存数据失败' }
 		}
 
@@ -3675,7 +3680,7 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 		session.endSession()
 		return { success: true, isExists: false, message: '创建 TOTP 身份验证器成功', result: { otpAuth } }
 	} catch (error) {
-		console.error('创建 TOTP 身份验证器失败时出错，未知错误', error)
+		logging('ERROR', '创建 TOTP 身份验证器失败时出错，未知错误', error)
 		return { success: false, isExists: false, message: '创建 TOTP 身份验证器时出错，未知错误' }
 	}
 }
@@ -3691,7 +3696,7 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			const errorMessage = '确认绑定 TOTP 设备失败，非法用户'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
@@ -3703,7 +3708,7 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: false, isAllowRecoveryCodeAndDeleteTotp: false, totpEnableStatus: false })
 		if (!totpVerificationResult.success && totpVerificationResult.resetAttemptsCallback) {
 			const errorMessage = `确认绑定 TOTP 设备失败，验证失败：${totpVerificationResult.message}`
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -3744,7 +3749,7 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 
 		if (!updateAuthenticatorResult.success || !updateAuthenticatorResult.result || !updateUserAuthResult.success || !updateUserAuthResult.result) {
 			const errorMessage = '确认绑定 TOTP 设备失败，更新失败'
-			console.error('ERROR', errorMessage)
+			logging('ERROR', errorMessage)
 			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
@@ -3753,7 +3758,7 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		return { success: true, result: { backupCode, recoveryCode }, message: '已绑定 TOTP 设备' }
 	} catch (error) {
 		const errorMessage = '确认绑定 TOTP 设备时出错，未知错误'
-		console.error('ERROR', errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, message: errorMessage }
 	}
 }
@@ -3767,7 +3772,7 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 export const createUserEmailAuthenticatorService = async (uuid: string, token: string): Promise<CreateUserEmailAuthenticatorResponseDto> => {
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('创建 Email 身份验证器失败，非法用户', { uuid })
+			logging('ERROR', '创建 Email 身份验证器失败，非法用户', undefined, { uuid })
 			return { success: false, isExists: false, message: '创建 Email 身份验证器失败，非法用户' }
 		}
 
@@ -3785,7 +3790,7 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(createUserEmailAuthenticatorUserAuthWhere, createUserEmailAuthenticatorUserAuthSelect, userAuthSchemaInstance, userAuthCollectionName, { session })
 		if (!userAuthResult.success || !userAuthResult?.result || userAuthResult.result?.length !== 1) {
 			const errorMessage = '创建 Email 2FA 身份验证器失败，用户不存在'
-			console.error(errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, isExists: false, message: errorMessage }
 		}
@@ -3794,21 +3799,21 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		const emailLowerCase = userAuthResult.result[0].emailLowerCase
 		if (!emailLowerCase) {
 			const errorMessage = '创建 Email 2FA 身份验证器失败，未找到邮箱'
-			console.error(errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, isExists: false, message: errorMessage }
 		}
 
 		if (userAuthResult.result[0].authenticatorType === 'email') {
 			const errorMessage = '创建 Email 2FA 身份验证器失败，已经开启 Email 2FA'
-			console.error(errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, isExists: true, existsAuthenticatorType: 'email', message: errorMessage }
 		}
 
 		if (userAuthResult.result[0].authenticatorType === 'totp') {
 			const errorMessage = '创建 Email 2FA 身份验证器失败，已经开启 TOTP 2FA'
-			console.error(errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, isExists: true, existsAuthenticatorType: 'totp', message: errorMessage }
 		}
@@ -3826,7 +3831,7 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 
 		if (!updateUserAuthResult.success || !updateUserAuthResult.result) {
 			const errorMessage = '创建 Email 2FA 身份验证器失败，保存数据失败'
-			console.error(errorMessage, { uuid })
+			logging('ERROR', errorMessage, undefined, { uuid })
 			await abortAndEndSession(session)
 			return { success: false, isExists: false, message: errorMessage }
 		}
@@ -3835,7 +3840,7 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		return { success: true, isExists: false, message: '创建 Email 2FA 身份验证器成功', result: { email, emailLowerCase } }
 	} catch (error) {
 		const errorMessage = '创建 Email 2FA 身份验证器时出错，未知错误'
-		console.error(errorMessage, error)
+		logging('ERROR', errorMessage, error)
 		return { success: false, isExists: false, message: errorMessage }
 	}
 }
@@ -3849,12 +3854,12 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 export const deleteUserEmailAuthenticatorService = async (deleteUserEmailAuthenticatorRequest: DeleteUserEmailAuthenticatorRequestDto, uuid: string, token: string): Promise<DeleteUserEmailAuthenticatorResponseDto> => {
 	try {
 		if (!checkDeleteUserEmailAuthenticatorRequest(deleteUserEmailAuthenticatorRequest)) {
-			console.error('用户删除 Email 2FA 时失败，参数非法')
+			logging('ERROR', '用户删除 Email 2FA 时失败，参数非法')
 			return { success: false, message: '用户删除 Email 2FA 时失败，参数非法' }
 		}
 
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('用户删除 Email 2FA 时失败，用户校验未通过')
+			logging('ERROR', '用户删除 Email 2FA 时失败，用户校验未通过')
 			return { success: false, message: '用户删除 Email 2FA 时失败，用户校验未通过' }
 		}
 
@@ -3878,20 +3883,20 @@ export const deleteUserEmailAuthenticatorService = async (deleteUserEmailAuthent
 
 		if (!userAuthResult.success || userAuthResult.result?.length !== 1) {
 			await abortAndEndSession(session)
-			console.error('用户删除 Email 2FA 时失败，用户不存在')
+			logging('ERROR', '用户删除 Email 2FA 时失败，用户不存在')
 			return { success: false, message: '用户删除 Email 2FA 时失败，用户不存在' }
 		}
 
 		if (userAuthData.authenticatorType !== 'email') {
 			await abortAndEndSession(session)
-			console.error('用户删除 Email 2FA 时失败，用户未开启 2FA 或者 2FA 方式不是 Email。')
+			logging('ERROR', '用户删除 Email 2FA 时失败，用户未开启 2FA 或者 2FA 方式不是 Email。')
 			return { success: false, message: '用户删除 Email 2FA 时失败，用户未开启 2FA 或者 2FA 方式不是 Email。' }
 		}
 
 		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData.passwordHashHash)
 		if (!isCorrectPassword) {
 			await abortAndEndSession(session)
-			console.error('用户删除 Email 2FA 时失败，密码错误')
+			logging('ERROR', '用户删除 Email 2FA 时失败，密码错误')
 			return { success: false, message: '用户删除 Email 2FA 时失败，密码错误' }
 		}
 
@@ -3900,7 +3905,7 @@ export const deleteUserEmailAuthenticatorService = async (deleteUserEmailAuthent
 
 		if (!verificationCodeCheckResult || !verificationCodeCheckResult.success) {
 			await abortAndEndSession(session)
-			console.error('用户删除 Email 2FA 时失败，验证失败或验证码错误')
+			logging('ERROR', '用户删除 Email 2FA 时失败，验证失败或验证码错误')
 			return { success: false, message: '用户删除 Email 2FA 时失败，验证失败或验证码错误' }
 		}
 
@@ -3909,14 +3914,14 @@ export const deleteUserEmailAuthenticatorService = async (deleteUserEmailAuthent
 
 		if (!resetUser2FATypeByUUIDResult) {
 			await abortAndEndSession(session)
-			console.error('用户删除 Email 2FA 时失败，用户关闭 2FA 失败', { UUID: uuid })
+			logging('ERROR', '用户删除 Email 2FA 时失败，用户关闭 2FA 失败', undefined, { UUID: uuid })
 			return { success: false, message: '用户删除 Email 2FA 时失败，用户关闭 2FA 失败' }
 		}
 
 		await commitAndEndSession(session)
 		return { success: true, message: '用户删除 Email 2FA 成功' }
 	} catch (error) {
-		console.error('用户删除 Email 2FA 时出错，未知错误', error)
+		logging('ERROR', '用户删除 Email 2FA 时出错，未知错误', error)
 		return { success: false, message: '用户删除 Email 2FA 时出错，未知错误' }
 	}
 }
@@ -3930,7 +3935,7 @@ export const checkUserHave2FAByEmailService = async (checkUserHave2FARequestDto:
 	try {
 		const { email } = checkUserHave2FARequestDto
 		if (!email) {
-			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空`)
+			logging('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空`)
 			return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，邮箱为空' }
 		}
 
@@ -3944,13 +3949,13 @@ export const checkUserHave2FAByEmailService = async (checkUserHave2FARequestDto:
 
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
-			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据`)
+			logging('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据`)
 			return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据' }
 		}
 
 		const UUID = userAuthResult.result[0].UUID
 		if (!UUID) {
-			console.error('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到 UUID`)
+			logging('ERROR', `通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到 UUID`)
 			return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器失败，未找到 UUID' }
 		}
 
@@ -3972,7 +3977,7 @@ export const checkUserHave2FAByEmailService = async (checkUserHave2FARequestDto:
 			return { success: true, have2FA: false, message: '用户未开启 2FA' }
 		}
 	} catch (error) {
-		console.error('通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
+		logging('ERROR', '通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
 		return { success: false, have2FA: false, message: '通过 Email 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
 	}
 }
@@ -3986,7 +3991,7 @@ export const checkUserHave2FAByEmailService = async (checkUserHave2FARequestDto:
 export const checkUserHave2FAByUUIDService = async (uuid: string, token: string): Promise<CheckUserHave2FAResponseDto> => {
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
-			console.error('ERROR', `通过 UUID 检查用户是否已开启 2FA 身份验证器失败，非法用户`)
+			logging('ERROR', `通过 UUID 检查用户是否已开启 2FA 身份验证器失败，非法用户`)
 			return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器失败，非法用户' }
 		}
 
@@ -3998,7 +4003,7 @@ export const checkUserHave2FAByUUIDService = async (uuid: string, token: string)
 
 		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
-			console.error('ERROR', `通过 UUID 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据`)
+			logging('ERROR', `通过 UUID 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据`)
 			return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器失败，未找到用户数据' }
 		}
 
@@ -4020,7 +4025,7 @@ export const checkUserHave2FAByUUIDService = async (uuid: string, token: string)
 			return { success: true, have2FA: false, message: '用户未开启 2FA' }
 		}
 	} catch (error) {
-		console.error('通过 UUID 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
+		logging('ERROR', '通过 UUID 检查用户是否已开启 2FA 身份验证器时出错，未知错误', error)
 		return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
 	}
 }
