@@ -582,8 +582,8 @@ export const approveCommentReviewService = async (
 		const checkWhere: QueryType<VideoComment> = {
 			commentRoute,
 			pendingReview: true,
-			userDeletedFlag: { $ne: true },
-			adminDeletedFlag: { $ne: true },
+			userDeletedFlag: { $ne: true } as any,
+			adminDeletedFlag: { $ne: true } as any,
 		}
 		const checkSelect: SelectType<VideoComment> = {
 			commentRoute: 1,
@@ -600,8 +600,8 @@ export const approveCommentReviewService = async (
 		const updateWhere: QueryType<VideoComment> = {
 			commentRoute,
 			pendingReview: true,
-			userDeletedFlag: { $ne: true },
-			adminDeletedFlag: { $ne: true },
+			userDeletedFlag: { $ne: true } as any,
+			adminDeletedFlag: { $ne: true } as any,
 		}
 		const updateData: UpdateType<VideoComment> = {
 			pendingReview: false,
@@ -657,8 +657,8 @@ export const rejectCommentReviewService = async (
 		const checkWhere: QueryType<VideoComment> = {
 			commentRoute,
 			pendingReview: true,
-			userDeletedFlag: { $ne: true },
-			adminDeletedFlag: { $ne: true },
+			userDeletedFlag: { $ne: true } as any,
+			adminDeletedFlag: { $ne: true } as any,
 		}
 		const checkSelect: SelectType<VideoComment> = {
 			commentRoute: 1,
@@ -713,12 +713,12 @@ export const approveDanmakuReviewService = async (
 
 		// 检查弹幕是否存在且待审核且未被删除
 		const checkWhere: QueryType<Danmaku> = {
-			_id: new mongoose.Types.ObjectId(danmakuId),
+			_id: new mongoose.Types.ObjectId(danmakuId as any) as any,
 			pendingReview: true,
-			userDeletedFlag: { $ne: true },
-			adminDeletedFlag: { $ne: true },
+			userDeletedFlag: { $ne: true } as any,
+			adminDeletedFlag: { $ne: true } as any,
 		}
-		const checkSelect: SelectType<Danmaku> = {
+		const checkSelect: any = {
 			_id: 1,
 			pendingReview: 1,
 		}
@@ -731,10 +731,10 @@ export const approveDanmakuReviewService = async (
 
 		// 更新弹幕状态
 		const updateWhere: QueryType<Danmaku> = {
-			_id: new mongoose.Types.ObjectId(danmakuId),
+			_id: new mongoose.Types.ObjectId(danmakuId as any) as any,
 			pendingReview: true,
-			userDeletedFlag: { $ne: true },
-			adminDeletedFlag: { $ne: true },
+			userDeletedFlag: { $ne: true } as any,
+			adminDeletedFlag: { $ne: true } as any,
 		}
 		const updateData: UpdateType<Danmaku> = {
 			pendingReview: false,
@@ -788,12 +788,12 @@ export const rejectDanmakuReviewService = async (
 
 		// 检查弹幕是否存在且待审核且未被删除
 		const checkWhere: QueryType<Danmaku> = {
-			_id: new mongoose.Types.ObjectId(danmakuId),
+			_id: new mongoose.Types.ObjectId(danmakuId as any) as any,
 			pendingReview: true,
-			userDeletedFlag: { $ne: true },
-			adminDeletedFlag: { $ne: true },
+			userDeletedFlag: { $ne: true } as any,
+			adminDeletedFlag: { $ne: true } as any,
 		}
-		const checkSelect: SelectType<Danmaku> = {
+		const checkSelect: any = {
 			_id: 1,
 			pendingReview: 1,
 		}
