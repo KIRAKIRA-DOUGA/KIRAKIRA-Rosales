@@ -45,6 +45,7 @@ import {
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getSelfVideoCommentListController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
+import { approveCommentReviewController, approveDanmakuReviewController, approveVideoReviewController, getPendingReviewCommentListController, getPendingReviewDanmakuListController, getPendingReviewVideoListController, rejectCommentReviewController, rejectDanmakuReviewController, rejectVideoReviewController } from '../controller/ReviewController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { cancelVideoDownvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, emitVideoUpvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
@@ -475,6 +476,62 @@ router.get('/video/pending', getPendingReviewVideoController) // 获取待审核
 router.post('/video/pending/approved', approvePendingReviewVideoController) // 通过一个待审核视频 // WARN: 仅限管理员
 // https://localhost:9999/video/pending/approved
 // cookie: uid, token
+
+// ========== 新的审核接口（需要 developer 角色，使用 uuid 和 token） ==========
+
+router.get('/review/video/pending', getPendingReviewVideoListController) // 获取待审核视频列表（需要 developer 角色）
+// https://localhost:9999/review/video/pending?num=20&offset=0
+// cookie: uuid, token
+
+router.get('/review/comment/pending', getPendingReviewCommentListController) // 获取待审核评论列表（需要 developer 角色）
+// https://localhost:9999/review/comment/pending?num=20&offset=0
+// cookie: uuid, token
+
+router.get('/review/danmaku/pending', getPendingReviewDanmakuListController) // 获取待审核弹幕列表（需要 developer 角色）
+// https://localhost:9999/review/danmaku/pending?num=20&offset=0
+// cookie: uuid, token
+
+router.post('/review/video/approve', approveVideoReviewController) // 通过视频审核（需要 developer 角色）
+// https://localhost:9999/review/video/approve
+// cookie: uuid, token
+// {
+// 	"videoId": 123
+// }
+
+router.post('/review/video/reject', rejectVideoReviewController) // 退回视频审核（需要 developer 角色）
+// https://localhost:9999/review/video/reject
+// cookie: uuid, token
+// {
+// 	"videoId": 123
+// }
+
+router.post('/review/comment/approve', approveCommentReviewController) // 通过评论审核（需要 developer 角色）
+// https://localhost:9999/review/comment/approve
+// cookie: uuid, token
+// {
+// 	"commentRoute": "1.2.3"
+// }
+
+router.post('/review/comment/reject', rejectCommentReviewController) // 退回评论审核（需要 developer 角色）
+// https://localhost:9999/review/comment/reject
+// cookie: uuid, token
+// {
+// 	"commentRoute": "1.2.3"
+// }
+
+router.post('/review/danmaku/approve', approveDanmakuReviewController) // 通过弹幕审核（需要 developer 角色）
+// https://localhost:9999/review/danmaku/approve
+// cookie: uuid, token
+// {
+// 	"danmakuId": "507f1f77bcf86cd799439011"
+// }
+
+router.post('/review/danmaku/reject', rejectDanmakuReviewController) // 退回弹幕审核（需要 developer 角色）
+// https://localhost:9999/review/danmaku/reject
+// cookie: uuid, token
+// {
+// 	"danmakuId": "507f1f77bcf86cd799439011"
+// }
 
 
 
