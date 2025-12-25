@@ -392,8 +392,9 @@ export const getFollowingVideosController = async (ctx: koaCtx, next: koaNext) =
 		return
 	}
 
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+	// 验证用户身份（uuid 和 token 在 service 层验证）
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token', videosCount: 0, videos: [] }
 		return
 	}
 
