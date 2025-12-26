@@ -29,35 +29,6 @@ import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserTokenByUuidService } from './UserService.js'
 
 /**
- * 检查用户是否有 administrator 角色
- * @param uuid 用户的 UUID
- * @returns 有 administrator 角色返回 true，否则返回 false
- */
-const checkUserHasAdminRole = async (uuid: string): Promise<boolean> => {
-	try {
-		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
-		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
-		const where: QueryType<UserAuth> = {
-			UUID: uuid,
-		}
-		const select: SelectType<UserAuth> = {
-			roles: 1,
-		}
-		const result = await selectDataFromMongoDB<UserAuth>(where, select, userAuthSchemaInstance, userAuthCollectionName)
-		
-		if (!result.success || !result.result || result.result.length === 0) {
-			return false
-		}
-
-		const userRoles = result.result[0].roles || []
-		return userRoles.includes('administrator')
-	} catch (error) {
-		console.error('ERROR', '检查用户 administrator 角色失败：', error)
-		return false
-	}
-}
-
-/**
  * 获取待审核视频列表
  * @param getPendingReviewVideoListRequest 获取待审核视频列表的请求载荷
  * @param uuid 用户的 UUID
@@ -78,11 +49,6 @@ export const getPendingReviewVideoListService = async (
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '获取待审核视频列表失败：用户验证失败')
 			return { success: false, message: '获取待审核视频列表失败：用户验证失败' }
-		}
-
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '获取待审核视频列表失败：用户没有 administrator 角色')
-			return { success: false, message: '获取待审核视频列表失败：权限不足' }
 		}
 
 		const { num, offset } = getPendingReviewVideoListRequest
@@ -207,11 +173,6 @@ export const getPendingReviewCommentListService = async (
 			return { success: false, message: '获取待审核评论列表失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '获取待审核评论列表失败：用户没有 administrator 角色')
-			return { success: false, message: '获取待审核评论列表失败：权限不足' }
-		}
-
 		const { num, offset } = getPendingReviewCommentListRequest
 		const { collectionName: commentCollectionName, schemaInstance: commentSchemaInstance } = VideoCommentSchema
 		type VideoComment = InferSchemaType<typeof commentSchemaInstance>
@@ -322,11 +283,6 @@ export const getPendingReviewDanmakuListService = async (
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '获取待审核弹幕列表失败：用户验证失败')
 			return { success: false, message: '获取待审核弹幕列表失败：用户验证失败' }
-		}
-
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '获取待审核弹幕列表失败：用户没有 administrator 角色')
-			return { success: false, message: '获取待审核弹幕列表失败：权限不足' }
 		}
 
 		const { num, offset } = getPendingReviewDanmakuListRequest
@@ -441,11 +397,6 @@ export const approveVideoReviewService = async (
 			return { success: false, message: '通过视频审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '通过视频审核失败：用户没有 administrator 角色')
-			return { success: false, message: '通过视频审核失败：权限不足' }
-		}
-
 		const { videoId } = approveVideoReviewRequest
 		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 		type Video = InferSchemaType<typeof videoSchemaInstance>
@@ -512,11 +463,6 @@ export const rejectVideoReviewService = async (
 			return { success: false, message: '退回视频审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '退回视频审核失败：用户没有 administrator 角色')
-			return { success: false, message: '退回视频审核失败：权限不足' }
-		}
-
 		const { videoId } = rejectVideoReviewRequest
 		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 		type Video = InferSchemaType<typeof videoSchemaInstance>
@@ -567,11 +513,6 @@ export const approveCommentReviewService = async (
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '通过评论审核失败：用户验证失败')
 			return { success: false, message: '通过评论审核失败：用户验证失败' }
-		}
-
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '通过评论审核失败：用户没有 administrator 角色')
-			return { success: false, message: '通过评论审核失败：权限不足' }
 		}
 
 		const { commentRoute } = approveCommentReviewRequest
@@ -644,11 +585,6 @@ export const rejectCommentReviewService = async (
 			return { success: false, message: '退回评论审核失败：用户验证失败' }
 		}
 
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '退回评论审核失败：用户没有 administrator 角色')
-			return { success: false, message: '退回评论审核失败：权限不足' }
-		}
-
 		const { commentRoute } = rejectCommentReviewRequest
 		const { collectionName: commentCollectionName, schemaInstance: commentSchemaInstance } = VideoCommentSchema
 		type VideoComment = InferSchemaType<typeof commentSchemaInstance>
@@ -700,11 +636,6 @@ export const approveDanmakuReviewService = async (
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '通过弹幕审核失败：用户验证失败')
 			return { success: false, message: '通过弹幕审核失败：用户验证失败' }
-		}
-
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '通过弹幕审核失败：用户没有 administrator 角色')
-			return { success: false, message: '通过弹幕审核失败：权限不足' }
 		}
 
 		const { danmakuId } = approveDanmakuReviewRequest
@@ -775,11 +706,6 @@ export const rejectDanmakuReviewService = async (
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			console.error('ERROR', '退回弹幕审核失败：用户验证失败')
 			return { success: false, message: '退回弹幕审核失败：用户验证失败' }
-		}
-
-		if (!(await checkUserHasAdminRole(uuid))) {
-			console.error('ERROR', '退回弹幕审核失败：用户没有 administrator 角色')
-			return { success: false, message: '退回弹幕审核失败：权限不足' }
 		}
 
 		const { danmakuId } = rejectDanmakuReviewRequest
