@@ -2,10 +2,10 @@
 
 
 export default {
-	SendVerificationCode: {
-		mailTitle: "KIRAKIRA-登録認証コード",
-		mailHeading: "登録確認用のコードは",
-		mailText: "KIRAKIRA へようこそ！このコードを使ってアカウントを登録しましょう。\nコードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
+	SendRegistrationVerificationCode: {
+		mailTitle: "KIRAKIRA-登録の認証コード",
+		mailHeading: "登録の確認コードは",
+		mailText: "KIRAKIRA へようこそ！このコードを使ってアカウント登録を完了しましょう。\nコードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendChangeEmailVerificationCode: {
 		mailTitle: "KIRAKIRA - メールアドレス変更の確認コード",
@@ -18,18 +18,28 @@ export default {
 		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendResetPasswordVerificationCode: {
-		mailTitle: "KIRAKira - パスワード認証コードをリセットする",
-		mailHeading: "パスワードをリセットするコードは",
-		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
+		mailTitle: "KIRAKira - パスワードリセット用認証コード",
+		mailHeading: "パスワードリセット用のコードは",
+		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendLoginVerificationCode: {
 		mailTitle: "KIRAKIA - ログイン認証コード",
 		mailHeading: "ログイン認証コードは",
-		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
+		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
 	},
 	SendDisableUserEmail2FAVerificationCode: {
-		mailTitle: "KIRAKira - メール2FA認証コードを無効にする",
+		mailTitle: "KIRAKira - メール2要素認証コードを無効にする",
 		mailHeading: "認証コードは",
 		mailText: "確認コードの有効期間は 30 分です。このコードは他の人には絶対に教えないでください。\n通知の受信を停止するには、KIRAKIRA サポートチームまでご連絡ください。",
+	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailTitle: "KIRAKIRA-認証コード",
+		mailHeading: "認証コードは",
+		mailText: "認証コードは30分間有効です。他人に確認コードを開示しないようにしてください。\nこのメールはKIRAKIRAアカウントにリンクされたメールに送信されました。通知を停止するにはKIRAKIRAサポートチームまでご連絡ください。",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailTitle: "KIRAKIRA-認証コード",
+		mailHeading: "認証コードは",
+		mailText: "認証コードは30分間有効です。他人に確認コードを開示しないようにしてください。\nこのメールはあなたのメールアドレスに直接送信されました。通知を停止するには、KIRAサポートチームまでお問い合わせください。",
 	},
 }
