@@ -7,6 +7,7 @@ import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "
 import { selectDataFromMongoDB, insertData2MongoDB, deleteDataFromMongoDB, selectDataByAggregateFromMongoDB } from "../dbPool/DbClusterPool.js";
 import { BlockListSchema, UnblockListSchema } from "../dbPool/schema/BlockSchema.js";
 import { parseInteger } from '../common/ValidTool.js'
+import { logging } from "./loggingService.js";
 
 const MAX_KEYWORD_LENGTH = 30; // 关键词长度限制
 const MAX_REGEX_LENGTH = 30; // 正则表达式长度限制
@@ -25,7 +26,7 @@ export const blockUserByUidService = async (blockUserByUidRequest: BlockUserByUi
 
 		const { blockUid } = blockUserByUidRequest
 		if (!checkUserExistsByUIDService({ uid: blockUid })) {
-			console.error('ERROR', '屏蔽用户失败，用户不存在')
+			logging('ERROR', '屏蔽用户失败，用户不存在')
 			return { success: false, message: '屏蔽用户失败，用户不存在' }
 		}
 
@@ -33,17 +34,17 @@ export const blockUserByUidService = async (blockUserByUidRequest: BlockUserByUi
 		const operatorUid = await getUserUid(uuid)
 
 		if (!userUuid || !operatorUid) {
-			console.error('ERROR', '屏蔽用户失败，用户不存在')
+			logging('ERROR', '屏蔽用户失败，用户不存在')
 			return { success: false, message: '屏蔽用户失败，用户不存在' }
 		}
 
 		if (userUuid === uuid) {
-			console.error('ERROR', '屏蔽用户失败，不能屏蔽自己')
+			logging('ERROR', '屏蔽用户失败，不能屏蔽自己')
 			return { success: false, message: '屏蔽用户失败，不能屏蔽自己' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '屏蔽用户失败，用户 Token 不合法')
+			logging('ERROR', '屏蔽用户失败，用户 Token 不合法')
 			return { success: false, message: '屏蔽用户失败，用户 Token 不合法' }
 		}
 
@@ -77,13 +78,13 @@ export const blockUserByUidService = async (blockUserByUidRequest: BlockUserByUi
 
 		const insertResult = await insertData2MongoDB<BlockListSchemaType>(blockListData, blockListSchemaInstance, blockListCollectionName)
 		if (!insertResult.success) {
-			console.error('ERROR', '屏蔽用户失败，查询数据失败')
+			logging('ERROR', '屏蔽用户失败，查询数据失败')
 			return { success: false, message: '屏蔽用户失败，查询数据失败' }
 		}
 		return { success: true, message: '屏蔽用户成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '屏蔽用户失败，未知错误', error)
+		logging('ERROR', '屏蔽用户失败，未知错误', error)
 		return { success: false, message: '屏蔽用户失败' }
 	}
 }
@@ -103,7 +104,7 @@ export const hideUserByUidService = async (hideUserByUidRequest: HideUserByUidRe
 
 		const { hideUid } = hideUserByUidRequest
 		if (!checkUserExistsByUIDService({ uid: hideUid })) {
-			console.error('ERROR', '隐藏用户失败，用户不存在')
+			logging('ERROR', '隐藏用户失败，用户不存在')
 			return { success: false, message: '隐藏用户失败，用户不存在' }
 		}
 
@@ -111,15 +112,15 @@ export const hideUserByUidService = async (hideUserByUidRequest: HideUserByUidRe
 		const operatorUid = await getUserUid(uuid)
 
 		if (!userUuid || !operatorUid) {
-			console.error('ERROR', '隐藏用户失败，用户不存在')
+			logging('ERROR', '隐藏用户失败，用户不存在')
 			return { success: false, message: '隐藏用户失败，用户不存在' }
 		}
 		if (userUuid === uuid) {
-			console.error('ERROR', '隐藏用户失败，不能隐藏自己')
+			logging('ERROR', '隐藏用户失败，不能隐藏自己')
 			return { success: false, message: '隐藏用户失败，不能隐藏自己' }
 		}
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '隐藏用户失败，用户 Token 不合法')
+			logging('ERROR', '隐藏用户失败，用户 Token 不合法')
 			return { success: false, message: '隐藏用户失败，用户 Token 不合法' }
 		}
 
@@ -153,13 +154,13 @@ export const hideUserByUidService = async (hideUserByUidRequest: HideUserByUidRe
 
 		const insertResult = await insertData2MongoDB<BlockListSchemaType>(blockListData, blockListSchemaInstance, blockListCollectionName)
 		if (!insertResult.success) {
-			console.error('ERROR', '隐藏用户失败，查询数据失败')
+			logging('ERROR', '隐藏用户失败，查询数据失败')
 			return { success: false, message: '隐藏用户失败，查询数据失败' }
 		}
 		return { success: true, message: '隐藏用户成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '隐藏用户失败，未知错误', error)
+		logging('ERROR', '隐藏用户失败，未知错误', error)
 		return { success: false, message: '隐藏用户失败，未知错误' }
 	}
 }
@@ -180,19 +181,19 @@ export const blockKeywordService = async (blockKeywordRequest: BlockKeywordReque
 		const { blockKeyword } = blockKeywordRequest
 
 		if (!safeRegex(blockKeyword)) {
-			console.error('ERROR', '屏蔽关键词失败，用户输入了一个不安全的关键词，该关键词是一个不安全的正则表达式')
+			logging('ERROR', '屏蔽关键词失败，用户输入了一个不安全的关键词，该关键词是一个不安全的正则表达式')
 			return { success: false, message: '屏蔽关键词失败，用户输入了一个不安全的关键词' }
 		}
 
 		const operatorUid = await getUserUid(uuid)
 
 		if (!operatorUid) {
-			console.error('ERROR', '屏蔽关键词失败，用户不存在')
+			logging('ERROR', '屏蔽关键词失败，用户不存在')
 			return { success: false, message: '屏蔽关键词失败，用户不存在' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '屏蔽关键词失败，用户 Token 不合法')
+			logging('ERROR', '屏蔽关键词失败，用户 Token 不合法')
 			return { success: false, message: '屏蔽关键词失败，用户 Token 不合法' }
 		}
 
@@ -214,7 +215,7 @@ export const blockKeywordService = async (blockKeywordRequest: BlockKeywordReque
 
 		const blockListResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName)
 		if (blockListResult.success && blockListResult.result && blockListResult.result.length > 0) {
-			console.error('ERROR', '屏蔽关键词失败，该关键词已经被你屏蔽')
+			logging('ERROR', '屏蔽关键词失败，该关键词已经被你屏蔽')
 			return { success: false, message: '屏蔽关键词失败，该关键词已经被你屏蔽' }
 		}
 
@@ -233,7 +234,7 @@ export const blockKeywordService = async (blockKeywordRequest: BlockKeywordReque
 		return { success: true, message: '屏蔽关键词成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '屏蔽关键词失败', error)
+		logging('ERROR', '屏蔽关键词失败', error)
 		return { success: false, message: '屏蔽关键词失败' }
 	}
 }
@@ -255,12 +256,12 @@ export const blockTagService = async (blockTagRequest: BlockTagRequestDto, uuid:
 		const operatorUid = await getUserUid(uuid)
 
 		if (!operatorUid) {
-			console.error('ERROR', '屏蔽标签失败，用户不存在')
+			logging('ERROR', '屏蔽标签失败，用户不存在')
 			return { success: false, message: '屏蔽标签失败，用户不存在' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '屏蔽标签失败，用户 Token 不合法')
+			logging('ERROR', '屏蔽标签失败，用户 Token 不合法')
 			return { success: false, message: '屏蔽标签失败，用户 Token 不合法' }
 		}
 
@@ -284,7 +285,7 @@ export const blockTagService = async (blockTagRequest: BlockTagRequestDto, uuid:
 
 		const blockListResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName)
 		if (blockListResult.success && blockListResult.result && blockListResult.result.length > 0) {
-			console.error('ERROR', '屏蔽标签失败，该标签已经被你屏蔽')
+			logging('ERROR', '屏蔽标签失败，该标签已经被你屏蔽')
 			return { success: false, message: '屏蔽标签失败，该标签已经被你屏蔽' }
 		}
 
@@ -298,13 +299,13 @@ export const blockTagService = async (blockTagRequest: BlockTagRequestDto, uuid:
 
 		const insertResult = await insertData2MongoDB<BlockListSchemaType>(blockListData, blockListSchemaInstance, blockListCollectionName)
 		if (!insertResult.success) {
-			console.error('ERROR', '屏蔽标签失败，查询数据失败')
+			logging('ERROR', '屏蔽标签失败，查询数据失败')
 			return { success: false, message: '屏蔽标签失败，查询数据失败' }
 		}
 		return { success: true, message: '屏蔽标签成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '屏蔽标签失败，未知错误', error)
+		logging('ERROR', '屏蔽标签失败，未知错误', error)
 		return { success: false, message: '屏蔽标签失败，未知错误' }
 	}
 }
@@ -325,19 +326,19 @@ export const addRegexService = async (addRegexRequest: AddRegexRequestDto, uuid:
 		const { blockRegex } = addRegexRequest
 
 		if (!safeRegex(blockRegex)) {
-			console.error('ERROR', '添加正则表达式失败，用户输入了一个不安全的正则表达式')
+			logging('ERROR', '添加正则表达式失败，用户输入了一个不安全的正则表达式')
 			return { success: false, message: '添加正则表达式失败，用户输入了一个不安全的正则表达式', unsafeRegex: true }
 		}
 
 		const operatorUid = await getUserUid(uuid)
 
 		if (!operatorUid) {
-			console.error('ERROR', '添加正则表达式失败，用户不存在')
+			logging('ERROR', '添加正则表达式失败，用户不存在')
 			return { success: false, message: '添加正则表达式失败，用户不存在', unsafeRegex: false }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '添加正则表达式失败，用户 Token 不合法')
+			logging('ERROR', '添加正则表达式失败，用户 Token 不合法')
 			return { success: false, message: '添加正则表达式失败，用户 Token 不合法', unsafeRegex: false }
 		}
 
@@ -378,7 +379,7 @@ export const addRegexService = async (addRegexRequest: AddRegexRequestDto, uuid:
 		return { success: true, message: '添加正则表达式成功', unsafeRegex: false }
 	}
 	catch (error) {
-		console.error('ERROR', '添加正则表达式失败', error)
+		logging('ERROR', '添加正则表达式失败', error)
 		return { success: false, message: '添加正则表达式失败', unsafeRegex: false }
 	}
 }
@@ -398,23 +399,23 @@ export const unBlockUserService = async (unblockUserByUidRequest: UnblockUserByU
 
 		const { blockUid } = unblockUserByUidRequest
 		if (!checkUserExistsByUIDService({ uid: blockUid })) {
-			console.error('ERROR', '取消屏蔽用户失败，用户不存在')
+			logging('ERROR', '取消屏蔽用户失败，用户不存在')
 			return { success: false, message: '取消屏蔽用户失败，用户不存在' }
 		}
 		const userUuid = await getUserUuid(blockUid)
 		const operatorUid = await getUserUid(uuid)
 
 		if (!userUuid || !operatorUid) {
-			console.error('ERROR', '取消屏蔽用户失败，用户不存在')
+			logging('ERROR', '取消屏蔽用户失败，用户不存在')
 			return { success: false, message: '取消屏蔽用户失败，用户不存在' }
 		}
 		if (userUuid === uuid) {
-			console.error('ERROR', '取消屏蔽用户失败，不能取消自己的屏蔽')
+			logging('ERROR', '取消屏蔽用户失败，不能取消自己的屏蔽')
 			return { success: false, message: '取消屏蔽用户失败，不能取消自己的屏蔽' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '取消屏蔽用户失败，用户 Token 不合法')
+			logging('ERROR', '取消屏蔽用户失败，用户 Token 不合法')
 			return { success: false, message: '取消屏蔽用户失败，用户 Token 不合法' }
 		}
 
@@ -439,12 +440,12 @@ export const unBlockUserService = async (unblockUserByUidRequest: UnblockUserByU
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!selectResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽用户失败，查询数据失败')
+			logging('ERROR', '取消屏蔽用户失败，查询数据失败')
 			return { success: false, message: '取消屏蔽用户失败，查询数据失败' }
 		}
 		if (selectResult.result.length === 0) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽用户失败，用户未被屏蔽')
+			logging('ERROR', '取消屏蔽用户失败，用户未被屏蔽')
 			return { success: false, message: '取消屏蔽用户失败，用户未被屏蔽' }
 		}
 
@@ -459,21 +460,21 @@ export const unBlockUserService = async (unblockUserByUidRequest: UnblockUserByU
 		const insertResult = await insertData2MongoDB<UnblockListSchemaType>(unblockListData, unblockUserSchemaInstance, unblockUserCollectionName, {session})
 		if (!insertResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽用户失败，查询数据失败')
+			logging('ERROR', '取消屏蔽用户失败，查询数据失败')
 			return { success: false, message: '取消屏蔽用户失败，查询数据失败' }
 		}
 
 		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽用户失败，查询数据失败')
+			logging('ERROR', '取消屏蔽用户失败，查询数据失败')
 			return { success: false, message: '取消屏蔽用户失败，查询数据失败' }
 		}
 		await commitAndEndSession(session)
 		return { success: true, message: '取消屏蔽用户成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '取消屏蔽用户失败，未知错误', error)
+		logging('ERROR', '取消屏蔽用户失败，未知错误', error)
 		return { success: false, message: '取消屏蔽用户失败，未知错误' }
 	}
 }
@@ -493,23 +494,23 @@ export const showUserService = async (showUserByUidRequest: ShowUserByUidRequest
 
 		const { hideUid } = showUserByUidRequest
 		if (!checkUserExistsByUIDService({ uid: hideUid })) {
-			console.error('ERROR', '显示用户失败，用户不存在')
+			logging('ERROR', '显示用户失败，用户不存在')
 			return { success: false, message: '显示用户失败，用户不存在' }
 		}
 		const userUuid = await getUserUuid(hideUid)
 		const operatorUid = await getUserUid(uuid)
 
 		if (!userUuid || !operatorUid) {
-			console.error('ERROR', '显示用户失败，用户不存在')
+			logging('ERROR', '显示用户失败，用户不存在')
 			return { success: false, message: '显示用户失败，用户不存在' }
 		}
 		if (userUuid === uuid) {
-			console.error('ERROR', '显示用户失败，不能显示自己')
+			logging('ERROR', '显示用户失败，不能显示自己')
 			return { success: false, message: '显示用户失败，不能显示自己' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '显示用户失败，用户 Token 不合法')
+			logging('ERROR', '显示用户失败，用户 Token 不合法')
 			return { success: false, message: '显示用户失败，用户 Token 不合法' }
 		}
 
@@ -534,12 +535,12 @@ export const showUserService = async (showUserByUidRequest: ShowUserByUidRequest
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!selectResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '显示用户失败，查询数据失败')
+			logging('ERROR', '显示用户失败，查询数据失败')
 			return { success: false, message: '显示用户失败，查询数据失败' }
 		}
 		if (selectResult.result.length === 0) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '显示用户失败，用户未被隐藏')
+			logging('ERROR', '显示用户失败，用户未被隐藏')
 			return { success: false, message: '显示用户失败，用户未被隐藏' }
 		}
 
@@ -554,21 +555,21 @@ export const showUserService = async (showUserByUidRequest: ShowUserByUidRequest
 		const insertResult = await insertData2MongoDB<UnblockListSchemaType>(unblockListData, unblockUserSchemaInstance, unblockUserCollectionName, {session})
 		if (!insertResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '显示用户失败，查询数据失败')
+			logging('ERROR', '显示用户失败，查询数据失败')
 			return { success: false, message: '显示用户失败，查询数据失败' }
 		}
 
 		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '显示用户失败，查询数据失败')
+			logging('ERROR', '显示用户失败，查询数据失败')
 			return { success: false, message: '显示用户失败，查询数据失败' }
 		}
 		await commitAndEndSession(session)
 		return { success: true, message: '显示用户成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '显示用户失败，未知错误', error)
+		logging('ERROR', '显示用户失败，未知错误', error)
 		return { success: false, message: '显示用户失败，未知错误' }
 	}
 }
@@ -590,12 +591,12 @@ export const unBlockTagService = async (unblockTagRequest: UnblockTagRequestDto,
 		const operatorUid = await getUserUid(uuid)
 
 		if (!operatorUid) {
-			console.error('ERROR', '取消屏蔽标签失败，用户不存在')
+			logging('ERROR', '取消屏蔽标签失败，用户不存在')
 			return { success: false, message: '取消屏蔽标签失败，用户不存在' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '取消屏蔽标签失败，用户 Token 不合法')
+			logging('ERROR', '取消屏蔽标签失败，用户 Token 不合法')
 			return { success: false, message: '取消屏蔽标签失败，用户 Token 不合法' }
 		}
 
@@ -620,12 +621,12 @@ export const unBlockTagService = async (unblockTagRequest: UnblockTagRequestDto,
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!selectResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽标签失败，查询数据失败')
+			logging('ERROR', '取消屏蔽标签失败，查询数据失败')
 			return { success: false, message: '取消屏蔽标签失败，查询数据失败' }
 		}
 		if (selectResult.result.length === 0) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽标签失败，标签未被屏蔽')
+			logging('ERROR', '取消屏蔽标签失败，标签未被屏蔽')
 			return { success: false, message: '取消屏蔽标签失败，标签未被屏蔽' }
 		}
 
@@ -640,21 +641,21 @@ export const unBlockTagService = async (unblockTagRequest: UnblockTagRequestDto,
 		const insertResult = await insertData2MongoDB<UnblockListSchemaType>(unblockListData, unblockUserSchemaInstance, unblockUserCollectionName, {session})
 		if (!insertResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽标签失败，查询数据失败')
+			logging('ERROR', '取消屏蔽标签失败，查询数据失败')
 			return { success: false, message: '取消屏蔽标签失败，查询数据失败' }
 		}
 
 		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽标签失败，查询数据失败')
+			logging('ERROR', '取消屏蔽标签失败，查询数据失败')
 			return { success: false, message: '取消屏蔽标签失败，查询数据失败' }
 		}
 		await commitAndEndSession(session)
 		return { success: true, message: '取消屏蔽标签成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '取消屏蔽标签失败，未知错误', error)
+		logging('ERROR', '取消屏蔽标签失败，未知错误', error)
 		return { success: false, message: '取消屏蔽标签失败，未知错误' }
 	}
 }
@@ -676,12 +677,12 @@ export const unBlockKeywordService = async (unblockKeywordRequest: UnblockKeywor
 		const operatorUid = await getUserUid(uuid)
 
 		if (!operatorUid) {
-			console.error('ERROR', '取消屏蔽关键词失败，用户不存在')
+			logging('ERROR', '取消屏蔽关键词失败，用户不存在')
 			return { success: false, message: '取消屏蔽关键词失败，用户不存在' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '取消屏蔽关键词失败，用户 Token 不合法')
+			logging('ERROR', '取消屏蔽关键词失败，用户 Token 不合法')
 			return { success: false, message: '取消屏蔽关键词失败，用户 Token 不合法' }
 		}
 
@@ -706,12 +707,12 @@ export const unBlockKeywordService = async (unblockKeywordRequest: UnblockKeywor
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!selectResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽关键词失败，查询数据失败')
+			logging('ERROR', '取消屏蔽关键词失败，查询数据失败')
 			return { success: false, message: '取消屏蔽关键词失败，查询数据失败' }
 		}
 		if (selectResult.result.length === 0) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽关键词失败，关键词未被屏蔽')
+			logging('ERROR', '取消屏蔽关键词失败，关键词未被屏蔽')
 			return { success: false, message: '取消屏蔽关键词失败，关键词未被屏蔽' }
 		}
 
@@ -726,21 +727,21 @@ export const unBlockKeywordService = async (unblockKeywordRequest: UnblockKeywor
 		const insertResult = await insertData2MongoDB<UnblockListSchemaType>(unblockListData, unblockUserSchemaInstance, unblockUserCollectionName, {session})
 		if (!insertResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽关键词失败，查询数据失败')
+			logging('ERROR', '取消屏蔽关键词失败，查询数据失败')
 			return { success: false, message: '取消屏蔽关键词失败，查询数据失败' }
 		}
 
 		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '取消屏蔽关键词失败，查询数据失败')
+			logging('ERROR', '取消屏蔽关键词失败，查询数据失败')
 			return { success: false, message: '取消屏蔽关键词失败，查询数据失败' }
 		}
 		await commitAndEndSession(session)
 		return { success: true, message: '取消屏蔽关键词成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '取消屏蔽关键词失败，未知错误', error)
+		logging('ERROR', '取消屏蔽关键词失败，未知错误', error)
 		return { success: false, message: '取消屏蔽关键词失败，未知错误' }
 	}
 }
@@ -762,12 +763,12 @@ export const removeRegexService = async (removeRegexRequest: RemoveRegexRequestD
 		const operatorUid = await getUserUid(uuid)
 
 		if (!operatorUid) {
-			console.error('ERROR', '删除正则表达式失败，用户不存在')
+			logging('ERROR', '删除正则表达式失败，用户不存在')
 			return { success: false, message: '删除正则表达式失败，用户不存在' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '删除正则表达式失败，用户 Token 不合法')
+			logging('ERROR', '删除正则表达式失败，用户 Token 不合法')
 			return { success: false, message: '删除正则表达式失败，用户 Token 不合法' }
 		}
 
@@ -792,12 +793,12 @@ export const removeRegexService = async (removeRegexRequest: RemoveRegexRequestD
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!selectResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '删除正则表达式失败，查询数据失败')
+			logging('ERROR', '删除正则表达式失败，查询数据失败')
 			return { success: false, message: '删除正则表达式失败，查询数据失败' }
 		}
 		if (selectResult.result.length === 0) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '删除正则表达式失败，正则表达式未被屏蔽')
+			logging('ERROR', '删除正则表达式失败，正则表达式未被屏蔽')
 			return { success: false, message: '删除正则表达式失败，正则表达式未被屏蔽' }
 		}
 
@@ -812,21 +813,21 @@ export const removeRegexService = async (removeRegexRequest: RemoveRegexRequestD
 		const insertResult = await insertData2MongoDB<UnblockListSchemaType>(unblockListData, unblockUserSchemaInstance, unblockUserCollectionName, {session})
 		if (!insertResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '删除正则表达式失败，查询数据失败')
+			logging('ERROR', '删除正则表达式失败，查询数据失败')
 			return { success: false, message: '删除正则表达式失败，查询数据失败' }
 		}
 
 		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '删除正则表达式失败，查询数据失败')
+			logging('ERROR', '删除正则表达式失败，查询数据失败')
 			return { success: false, message: '删除正则表达式失败，查询数据失败' }
 		}
 		await commitAndEndSession(session)
 		return { success: true, message: '删除正则表达式成功' }
 	}
 	catch (error) {
-		console.error('ERROR', '删除正则表达式失败，未知错误', error)
+		logging('ERROR', '删除正则表达式失败，未知错误', error)
 		return { success: false, message: '删除正则表达式失败，未知错误' }
 	}
 }
@@ -845,18 +846,18 @@ export const getBlockListService = async (getBlockListRequest: GetBlockListReque
 		}
 
 		if (!uuid || !token) {
-			console.warn('WARN', 'WARNING', '获取黑名单失败，用户未登录')
+			logging('WARN', '获取黑名单失败，用户未登录')
 			return { success: false, message: '获取黑名单失败，用户未登录', blocklistCount: -1 }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取黑名单失败，用户 Token 不合法')
+			logging('ERROR', '获取黑名单失败，用户 Token 不合法')
 			return { success: false, message: '获取黑名单失败，用户 Token 不合法', blocklistCount: -1 }
 		}
 
 		const { type } = getBlockListRequest
 		if (!['hide', 'block', 'keyword', 'tag', 'regex'].includes(type)) {
-			console.error('ERROR', '获取黑名单失败，黑名单类型不合法')
+			logging('ERROR', '获取黑名单失败，黑名单类型不合法')
 			return { success: false, message: '获取黑名单失败，黑名单类型不合法' }
 		}
 
@@ -879,7 +880,7 @@ export const getBlockListService = async (getBlockListRequest: GetBlockListReque
 
 		const shouldJoinUserInfo = ['hide', 'block'].includes(type) // 判断是否需要关联用户信息
 		const shouldJoinTagInfo = type === 'tag' // 判断是否需要关联 TAG 信息
-		
+
 		if (shouldJoinUserInfo) {
 			getBlocklistPipelineProject = [
 				{
@@ -971,7 +972,7 @@ export const getBlockListService = async (getBlockListRequest: GetBlockListReque
 		const blocklistResult = await selectDataByAggregateFromMongoDB(blockListSchemaInstance, blockListCollectionName, getBlocklistPipelineMix)
 
 		if (!blocklistResult.success || !blocklistCountResult.success) {
-			console.error('ERROR', '获取黑名单失败，查询数据失败')
+			logging('ERROR', '获取黑名单失败，查询数据失败')
 			return { success: false, message: '获取黑名单失败，查询数据失败' }
 		}
 
@@ -983,7 +984,7 @@ export const getBlockListService = async (getBlockListRequest: GetBlockListReque
 		}
 
 	} catch (error) {
-		console.error('ERROR', '获取黑名单失败，未知错误', error)
+		logging('ERROR', '获取黑名单失败，未知错误', error)
 		return { success: false, message: '获取黑名单失败，未知错误' }
 	}
 }
@@ -1000,7 +1001,7 @@ type AdditionalFieldsProject = {
 	isBlockedByOther?: 1;
 }
 /** 返回值，一个构建好的 Monogoose Pipeline 查询 */
-type BlockListFilterResult = { success: boolean, filter: PipelineStage.Match[], additionalFields: AdditionalFieldsProject } 
+type BlockListFilterResult = { success: boolean, filter: PipelineStage.Match[], additionalFields: AdditionalFieldsProject }
 /**
  * 构建 Mongoose Pipeline 黑名单过滤器
  * @param attrs 哪些属性需要过滤，以及使用的过滤方式
@@ -1016,7 +1017,7 @@ export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?:
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '构建黑名单过滤器失败，用户 Token 不合法')
+			logging('ERROR', '构建黑名单过滤器失败，用户 Token 不合法')
 			return { success: false, filter: [], additionalFields: { } }
 		}
 
@@ -1026,13 +1027,13 @@ export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?:
 		const getBlockListWhere: QueryType<BlockListSchemaType> = {
 			operatorUUID: uuid,
 		}
-		
+
 		const getBlockListSelect: SelectType<BlockListSchemaType> = {
 			type: 1,
 			value: 1,
 			operatorUUID: 1,
 		}
-		
+
 		const { result: blockListResult, success: blockListSuccess } = await selectDataFromMongoDB<BlockListSchemaType>(getBlockListWhere, getBlockListSelect, blockListSchemaInstance, blockListCollectionName)
 
 		const isBlockListOk = blockListSuccess && blockListResult.length > 0
@@ -1083,7 +1084,7 @@ export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?:
 									pipeline: [
 										{
 											$match: {
-												$expr: { 
+												$expr: {
 													$and: [
 														{ $eq: ['$operatorUUID', '$$uuid'] },
 														{ $eq: ['$type', 'block'] },
@@ -1130,7 +1131,7 @@ export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?:
 									pipeline: [
 										{
 											$match: {
-												$expr: { 
+												$expr: {
 													$and: [
 														{ $eq: ['$operatorUUID', '$$uuid'] },
 														{ $eq: ['$type', 'block'] },
@@ -1186,125 +1187,10 @@ export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?:
 
 		return { success: true, filter: blockListMongooseFilter, additionalFields }
 	} catch (error) {
-		console.error('ERROR', '构建黑名单过滤器时出错，未知错误', error)
+		logging('ERROR', '构建黑名单过滤器时出错，未知错误', error)
 		return { success: false, filter: [], additionalFields: { } }
 	}
 }
-
-// /**
-//  * 检查内容是否被屏蔽
-//  * @param uuid 用户 uuid
-//  * @param token 用户 Token
-//  * @param content 内容
-//  * @returns 内容是否被屏蔽的请求响应
-//  */
-// export const checkBlockContentService = async (CheckIsBlockedRequest: CheckContentIsBlockedRequestDto, uuid: string, token: string): Promise<CheckIsBlockedResponseDto> => {
-// 	try {
-// 		if (!checkCheckContentIsBlockedRequest(CheckIsBlockedRequest)) {
-// 			console.error('ERROR', '检查内容是否被屏蔽失败，请求载荷不合法')
-// 			return { success: true, message: '检查内容是否被屏蔽失败，请求载荷不合法', isBlocked: false }
-// 		}
-// 		const { content } = CheckIsBlockedRequest
-
-// 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-// 			console.error('ERROR', '检查内容是否被屏蔽失败，用户 Token 不合法')
-// 			return { success: false, message: '检查内容是否被屏蔽失败，用户 Token 不合法', isBlocked: false }
-// 		}
-
-
-// 		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
-// 		type BlockListSchemaType = InferSchemaType<typeof blockListSchemaInstance>
-// 		const keywordWhere: QueryType<BlockListSchemaType> = {
-// 			type: 'keyword',
-// 			operatorUUID: uuid,
-// 		}
-// 		const keywordSelect: SelectType<BlockListSchemaType> = {
-// 			value: 1,
-// 		}
-
-// 		const regexWhere: QueryType<BlockListSchemaType> = {
-// 			type: 'regex',
-// 			operatorUUID: uuid,
-// 		}
-// 		const regexSelect: SelectType<BlockListSchemaType> = {
-// 			value: 1,
-// 		}
-
-// 		const keywordResult = await selectDataFromMongoDB(keywordWhere, keywordSelect, blockListSchemaInstance, blockListCollectionName)
-// 		if (!keywordResult.success) {
-// 			console.error('ERROR', '检查内容是否被屏蔽失败，查询数据失败')
-// 			return { success: false, message: '检查内容是否被屏蔽失败，查询数据失败', isBlocked: false }
-// 		}
-
-// 		const regexResult = await selectDataFromMongoDB(regexWhere, regexSelect, blockListSchemaInstance, blockListCollectionName)
-// 		if (!regexResult.success) {
-// 			console.error('ERROR', '检查内容是否被屏蔽失败，查询数据失败')
-// 			return { success: false, message: '检查内容是否被屏蔽失败，查询数据失败', isBlocked: false }
-// 		}
-// 		const keywordData = keywordResult.result.map((item) => item.value)
-// 		const regexData = regexResult.result.map((item) => item.value)
-
-// 		if (keywordData.length > 0 || regexData.length > 0) {
-// 			const regexList = regexData.map((regex) => new RegExp(regex, 'i'))
-// 			const isBlocked = keywordData.some((keyword) => content.includes(keyword)) || regexList.some((regex) => regex.test(content))
-// 			return { success: true, message: '检查内容是否被屏蔽成功，被屏蔽', isBlocked }
-// 		} else {
-// 			return { success: true, message: '检查内容是否被屏蔽成功，未被屏蔽', isBlocked: false }
-// 		}
-
-// 	} catch (error) {
-// 		console.error('ERROR', '检查内容是否被屏蔽失败，未知错误', error)
-// 		return { success: false, message: '检查内容是否被屏蔽失败，未知错误', isBlocked: false }
-// 	}
-// }
-
-// /**
-//  * 检查标签是否被屏蔽
-//  * @param uuid 用户 uuid
-//  * @param token 用户 Token
-//  * @param tagId 标签 ID
-//  * @returns 标签是否被屏蔽的请求响应
-//  */
-// export const checkBlockTagsService = async (CheckIsBlockedRequest: CheckTagIsBlockedRequestDto, uuid: string, token: string): Promise<CheckIsBlockedResponseDto> => {
-// 	try {
-// 		if (!checkCheckTagIsBlockedRequest(CheckIsBlockedRequest)) {
-// 			console.error('ERROR', '检查标签是否被屏蔽失败，请求载荷不合法')
-// 			return { success: true, message: '检查标签是否被屏蔽失败，请求载荷不合法', isBlocked: false }
-// 		}
-// 		const { tagId } = CheckIsBlockedRequest
-
-// 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-// 			console.error('ERROR', '检查标签是否被屏蔽失败，用户 Token 不合法')
-// 			return { success: false, message: '检查标签是否被屏蔽失败，用户 Token 不合法', isBlocked: false }
-// 		}
-// 		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
-// 		type BlockListSchemaType = InferSchemaType<typeof blockListSchemaInstance>
-// 		const tagWhere: QueryType<BlockListSchemaType> = {
-// 			type: 'tag',
-// 			operatorUUID: uuid,
-// 		}
-// 		const tagSelect: SelectType<BlockListSchemaType> = {
-// 			value: 1,
-// 		}
-// 		const tagResult = await selectDataFromMongoDB(tagWhere, tagSelect, blockListSchemaInstance, blockListCollectionName)
-// 		if (!tagResult.success) {
-// 			console.error('ERROR', '检查标签是否被屏蔽失败，查询数据失败')
-// 			return { success: false, message: '检查标签是否被屏蔽失败，查询数据失败', isBlocked: false }
-// 		}
-
-// 		if (tagResult.result.length > 0) {
-// 			const tagData = tagResult.result.map((item) => item.value)
-// 			const isBlocked = tagData.some((tag) => tag === tagId)
-// 			return { success: true, message: '检查标签是否被屏蔽成功，被屏蔽', isBlocked }
-// 		} else {
-// 			return { success: true, message: '检查标签是否被屏蔽成功，未被屏蔽', isBlocked: false }
-// 		}
-
-// 	} catch (error) {
-// 		console.error('ERROR', '检查标签是否被屏蔽失败，未知错误', error)
-// 		return { success: false, message: '检查标签是否被屏蔽失败，未知错误', isBlocked: false }
-// 	}
-// }
 
 /**
  * 检查用户是否被屏蔽或隐藏
@@ -1319,25 +1205,25 @@ export const checkBlockUserService = async (checkIsBlockedRequest: CheckUserIsBl
 		let isHidden = false
 
 		if (!checkCheckUserIsBlockedRequest(checkIsBlockedRequest)) {
-			console.error('ERROR', '检查用户是否被屏蔽或隐藏失败，请求载荷不合法')
+			logging('ERROR', '检查用户是否被屏蔽或隐藏失败，请求载荷不合法')
 			return { success: false, message: '检查用户是否被屏蔽或隐藏失败，请求载荷不合法', isBlocked, isHidden }
 		}
 
 		const { uid } = checkIsBlockedRequest
 
 		if (!checkUserExistsByUIDService({ uid })) {
-			console.error('ERROR', '检查用户是否被屏蔽或隐藏失败，用户不存在')
+			logging('ERROR', '检查用户是否被屏蔽或隐藏失败，用户不存在')
 			return { success: false, message: '检查用户是否被屏蔽或隐藏失败，用户不存在', isBlocked, isHidden }
 		}
 
 		const targetUuid = await getUserUuid(uid)
 		if (!targetUuid) {
-			console.error('ERROR', '检查用户是否被屏蔽或隐藏失败，用户 UUID 不存在')
+			logging('ERROR', '检查用户是否被屏蔽或隐藏失败，用户 UUID 不存在')
 			return { success: false, message: '检查用户是否被屏蔽或隐藏失败，用户 UUID 不存在', isBlocked, isHidden }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '检查用户是否被屏蔽或隐藏失败，用户 Token 不合法')
+			logging('ERROR', '检查用户是否被屏蔽或隐藏失败，用户 Token 不合法')
 			return { success: false, message: '检查用户是否被屏蔽或隐藏失败，用户 Token 不合法', isBlocked, isHidden }
 		}
 
@@ -1359,13 +1245,13 @@ export const checkBlockUserService = async (checkIsBlockedRequest: CheckUserIsBl
 
 		const blockResult = await selectDataFromMongoDB<BlockListSchemaType>(blockWhere, userSelect, blockListSchemaInstance, blockListCollectionName)
 		if (!blockResult.success) {
-			console.error('ERROR', '检查用户是否被屏蔽或隐藏失败，查询屏蔽数据失败')
+			logging('ERROR', '检查用户是否被屏蔽或隐藏失败，查询屏蔽数据失败')
 			return { success: false, message: '检查用户是否被屏蔽或隐藏失败，查询屏蔽数据失败', isBlocked, isHidden }
 		}
 
 		const hideResult = await selectDataFromMongoDB<BlockListSchemaType>(hideWhere, userSelect, blockListSchemaInstance, blockListCollectionName)
 		if (!hideResult.success) {
-			console.error('ERROR', '检查用户是否被屏蔽或隐藏失败，查询隐藏数据失败')
+			logging('ERROR', '检查用户是否被屏蔽或隐藏失败，查询隐藏数据失败')
 			return { success: false, message: '检查用户是否被屏蔽或隐藏失败，查询隐藏数据失败', isBlocked, isHidden }
 		}
 
@@ -1380,7 +1266,7 @@ export const checkBlockUserService = async (checkIsBlockedRequest: CheckUserIsBl
 		return { success: true, message: '检查用户是否被屏蔽或隐藏完成', isBlocked, isHidden }
 
 	} catch (error) {
-		console.error('ERROR', '检查用户是否被屏蔽或隐藏失败，未知错误', error)
+		logging('ERROR', '检查用户是否被屏蔽或隐藏失败，未知错误', error)
 		return { success: false, message: '检查用户是否被屏蔽或隐藏失败，未知错误', isBlocked: false, isHidden: false }
 	}
 }
@@ -1395,7 +1281,7 @@ export const checkBlockUserService = async (checkIsBlockedRequest: CheckUserIsBl
 export const checkIsBlockedByOtherUserService = async (checkIsBlockedByOtherRequest: CheckIsBlockedByOtherUserRequestDto, uuid: string, token: string): Promise<CheckIsBlockedByOtherUserResponseDto> => {
 	try {
 		if (!checkCheckIsBlockedByOtherUserRequest(checkIsBlockedByOtherRequest)) {
-			console.error('ERROR', '检查是否被其他用户屏蔽失败，请求载荷不合法')
+			logging('ERROR', '检查是否被其他用户屏蔽失败，请求载荷不合法')
 			return { success: false, message: '检查是否被其他用户屏蔽失败，请求载荷不合法', isBlocked: false }
 		}
 		const { targetUid } = checkIsBlockedByOtherRequest
@@ -1405,7 +1291,7 @@ export const checkIsBlockedByOtherUserService = async (checkIsBlockedByOtherRequ
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '检查是否被其他用户屏蔽失败，用户 Token 不合法')
+			logging('ERROR', '检查是否被其他用户屏蔽失败，用户 Token 不合法')
 			return { success: false, message: '检查是否被其他用户屏蔽失败，用户 Token 不合法', isBlocked: false }
 		}
 		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
@@ -1420,7 +1306,7 @@ export const checkIsBlockedByOtherUserService = async (checkIsBlockedByOtherRequ
 		}
 		const blockResult = await selectDataFromMongoDB<BlockListSchemaType>(blockWhere, blockSelect, blockListSchemaInstance, blockListCollectionName)
 		if (!blockResult.success) {
-			console.error('ERROR', '检查是否被其他用户屏蔽失败，查询数据失败')
+			logging('ERROR', '检查是否被其他用户屏蔽失败，查询数据失败')
 			return { success: false, message: '检查是否被其他用户屏蔽失败，查询数据失败', isBlocked: false }
 		}
 
@@ -1431,7 +1317,7 @@ export const checkIsBlockedByOtherUserService = async (checkIsBlockedByOtherRequ
 		}
 
 	} catch (error) {
-		console.error('ERROR', '检查是否被其他用户屏蔽失败，未知错误', error)
+		logging('ERROR', '检查是否被其他用户屏蔽失败，未知错误', error)
 		return { success: false, message: '检查是否被其他用户屏蔽失败，未知错误', isBlocked: false }
 	}
 }
@@ -1458,12 +1344,12 @@ const getBlocklistCount = async (blocklistType: string, uuid: string): Promise<n
 		]
 		const BlocklistCountResult = await selectDataByAggregateFromMongoDB(blockListSchemaInstance, blockListCollectionName, countBlocklistPipeline)
 		if (!BlocklistCountResult.success) {
-			console.error('ERROR', '获取黑名单数量失败，查询数据失败')
+			logging('ERROR', '获取黑名单数量失败，查询数据失败')
 			return 0
 		}
 		return BlocklistCountResult.result?.[0]?.totalCount
 	} catch (error) {
-		console.error('ERROR', '获取黑名单数量失败，未知错误', error)
+		logging('ERROR', '获取黑名单数量失败，未知错误', error)
 		return 0
 	}
 }
@@ -1476,7 +1362,7 @@ const getBlocklistCount = async (blocklistType: string, uuid: string): Promise<n
  */
 const checkBlockUserByUidRequest = (blockUserByUidRequest: BlockUserByUidRequestDto): boolean => {
 	if (!blockUserByUidRequest.blockUid) {
-		console.error('ERROR', '屏蔽用户请求载荷不合法')
+		logging('ERROR', '屏蔽用户请求载荷不合法')
 		return false
 	}
 	return true
@@ -1489,7 +1375,7 @@ const checkBlockUserByUidRequest = (blockUserByUidRequest: BlockUserByUidRequest
  */
 const checkHideUserByUidRequest = (hideUserByUidRequest: HideUserByUidRequestDto): boolean => {
 	if (!hideUserByUidRequest.hideUid) {
-		console.error('ERROR', '隐藏用户请求载荷不合法')
+		logging('ERROR', '隐藏用户请求载荷不合法')
 		return false
 	}
 	return true
@@ -1502,7 +1388,7 @@ const checkHideUserByUidRequest = (hideUserByUidRequest: HideUserByUidRequestDto
  */
 const checkBlockKeywordRequest = (blockKeywordRequest: BlockKeywordRequestDto): boolean => {
 	if (!blockKeywordRequest?.blockKeyword) {
-			console.error('ERROR', '屏蔽关键词请求载荷不合法')
+			logging('ERROR', '屏蔽关键词请求载荷不合法')
 			return false
 	}
 	const keyword = blockKeywordRequest.blockKeyword
@@ -1512,7 +1398,7 @@ const checkBlockKeywordRequest = (blockKeywordRequest: BlockKeywordRequestDto): 
 			keyword.length > MAX_KEYWORD_LENGTH || // 长度超限
 			!validKeywordRegex.test(keyword) // 包含非法字符
 	) {
-			console.error('ERROR', '屏蔽关键词请求载荷不合法')
+			logging('ERROR', '屏蔽关键词请求载荷不合法')
 			return false
 	}
 
@@ -1526,7 +1412,7 @@ const checkBlockKeywordRequest = (blockKeywordRequest: BlockKeywordRequestDto): 
  */
 const checkBlockTagRequest = (blockTagRequest: BlockTagRequestDto): boolean => {
 	if (!blockTagRequest.tagId) {
-		console.error('ERROR', '屏蔽标签请求载荷不合法')
+		logging('ERROR', '屏蔽标签请求载荷不合法')
 		return false
 	}
 	return true
@@ -1539,7 +1425,7 @@ const checkBlockTagRequest = (blockTagRequest: BlockTagRequestDto): boolean => {
  */
 const checkAddRegexRequest = (addRegexRequest: AddRegexRequestDto): boolean => {
 	if (!addRegexRequest?.blockRegex) {
-			console.error('ERROR', '添加正则表达式请求载荷不合法')
+			logging('ERROR', '添加正则表达式请求载荷不合法')
 			return false
 	}
 	const regex = addRegexRequest.blockRegex
@@ -1565,37 +1451,6 @@ const checkAddRegexRequest = (addRegexRequest: AddRegexRequestDto): boolean => {
 const checkGetBlockListRequest = (GetBlockListRequest: GetBlockListRequestDto) => {
 	return (
 		GetBlockListRequest.type !== undefined && GetBlockListRequest.type !== null
-	)
-}
-
-/**
- * 检查内容是否被屏蔽的请求载荷
- * @param CheckIsBlockedRequestDto 内容是否被屏蔽的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkCheckContentIsBlockedRequest = (checkIsBlockedRequest: CheckContentIsBlockedRequestDto): boolean => {
-	if (!checkIsBlockedRequest?.content) {
-			console.error('ERROR', '检查内容是否被屏蔽请求载荷不合法')
-			return false
-	}
-	const content = checkIsBlockedRequest.content
-	if (
-			content.trim().length === 0 || // 空字符串或纯空格
-			content.length > 500 // 长度超限
-	) {
-			return false
-	}
-	return true
-}
-
-/**
- * 检查标签是否被屏蔽的请求载荷
- * @param CheckIsBlockedRequest 内容是否被屏蔽的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkCheckTagIsBlockedRequest = (checkIsBlockedRequest: CheckTagIsBlockedRequestDto): boolean => {
-	return (
-		checkIsBlockedRequest.tagId !== undefined && checkIsBlockedRequest.tagId !== null
 	)
 }
 

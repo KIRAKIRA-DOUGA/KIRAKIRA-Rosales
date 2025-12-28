@@ -1,6 +1,7 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getCloudflareRFC3339ExpiryDateTime } from '../common/GetCloudflareRFC3339ExpiryDateTime.js'
+import { logging } from '../service/loggingService.js'
 
 /**
  * 生成一个预签名 URL，该 URL 可以用于向 Cloudflare R2 存储上传数据
@@ -15,17 +16,17 @@ export const createCloudflareR2PutSignedUrl = async (bucketName: string, fileNam
 	const secretAccessKey = process.env.CF_SECRET_ACCESS_KEY
 
 	if (expiresIn <= 0) {
-		console.error('ERROR', '无法创建 R2 预签名 URL, 过期时间必须大于等于 0 秒 ', { bucketName, fileName, expiresIn })
+		logging('ERROR', '无法创建 R2 预签名 URL, 过期时间必须大于等于 0 秒 ', undefined, { bucketName, fileName, expiresIn })
 		return undefined
 	}
 
 	if (expiresIn > 604800) {
-		console.error('ERROR', '无法创建 R2 预签名 URL, 过期时间必须大于等于 604800 秒（七天）', { bucketName, fileName, expiresIn })
+		logging('ERROR', '无法创建 R2 预签名 URL, 过期时间必须大于等于 604800 秒（七天）', undefined, { bucketName, fileName, expiresIn })
 		return undefined
 	}
 
 	if (!r2EndPoint && !accessKeyId && !secretAccessKey) {
-		console.error('ERROR', '无法创建 S3(R2) 存储桶实例，必要的参数： r2EndPoint, accessKeyId 和 secretAccessKey 可能为空。', { bucketName, fileName, expiresIn })
+		logging('ERROR', '无法创建 S3(R2) 存储桶实例，必要的参数： r2EndPoint, accessKeyId 和 secretAccessKey 可能为空。', undefined, { bucketName, fileName, expiresIn })
 		return undefined
 	}
 
@@ -40,7 +41,7 @@ export const createCloudflareR2PutSignedUrl = async (bucketName: string, fileNam
 		})
 
 		if (!R2) {
-			console.error('ERROR', '创建的 R2 客户端为空', { bucketName, fileName, expiresIn })
+			logging('ERROR', '创建的 R2 客户端为空', undefined, { bucketName, fileName, expiresIn })
 			return undefined
 		}
 
@@ -55,7 +56,7 @@ export const createCloudflareR2PutSignedUrl = async (bucketName: string, fileNam
 			)
 
 			if (!url) {
-				console.error('ERROR', '创建的预签名 URL 为空', { bucketName, fileName, expiresIn })
+				logging('ERROR', '创建的预签名 URL 为空', undefined, { bucketName, fileName, expiresIn })
 				R2.destroy()
 				return undefined
 			}
@@ -63,12 +64,12 @@ export const createCloudflareR2PutSignedUrl = async (bucketName: string, fileNam
 			R2.destroy()
 			return url
 		} catch (error) {
-			console.error('ERROR', '创建预签名 URL 失败，错误信息：', error, { bucketName, fileName, expiresIn })
+			logging('ERROR', '创建预签名 URL 失败', error, { bucketName, fileName, expiresIn })
 			R2.destroy()
 			return undefined
 		}
 	} catch (error) {
-		console.error('ERROR', '连接 S3(R2) 存储桶或创建预签名 URL 失败，错误信息：', error, { bucketName, fileName, expiresIn })
+		logging('ERROR', '连接 S3(R2) 存储桶或创建预签名 URL 失败', error, { bucketName, fileName, expiresIn })
 		return undefined
 	}
 }
@@ -86,17 +87,17 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 		const imagesToken = process.env.CF_IMAGES_TOKEN
 
 		if (expiresIn < 600) {
-			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL, 过期时间必须大于等于 120 秒 （2 分钟）', { fileName, expiresIn, metaData })
+			logging('ERROR', '无法创建 Cloudflare Images 预签名 URL, 过期时间必须大于等于 120 秒 （2 分钟）', undefined, { fileName, expiresIn, metaData })
 			return undefined
 		}
 
 		if (expiresIn > 21600) {
-			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL, 过期时间必须大于等于 21600 秒（360 分钟，6 小时）', { fileName, expiresIn, metaData })
+			logging('ERROR', '无法创建 Cloudflare Images 预签名 URL, 过期时间必须大于等于 21600 秒（360 分钟，6 小时）', undefined, { fileName, expiresIn, metaData })
 			return undefined
 		}
 
 		if (!imagesEndpointUrl && !imagesToken) {
-			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL： imagesEndpointUrl 和 imagesToken 可能为空。请检查环境变量设置（CF_IMAGES_ENDPOINT_URL, CF_IMAGES_TOKEN）', { fileName, expiresIn, metaData })
+			logging('ERROR', '无法创建 Cloudflare Images 预签名 URL： imagesEndpointUrl 和 imagesToken 可能为空。请检查环境变量设置（CF_IMAGES_ENDPOINT_URL, CF_IMAGES_TOKEN）', undefined, { fileName, expiresIn, metaData })
 			return undefined
 		}
 
@@ -114,24 +115,24 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 				},
 			})
 			if (!imageUploadSignedUrlResponse.ok) {
-				console.error('ERROR', `无法创建 Cloudflare Images 预签名 URL, HTTP error! status: ${imageUploadSignedUrlResponse.status}`)
+				logging('ERROR', `无法创建 Cloudflare Images 预签名 URL, HTTP error! status: ${imageUploadSignedUrlResponse.status}`, undefined, { fileName, expiresIn, metaData })
 				return undefined
 			}
 
 			const imageUploadSignedUrlResult = await imageUploadSignedUrlResponse.json()
-			
+
 			const imageUploadSignedUrl = imageUploadSignedUrlResult?.result?.uploadURL
 			if (imageUploadSignedUrlResult.success && imageUploadSignedUrl) {
 				return imageUploadSignedUrl
 			} else {
-				console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL：未能创建 URL！', { fileName, expiresIn, metaData })
+				logging('ERROR', '无法创建 Cloudflare Images 预签名 URL：未能创建 URL！', undefined, { fileName, expiresIn, metaData })
 				return undefined
 			}
 		} catch (error) {
-			console.error('ERROR', '无法创建 Cloudflare Images 预签名 URL：网络请求失败！', { error, errorDetail: error?.response?.data?.errors }, { fileName, expiresIn, metaData })
+			logging('ERROR', '无法创建 Cloudflare Images 预签名 URL：网络请求失败！', error, { errorDetail: error?.response?.data?.errors, fileName, expiresIn, metaData })
 			return undefined
 		}
 	} catch (error) {
-		console.error('ERROR', '创建 Cloudflare Images 上传预签名 URL 失败：', error)
+		logging('ERROR', '创建 Cloudflare Images 上传预签名 URL 失败：', error)
 	}
 }
