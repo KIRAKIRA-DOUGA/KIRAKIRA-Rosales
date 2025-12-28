@@ -32,4 +32,12 @@ export default {
 		mailHeading: "Votre code de vérification est",
 		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
 	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - Code de vérification",
+		mailHeading: "Votre code de vérification est",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - Code de vérification",
+		mailHeading: "Votre code de vérification est",
+	},
 }

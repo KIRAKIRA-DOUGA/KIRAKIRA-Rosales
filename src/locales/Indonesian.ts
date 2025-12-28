@@ -32,4 +32,10 @@ export default {
 		mailHeading: "Kode verifikasi Anda adalah",
 		mailText: "Kode verifikasi ini berlaku selama 30 menit. Jangan berikan kode ini kepada siapa pun.\nUntuk berhenti mendapatkan notifikasi, harap hubungi tim dukungan KIRAKIRA.",
 	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailHeading: "Kode verifikasi Anda adalah",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailHeading: "Kode verifikasi Anda adalah",
+	},
 }

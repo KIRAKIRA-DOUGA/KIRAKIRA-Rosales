@@ -32,4 +32,10 @@ export default {
 		mailHeading: "Mã xác minh của bạn là",
 		mailText: "Mã xác minh có hiệu lực trong 30 phút. Vui lòng đảm bảo không tiết lộ mã xác minh của bạn cho người khác.\nĐể ngừng nhận thông báo, vui lòng liên hệ với nhóm hỗ trợ KIRAKIRA.",
 	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailHeading: "Mã xác minh của bạn là",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailHeading: "Mã xác minh của bạn là",
+	},
 }

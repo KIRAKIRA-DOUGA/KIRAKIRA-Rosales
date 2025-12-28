@@ -32,4 +32,14 @@ export default {
 		mailHeading: "crwdns3630:0crwdne3630:0",
 		mailText: "crwdns3632:0crwdne3632:0",
 	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailTitle: "crwdns3816:0crwdne3816:0",
+		mailHeading: "crwdns3818:0crwdne3818:0",
+		mailText: "crwdns3820:0crwdne3820:0",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailTitle: "crwdns3822:0crwdne3822:0",
+		mailHeading: "crwdns3824:0crwdne3824:0",
+		mailText: "crwdns3826:0crwdne3826:0",
+	},
 }

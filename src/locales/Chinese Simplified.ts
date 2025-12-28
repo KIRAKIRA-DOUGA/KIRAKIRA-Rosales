@@ -32,4 +32,14 @@ export default {
 		mailHeading: "你的验证码是",
 		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n要停止接收通知，请联系KIRAKIRA支持团队。",
 	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - 验证码",
+		mailHeading: "你的验证码是",
+		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n该邮件是向您账号绑定的邮箱发送的，要停止接收通知，请联系KIRAKIRA支持团队。",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - 验证码",
+		mailHeading: "你的验证码是",
+		mailText: "验证码30分钟内有效。请注意安全，不要向他人泄露你的验证码。\n该邮件是直接向您的邮箱地址发送的，要停止接收通知，请联系KIRAKIRA支持团队。",
+	},
 }

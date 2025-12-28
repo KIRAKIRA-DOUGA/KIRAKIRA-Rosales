@@ -8,4 +8,6 @@ export default {
 	SendResetPasswordVerificationCode: {},
 	SendLoginVerificationCode: {},
 	SendDisableUserEmail2FAVerificationCode: {},
+	SendGeneral2FAEmailVerificationCode: {},
+	SendGeneralEmailVerificationCode: {},
 }

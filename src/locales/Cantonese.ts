@@ -32,4 +32,10 @@ export default {
 		mailHeading: "你嘅驗證碼係",
 		mailText: "驗證碼有效期30分鐘。請確保唔好將你嘅驗證碼洩露畀其他人。\n若要停止收取通知，請聯絡KIRAKIRA支援團隊。",
 	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailHeading: "你嘅驗證碼係",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailHeading: "你嘅驗證碼係",
+	},
 }
