@@ -28,6 +28,7 @@ import { BlockListSchema } from '../dbPool/schema/BlockSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { v4 as uuidV4 } from 'uuid'
+import { logging } from './loggingService.js'
 
 /**
  * 生成会话ID（确保两个用户之间的会话ID唯一且一致）
@@ -54,7 +55,7 @@ const checkUserIsBlocked = async (blockerUuid: string, blockedUuid: string): Pro
 		const result = await selectDataFromMongoDB<BlockList>(where, select, blockListSchemaInstance, blockListCollectionName)
 		return result.success && result.result && result.result.length > 0
 	} catch (error) {
-		console.error('ERROR', '检查用户是否被拉黑失败：', error)
+		logging('ERROR', '检查用户是否被拉黑失败：', error)
 		return false
 	}
 }
@@ -74,7 +75,7 @@ const checkUserIsFollowing = async (followerUuid: string, followingUuid: string)
 		const result = await selectDataFromMongoDB<Following>(where, select, followingSchemaInstance, followingCollectionName)
 		return result.success && result.result && result.result.length > 0
 	} catch (error) {
-		console.error('ERROR', '检查用户是否关注失败：', error)
+		logging('ERROR', '检查用户是否关注失败：', error)
 		return false
 	}
 }
@@ -127,7 +128,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		
 		return receiverMessages.success && (!receiverMessages.result || receiverMessages.result.length === 0)
 	} catch (error) {
-		console.error('ERROR', '检查是否有未回复消息失败：', error)
+		logging('ERROR', '检查是否有未回复消息失败：', error)
 		return false
 	}
 }
@@ -208,7 +209,7 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 		
 		return { success: true, conversation: conversationData }
 	} catch (error) {
-		console.error('ERROR', '获取或创建会话失败：', error)
+		logging('ERROR', '获取或创建会话失败：', error)
 		return { success: false }
 	}
 }
@@ -224,13 +225,13 @@ export const sendMessageService = async (
 	try {
 		// 验证请求参数
 		if (!checkSendMessageRequest(sendMessageRequest)) {
-			console.error('ERROR', '发送消息失败：参数不合法')
+			logging('ERROR', '发送消息失败：参数不合法')
 			return { success: false, message: '发送消息失败：参数不合法' }
 		}
 		
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(senderUuid, token)).success) {
-			console.error('ERROR', '发送消息失败：用户验证失败')
+			logging('ERROR', '发送消息失败：用户验证失败')
 			return { success: false, message: '发送消息失败：用户验证失败' }
 		}
 		
@@ -239,20 +240,20 @@ export const sendMessageService = async (
 		// 获取接收者UUID
 		const receiverUuid = await getUserUuid(receiverUid)
 		if (!receiverUuid) {
-			console.error('ERROR', '发送消息失败：接收者不存在')
+			logging('ERROR', '发送消息失败：接收者不存在')
 			return { success: false, message: '发送消息失败：接收者不存在' }
 		}
 		
 		// 不能给自己发消息
 		if (senderUuid === receiverUuid) {
-			console.error('ERROR', '发送消息失败：不能给自己发消息')
+			logging('ERROR', '发送消息失败：不能给自己发消息')
 			return { success: false, message: '发送消息失败：不能给自己发消息' }
 		}
 		
 		// 检查接收者是否拉黑了发送者
 		const isBlocked = await checkUserIsBlocked(receiverUuid, senderUuid)
 		if (isBlocked) {
-			console.error('ERROR', '发送消息失败：对方已拉黑你')
+			logging('ERROR', '发送消息失败：对方已拉黑你')
 			return { success: false, message: '发送消息失败：对方已拉黑你' }
 		}
 		
@@ -263,7 +264,7 @@ export const sendMessageService = async (
 		if (!isFollowing) {
 			const hasUnreplied = await checkHasUnrepliedMessage(senderUuid, receiverUuid)
 			if (hasUnreplied) {
-				console.error('ERROR', '发送消息失败：对方未回复你的上一条消息，且你未关注对方')
+				logging('ERROR', '发送消息失败：对方未回复你的上一条消息，且你未关注对方')
 				return { success: false, message: '发送消息失败：对方未回复你的上一条消息，且你未关注对方' }
 			}
 		}
@@ -271,11 +272,11 @@ export const sendMessageService = async (
 		// 验证消息内容
 		if (messageType === IM_MESSAGE_TYPE.text) {
 			if (!content || content.trim().length === 0) {
-				console.error('ERROR', '发送消息失败：消息内容不能为空')
+				logging('ERROR', '发送消息失败：消息内容不能为空')
 				return { success: false, message: '发送消息失败：消息内容不能为空' }
 			}
 			if (content.length > 10000) {
-				console.error('ERROR', '发送消息失败：消息内容过长')
+				logging('ERROR', '发送消息失败：消息内容过长')
 				return { success: false, message: '发送消息失败：消息内容过长' }
 			}
 		}
@@ -287,7 +288,7 @@ export const sendMessageService = async (
 			const conversationResult = await getOrCreateConversation(senderUuid, receiverUuid)
 			if (!conversationResult.success || !conversationResult.conversation) {
 				await abortAndEndSession(session)
-				console.error('ERROR', '发送消息失败：创建会话失败')
+				logging('ERROR', '发送消息失败：创建会话失败')
 				return { success: false, message: '发送消息失败：创建会话失败' }
 			}
 			
@@ -318,7 +319,7 @@ export const sendMessageService = async (
 			const insertMessageResult = await insertData2MongoDB<Message>(messageData, messageSchemaInstance, messageCollectionName, { session })
 			if (!insertMessageResult.success) {
 				await abortAndEndSession(session)
-				console.error('ERROR', '发送消息失败：插入消息失败')
+				logging('ERROR', '发送消息失败：插入消息失败')
 				return { success: false, message: '发送消息失败：插入消息失败' }
 			}
 			
@@ -349,7 +350,7 @@ export const sendMessageService = async (
 			
 			if (!updateConversationResult.success) {
 				await abortAndEndSession(session)
-				console.error('ERROR', '发送消息失败：更新会话失败')
+				logging('ERROR', '发送消息失败：更新会话失败')
 				return { success: false, message: '发送消息失败：更新会话失败' }
 			}
 			
@@ -365,7 +366,7 @@ export const sendMessageService = async (
 			throw error
 		}
 	} catch (error) {
-		console.error('ERROR', '发送消息失败：未知错误', error)
+		logging('ERROR', '发送消息失败：未知错误', error)
 		return { success: false, message: '发送消息失败：未知错误' }
 	}
 }
@@ -381,7 +382,7 @@ export const getConversationListService = async (
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取会话列表失败：用户验证失败')
+			logging('ERROR', '获取会话列表失败：用户验证失败')
 			return { success: false, message: '获取会话列表失败：用户验证失败' }
 		}
 		
@@ -510,7 +511,7 @@ export const getConversationListService = async (
 		const countResult = await selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, countPipeline)
 		
 		if (!conversationsResult.success) {
-			console.error('ERROR', '获取会话列表失败：查询失败')
+			logging('ERROR', '获取会话列表失败：查询失败')
 			return { success: false, message: '获取会话列表失败：查询失败' }
 		}
 		
@@ -536,7 +537,7 @@ export const getConversationListService = async (
 			totalCount,
 		}
 	} catch (error) {
-		console.error('ERROR', '获取会话列表失败：未知错误', error)
+		logging('ERROR', '获取会话列表失败：未知错误', error)
 		return { success: false, message: '获取会话列表失败：未知错误' }
 	}
 }
@@ -552,12 +553,12 @@ export const getMessageListService = async (
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取消息列表失败：用户验证失败')
+			logging('ERROR', '获取消息列表失败：用户验证失败')
 			return { success: false, message: '获取消息列表失败：用户验证失败' }
 		}
 		
 		if (!checkGetMessageListRequest(getMessageListRequest)) {
-			console.error('ERROR', '获取消息列表失败：参数不合法')
+			logging('ERROR', '获取消息列表失败：参数不合法')
 			return { success: false, message: '获取消息列表失败：参数不合法' }
 		}
 		
@@ -580,7 +581,7 @@ export const getMessageListService = async (
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
 		
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
-			console.error('ERROR', '获取消息列表失败：会话不存在或无权限')
+			logging('ERROR', '获取消息列表失败：会话不存在或无权限')
 			return { success: false, message: '获取消息列表失败：会话不存在或无权限' }
 		}
 		
@@ -643,7 +644,7 @@ export const getMessageListService = async (
 		const countResult = await selectDataByAggregateFromMongoDB(messageSchemaInstance, messageCollectionName, countPipeline)
 		
 		if (!messagesResult.success) {
-			console.error('ERROR', '获取消息列表失败：查询失败')
+			logging('ERROR', '获取消息列表失败：查询失败')
 			return { success: false, message: '获取消息列表失败：查询失败' }
 		}
 		
@@ -676,7 +677,7 @@ export const getMessageListService = async (
 			totalCount,
 		}
 	} catch (error) {
-		console.error('ERROR', '获取消息列表失败：未知错误', error)
+		logging('ERROR', '获取消息列表失败：未知错误', error)
 		return { success: false, message: '获取消息列表失败：未知错误' }
 	}
 }
@@ -692,12 +693,12 @@ export const markMessageReadService = async (
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '标记消息已读失败：用户验证失败')
+			logging('ERROR', '标记消息已读失败：用户验证失败')
 			return { success: false, message: '标记消息已读失败：用户验证失败' }
 		}
 		
 		if (!checkMarkMessageReadRequest(markMessageReadRequest)) {
-			console.error('ERROR', '标记消息已读失败：参数不合法')
+			logging('ERROR', '标记消息已读失败：参数不合法')
 			return { success: false, message: '标记消息已读失败：参数不合法' }
 		}
 		
@@ -721,7 +722,7 @@ export const markMessageReadService = async (
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
 		
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
-			console.error('ERROR', '标记消息已读失败：会话不存在或无权限')
+			logging('ERROR', '标记消息已读失败：会话不存在或无权限')
 			return { success: false, message: '标记消息已读失败：会话不存在或无权限' }
 		}
 		
@@ -826,7 +827,7 @@ export const markMessageReadService = async (
 			throw error
 		}
 	} catch (error) {
-		console.error('ERROR', '标记消息已读失败：未知错误', error)
+		logging('ERROR', '标记消息已读失败：未知错误', error)
 		return { success: false, message: '标记消息已读失败：未知错误' }
 	}
 }
@@ -842,12 +843,12 @@ export const deleteConversationService = async (
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '删除会话失败：用户验证失败')
+			logging('ERROR', '删除会话失败：用户验证失败')
 			return { success: false, message: '删除会话失败：用户验证失败' }
 		}
 		
 		if (!checkDeleteConversationRequest(deleteConversationRequest)) {
-			console.error('ERROR', '删除会话失败：参数不合法')
+			logging('ERROR', '删除会话失败：参数不合法')
 			return { success: false, message: '删除会话失败：参数不合法' }
 		}
 		
@@ -871,7 +872,7 @@ export const deleteConversationService = async (
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
 		
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
-			console.error('ERROR', '删除会话失败：会话不存在或无权限')
+			logging('ERROR', '删除会话失败：会话不存在或无权限')
 			return { success: false, message: '删除会话失败：会话不存在或无权限' }
 		}
 		
@@ -898,13 +899,13 @@ export const deleteConversationService = async (
 		)
 		
 		if (!updateResult.success) {
-			console.error('ERROR', '删除会话失败：更新失败')
+			logging('ERROR', '删除会话失败：更新失败')
 			return { success: false, message: '删除会话失败：更新失败' }
 		}
 		
 		return { success: true, message: '删除会话成功' }
 	} catch (error) {
-		console.error('ERROR', '删除会话失败：未知错误', error)
+		logging('ERROR', '删除会话失败：未知错误', error)
 		return { success: false, message: '删除会话失败：未知错误' }
 	}
 }
@@ -920,12 +921,12 @@ export const deleteMessageService = async (
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '删除消息失败：用户验证失败')
+			logging('ERROR', '删除消息失败：用户验证失败')
 			return { success: false, message: '删除消息失败：用户验证失败' }
 		}
 		
 		if (!checkDeleteMessageRequest(deleteMessageRequest)) {
-			console.error('ERROR', '删除消息失败：参数不合法')
+			logging('ERROR', '删除消息失败：参数不合法')
 			return { success: false, message: '删除消息失败：参数不合法' }
 		}
 		
@@ -949,7 +950,7 @@ export const deleteMessageService = async (
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
 		
 		if (!messageResult.success || !messageResult.result || messageResult.result.length === 0) {
-			console.error('ERROR', '删除消息失败：消息不存在或无权限')
+			logging('ERROR', '删除消息失败：消息不存在或无权限')
 			return { success: false, message: '删除消息失败：消息不存在或无权限' }
 		}
 		
@@ -974,13 +975,13 @@ export const deleteMessageService = async (
 		)
 		
 		if (!updateResult.success) {
-			console.error('ERROR', '删除消息失败：更新失败')
+			logging('ERROR', '删除消息失败：更新失败')
 			return { success: false, message: '删除消息失败：更新失败' }
 		}
 		
 		return { success: true, message: '删除消息成功' }
 	} catch (error) {
-		console.error('ERROR', '删除消息失败：未知错误', error)
+		logging('ERROR', '删除消息失败：未知错误', error)
 		return { success: false, message: '删除消息失败：未知错误' }
 	}
 }
@@ -996,7 +997,7 @@ export const getUnreadMessageCountService = async (
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取未读消息总数失败：用户验证失败')
+			logging('ERROR', '获取未读消息总数失败：用户验证失败')
 			return { success: false, message: '获取未读消息总数失败：用户验证失败' }
 		}
 		
@@ -1035,7 +1036,7 @@ export const getUnreadMessageCountService = async (
 		const result = await selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, pipeline)
 		
 		if (!result.success) {
-			console.error('ERROR', '获取未读消息总数失败：查询失败')
+			logging('ERROR', '获取未读消息总数失败：查询失败')
 			return { success: false, message: '获取未读消息总数失败：查询失败' }
 		}
 		
@@ -1047,7 +1048,7 @@ export const getUnreadMessageCountService = async (
 			totalUnreadCount,
 		}
 	} catch (error) {
-		console.error('ERROR', '获取未读消息总数失败：未知错误', error)
+		logging('ERROR', '获取未读消息总数失败：未知错误', error)
 		return { success: false, message: '获取未读消息总数失败：未知错误' }
 	}
 }
@@ -1126,12 +1127,12 @@ export const recallMessageService = async (
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '撤回消息失败：用户验证失败')
+			logging('ERROR', '撤回消息失败：用户验证失败')
 			return { success: false, message: '撤回消息失败：用户验证失败' }
 		}
 		
 		if (!checkRecallMessageRequest(recallMessageRequest)) {
-			console.error('ERROR', '撤回消息失败：参数不合法')
+			logging('ERROR', '撤回消息失败：参数不合法')
 			return { success: false, message: '撤回消息失败：参数不合法' }
 		}
 		
@@ -1155,7 +1156,7 @@ export const recallMessageService = async (
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
 		
 		if (!messageResult.success || !messageResult.result || messageResult.result.length === 0) {
-			console.error('ERROR', '撤回消息失败：消息不存在或无权限')
+			logging('ERROR', '撤回消息失败：消息不存在或无权限')
 			return { success: false, message: '撤回消息失败：消息不存在或无权限' }
 		}
 		
@@ -1163,7 +1164,7 @@ export const recallMessageService = async (
 		
 		// 检查是否已经撤回
 		if (message.isRecalled) {
-			console.error('ERROR', '撤回消息失败：消息已被撤回')
+			logging('ERROR', '撤回消息失败：消息已被撤回')
 			return { success: false, message: '撤回消息失败：消息已被撤回' }
 		}
 		
@@ -1171,7 +1172,7 @@ export const recallMessageService = async (
 		const now = new Date().getTime()
 		const timeSinceCreation = now - message.createDateTime
 		if (timeSinceCreation > RECALL_TIME_LIMIT) {
-			console.error('ERROR', '撤回消息失败：超过撤回时间限制（2分钟）')
+			logging('ERROR', '撤回消息失败：超过撤回时间限制（2分钟）')
 			return { success: false, message: '撤回消息失败：超过撤回时间限制（2分钟）' }
 		}
 		
@@ -1193,13 +1194,13 @@ export const recallMessageService = async (
 		)
 		
 		if (!updateResult.success) {
-			console.error('ERROR', '撤回消息失败：更新失败')
+			logging('ERROR', '撤回消息失败：更新失败')
 			return { success: false, message: '撤回消息失败：更新失败' }
 		}
 		
 		return { success: true, message: '撤回消息成功' }
 	} catch (error) {
-		console.error('ERROR', '撤回消息失败：未知错误', error)
+		logging('ERROR', '撤回消息失败：未知错误', error)
 		return { success: false, message: '撤回消息失败：未知错误' }
 	}
 }

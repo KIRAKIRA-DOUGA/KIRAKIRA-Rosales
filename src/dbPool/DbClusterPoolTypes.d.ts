@@ -83,6 +83,10 @@ export type QueryType<T> = {
 // 数据库 Update，相当于 SQL UPDATE 中的 SET
 export type UpdateType<T> = {
 	[K in keyof T]?: T[K];
+} & {
+	$inc?: {
+		[K in keyof T]?: T[K] extends number ? number : never; // 仅允许对数字类型进行自增/自减操作
+	};
 }
 
 // 数据库 Select 投影，相当于 SQL 中的 SELECT

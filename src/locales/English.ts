@@ -1,5 +1,5 @@
 export default {
-	SendVerificationCode: {
+	SendRegistrationVerificationCode: {
 		mailTitle: "KIRAKIRA - Register Verification Code",
 		mailHeading: "Your registration verification code is",
 		mailText: "Welcome to KIRAKIRA. You can use this verification code to register your account.\nVerification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.\nTo stop receiving notifications, please contact the KIRAKIRA support team.",
@@ -28,5 +28,15 @@ export default {
 		mailTitle: "KIRAKIRA - Disable Email 2FA Verification Code",
 		mailHeading: "Your verification code is",
 		mailText: "Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.\nTo stop receiving notifications, please contact the KIRAKIRA support team.",
+	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - Verification Code",
+		mailHeading: "Your verification code is",
+		mailText: "Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.\nThis email was sent to the email linked to your KIRAKIRA account. To stop receiving notifications, please contact the KIRAKIRA support team.",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - Verification Code",
+		mailHeading: "Your verification code is",
+		mailText: "Verification code is valid for 30 minutes. Please ensure do not disclose your verification code to others.\nThis email was sent directly to your email address. To stop receiving notifications, please contact the KIRAKIRA support team.",
 	},
 }

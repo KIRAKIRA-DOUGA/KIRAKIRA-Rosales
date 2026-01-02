@@ -10,19 +10,26 @@ import Indonesian from "../locales/Indonesian.js"; // 印尼语
 import Korean from "../locales/Korean.js"; // 韩语
 import ChineseTraditional from "../locales/Chinese Traditional.js"; // 繁体中文
 import Vietnamese from "../locales/Vietnamese.js"; // 越南语
+import { logging } from "../service/loggingService.js";
 
 
 const languagePacks = {
-	"zh-Hans-CN": ChineseSimplified,
-	"zht": ChineseTraditional,
 	"en": English,
-	"fr": French,
+	"zh-Hans-CN": ChineseSimplified,
+	"zh-Hant-TW": ChineseTraditional,
 	"ja": Japanese,
-	"yue": Cantonese,
-	"id": Indonesian,
 	"ko": Korean,
 	"vi": Vietnamese,
+	"id": Indonesian,
+	"fr": French,
+	"yue": Cantonese,
 };
+
+/** 可用的语言列表（类型） */
+type SupportedLanguage = keyof typeof languagePacks
+
+/** 可用的语言列表 */
+export const supportedLanguageList = Object.keys(languagePacks);
 
 /**
  * 判断客户端的语言并返回对应的语言包
@@ -42,3 +49,94 @@ export const getI18nLanguagePack = (clientLanguage: string, targetMail: string) 
 	Object.entries(messages).forEach(([key, value]) => mailHtml = mailHtml.replaceAll(`{{${key}}}`, value.replaceAll("\n", "<br>")));
 	return { mailTitle, mailHtml };
 };
+
+/**
+ * 标准化客户端传入的语言标识符
+ * @param clientLanguage 客户端语言
+ * @returns 后端支持的语言标识符
+ */
+export const standardizeClientLanguageFlag = (clientLanguage: string): SupportedLanguage => {
+	try {
+		const lang = (clientLanguage ?? '').trim().replace(/_/g, '-');
+		if (!lang) return 'zh-Hans-CN';
+
+		switch (lang) {
+			// English
+			case 'en':
+			case 'en-US':
+			case 'en-GB':
+			case 'en-AU':
+			case 'en-CA':
+				return 'en';
+
+			// Simplified Chinese
+			case 'zh':
+			case 'cn':
+			case 'ch':
+			case 'chs':
+			case 'zh-CN':
+			case 'zh-SG':
+			case 'zh-Hans':
+			case 'zh-Hans-CN':
+			case 'zh-Hans-SG':
+				return 'zh-Hans-CN';
+
+			// Traditional Chinese
+			case 'tw':
+			case 'cht':
+			case 'zh-TW':
+			case 'zh-HK':
+			case 'zh-MO':
+			case 'zh-Hant':
+			case 'zh-Hant-TW':
+			case 'zh-Hant-HK':
+			case 'zh-Hant-MO':
+				return 'zh-Hant-TW';
+
+			// Japanese
+			case 'ja':
+			case 'ja-JP':
+				return 'ja';
+
+			// Korean 韩语
+			case 'ko':
+			case 'ko-KR':
+				return 'ko';
+
+			// Vietnamese 越南语
+			case 'vi':
+			case 'vi-VN':
+				return 'vi';
+
+			// Indonesian 印尼语
+			case 'id':
+			case 'id-ID':
+			case 'in':
+			case 'in-ID':
+				return 'id';
+
+			// French 法语
+			case 'fr':
+			case 'fr-FR':
+			case 'fr-CA':
+				return 'fr';
+
+			// Cantonese 粤语
+			case 'yue':
+			case 'yue-HK':
+			case 'zh-YUE':
+			case 'zh-yue':
+				return 'yue';
+
+			// crowdin i18n mode fallback to 'en'
+			case 'ii':
+				return 'en';
+
+			default:
+				return 'zh-Hans-CN';
+		}
+	} catch (error) {
+		logging('ERROR', 'Unable to standardize client language string', error, { clientLanguage });
+		return 'zh-Hans-CN';
+	}
+}
