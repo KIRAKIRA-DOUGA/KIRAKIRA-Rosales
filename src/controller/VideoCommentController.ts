@@ -35,6 +35,20 @@ export const emitVideoCommentController = async (ctx: koaCtx, next: koaNext) => 
  * @param ctx context
  * @param next context
  */
+export const getSelfVideoCommentListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const page = parseInteger(ctx.query.page as string) ?? 1
+	const pageSize = parseInteger(ctx.query.pageSize as string) ?? 20
+	const request: GetSelfVideoCommentRequestDto = {
+		page,
+		pageSize,
+	}
+	const resp = await getSelfVideoCommentListService(request, uuid, token)
+	ctx.body = resp
+	await next()
+}
+
 export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koaNext) => {
 	const videoId = ctx.query.videoId as string
 	const page = ctx.query.page as string
@@ -50,25 +64,6 @@ export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koa
 	const token = ctx.cookies.get('token')
 	const videoCommentListResponse = await getVideoCommentListByKvidService(getVideoCommentByKvidRequest, UUID, token)
 	ctx.body = videoCommentListResponse
-	await next()
-}
-
-/**
- * 获取本人已发布的评论（包含管理员删除或待审核，排除用户自行删除）
- * @param ctx context
- * @param next context
- */
-export const getSelfVideoCommentListController = async (ctx: koaCtx, next: koaNext) => {
-	const uuid = ctx.cookies.get('uuid')
-	const token = ctx.cookies.get('token')
-	const page = parseInteger(ctx.query.page as string) ?? 1
-	const pageSize = parseInteger(ctx.query.pageSize as string) ?? 20
-	const request: GetSelfVideoCommentRequestDto = {
-		page,
-		pageSize,
-	}
-	const resp = await getSelfVideoCommentListService(request, uuid, token)
-	ctx.body = resp
 	await next()
 }
 

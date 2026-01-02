@@ -16,10 +16,9 @@ import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.j
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUserUuid } from './UserService.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
-import { FavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
-import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { recordVideoWatchAndIncrementCount } from './VideoWatchService.js'
+import { logging } from './loggingService.js'
 
 /**
  * 上传视频
@@ -31,18 +30,18 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 	try {
 		if (checkUploadVideoRequest(uploadVideoRequest) && esClient && !isEmptyObject(esClient)) {
 			if (!(await checkUserTokenService(uid, token)).success) {
-				console.error('ERROR', '上传视频失败，用户校验未通过')
+				logging('ERROR', '上传视频失败，用户校验未通过')
 				return { success: false, message: '上传视频失败，用户校验未通过' }
 			}
 
 			if (uploadVideoRequest.uploaderId !== uid) {
-				console.error('ERROR', '上传视频失败, UID 与 cookie 不相符')
+				logging('ERROR', '上传视频失败, UID 与 cookie 不相符')
 				return { success: false, message: '上传视频失败, 账户未对齐' }
 			}
 
 			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 			if (!UUID) {
-				console.error('ERROR', '上传视频失败，UUID 不存在', { uid })
+				logging('ERROR', '上传视频失败，UUID 不存在', undefined, { uid })
 				return { success: false, message: '上传视频失败，UUID 不存在' }
 			}
 
@@ -113,7 +112,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 							await session.abortTransaction()
 						}
 						session.endSession()
-						console.error('ERROR', '视频上传失败，数据无法导入数据库或搜索引擎')
+						logging('ERROR', '视频上传失败，数据无法导入数据库或搜索引擎')
 						return { success: false, message: '视频上传失败，数据无法导入数据库或搜索引擎' }
 					}
 				} catch (error) {
@@ -121,7 +120,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('ERROR', '视频上传失败，数据无法导入数据库，错误：', error)
+					logging('ERROR', '视频上传失败，数据无法导入数据库，错误：', error)
 					return { success: false, message: '视频上传失败，无法记录视频信息' }
 				}
 			} else {
@@ -129,15 +128,15 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					await session.abortTransaction()
 				}
 				session.endSession()
-				console.error('ERROR', '获取视频自增 ID 失败', uploadVideoRequest)
+				logging('ERROR', '获取视频自增 ID 失败', undefined, { uploadVideoRequest })
 				return { success: false, message: '视频上传失败，获取视频 ID 失败' }
 			}
 		} else {
-			console.error('ERROR', `上传视频时的字段校验未通过或 Es 客户端未连接，用户ID：${uploadVideoRequest.uploaderId}`)
+			logging('ERROR', `上传视频时的字段校验未通过或 Es 客户端未连接，用户ID：${uploadVideoRequest.uploaderId}`)
 			return { success: false, message: '上传时携带的参数不正确或搜索引擎客户端未连接' }
 		}
 	} catch (error) {
-		console.error('ERROR', '视频上传失败：', error)
+		logging('ERROR', '视频上传失败：', error)
 		return { success: false, message: '视频上传失败' }
 	}
 }
@@ -221,18 +220,18 @@ export const getThumbVideoService = async (uuid?: string, token?: string): Promi
 			const videoResult = result.result
 
 			if (!result.success || !videoResult) {
-				console.error('ERROR', '获取到的视频数组长度小于等于 0')
+				logging('ERROR', '获取到的视频数组长度小于等于 0')
 				return { success: false, message: '获取首页视频时出现异常，视频数量为 0', videosCount: 0, videos: [] }
 			}
 
 			const videosCount = videoResult.length
 			return { success: true, message: '获取首页视频成功', videosCount, videos: videoResult }
 		} catch (error) {
-			console.error('ERROR', '获取首页视频时出现异常，查询失败：', error)
+			logging('ERROR', '获取首页视频时出现异常，查询失败：', error)
 			return { success: false, message: '获取首页视频时出现异常', videosCount: 0, videos: [] }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取首页视频失败：', error)
+		logging('ERROR', '获取首页视频失败：', error)
 		return { success: false, message: '获取首页视频失败', videosCount: 0, videos: [] }
 	}
 }
@@ -261,23 +260,23 @@ export const checkVideoExistByKvidService = async (checkVideoExistRequestDto: Ch
 					if (videosCount === 1) {
 						return { success: true, message: "视频存在", exist: true }
 					} else {
-						console.error('ERROR', '获取到的视频数组长度不等于 1')
+						logging('ERROR', '获取到的视频数组长度不等于 1')
 						return { success: false, message: "获取视频信息错误，视频不存在", exist: false }
 					}
 				} else {
-					console.error('ERROR', '获取到的视频结果或视频数组为空')
+					logging('ERROR', '获取到的视频结果或视频数组为空')
 					return { success: false, message: "获取视频信息错误，视频不存在", exist: false }
 				}
 			} catch (error) {
-				console.error('ERROR', '获取视频失败：', error)
+				logging('ERROR', '获取视频失败：', error)
 				return { success: false, message: "获取视频信息错误，视频不存在", exist: false }
 			}
 		} else {
-			console.error('ERROR', 'KVID 为空')
+			logging('ERROR', 'KVID 为空')
 			return { success: false, message: "获取视频信息错误，KVID 为空", exist: false }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取视频失败：', error)
+		logging('ERROR', '获取视频失败：', error)
 		return { success: false, message: "获取视频信息错误，未知错误", exist: false }
 	}
 }
@@ -304,25 +303,25 @@ export const checkVideoBlockedByKvidService = async (videoId: number, selectorUu
 		}
 		const videoResult = await selectDataFromMongoDB<Video>(where, select, schemaInstance, collectionName)
 		if (!videoResult.success || !videoResult.result || videoResult.result.length === 0) {
-			console.error('ERROR', '检查视频是否被屏蔽失败，未找到对应的视频')
+			logging('ERROR', '检查视频是否被屏蔽失败，未找到对应的视频')
 			return { success: false, message: '检查视频是否被屏蔽失败，未找到对应的视频'}
 		}
 		const video = videoResult.result?.[0]
 		const uploaderUUID = video.uploaderUUID
 		if (!uploaderUUID) {
-			console.error('ERROR', '检查视频是否被屏蔽失败，视频上传者 UID 为空')
+			logging('ERROR', '检查视频是否被屏蔽失败，视频上传者 UID 为空')
 			return { success: false, message: '检查视频是否被屏蔽失败，视频上传者 UID 为空' }
 		}
 		const targetUid = await getUserUid(uploaderUUID)
 		if (!targetUid) {
-			console.error('ERROR', '检查视频是否被屏蔽失败，视频上传者 UID 不存在')
+			logging('ERROR', '检查视频是否被屏蔽失败，视频上传者 UID 不存在')
 			return { success: false, message: '检查视频是否被屏蔽失败，视频上传者 UID 不存在' }
 		}
 
 		const checkBlockUserResult = await checkBlockUserService({ uid: targetUid }, selectorUuid, selectorToken)
 		const checkIsBlockedByOtherUserResult = await checkIsBlockedByOtherUserService({ targetUid }, selectorUuid, selectorToken)
 		if (!checkBlockUserResult.success && !checkIsBlockedByOtherUserResult.success) {
-			console.error('ERROR', '检查视频是否被屏蔽失败，无法检查用户是否被屏蔽')
+			logging('ERROR', '检查视频是否被屏蔽失败，无法检查用户是否被屏蔽')
 			return { success: false, message: '检查视频是否被屏蔽失败，无法检查用户是否被屏蔽' }
 		}
 
@@ -347,7 +346,7 @@ export const checkVideoBlockedByKvidService = async (videoId: number, selectorUu
 		}
 		return { success: true, message: '未屏蔽', isBlocked, isBlockedByOther, isHidden }
 	} catch (error) {
-		console.error('ERROR', '检查视频是否被屏蔽失败：', error)
+		logging('ERROR', '检查视频是否被屏蔽失败：', error)
 		return { success: false, message: '检查视频是否被屏蔽失败，未知错误'}
 	}
 }
@@ -367,7 +366,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 
 		// 判断请求参数是否合法
 		if (!checkGetVideoByKvidRequest(getVideoByKvidRequest)) {
-			console.error('ERROR', '视频页 - KVID 为空')
+			logging('ERROR', '视频页 - KVID 为空')
 			return { success: false, message: '视频页 - 必要的请求参数为空', isBlocked: false, isBlockedByOther, isHidden }
 		}
 
@@ -427,7 +426,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 			const result = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, getThumbVideoPipeline)
 			const video = result.result?.[0] as GetVideoByKvidResponseDto['video']
 			if (!result.success || !video) {
-				console.error('ERROR', '视频页 - 获取到的视频结果或视频数组为空')
+				logging('ERROR', '视频页 - 获取到的视频结果或视频数组为空')
 				return { success: false, message: '视频页 - 未获取到视频', isBlocked: false, isBlockedByOther, isHidden }
 			}
 
@@ -457,7 +456,6 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				if (checkBlockUserResult.isBlocked) {
 					return { success: true, message: '视频页 - 未获取到视频，你已屏蔽该用户', isBlockedByOther, isBlocked: true, isHidden }
 				}
-
 
 				// 5. 记录视频播放量（一人一天看一个视频不管看多少次都只加一次播放量）
 				const watchCountIncremented = await recordVideoWatchAndIncrementCount(videoId, selectorUuid)
@@ -492,64 +490,26 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					video.uploaderInfo.isFollowing = true
 				}
 
-			// 8. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
-			if (video.uploaderUUID === selectorUuid) {
-				video.uploaderInfo.isSelf = true
+				// 7. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
+				if (video.uploaderUUID === selectorUuid) {
+					video.uploaderInfo.isSelf = true
+				}
 			}
 
-			// 9. 计算视频点赞数、点踩数和被收藏数
-			const [upvoteCount, downvoteCount, favoritesCount] = await Promise.all([
-				getVideoUpvoteCount(videoId),
-				getVideoDownvoteCount(videoId),
-				getVideoFavoritesCount(videoId),
-			])
-			video.upvoteCount = upvoteCount
-			video.downvoteCount = downvoteCount
-			video.favoritesCount = favoritesCount
-
-			// 10. 检查当前用户是否点赞/点踩
-			const selectorUid = await getUserUid(selectorUuid)
-			if (selectorUid !== undefined && selectorUid !== null && selectorUid >= 1) {
-				const [isUpvoted, isDownvoted] = await Promise.all([
-					checkUserHasUpvoted(videoId, selectorUid),
-					checkUserHasDownvoted(videoId, selectorUid),
-				])
-				video.isUpvoted = isUpvoted
-				video.isDownvoted = isDownvoted
-			} else {
-				video.isUpvoted = false
-				video.isDownvoted = false
+			return {
+				success: true,
+				message: '视频页 - 获取视频成功',
+				video,
+				isBlocked: false,
+				isBlockedByOther,
+				isHidden,
 			}
-		} else {
-			// 用户未登录，仍然计算点赞数和点踩数，但不计算用户是否点赞/点踩
-			const [upvoteCount, downvoteCount] = await Promise.all([
-				getVideoUpvoteCount(videoId),
-				getVideoDownvoteCount(videoId),
-			])
-			video.upvoteCount = upvoteCount
-			video.downvoteCount = downvoteCount
-			video.isUpvoted = false
-			video.isDownvoted = false
-		}
-
-		// 计算视频被收藏数（一个用户创建再多含有这个视频的收藏夹也只能算一次收藏）
-		const favoritesCount = await getVideoFavoritesCount(videoId)
-		video.favoritesCount = favoritesCount
-
-		return {
-			success: true,
-			message: '视频页 - 获取视频成功',
-			video,
-			isBlocked: false,
-			isBlockedByOther,
-			isHidden,
-		}
 		} catch (error) {
-			console.error('ERROR', '视频页 - 视频查询失败：', error)
+			logging('ERROR', '视频页 - 视频查询失败：', error)
 			return { success: false, message: '视频页 - 视频查询失败', isBlocked: false, isBlockedByOther, isHidden }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取视频失败：', error)
+		logging('ERROR', '获取视频失败：', error)
 		return { success: false, message: '获取视频失败：', isBlocked: false, isBlockedByOther: false, isHidden: false }
 	}
 }
@@ -565,7 +525,7 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 		let isBlockedByOther = false
 
 		if (!checkGetVideoByUidRequest(getVideoByUidRequest)) {
-			console.error('ERROR', '根据 UID 获取视频失败，请求的 UID 为空：')
+			logging('ERROR', '根据 UID 获取视频失败，请求的 UID 为空：')
 			return { success: false, message: '根据 UID 获取视频失败，请求的 UID 为空', videosCount: 0, videos: [], isBlockedByOther, isBlocked: false, isHidden }
 		}
 
@@ -618,7 +578,7 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 			const result = await selectDataFromMongoDB<Video>(where, select, schemaInstance, collectionName)
 			const videoResult = result.result
 			if (!result.success || !videoResult) {
-				console.error('ERROR', '根据 UID 获取视频失败，获取的结果失败或为空')
+				logging('ERROR', '根据 UID 获取视频失败，获取的结果失败或为空')
 				return { success: false, message: '根据 UID 获取视频失败，获取的结果失败或为空', videosCount: 0, videos: [], isBlockedByOther, isBlocked: false, isHidden }
 			}
 
@@ -630,11 +590,11 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 
 			return { success: true, message: '根据 UID 获取视频成功', videosCount: videoResultLength, videos: videoResult, isBlockedByOther, isBlocked: false, isHidden }
 		} catch (error) {
-			console.error('ERROR', '根据 UID 获取视频失败，检索视频出错：', error)
+			logging('ERROR', '根据 UID 获取视频失败，检索视频出错：', error)
 			return { success: false, message: '根据 UID 获取视频失败，检索视频出错', videosCount: 0, videos: [], isBlockedByOther, isBlocked: false, isHidden }
 		}
 	} catch (error) {
-		console.error('ERROR', '根据 UID 获取视频失败，未知原因：', error)
+		logging('ERROR', '根据 UID 获取视频失败，未知原因：', error)
 		return { success: false, message: '根据 UID 获取视频失败，未知原因', videosCount: 0, videos: [], isBlockedByOther: false, isBlocked: false, isHidden: false }
 	}
 }
@@ -692,30 +652,30 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 							if (videos && videosCount !== undefined && videosCount !== null && videosCount > 0) {
 								return { success: true, message: '使用关键字搜索视频成功', videosCount, videos }
 							} else {
-								console.error('ERROR', '使用关键字搜索视频失败，在 Es 中搜索成功，但在 MongoDB 中没有找到匹配的视频')
+								logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索成功，但在 MongoDB 中没有找到匹配的视频')
 								return { success: false, message: '使用关键字搜索视频失败，搜索到视频了，但是视频信息没有存储在在数据库中', videosCount: 0, videos: [] }
 							}
 						} catch (error) {
-							console.error('ERROR', '使用关键字搜索视频失败，在 Es 中搜索成功，但在 MongoDB 中搜索出现异常')
+							logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索成功，但在 MongoDB 中搜索出现异常')
 							return { success: false, message: '使用关键字搜索视频失败，搜索到视频了，但是视频数据获取异常', videosCount: 0, videos: [] }
 						}
 					} else {
 						return { success: true, message: '使用关键字搜索视频成功，但搜索结果为空', videosCount: 0, videos: [] }
 					}
 				} else {
-					console.error('ERROR', '使用关键字搜索视频失败，在 Es 中搜索失败')
+					logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索失败')
 					return { success: false, message: '使用关键字搜索视频失败，搜索失败', videosCount: 0, videos: [] }
 				}
 			} catch (error) {
-				console.error('ERROR', '使用关键字搜索视频失败，在 Es 中搜索数据出现异常', error)
+				logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索数据出现异常', error)
 				return { success: false, message: '使用关键字搜索视频失败，搜索数据时出现异常', videosCount: 0, videos: [] }
 			}
 		} else {
-			console.error('ERROR', '使用关键字搜索视频失败，检索关键字或 Es 连接客户端为空')
+			logging('ERROR', '使用关键字搜索视频失败，检索关键字或 Es 连接客户端为空')
 			return { success: false, message: '使用关键字搜索视频失败，必要参数为空', videosCount: 0, videos: [] }
 		}
 	} catch (error) {
-		console.error('ERROR', '使用关键字搜索视频失败，未知原因：', error)
+		logging('ERROR', '使用关键字搜索视频失败，未知原因：', error)
 		return { success: false, message: '使用关键字搜索视频失败，未知原因', videosCount: 0, videos: [] }
 	}
 }
@@ -737,7 +697,7 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 			const uploadMetadata = getVideoFileTusEndpointRequest.uploadMetadata
 
 			if (!streamTusEndpointUrl && !streamToken) {
-				console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, streamTusEndpointUrl 和 streamToken 可能为空。请检查环境变量设置（CF_STREAM_TUS_ENDPOINT_URL, CF_STREAM_TOKEN）')
+				logging('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, streamTusEndpointUrl 和 streamToken 可能为空。请检查环境变量设置（CF_STREAM_TUS_ENDPOINT_URL, CF_STREAM_TOKEN）')
 				return undefined
 			}
 
@@ -753,7 +713,7 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 				})
 
 				if (!videoTusEndpointResponse.ok) {
-					console.error('ERROR', `无法创建 Cloudflare Stream TUS Endpoint, HTTP error! status: ${videoTusEndpointResponse.status}`)
+					logging('ERROR', `无法创建 Cloudflare Stream TUS Endpoint, HTTP error! status: ${videoTusEndpointResponse.status}`)
 					return undefined
 				}
 
@@ -762,19 +722,19 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 				if (videoTusEndpoint) {
 					return videoTusEndpoint
 				} else {
-					console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 请求结果为空')
+					logging('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 请求结果为空')
 					return undefined
 				}
 			} catch (error) {
-				console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 发送请求失败', error?.response?.data)
+				logging('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 发送请求失败', error, { responseData: error?.response?.data })
 				return undefined
 			}
 		} else {
-			console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 用户校验未通过', { uid })
+			logging('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 用户校验未通过', undefined, { uid })
 			return undefined
 		}
 	} catch (error) {
-		console.error('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 未知错误：', error)
+		logging('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 未知错误：', error)
 		return undefined
 	}
 }
@@ -796,15 +756,15 @@ export const getVideoCoverUploadSignedUrlService = async (uid: number, token: st
 					return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: { fileName, signedUrl } }
 				}
 			} catch (error) {
-				console.error('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
+				logging('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
 				return { success: false, message: '获取视频封面图上传预签名 URL 失败，请求失败' }
 			}
 		} else {
-			console.error('ERROR', '获取视频封面图上传预签名 URL 失败，用户校验未通过')
+			logging('ERROR', '获取视频封面图上传预签名 URL 失败，用户校验未通过')
 			return { success: false, message: '获取视频封面图上传预签名 URL 失败，用户校验未通过' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取视频封面图上传预签名 URL 失败：', error)
+		logging('ERROR', '获取视频封面图上传预签名 URL 失败：', error)
 		return { success: false, message: '获取视频封面图上传预签名 URL 失败，未知原因' }
 	}
 }
@@ -879,23 +839,23 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
 							return { success: true, message: '通过 TAG ID 搜索未找到视频', videosCount: 0, videos: [] }
 						}
 					} else {
-						console.error('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
+						logging('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
 						return { success: true, message: '通过 TAG ID 搜索时出错，整理后的搜索结果为空', videosCount: 0, videos: [] }
 					}
 				} else {
-					console.error('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
+					logging('ERROR', '通过 TAG ID 搜索时出错，搜索结果为空')
 					return { success: false, message: '通过 TAG ID 搜索时出错，搜索结果为空', videosCount: 0, videos: [] }
 				}
 			} catch (error) {
-				console.error('ERROR', '通过 TAG ID 搜索时出错，搜索视频出错：', error)
+				logging('ERROR', '通过 TAG ID 搜索时出错，搜索视频出错：', error)
 				return { success: false, message: '通过 TAG ID 搜索时出错，搜索视频出错', videosCount: 0, videos: [] }
 			}
 		} else {
-			console.error('ERROR', '无法通过 TAG ID 获取视频，请求参数不合法')
+			logging('ERROR', '无法通过 TAG ID 获取视频，请求参数不合法')
 			return { success: false, message: '无法通过 TAG ID 获取视频，请求参数不合法', videosCount: 0, videos: [] }
 		}
 	} catch (error) {
-		console.error('ERROR', '无法通过 TAG ID 获取视频，未知异常：', error)
+		logging('ERROR', '无法通过 TAG ID 获取视频，未知异常：', error)
 		return { success: false, message: '无法通过 TAG ID 获取视频，未知异常', videosCount: 0, videos: [] }
 	}
 }
@@ -914,7 +874,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 			if ((await checkUserTokenService(adminUid, adminToken)).success) {
 				const adminUUID = await getUserUuid(adminUid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 				if (!adminUUID) {
-					console.error('ERROR', '删除一个视频失败，adminUUID 不存在', { adminUid })
+					logging('ERROR', '删除一个视频失败，adminUUID 不存在', undefined, { adminUid })
 					return { success: false, message: '删除一个视频失败，adminUUID 不存在' }
 				}
 
@@ -967,7 +927,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 									await session.abortTransaction()
 								}
 								session.endSession()
-								console.error('ERROR', '删除一个视频失败，删除视频失败')
+								logging('ERROR', '删除一个视频失败，删除视频失败')
 								return { success: false, message: '删除一个视频失败，删除视频失败' }
 							}
 						} else {
@@ -975,7 +935,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 								await session.abortTransaction()
 							}
 							session.endSession()
-							console.error('ERROR', '删除一个视频失败，保存副本失败')
+							logging('ERROR', '删除一个视频失败，保存副本失败')
 							return { success: false, message: '删除一个视频失败，保存副本失败' }
 						}
 					} else {
@@ -983,7 +943,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 							await session.abortTransaction()
 						}
 						session.endSession()
-						console.error('ERROR', '删除一个视频失败，查询视频数据失败')
+						logging('ERROR', '删除一个视频失败，查询视频数据失败')
 						return { success: false, message: '删除一个视频失败，查询视频数据失败' }
 					}
 				} catch (error) {
@@ -991,19 +951,19 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('ERROR', '删除一个视频时出错，获取视频失败！')
+					logging('ERROR', '删除一个视频时出错，获取视频失败！')
 					return { success: false, message: '删除一个视频时出错，获取视频失败' }
 				}
 			} else {
-				console.error('ERROR', '删除一个视频失败，非法用户！')
+				logging('ERROR', '删除一个视频失败，非法用户！')
 				return { success: false, message: '删除一个视频失败，非法用户！' }
 			}
 		} else {
-			console.error('ERROR', '删除一个视频失败，参数不合法')
+			logging('ERROR', '删除一个视频失败，参数不合法')
 			return { success: false, message: '删除一个视频失败，参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '删除一个视频时出错，未知错误：', error)
+		logging('ERROR', '删除一个视频时出错，未知错误：', error)
 		return { success: false, message: '删除一个视频时出错，未知错误' }
 	}
 }
@@ -1018,7 +978,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 export const getPendingReviewVideoService = async (adminUid: number, adminToken: string): Promise<PendingReviewVideoResponseDto> => {
 	try {
 		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
-			console.error('ERROR', '获取待审核视频列表失败，用户校验失败！')
+			logging('ERROR', '获取待审核视频列表失败，用户校验失败！')
 			return { success: false, message: '获取待审核视频列表失败，用户校验失败！', videosCount: 0, videos: [] }
 		}
 
@@ -1076,19 +1036,19 @@ export const getPendingReviewVideoService = async (adminUid: number, adminToken:
 						}),
 					}
 				} else {
-					console.error('ERROR', '获取待审核视频列表失败，获取到的视频数组长度小于等于 0')
+					logging('ERROR', '获取待审核视频列表失败，获取到的视频数组长度小于等于 0')
 					return { success: false, message: '获取待审核视频列表失败，视频数量为 0', videosCount: 0, videos: [] }
 				}
 			} else {
-				console.error('ERROR', '获取待审核视频列表失败，获取到的视频结果或视频数组为空')
+				logging('ERROR', '获取待审核视频列表失败，获取到的视频结果或视频数组为空')
 				return { success: false, message: '获取待审核视频列表失败，未获取到视频', videosCount: 0, videos: [] }
 			}
 		} catch (error) {
-			console.error('ERROR', '获取待审核视频列表时出错，获取视频时出现异常，查询失败：', error)
+			logging('ERROR', '获取待审核视频列表时出错，获取视频时出现异常，查询失败：', error)
 			return { success: false, message: '获取待审核视频列表时出错，查询失败', videosCount: 0, videos: [] }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取待审核视频列表时出错，获取视频出错：', error)
+		logging('ERROR', '获取待审核视频列表时出错，获取视频出错：', error)
 		return { success: false, message: '获取待审核视频列表时出错，获取视频出错', videosCount: 0, videos: [] }
 	}
 }
@@ -1103,12 +1063,12 @@ export const getPendingReviewVideoService = async (adminUid: number, adminToken:
 export const approvePendingReviewVideoService = async (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto, adminUid: number, adminToken: string): Promise<ApprovePendingReviewVideoResponseDto> => {
 	try {
 		if (!checkApprovePendingReviewVideoRequest(approvePendingReviewVideoRequest)) {
-			console.error('ERROR', '通过一个待审核视频失败，参数校验失败')
+			logging('ERROR', '通过一个待审核视频失败，参数校验失败')
 			return { success: false, message: '通过一个待审核视频失败，参数校验失败' }
 		}
 
 		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
-			console.error('ERROR', '通过一个待审核视频失败，用户校验失败！')
+			logging('ERROR', '通过一个待审核视频失败，用户校验失败！')
 			return { success: false, message: '通过一个待审核视频失败，用户校验失败！' }
 		}
 
@@ -1126,18 +1086,18 @@ export const approvePendingReviewVideoService = async (approvePendingReviewVideo
 			const updatePendingReviewVideoResult = await findOneAndUpdateData4MongoDB<Video>(updatePendingReviewVideoWhere, updatePendingReviewVideoData, videoSchemaInstance, videoCollectionName)
 
 			if (!updatePendingReviewVideoResult.success) {
-				console.error('ERROR', '通过一个待审核视频失败，更新失败')
+				logging('ERROR', '通过一个待审核视频失败，更新失败')
 				return { success: false, message: '通过一个待审核视频失败，更新失败' }
 			}
 
 
 			return { success: true, message: '通过待审核视频成功' }
 		} catch (error) {
-			console.error('ERROR', '通过一个待审核视频时出错，请求更新时出错：', error)
+			logging('ERROR', '通过一个待审核视频时出错，请求更新时出错：', error)
 			return { success: false, message: '通过一个待审核视频时出错，请求更新时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '通过一个待审核视频时出错，未知错误：', error)
+		logging('ERROR', '通过一个待审核视频时出错，未知错误：', error)
 		return { success: false, message: '通过一个待审核视频时出错，未知错误' }
 	}
 }
@@ -1229,48 +1189,5 @@ const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boo
  */
 const checkApprovePendingReviewVideoRequest = (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto) => {
 	return (!!approvePendingReviewVideoRequest.videoId && typeof approvePendingReviewVideoRequest.videoId === 'number' && approvePendingReviewVideoRequest.videoId >= 0)
-}
-
-/**
- * 获取视频被收藏数（一个用户创建再多含有这个视频的收藏夹也只能算一次收藏）
- * @param videoId 视频 ID
- * @returns 视频被收藏数（去重后的用户数）
- */
-export const getVideoFavoritesCount = async (videoId: number): Promise<number> => {
-	try {
-		if (!videoId || videoId < 1) {
-			return 0
-		}
-
-		const { collectionName, schemaInstance } = FavoritesDetailSchema
-		type FavoritesDetailType = InferSchemaType<typeof schemaInstance>
-
-		// 使用聚合管道统计：找到所有收藏该视频的记录，按 operator（用户ID）去重，然后计数
-		const pipeline: PipelineStage[] = [
-			{
-				$match: {
-					category: 'video',
-					id: String(videoId),
-				},
-			},
-			{
-				$group: {
-					_id: '$operator', // 按用户ID分组去重
-				},
-			},
-			{
-				$count: 'total',
-			},
-		]
-
-		const result = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, pipeline)
-		if (result.success && result.result && result.result.length > 0) {
-			return result.result[0].total || 0
-		}
-		return 0
-	} catch (error) {
-		console.error('ERROR', '获取视频被收藏数失败：', error)
-		return 0
-	}
 }
 

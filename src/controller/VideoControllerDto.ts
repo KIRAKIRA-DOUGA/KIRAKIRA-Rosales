@@ -172,16 +172,6 @@ export type GetVideoByKvidResponseDto = {
 		copyright: string;
 		/** 视频 TAG */
 		videoTagList: VideoTag[];
-		/** 视频点赞数 */
-		upvoteCount?: number;
-		/** 视频点踩数 */
-		downvoteCount?: number;
-		/** 当前用户是否点赞（根据 uuid 和 token） */
-		isUpvoted?: boolean;
-		/** 当前用户是否点踩（根据 uuid 和 token） */
-		isDownvoted?: boolean;
-		/** 视频被收藏数（一个用户创建再多含有这个视频的收藏夹也只能算一次收藏） */
-		favoritesCount?: number;
 	};
 } & BlockState
 

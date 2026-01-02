@@ -5,6 +5,7 @@ import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClus
 import { FavoritesDetailSchema, FavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
+import { logging } from './loggingService.js'
 
 /**
  * 创建收藏夹
@@ -19,7 +20,7 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 			if ((await checkUserTokenByUuidService(uuid, token)).success) {
 				const uid = await getUserUid(uuid)
 				if (!uid) {
-					console.error('ERROR', '创建收藏夹失败，用户ID不存在')
+					logging('ERROR', '创建收藏夹失败，用户ID不存在')
 					return { success: false, message: '创建收藏夹失败，用户ID不存在' }
 				}
 				// 检查用户已创建的收藏夹数量是否达到上限（100个）
@@ -33,7 +34,7 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 				}
 				const countResult = await selectDataFromMongoDB<FavoritesType>(countWhere, countSelect, favoritesSchemaInstance, favoritesCollectionName)
 				if (countResult.success && countResult.result && countResult.result.length >= 100) {
-					console.error('ERROR', '创建收藏夹失败，收藏夹数量已达上限（100个）')
+					logging('ERROR', '创建收藏夹失败，收藏夹数量已达上限（100个）')
 					return { success: false, message: '创建收藏夹失败，收藏夹数量已达上限（100个）' }
 				}
 
@@ -71,7 +72,7 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 							await session.abortTransaction()
 						}
 						session.endSession()
-						console.error('ERROR', '创建收藏夹失败，数据存储失败')
+						logging('ERROR', '创建收藏夹失败，数据存储失败')
 						return { success: false, message: '创建收藏夹失败，数据存储失败' }
 					}
 				} catch (error) {
@@ -79,19 +80,19 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('ERROR', '创建收藏夹失败，数据存储时出错：', error)
+					logging('ERROR', '创建收藏夹失败，数据存储时出错：', error)
 					return { success: false, message: '创建收藏夹失败，数据存储时出错' }
 				}
 			} else {
-				console.error('ERROR', '创建收藏夹失败，用户校验失败')
+				logging('ERROR', '创建收藏夹失败，用户校验失败')
 				return { success: false, message: '创建收藏夹失败，用户校验失败' }
 			}
 		} else {
-			console.error('ERROR', '创建收藏夹失败，数据校验失败')
+			logging('ERROR', '创建收藏夹失败，数据校验失败')
 			return { success: false, message: '创建收藏夹失败，数据校验失败' }
 		}
 	} catch (error) {
-		console.error('ERROR', '创建收藏夹失败，未知原因：', error)
+		logging('ERROR', '创建收藏夹失败，未知原因：', error)
 		return { success: false, message: '创建收藏夹失败，未知原因' }
 	}
 }
@@ -107,7 +108,7 @@ export const getFavoritesService = async (uuid: string, token: string): Promise<
 		if ((await checkUserTokenByUuidService(uuid, token)).success) {
 			const uid = await getUserUid(uuid)
 			if (!uid) {
-				console.error('ERROR', '获取收藏夹列表失败，用户ID不存在')
+				logging('ERROR', '获取收藏夹列表失败，用户ID不存在')
 				return { success: false, message: '获取收藏夹列表失败，用户ID不存在' }
 			}
 			const { collectionName, schemaInstance } = FavoritesSchema
@@ -139,19 +140,19 @@ export const getFavoritesService = async (uuid: string, token: string): Promise<
 						return { success: true, message: '收藏夹列表为空', result: [] }
 					}
 				} else {
-					console.error('ERROR', '获取收藏夹失败，请求收藏夹数据失败')
+					logging('ERROR', '获取收藏夹失败，请求收藏夹数据失败')
 					return { success: false, message: '获取收藏夹失败，请求收藏夹数据失败' }
 				}
 			} catch (error) {
-				console.error('ERROR', '获取收藏夹失败，请求收藏夹数据时出错', error)
+				logging('ERROR', '获取收藏夹失败，请求收藏夹数据时出错', error)
 				return { success: false, message: '获取收藏夹失败，请求收藏夹数据时出错' }
 			}
 		} else {
-			console.error('ERROR', '获取收藏夹失败，用户校验失败')
+			logging('ERROR', '获取收藏夹失败，用户校验失败')
 			return { success: false, message: '获取收藏夹失败，用户校验失败' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取收藏夹失败，未知原因：', error)
+		logging('ERROR', '获取收藏夹失败，未知原因：', error)
 		return { success: false, message: '获取收藏夹失败，未知原因' }
 	}
 }
@@ -185,7 +186,7 @@ const checkFavoritesPermission = async (favoritesId: number, uid: number): Promi
 		}
 		return false
 	} catch (error) {
-		console.error('ERROR', '检查收藏夹权限失败：', error)
+		logging('ERROR', '检查收藏夹权限失败：', error)
 		return false
 	}
 }
@@ -200,24 +201,24 @@ const checkFavoritesPermission = async (favoritesId: number, uid: number): Promi
 export const addToFavoritesService = async (addToFavoritesRequest: AddToFavoritesRequestDto, uuid: string, token: string): Promise<AddToFavoritesResponseDto> => {
 	try {
 		if (!checkAddToFavoritesRequest(addToFavoritesRequest)) {
-			console.error('ERROR', '添加内容到收藏夹失败，参数校验失败')
+			logging('ERROR', '添加内容到收藏夹失败，参数校验失败')
 			return { success: false, message: '添加内容到收藏夹失败，参数校验失败' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '添加内容到收藏夹失败，用户校验失败')
+			logging('ERROR', '添加内容到收藏夹失败，用户校验失败')
 			return { success: false, message: '添加内容到收藏夹失败，用户校验失败' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			console.error('ERROR', '添加内容到收藏夹失败，用户ID不存在')
+			logging('ERROR', '添加内容到收藏夹失败，用户ID不存在')
 			return { success: false, message: '添加内容到收藏夹失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
 		if (!(await checkFavoritesPermission(addToFavoritesRequest.favoritesListId, uid))) {
-			console.error('ERROR', '添加内容到收藏夹失败，没有权限操作该收藏夹')
+			logging('ERROR', '添加内容到收藏夹失败，没有权限操作该收藏夹')
 			return { success: false, message: '添加内容到收藏夹失败，没有权限操作该收藏夹' }
 		}
 
@@ -245,7 +246,7 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 		}
 		const countResult = await selectDataFromMongoDB<FavoritesDetailType>(countWhere, countSelect, schemaInstance, collectionName)
 		if (countResult.success && countResult.result && countResult.result.length >= 5000) {
-			console.error('ERROR', '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）')
+			logging('ERROR', '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）')
 			return { success: false, message: '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）' }
 		}
 
@@ -275,15 +276,15 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 			if (insertResult.success && insertResult.result && insertResult.result.length > 0) {
 				return { success: true, message: '添加内容到收藏夹成功' }
 			} else {
-				console.error('ERROR', '添加内容到收藏夹失败，数据存储失败')
+				logging('ERROR', '添加内容到收藏夹失败，数据存储失败')
 				return { success: false, message: '添加内容到收藏夹失败，数据存储失败' }
 			}
 		} catch (error) {
-			console.error('ERROR', '添加内容到收藏夹失败，数据存储时出错：', error)
+			logging('ERROR', '添加内容到收藏夹失败，数据存储时出错：', error)
 			return { success: false, message: '添加内容到收藏夹失败，数据存储时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '添加内容到收藏夹失败，未知原因：', error)
+		logging('ERROR', '添加内容到收藏夹失败，未知原因：', error)
 		return { success: false, message: '添加内容到收藏夹失败，未知原因' }
 	}
 }
@@ -298,24 +299,24 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 export const removeFromFavoritesService = async (removeFromFavoritesRequest: RemoveFromFavoritesRequestDto, uuid: string, token: string): Promise<RemoveFromFavoritesResponseDto> => {
 	try {
 		if (!checkRemoveFromFavoritesRequest(removeFromFavoritesRequest)) {
-			console.error('ERROR', '从收藏夹移除内容失败，参数校验失败')
+			logging('ERROR', '从收藏夹移除内容失败，参数校验失败')
 			return { success: false, message: '从收藏夹移除内容失败，参数校验失败' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '从收藏夹移除内容失败，用户校验失败')
+			logging('ERROR', '从收藏夹移除内容失败，用户校验失败')
 			return { success: false, message: '从收藏夹移除内容失败，用户校验失败' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			console.error('ERROR', '从收藏夹移除内容失败，用户ID不存在')
+			logging('ERROR', '从收藏夹移除内容失败，用户ID不存在')
 			return { success: false, message: '从收藏夹移除内容失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
 		if (!(await checkFavoritesPermission(removeFromFavoritesRequest.favoritesListId, uid))) {
-			console.error('ERROR', '从收藏夹移除内容失败，没有权限操作该收藏夹')
+			logging('ERROR', '从收藏夹移除内容失败，没有权限操作该收藏夹')
 			return { success: false, message: '从收藏夹移除内容失败，没有权限操作该收藏夹' }
 		}
 
@@ -332,15 +333,15 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 			if (deleteResult.success && deleteResult.result && deleteResult.result.deletedCount > 0) {
 				return { success: true, message: '从收藏夹移除内容成功' }
 			} else {
-				console.error('ERROR', '从收藏夹移除内容失败，未找到要删除的内容')
+				logging('ERROR', '从收藏夹移除内容失败，未找到要删除的内容')
 				return { success: false, message: '从收藏夹移除内容失败，未找到要删除的内容' }
 			}
 		} catch (error) {
-			console.error('ERROR', '从收藏夹移除内容失败，删除数据时出错：', error)
+			logging('ERROR', '从收藏夹移除内容失败，删除数据时出错：', error)
 			return { success: false, message: '从收藏夹移除内容失败，删除数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '从收藏夹移除内容失败，未知原因：', error)
+		logging('ERROR', '从收藏夹移除内容失败，未知原因：', error)
 		return { success: false, message: '从收藏夹移除内容失败，未知原因' }
 	}
 }
@@ -355,24 +356,24 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFavoritesDetailRequestDto, uuid: string, token: string): Promise<GetFavoritesDetailResponseDto> => {
 	try {
 		if (!checkGetFavoritesDetailRequest(getFavoritesDetailRequest)) {
-			console.error('ERROR', '获取收藏夹内容失败，参数校验失败')
+			logging('ERROR', '获取收藏夹内容失败，参数校验失败')
 			return { success: false, message: '获取收藏夹内容失败，参数校验失败' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取收藏夹内容失败，用户校验失败')
+			logging('ERROR', '获取收藏夹内容失败，用户校验失败')
 			return { success: false, message: '获取收藏夹内容失败，用户校验失败' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			console.error('ERROR', '获取收藏夹内容失败，用户ID不存在')
+			logging('ERROR', '获取收藏夹内容失败，用户ID不存在')
 			return { success: false, message: '获取收藏夹内容失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限查看该收藏夹
 		if (!(await checkFavoritesPermission(getFavoritesDetailRequest.favoritesListId, uid))) {
-			console.error('ERROR', '获取收藏夹内容失败，没有权限查看该收藏夹')
+			logging('ERROR', '获取收藏夹内容失败，没有权限查看该收藏夹')
 			return { success: false, message: '获取收藏夹内容失败，没有权限查看该收藏夹' }
 		}
 
@@ -400,15 +401,15 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 			if (result.success && result.result) {
 				return { success: true, message: '获取收藏夹内容成功', result: result.result }
 			} else {
-				console.error('ERROR', '获取收藏夹内容失败，查询数据失败')
+				logging('ERROR', '获取收藏夹内容失败，查询数据失败')
 				return { success: false, message: '获取收藏夹内容失败，查询数据失败' }
 			}
 		} catch (error) {
-			console.error('ERROR', '获取收藏夹内容失败，查询数据时出错：', error)
+			logging('ERROR', '获取收藏夹内容失败，查询数据时出错：', error)
 			return { success: false, message: '获取收藏夹内容失败，查询数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取收藏夹内容失败，未知原因：', error)
+		logging('ERROR', '获取收藏夹内容失败，未知原因：', error)
 		return { success: false, message: '获取收藏夹内容失败，未知原因' }
 	}
 }
@@ -423,24 +424,24 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 export const updateFavoritesService = async (updateFavoritesRequest: UpdateFavoritesRequestDto, uuid: string, token: string): Promise<UpdateFavoritesResponseDto> => {
 	try {
 		if (!checkUpdateFavoritesRequest(updateFavoritesRequest)) {
-			console.error('ERROR', '更新收藏夹信息失败，参数校验失败')
+			logging('ERROR', '更新收藏夹信息失败，参数校验失败')
 			return { success: false, message: '更新收藏夹信息失败，参数校验失败' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '更新收藏夹信息失败，用户校验失败')
+			logging('ERROR', '更新收藏夹信息失败，用户校验失败')
 			return { success: false, message: '更新收藏夹信息失败，用户校验失败' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			console.error('ERROR', '更新收藏夹信息失败，用户ID不存在')
+			logging('ERROR', '更新收藏夹信息失败，用户ID不存在')
 			return { success: false, message: '更新收藏夹信息失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
 		if (!(await checkFavoritesPermission(updateFavoritesRequest.favoritesId, uid))) {
-			console.error('ERROR', '更新收藏夹信息失败，没有权限操作该收藏夹')
+			logging('ERROR', '更新收藏夹信息失败，没有权限操作该收藏夹')
 			return { success: false, message: '更新收藏夹信息失败，没有权限操作该收藏夹' }
 		}
 
@@ -486,15 +487,15 @@ export const updateFavoritesService = async (updateFavoritesRequest: UpdateFavor
 					return { success: true, message: '更新收藏夹信息成功' }
 				}
 			} else {
-				console.error('ERROR', '更新收藏夹信息失败，更新数据失败')
+				logging('ERROR', '更新收藏夹信息失败，更新数据失败')
 				return { success: false, message: '更新收藏夹信息失败，更新数据失败' }
 			}
 		} catch (error) {
-			console.error('ERROR', '更新收藏夹信息失败，更新数据时出错：', error)
+			logging('ERROR', '更新收藏夹信息失败，更新数据时出错：', error)
 			return { success: false, message: '更新收藏夹信息失败，更新数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '更新收藏夹信息失败，未知原因：', error)
+		logging('ERROR', '更新收藏夹信息失败，未知原因：', error)
 		return { success: false, message: '更新收藏夹信息失败，未知原因' }
 	}
 }
@@ -509,18 +510,18 @@ export const updateFavoritesService = async (updateFavoritesRequest: UpdateFavor
 export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavoritesRequestDto, uuid: string, token: string): Promise<DeleteFavoritesResponseDto> => {
 	try {
 		if (!checkDeleteFavoritesRequest(deleteFavoritesRequest)) {
-			console.error('ERROR', '删除收藏夹失败，参数校验失败')
+			logging('ERROR', '删除收藏夹失败，参数校验失败')
 			return { success: false, message: '删除收藏夹失败，参数校验失败' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '删除收藏夹失败，用户校验失败')
+			logging('ERROR', '删除收藏夹失败，用户校验失败')
 			return { success: false, message: '删除收藏夹失败，用户校验失败' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			console.error('ERROR', '删除收藏夹失败，用户ID不存在')
+			logging('ERROR', '删除收藏夹失败，用户ID不存在')
 			return { success: false, message: '删除收藏夹失败，用户ID不存在' }
 		}
 
@@ -535,11 +536,11 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 		}
 		const checkResult = await selectDataFromMongoDB<FavoritesType>(checkWhere, checkSelect, favoritesSchemaInstance, favoritesCollectionName)
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
-			console.error('ERROR', '删除收藏夹失败，收藏夹不存在')
+			logging('ERROR', '删除收藏夹失败，收藏夹不存在')
 			return { success: false, message: '删除收藏夹失败，收藏夹不存在' }
 		}
 		if (checkResult.result[0].creator !== uid) {
-			console.error('ERROR', '删除收藏夹失败，只有创建者可以删除收藏夹')
+			logging('ERROR', '删除收藏夹失败，只有创建者可以删除收藏夹')
 			return { success: false, message: '删除收藏夹失败，只有创建者可以删除收藏夹' }
 		}
 
@@ -567,11 +568,11 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('ERROR', '删除收藏夹失败，删除数据时出错：', error)
+			logging('ERROR', '删除收藏夹失败，删除数据时出错：', error)
 			return { success: false, message: '删除收藏夹失败，删除数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '删除收藏夹失败，未知原因：', error)
+		logging('ERROR', '删除收藏夹失败，未知原因：', error)
 		return { success: false, message: '删除收藏夹失败，未知原因' }
 	}
 }
@@ -586,24 +587,24 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 export const reorderFavoritesDetailService = async (reorderFavoritesDetailRequest: ReorderFavoritesDetailRequestDto, uuid: string, token: string): Promise<ReorderFavoritesDetailResponseDto> => {
 	try {
 		if (!checkReorderFavoritesDetailRequest(reorderFavoritesDetailRequest)) {
-			console.error('ERROR', '调整收藏夹内部排序失败，参数校验失败')
+			logging('ERROR', '调整收藏夹内部排序失败，参数校验失败')
 			return { success: false, message: '调整收藏夹内部排序失败，参数校验失败' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '调整收藏夹内部排序失败，用户校验失败')
+			logging('ERROR', '调整收藏夹内部排序失败，用户校验失败')
 			return { success: false, message: '调整收藏夹内部排序失败，用户校验失败' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			console.error('ERROR', '调整收藏夹内部排序失败，用户ID不存在')
+			logging('ERROR', '调整收藏夹内部排序失败，用户ID不存在')
 			return { success: false, message: '调整收藏夹内部排序失败，用户ID不存在' }
 		}
 
 		// 检查用户是否有权限操作该收藏夹
 		if (!(await checkFavoritesPermission(reorderFavoritesDetailRequest.favoritesListId, uid))) {
-			console.error('ERROR', '调整收藏夹内部排序失败，没有权限操作该收藏夹')
+			logging('ERROR', '调整收藏夹内部排序失败，没有权限操作该收藏夹')
 			return { success: false, message: '调整收藏夹内部排序失败，没有权限操作该收藏夹' }
 		}
 
@@ -630,7 +631,7 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 			if (!existingResult.success) {
 				await session.abortTransaction()
 				session.endSession()
-				console.error('ERROR', '调整收藏夹内部排序失败，读取现有数据失败')
+				logging('ERROR', '调整收藏夹内部排序失败，读取现有数据失败')
 				return { success: false, message: '调整收藏夹内部排序失败，读取现有数据失败' }
 			}
 
@@ -672,7 +673,7 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 				if (!target) {
 					await session.abortTransaction()
 					session.endSession()
-					console.error('ERROR', '调整收藏夹内部排序失败，存在不存在的收藏项')
+					logging('ERROR', '调整收藏夹内部排序失败，存在不存在的收藏项')
 					return { success: false, message: '调整收藏夹内部排序失败，存在不存在的收藏项' }
 				}
 
@@ -722,11 +723,11 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('ERROR', '调整收藏夹内部排序失败，更新数据时出错：', error)
+			logging('ERROR', '调整收藏夹内部排序失败，更新数据时出错：', error)
 			return { success: false, message: '调整收藏夹内部排序失败，更新数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '调整收藏夹内部排序失败，未知原因：', error)
+		logging('ERROR', '调整收藏夹内部排序失败，未知原因：', error)
 		return { success: false, message: '调整收藏夹内部排序失败，未知原因' }
 	}
 }
@@ -864,23 +865,23 @@ const checkReorderFavoritesDetailRequest = (reorderFavoritesDetailRequest: Reord
 // 							return { success: true, message: '更新或创建用户浏览历史成功', result: result as CreateOrUpdateBrowsingHistoryResponseDto['result'] }
 // 						}
 // 					} catch (error) {
-// 						console.error('ERROR', '更新或创建用户浏览历史时出错，插入数据时出错')
+// 						logging('ERROR', '更新或创建用户浏览历史时出错，插入数据时出错')
 // 						return { success: false, message: '更新或创建用户浏览历史时出错，插入数据时出错' }
 // 					}
 // 				} else {
-// 					console.error('ERROR', '更新或创建用户浏览历史时出错，用户校验失败')
+// 					logging('ERROR', '更新或创建用户浏览历史时出错，用户校验失败')
 // 					return { success: false, message: '更新或创建用户浏览历史时出错，用户校验失败' }
 // 				}
 // 			} else {
-// 				console.error('ERROR', '更新或创建用户浏览历史时出错，查看历史记录的目标用户与当前登录用户不一致，不允许查看其他用户的历史记录！')
+// 				logging('ERROR', '更新或创建用户浏览历史时出错，查看历史记录的目标用户与当前登录用户不一致，不允许查看其他用户的历史记录！')
 // 				return { success: false, message: '更新或创建用户浏览历史时出错，查看历史记录的目标用户与当前登录用户不一致，不允许查看其他用户的历史记录！' }
 // 			}
 // 		} else {
-// 			console.error('ERROR', '更新或创建用户浏览历史时出错，参数不合法')
+// 			logging('ERROR', '更新或创建用户浏览历史时出错，参数不合法')
 // 			return { success: false, message: '更新或创建用户浏览历史时出错，参数不合法' }
 // 		}
 // 	} catch (error) {
-// 		console.error('ERROR', '更新或创建用户浏览历史时出错，未知原因：', error)
+// 		logging('ERROR', '更新或创建用户浏览历史时出错，未知原因：', error)
 // 		return { success: false, message: '更新或创建用户浏览历史时出错，未知原因' }
 // 	}
 // }
@@ -973,23 +974,23 @@ const checkReorderFavoritesDetailRequest = (reorderFavoritesDetailRequest: Reord
 // 							return { success: true, message: '用户的浏览历史为空', result: [] }
 // 						}
 // 					} else {
-// 						console.error('ERROR', '获取用户浏览历史时出错，未获取到数据')
+// 						logging('ERROR', '获取用户浏览历史时出错，未获取到数据')
 // 						return { success: false, message: '获取用户浏览历史时出错，未获取到数据' }
 // 					}
 // 				} catch (error) {
-// 					console.error('ERROR', '获取用户浏览历史时出错，获取用户浏览历史数据失败')
+// 					logging('ERROR', '获取用户浏览历史时出错，获取用户浏览历史数据失败')
 // 					return { success: false, message: '获取用户浏览历史时出错，获取用户浏览历史数据失败' }
 // 				}
 // 			} else {
-// 				console.error('ERROR', '获取用户浏览历史时出错，用户校验失败')
+// 				logging('ERROR', '获取用户浏览历史时出错，用户校验失败')
 // 				return { success: false, message: '获取用户浏览历史时出错，用户校验失败' }
 // 			}
 // 		} else {
-// 			console.error('ERROR', '获取用户浏览历史时出错，请求参数不合法')
+// 			logging('ERROR', '获取用户浏览历史时出错，请求参数不合法')
 // 			return { success: false, message: '获取用户浏览历史时出错，请求参数不合法' }
 // 		}
 // 	} catch (error) {
-// 		console.error('ERROR', '获取用户浏览历史时出错，未知原因：', error)
+// 		logging('ERROR', '获取用户浏览历史时出错，未知原因：', error)
 // 		return { success: false, message: '获取用户浏览历史时出错，未知原因' }
 // 	}
 // }

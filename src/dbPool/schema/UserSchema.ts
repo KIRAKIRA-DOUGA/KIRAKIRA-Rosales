@@ -18,6 +18,8 @@ class UserAuthSchemaFactory {
 		passwordHashHash: { type: String, required: true },
 		/** 用户的身分令牌 - 非空 */
 		token: { type: String, required: true },
+		/** 密码最后更新的时间戳 - 非空 */
+		passwordUpdateDateTime: { type: Number, required: true },
 		/** 密码提示 */
 		passwordHint: String, // TODO: 如何确保密码提示的安全性？
 		// /** 用户的角色 */
@@ -203,32 +205,6 @@ class UserSettingsSchemaFactory {
 export const UserSettingsSchema = new UserSettingsSchemaFactory()
 
 /**
- * 用户注册邮箱验证码
- */
-class UserVerificationCodeSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, required: true, unique: true },
-		/** 用户的验证码 - 非空 */
-		verificationCode: { type: String, required: true },
-		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
-		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
-		lastRequestDateTime: { type: Number, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'user-verification-code'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-export const UserVerificationCodeSchema = new UserVerificationCodeSchemaFactory()
-
-/**
  * 用户邀请码
  */
 class UserInvitationCodeSchemaFactory {
@@ -263,62 +239,6 @@ class UserInvitationCodeSchemaFactory {
 	schemaInstance = new Schema(this.schema)
 }
 export const UserInvitationCodeSchema = new UserInvitationCodeSchemaFactory()
-
-/**
- * 用户更改邮箱的邮箱验证码
- */
-class UserChangeEmailVerificationCodeSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, required: true, unique: true },
-		/** 用户的验证码 - 非空 */
-		verificationCode: { type: String, required: true },
-		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
-		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
-		lastRequestDateTime: { type: Number, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'user-change-email-verification-code'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-export const UserChangeEmailVerificationCodeSchema = new UserChangeEmailVerificationCodeSchemaFactory()
-
-/**
- * 用户更改密码的邮箱验证码
- */
-class UserChangePasswordVerificationCodeSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
-		UUID: { type: String, required: true },
-		/** 用户 ID - 非空 */
-		uid: { type: Number, required: true },
-		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, required: true, unique: true },
-		/** 用户的验证码 - 非空 */
-		verificationCode: { type: String, required: true },
-		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
-		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
-		lastRequestDateTime: { type: Number, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'user-change-password-verification-code'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-export const UserChangePasswordVerificationCodeSchema = new UserChangePasswordVerificationCodeSchemaFactory()
 
 /**
  * 用户 TOTP 身份验证器
@@ -360,88 +280,102 @@ class UserTotpAuthenticatorSchemaFactory {
 }
 export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()
 
+// /**
+//  * 用户找回密码的邮箱验证码
+//  */
+// class UserForgotPasswordVerificationCodeSchemaFactory {
+// 	/** MongoDB Schema */
+// 	schema = {
+// 		/** 用户的邮箱 - 非空 - 唯一 */
+// 		emailLowerCase: { type: String, required: true, unique: true },
+// 		/** 用户的验证码 - 非空 */
+// 		verificationCode: { type: String, required: true },
+// 		/** 用户的验证码过期时间 - 非空 */
+// 		overtimeAt: { type: Number, required: true, unique: true },
+// 		/** 用户今日请求的次数，用于防止滥用 - 非空 */
+// 		attemptsTimes: { type: Number, required: true },
+// 		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
+// 		lastRequestDateTime: { type: Number, required: true },
+// 		/** 系统专用字段-最后编辑时间 - 非空 */
+// 		editDateTime: { type: Number, required: true },
+// 	}
+// 	/** MongoDB 集合名 */
+// 	collectionName = 'user-reset-password-verification-code'
+// 	/** Mongoose Schema 实例 */
+// 	schemaInstance = new Schema(this.schema)
+// }
+// export const UserForgotPasswordVerificationCodeSchema = new UserForgotPasswordVerificationCodeSchemaFactory()
+
 /**
- * 用户 Email 身份验证器
+ * 通用 2FA 邮箱验证码
  */
-class UserEmailAuthenticatorSchemaFactory {
+class General2FAEmailVerificationCodeSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
-		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
-		UUID: { type: String, required: true },
-		/** 用户的 Email */
-		emailLowerCase: { type: String, required: true },
-		/** 是否启用 Email 身份验证器 - 非空 - 默认值：false */
-		enabled: { type: Boolean, required: true, default: false },
+		/** 用户的 UUID - 非空 - 唯一 */
+		uuid: { type: String, required: true, unique: true },
+		/** 传入该验证码独占的业务名 - 非空 -（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
+		exclusive: { type: String, required: true },
+		/** 用户的验证码 - 非空 */
+		verificationCode: { type: String, required: true },
+		/** 用户创建验证码的时间 - 非空 */
+		verificationCreatedDate: { type: Number, required: true, unique: true },
+		/** 用户今日连续请求创建验证码的次数，用于防止滥用 - 非空 */
+		totalCreateTimesToday: { type: Number, required: true },
+		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
+		totalVerifierTimesToday: { type: Number, required: true },
+		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
+		used: { type: Boolean, required: true },
 		/** 系统专用字段-创建时间 - 非空 */
-		createDateTime: { type: Number, required: true },
+		createdDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建者 - 非空 */
+		createdBy: { type: String, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
+		editedDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑者 - 非空 */
+		editedBy: { type: String, required: true },
 	}
 	/** MongoDB 集合名 */
-	collectionName = 'user-email-authenticator'
+	collectionName = 'general-2fa-email-verification-code'
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema)
-
-	// 构造器
-	constructor() {
-		// 添加 UUID 和 secret 组合的唯一索引
-		this.schemaInstance.index({ UUID: 1, email: 1 }, { unique: true });
-	}
 }
-export const UserEmailAuthenticatorSchema = new UserEmailAuthenticatorSchemaFactory()
+export const General2FAEmailVerificationCodeSchema = new General2FAEmailVerificationCodeSchemaFactory()
 
 /**
- * 用户验证 Email 身份验证器的邮箱验证码
+ * 通用邮箱验证码
  */
-class UserEmailAuthenticatorVerificationCodeSchemaFactory {
+class GeneralEmailVerificationCodeSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
-		/** 用户的 UUID，关联用户安全集合的 UUID - 非空 */
-		UUID: { type: String, required: true },
-		/** 用户 ID - 非空 */
-		uid: { type: Number, required: true },
-		/** 用户的邮箱 - 非空 - 唯一 */
+		/** 用户的 email - 非空 - 唯一 */
+		email: { type: String, required: true, unique: true },
+		/** 用户的全小写 email - 非空 - 唯一 */
 		emailLowerCase: { type: String, required: true, unique: true },
+		/** 传入该验证码独占的业务名 - 非空（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
+		exclusive: { type: String, required: true },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
-		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
-		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
-		lastRequestDateTime: { type: Number, required: true },
+		/** 用户创建验证码的时间 - 非空 */
+		verificationCreatedDate: { type: Number, required: true, unique: true },
+		/** 用户今日连续请求创建验证码的次数，用于防止滥用 - 非空 */
+		totalCreateTimesToday: { type: Number, required: true },
+		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
+		totalVerifierTimesToday: { type: Number, required: true },
+		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
+		used: { type: Boolean, required: true },
+		/** 系统专用字段-创建时间 - 非空 */
+		createdDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建者 - 非空 */
+		createdBy: { type: String, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
+		editedDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑者 - 非空 */
+		editedBy: { type: String, required: true },
 	}
 	/** MongoDB 集合名 */
-	collectionName = 'user-email-authenticator-verification-code'
+	collectionName = 'general-email-verification-code'
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema)
 }
-export const UserEmailAuthenticatorVerificationCodeSchema = new UserEmailAuthenticatorVerificationCodeSchemaFactory()
-
-/**
- * 用户找回密码的邮箱验证码
- */
-class UserForgotPasswordVerificationCodeSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** 用户的邮箱 - 非空 - 唯一 */
-		emailLowerCase: { type: String, required: true, unique: true },
-		/** 用户的验证码 - 非空 */
-		verificationCode: { type: String, required: true },
-		/** 用户的验证码过期时间 - 非空 */
-		overtimeAt: { type: Number, required: true, unique: true },
-		/** 用户今日请求的次数，用于防止滥用 - 非空 */
-		attemptsTimes: { type: Number, required: true },
-		/** 用户上一次请求验证码的时间，用于防止滥用 - 非空 */
-		lastRequestDateTime: { type: Number, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'user-reset-password-verification-code'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-export const UserForgotPasswordVerificationCodeSchema = new UserForgotPasswordVerificationCodeSchemaFactory()
+export const GeneralEmailVerificationCodeSchema = new GeneralEmailVerificationCodeSchemaFactory()

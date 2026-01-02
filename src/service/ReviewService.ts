@@ -27,6 +27,7 @@ import { VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserTokenByUuidService } from './UserService.js'
+import { logging } from './loggingService.js'
 
 /**
  * 获取待审核视频列表
@@ -42,12 +43,12 @@ export const getPendingReviewVideoListService = async (
 ): Promise<GetPendingReviewVideoListResponseDto> => {
 	try {
 		if (!checkGetPendingReviewVideoListRequest(getPendingReviewVideoListRequest)) {
-			console.error('ERROR', '获取待审核视频列表失败：参数不合法')
+			logging('ERROR', '获取待审核视频列表失败：参数不合法')
 			return { success: false, message: '获取待审核视频列表失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取待审核视频列表失败：用户验证失败')
+			logging('ERROR', '获取待审核视频列表失败：用户验证失败')
 			return { success: false, message: '获取待审核视频列表失败：用户验证失败' }
 		}
 
@@ -120,7 +121,7 @@ export const getPendingReviewVideoListService = async (
 		const listResult = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, listPipeline)
 
 		if (!listResult.success) {
-			console.error('ERROR', '获取待审核视频列表失败：查询失败')
+			logging('ERROR', '获取待审核视频列表失败：查询失败')
 			return { success: false, message: '获取待审核视频列表失败：查询失败' }
 		}
 
@@ -145,7 +146,7 @@ export const getPendingReviewVideoListService = async (
 			videos,
 		}
 	} catch (error) {
-		console.error('ERROR', '获取待审核视频列表失败：未知错误', error)
+		logging('ERROR', '获取待审核视频列表失败：未知错误', error)
 		return { success: false, message: '获取待审核视频列表失败：未知错误' }
 	}
 }
@@ -164,12 +165,12 @@ export const getPendingReviewCommentListService = async (
 ): Promise<GetPendingReviewCommentListResponseDto> => {
 	try {
 		if (!checkGetPendingReviewCommentListRequest(getPendingReviewCommentListRequest)) {
-			console.error('ERROR', '获取待审核评论列表失败：参数不合法')
+			logging('ERROR', '获取待审核评论列表失败：参数不合法')
 			return { success: false, message: '获取待审核评论列表失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取待审核评论列表失败：用户验证失败')
+			logging('ERROR', '获取待审核评论列表失败：用户验证失败')
 			return { success: false, message: '获取待审核评论列表失败：用户验证失败' }
 		}
 
@@ -232,7 +233,7 @@ export const getPendingReviewCommentListService = async (
 		const listResult = await selectDataByAggregateFromMongoDB<VideoComment>(commentSchemaInstance, commentCollectionName, listPipeline)
 
 		if (!listResult.success) {
-			console.error('ERROR', '获取待审核评论列表失败：查询失败')
+			logging('ERROR', '获取待审核评论列表失败：查询失败')
 			return { success: false, message: '获取待审核评论列表失败：查询失败' }
 		}
 
@@ -257,7 +258,7 @@ export const getPendingReviewCommentListService = async (
 			comments,
 		}
 	} catch (error) {
-		console.error('ERROR', '获取待审核评论列表失败：未知错误', error)
+		logging('ERROR', '获取待审核评论列表失败：未知错误', error)
 		return { success: false, message: '获取待审核评论列表失败：未知错误' }
 	}
 }
@@ -276,12 +277,12 @@ export const getPendingReviewDanmakuListService = async (
 ): Promise<GetPendingReviewDanmakuListResponseDto> => {
 	try {
 		if (!checkGetPendingReviewDanmakuListRequest(getPendingReviewDanmakuListRequest)) {
-			console.error('ERROR', '获取待审核弹幕列表失败：参数不合法')
+			logging('ERROR', '获取待审核弹幕列表失败：参数不合法')
 			return { success: false, message: '获取待审核弹幕列表失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取待审核弹幕列表失败：用户验证失败')
+			logging('ERROR', '获取待审核弹幕列表失败：用户验证失败')
 			return { success: false, message: '获取待审核弹幕列表失败：用户验证失败' }
 		}
 
@@ -344,7 +345,7 @@ export const getPendingReviewDanmakuListService = async (
 		const listResult = await selectDataByAggregateFromMongoDB<Danmaku>(danmakuSchemaInstance, danmakuCollectionName, listPipeline)
 
 		if (!listResult.success) {
-			console.error('ERROR', '获取待审核弹幕列表失败：查询失败')
+			logging('ERROR', '获取待审核弹幕列表失败：查询失败')
 			return { success: false, message: '获取待审核弹幕列表失败：查询失败' }
 		}
 
@@ -369,7 +370,7 @@ export const getPendingReviewDanmakuListService = async (
 			danmaku,
 		}
 	} catch (error) {
-		console.error('ERROR', '获取待审核弹幕列表失败：未知错误', error)
+		logging('ERROR', '获取待审核弹幕列表失败：未知错误', error)
 		return { success: false, message: '获取待审核弹幕列表失败：未知错误' }
 	}
 }
@@ -388,12 +389,12 @@ export const approveVideoReviewService = async (
 ): Promise<ApproveVideoReviewResponseDto> => {
 	try {
 		if (!checkApproveVideoReviewRequest(approveVideoReviewRequest)) {
-			console.error('ERROR', '通过视频审核失败：参数不合法')
+			logging('ERROR', '通过视频审核失败：参数不合法')
 			return { success: false, message: '通过视频审核失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '通过视频审核失败：用户验证失败')
+			logging('ERROR', '通过视频审核失败：用户验证失败')
 			return { success: false, message: '通过视频审核失败：用户验证失败' }
 		}
 
@@ -413,7 +414,7 @@ export const approveVideoReviewService = async (
 		const checkResult = await selectDataFromMongoDB<Video>(checkWhere, checkSelect, videoSchemaInstance, videoCollectionName)
 
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
-			console.error('ERROR', '通过视频审核失败：视频不存在或不是待审核状态')
+			logging('ERROR', '通过视频审核失败：视频不存在或不是待审核状态')
 			return { success: false, message: '通过视频审核失败：视频不存在或不是待审核状态' }
 		}
 
@@ -429,13 +430,13 @@ export const approveVideoReviewService = async (
 		const updateResult = await findOneAndUpdateData4MongoDB<Video>(updateWhere, updateData, videoSchemaInstance, videoCollectionName)
 
 		if (!updateResult.success) {
-			console.error('ERROR', '通过视频审核失败：更新失败')
+			logging('ERROR', '通过视频审核失败：更新失败')
 			return { success: false, message: '通过视频审核失败：更新失败' }
 		}
 
 		return { success: true, message: '通过视频审核成功' }
 	} catch (error) {
-		console.error('ERROR', '通过视频审核失败：未知错误', error)
+		logging('ERROR', '通过视频审核失败：未知错误', error)
 		return { success: false, message: '通过视频审核失败：未知错误' }
 	}
 }
@@ -454,12 +455,12 @@ export const rejectVideoReviewService = async (
 ): Promise<RejectVideoReviewResponseDto> => {
 	try {
 		if (!checkRejectVideoReviewRequest(rejectVideoReviewRequest)) {
-			console.error('ERROR', '退回视频审核失败：参数不合法')
+			logging('ERROR', '退回视频审核失败：参数不合法')
 			return { success: false, message: '退回视频审核失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '退回视频审核失败：用户验证失败')
+			logging('ERROR', '退回视频审核失败：用户验证失败')
 			return { success: false, message: '退回视频审核失败：用户验证失败' }
 		}
 
@@ -479,7 +480,7 @@ export const rejectVideoReviewService = async (
 		const checkResult = await selectDataFromMongoDB<Video>(checkWhere, checkSelect, videoSchemaInstance, videoCollectionName)
 
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
-			console.error('ERROR', '退回视频审核失败：视频不存在或不是待审核状态')
+			logging('ERROR', '退回视频审核失败：视频不存在或不是待审核状态')
 			return { success: false, message: '退回视频审核失败：视频不存在或不是待审核状态' }
 		}
 
@@ -487,7 +488,7 @@ export const rejectVideoReviewService = async (
 		// 这里我们只是确认操作成功，实际业务可能需要记录退回原因等
 		return { success: true, message: '退回视频审核成功' }
 	} catch (error) {
-		console.error('ERROR', '退回视频审核失败：未知错误', error)
+		logging('ERROR', '退回视频审核失败：未知错误', error)
 		return { success: false, message: '退回视频审核失败：未知错误' }
 	}
 }
@@ -506,12 +507,12 @@ export const approveCommentReviewService = async (
 ): Promise<ApproveCommentReviewResponseDto> => {
 	try {
 		if (!checkApproveCommentReviewRequest(approveCommentReviewRequest)) {
-			console.error('ERROR', '通过评论审核失败：参数不合法')
+			logging('ERROR', '通过评论审核失败：参数不合法')
 			return { success: false, message: '通过评论审核失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '通过评论审核失败：用户验证失败')
+			logging('ERROR', '通过评论审核失败：用户验证失败')
 			return { success: false, message: '通过评论审核失败：用户验证失败' }
 		}
 
@@ -533,7 +534,7 @@ export const approveCommentReviewService = async (
 		const checkResult = await selectDataFromMongoDB<VideoComment>(checkWhere, checkSelect, commentSchemaInstance, commentCollectionName)
 
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
-			console.error('ERROR', '通过评论审核失败：评论不存在或不是待审核状态或已被删除')
+			logging('ERROR', '通过评论审核失败：评论不存在或不是待审核状态或已被删除')
 			return { success: false, message: '通过评论审核失败：评论不存在或不是待审核状态或已被删除' }
 		}
 
@@ -551,13 +552,13 @@ export const approveCommentReviewService = async (
 		const updateResult = await findOneAndUpdateData4MongoDB<VideoComment>(updateWhere, updateData, commentSchemaInstance, commentCollectionName)
 
 		if (!updateResult.success) {
-			console.error('ERROR', '通过评论审核失败：更新失败')
+			logging('ERROR', '通过评论审核失败：更新失败')
 			return { success: false, message: '通过评论审核失败：更新失败' }
 		}
 
 		return { success: true, message: '通过评论审核成功' }
 	} catch (error) {
-		console.error('ERROR', '通过评论审核失败：未知错误', error)
+		logging('ERROR', '通过评论审核失败：未知错误', error)
 		return { success: false, message: '通过评论审核失败：未知错误' }
 	}
 }
@@ -576,12 +577,12 @@ export const rejectCommentReviewService = async (
 ): Promise<RejectCommentReviewResponseDto> => {
 	try {
 		if (!checkRejectCommentReviewRequest(rejectCommentReviewRequest)) {
-			console.error('ERROR', '退回评论审核失败：参数不合法')
+			logging('ERROR', '退回评论审核失败：参数不合法')
 			return { success: false, message: '退回评论审核失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '退回评论审核失败：用户验证失败')
+			logging('ERROR', '退回评论审核失败：用户验证失败')
 			return { success: false, message: '退回评论审核失败：用户验证失败' }
 		}
 
@@ -603,14 +604,14 @@ export const rejectCommentReviewService = async (
 		const checkResult = await selectDataFromMongoDB<VideoComment>(checkWhere, checkSelect, commentSchemaInstance, commentCollectionName)
 
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
-			console.error('ERROR', '退回评论审核失败：评论不存在或不是待审核状态或已被删除')
+			logging('ERROR', '退回评论审核失败：评论不存在或不是待审核状态或已被删除')
 			return { success: false, message: '退回评论审核失败：评论不存在或不是待审核状态或已被删除' }
 		}
 
 		// 退回审核：保持 pendingReview 为 true
 		return { success: true, message: '退回评论审核成功' }
 	} catch (error) {
-		console.error('ERROR', '退回评论审核失败：未知错误', error)
+		logging('ERROR', '退回评论审核失败：未知错误', error)
 		return { success: false, message: '退回评论审核失败：未知错误' }
 	}
 }
@@ -629,12 +630,12 @@ export const approveDanmakuReviewService = async (
 ): Promise<ApproveDanmakuReviewResponseDto> => {
 	try {
 		if (!checkApproveDanmakuReviewRequest(approveDanmakuReviewRequest)) {
-			console.error('ERROR', '通过弹幕审核失败：参数不合法')
+			logging('ERROR', '通过弹幕审核失败：参数不合法')
 			return { success: false, message: '通过弹幕审核失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '通过弹幕审核失败：用户验证失败')
+			logging('ERROR', '通过弹幕审核失败：用户验证失败')
 			return { success: false, message: '通过弹幕审核失败：用户验证失败' }
 		}
 
@@ -656,7 +657,7 @@ export const approveDanmakuReviewService = async (
 		const checkResult = await selectDataFromMongoDB<Danmaku>(checkWhere, checkSelect, danmakuSchemaInstance, danmakuCollectionName)
 
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
-			console.error('ERROR', '通过弹幕审核失败：弹幕不存在或不是待审核状态或已被删除')
+			logging('ERROR', '通过弹幕审核失败：弹幕不存在或不是待审核状态或已被删除')
 			return { success: false, message: '通过弹幕审核失败：弹幕不存在或不是待审核状态或已被删除' }
 		}
 
@@ -674,13 +675,13 @@ export const approveDanmakuReviewService = async (
 		const updateResult = await findOneAndUpdateData4MongoDB<Danmaku>(updateWhere, updateData, danmakuSchemaInstance, danmakuCollectionName)
 
 		if (!updateResult.success) {
-			console.error('ERROR', '通过弹幕审核失败：更新失败')
+			logging('ERROR', '通过弹幕审核失败：更新失败')
 			return { success: false, message: '通过弹幕审核失败：更新失败' }
 		}
 
 		return { success: true, message: '通过弹幕审核成功' }
 	} catch (error) {
-		console.error('ERROR', '通过弹幕审核失败：未知错误', error)
+		logging('ERROR', '通过弹幕审核失败：未知错误', error)
 		return { success: false, message: '通过弹幕审核失败：未知错误' }
 	}
 }
@@ -699,12 +700,12 @@ export const rejectDanmakuReviewService = async (
 ): Promise<RejectDanmakuReviewResponseDto> => {
 	try {
 		if (!checkRejectDanmakuReviewRequest(rejectDanmakuReviewRequest)) {
-			console.error('ERROR', '退回弹幕审核失败：参数不合法')
+			logging('ERROR', '退回弹幕审核失败：参数不合法')
 			return { success: false, message: '退回弹幕审核失败：参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '退回弹幕审核失败：用户验证失败')
+			logging('ERROR', '退回弹幕审核失败：用户验证失败')
 			return { success: false, message: '退回弹幕审核失败：用户验证失败' }
 		}
 
@@ -726,14 +727,14 @@ export const rejectDanmakuReviewService = async (
 		const checkResult = await selectDataFromMongoDB<Danmaku>(checkWhere, checkSelect, danmakuSchemaInstance, danmakuCollectionName)
 
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
-			console.error('ERROR', '退回弹幕审核失败：弹幕不存在或不是待审核状态或已被删除')
+			logging('ERROR', '退回弹幕审核失败：弹幕不存在或不是待审核状态或已被删除')
 			return { success: false, message: '退回弹幕审核失败：弹幕不存在或不是待审核状态或已被删除' }
 		}
 
 		// 退回审核：保持 pendingReview 为 true
 		return { success: true, message: '退回弹幕审核成功' }
 	} catch (error) {
-		console.error('ERROR', '退回弹幕审核失败：未知错误', error)
+		logging('ERROR', '退回弹幕审核失败：未知错误', error)
 		return { success: false, message: '退回弹幕审核失败：未知错误' }
 	}
 }

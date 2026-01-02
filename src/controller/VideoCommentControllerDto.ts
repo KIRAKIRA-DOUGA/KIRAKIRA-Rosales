@@ -26,26 +26,6 @@ export type EmitVideoCommentResponseDto = {
 }
 
 /**
- * 获取本人已发布的视频评论的请求载荷
- */
-export type GetSelfVideoCommentRequestDto = {
-	/** 分页：页码（可选，默认 1） */
-	page?: number;
-	/** 分页：每页大小（可选，默认 20） */
-	pageSize?: number;
-}
-
-/**
- * 获取本人已发布的视频评论的响应
- */
-export type GetSelfVideoCommentResponseDto = {
-	success: boolean;
-	message?: string;
-	videoCommentCount: number;
-	videoCommentList: VideoCommentResult[];
-}
-
-/**
  * 获取某个用户在对某个视频的评论的点赞情况的参数
  */
 export type GetVideoCommentUpvotePropsDto = {
@@ -210,6 +190,26 @@ export type EmitVideoCommentUpvoteRequestDto = {
 	id: string;
 	/** KVID 视频 ID */
 	videoId: number;
+}
+
+/**
+ * 获取本人已发布的视频评论的请求
+ */
+export type GetSelfVideoCommentRequestDto = {
+	/** 分页：页码（可选，默认 1） */
+	page?: number;
+	/** 分页：每页大小（可选，默认 20） */
+	pageSize?: number;
+}
+
+/**
+ * 获取本人已发布的视频评论的响应
+ */
+export type GetSelfVideoCommentResponseDto = {
+	success: boolean;
+	message?: string;
+	videoCommentCount: number;
+	videoCommentList: VideoCommentResult[];
 }
 
 /**

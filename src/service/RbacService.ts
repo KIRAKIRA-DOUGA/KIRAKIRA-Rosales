@@ -9,6 +9,7 @@ import { QueryType, SelectType, UpdateType } from "../dbPool/DbClusterPoolTypes.
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
 import { koaCtx } from "../type/koaTypes.js";
 import { clearUndefinedItemInObject, isEmptyObject } from "../common/ObjectTool.js";
+import { logging } from "./loggingService.js";
 
 /**
  * 通过 RBAC 检查用户的权限
@@ -24,7 +25,7 @@ export const checkUserByRbac = async (params: CheckUserRbacParams): Promise<Chec
 		if ('uid' in params) uid = params.uid
 
 		if (!uuid && uid === undefined) {
-			console.error('ERROR', '用户执行 RBAC 鉴权时失败，未提供 UUID 或 UID')
+			logging('ERROR', '用户执行 RBAC 鉴权时失败，未提供 UUID 或 UID')
 			return { status: 500, message: `用户执行 RBAC 鉴权时失败，未提供 UUID 或 UID` }
 		}
 
@@ -69,7 +70,7 @@ export const checkUserByRbac = async (params: CheckUserRbacParams): Promise<Chec
 			return { status: 403, message: `用户 ${uuid ? `UUID: ${uuid}` : `UID: ${uid}`} 在访问 ${apiPath} 的权限不足，或者用户不存在` }
 		}
 	} catch (error) {
-		console.error('ERROR', '用户执行 RBAC 鉴权时出现错误，未知错误：', error)
+		logging('ERROR', '用户执行 RBAC 鉴权时出现错误，未知错误：', error)
 		return { status: 500, message: '用户执行 RBAC 鉴权时出现错误，未知错误' }
 	}
 }
@@ -88,13 +89,13 @@ export const isPassRbacCheck = async (params: CheckUserRbacParams, ctx: koaCtx):
 		if (rbacStatus !== 200) {
 			ctx.status = rbacStatus
 			ctx.body = rbacMessage
-			console.warn('WARN', 'WARNING', 'RBAC', `${rbacStatus} - ${rbacMessage}`)
+			logging('WARN', `RBAC - ${rbacStatus} - ${rbacMessage}`)
 			return false
 		}
 
 		return true
 	} catch (error) {
-		console.error('ERROR', '在 Controller 层执行 RBAC 鉴权时出现错误，未知错误：', error)
+		logging('ERROR', '在 Controller 层执行 RBAC 鉴权时出现错误，未知错误：', error)
 		ctx.status = 500
 		ctx.body = '在 Controller 层执行 RBAC 鉴权时出现错误，未知错误'
 		return false
@@ -111,12 +112,12 @@ export const isPassRbacCheck = async (params: CheckUserRbacParams, ctx: koaCtx):
 export const createRbacApiPathService = async (createRbacApiPathRequest: CreateRbacApiPathRequestDto, uuid: string, token: string): Promise<CreateRbacApiPathResponseDto> => {
 	try {
 		if (!checkCreateRbacApiPathRequest(createRbacApiPathRequest)) {
-			console.error('ERROR', '创建 RBAC API 路径失败，参数不合法')
+			logging('ERROR', '创建 RBAC API 路径失败，参数不合法')
 			return { success: false, message: '创建 RBAC API 路径失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '创建 RBAC API 路径失败，用户 Token 校验未通过')
+			logging('ERROR', '创建 RBAC API 路径失败，用户 Token 校验未通过')
 			return { success: false, message: '创建 RBAC API 路径失败，用户 Token 校验未通过' }
 		}
 
@@ -143,7 +144,7 @@ export const createRbacApiPathService = async (createRbacApiPathRequest: CreateR
 		const insertResultData = insertResult?.result?.[0]
 
 		if (!insertResult.success || !insertResultData) {
-			console.error('ERROR', '创建 RBAC API 路径失败，数据插入失败')
+			logging('ERROR', '创建 RBAC API 路径失败，数据插入失败')
 			return { success: false, message: '创建 RBAC API 路径失败，数据插入失败' }
 		}
 
@@ -164,7 +165,7 @@ export const createRbacApiPathService = async (createRbacApiPathRequest: CreateR
 			}
 		}
 	} catch (error) {
-		console.error('ERROR', '创建 RBAC API 路径时出错，未知错误：', error)
+		logging('ERROR', '创建 RBAC API 路径时出错，未知错误：', error)
 		return { success: false, message: '创建 RBAC API 路径时出错，未知错误' }
 	}
 }
@@ -179,12 +180,12 @@ export const createRbacApiPathService = async (createRbacApiPathRequest: CreateR
 export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteRbacApiPathRequestDto, uuid: string, token: string): Promise<DeleteRbacApiPathResponseDto> => {
 	try {
 		if (!checkDeleteRbacApiPathRequest(deleteRbacApiPathRequest)) {
-			console.error('ERROR', '删除 RBAC API 路径失败，参数不合法')
+			logging('ERROR', '删除 RBAC API 路径失败，参数不合法')
 			return { success: false, isAssigned: false, message: '删除 RBAC API 路径失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '删除 RBAC API 路径失败，用户 Token 校验未通过')
+			logging('ERROR', '删除 RBAC API 路径失败，用户 Token 校验未通过')
 			return { success: false, isAssigned: false, message: '删除 RBAC API 路径失败，用户 Token 校验未通过' }
 		}
 
@@ -206,7 +207,7 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 
 		if (chackApiPathUnassignedResult.result?.length > 0) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '删除 RBAC API 路径失败，该 API 路径已经被绑定到一个角色，请先将其从角色中移出才能删除。')
+			logging('ERROR', '删除 RBAC API 路径失败，该 API 路径已经被绑定到一个角色，请先将其从角色中移出才能删除。')
 			return { success: false, isAssigned: true, message: '删除 RBAC API 路径失败，该 API 路径已经被绑定到一个角色，请先将其从角色中移出才能删除。' }
 		}
 
@@ -221,14 +222,14 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 
 		if (!deleteRbacApiResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '删除 RBAC API 路径失败，数据删除失败')
+			logging('ERROR', '删除 RBAC API 路径失败，数据删除失败')
 			return { success: false, isAssigned: false, message: '删除 RBAC API 路径失败，数据删除失败' }
 		}
 
 		await commitAndEndSession(session)
 		return { success: true, isAssigned: false, message: '删除 RBAC API 路径成功' }
 	} catch (error) {
-		console.error('ERROR', '创建 RBAC API 路径时出错，未知错误：', error)
+		logging('ERROR', '创建 RBAC API 路径时出错，未知错误：', error)
 		return { success: false, isAssigned: false, message: '创建 RBAC API 路径时出错，未知错误' }
 	}
 }
@@ -243,12 +244,12 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 export const getRbacApiPathService = async (getRbacApiPathRequest: GetRbacApiPathRequestDto, uuid: string, token: string): Promise<GetRbacApiPathResponseDto> => {
 	try {
 		if (!checkGetRbacApiPathRequest(getRbacApiPathRequest)) {
-			console.error('ERROR', '获取 RBAC API 路径失败，参数不合法')
+			logging('ERROR', '获取 RBAC API 路径失败，参数不合法')
 			return { success: false, message: '获取 RBAC API 路径失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取 RBAC API 路径失败，用户 Token 校验未通过')
+			logging('ERROR', '获取 RBAC API 路径失败，用户 Token 校验未通过')
 			return { success: false, message: '获取 RBAC API 路径失败，用户 Token 校验未通过' }
 		}
 
@@ -319,7 +320,7 @@ export const getRbacApiPathService = async (getRbacApiPathRequest: GetRbacApiPat
 			|| typeof count !== 'number' || count < 0
 			|| ( Array.isArray(result) && !result )
 		) {
-			console.error('ERROR', '获取 RBAC API 路径失败，获取数据失败')
+			logging('ERROR', '获取 RBAC API 路径失败，获取数据失败')
 			return { success: false, message: '获取 RBAC API 路径失败，获取数据失败' }
 		}
 
@@ -329,10 +330,10 @@ export const getRbacApiPathService = async (getRbacApiPathRequest: GetRbacApiPat
 			return { success: true, message: '查询 RBAC API 路径成功', count, result }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取 RBAC API 路径时出错，未知错误', error)
+		logging('ERROR', '获取 RBAC API 路径时出错，未知错误', error)
 		return { success: false, message: '获取 RBAC API 路径时出错，未知错误' }
 	}
-} 
+}
 
 /**
  * 创建 RBAC 角色
@@ -344,12 +345,12 @@ export const getRbacApiPathService = async (getRbacApiPathRequest: GetRbacApiPat
 export const createRbacRoleService = async (createRbacRoleRequest: CreateRbacRoleRequestDto, uuid: string, token: string): Promise<CreateRbacRoleResponseDto> => {
 	try {
 		if (!checkCreateRbacRoleRequest(createRbacRoleRequest)) {
-			console.error('ERROR', '创建 RBAC 角色失败，参数不合法')
+			logging('ERROR', '创建 RBAC 角色失败，参数不合法')
 			return { success: false, message: '创建 RBAC 角色失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '创建 RBAC 角色失败，用户 Token 校验未通过')
+			logging('ERROR', '创建 RBAC 角色失败，用户 Token 校验未通过')
 			return { success: false, message: '创建 RBAC 角色失败，用户 Token 校验未通过' }
 		}
 
@@ -377,13 +378,13 @@ export const createRbacRoleService = async (createRbacRoleRequest: CreateRbacRol
 		const insertResultData = insertResult?.result?.[0]
 
 		if (!insertResult.success || !insertResultData) {
-			console.error('ERROR', '创建 RBAC 角色失败，数据插入失败')
+			logging('ERROR', '创建 RBAC 角色失败，数据插入失败')
 			return { success: false, message: '创建 RBAC 角色失败，数据插入失败' }
 		}
 
 		return { success: true, message: '创建 RBAC 角色成功', result: insertResultData }
 	} catch (error) {
-		console.error('ERROR', '创建 RBAC 角色时出错，未知错误：', error)
+		logging('ERROR', '创建 RBAC 角色时出错，未知错误：', error)
 		return { success: false, message: '创建 RBAC 角色时出错，未知错误' }
 	}
 }
@@ -398,12 +399,12 @@ export const createRbacRoleService = async (createRbacRoleRequest: CreateRbacRol
 export const deleteRbacRoleService = async (deleteRbacRoleRequest: DeleteRbacRoleRequestDto, uuid: string, token: string): Promise<DeleteRbacRoleResponseDto> => {
 	try {
 		if (!checkDeleteRbacRoleRequest(deleteRbacRoleRequest)) {
-			console.error('ERROR', '删除 RBAC 角色失败，参数不合法')
+			logging('ERROR', '删除 RBAC 角色失败，参数不合法')
 			return { success: false, message: '删除 RBAC 角色失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '删除 RBAC 角色失败，用户 Token 校验未通过')
+			logging('ERROR', '删除 RBAC 角色失败，用户 Token 校验未通过')
 			return { success: false, message: '删除 RBAC 角色失败，用户 Token 校验未通过' }
 		}
 
@@ -419,13 +420,13 @@ export const deleteRbacRoleService = async (deleteRbacRoleRequest: DeleteRbacRol
 		const deleteResult = await deleteDataFromMongoDB(deleteRbacRoleWhere, rbacRoleSchemaInstance, rbacRoleCollectionName)
 
 		if (!deleteResult.success) {
-			console.error('ERROR', '删除 RBAC 角色失败，数据插入失败')
+			logging('ERROR', '删除 RBAC 角色失败，数据插入失败')
 			return { success: false, message: '删除 RBAC 角色失败，数据插入失败' }
 		}
 
 		return { success: true, message: '删除 RBAC 角色成功' }
 	} catch (error) {
-		console.error('ERROR', '删除 RBAC 角色时出错，未知错误：', error)
+		logging('ERROR', '删除 RBAC 角色时出错，未知错误：', error)
 		return { success: false, message: '删除 RBAC 角色时出错，未知错误' }
 	}
 }
@@ -440,12 +441,12 @@ export const deleteRbacRoleService = async (deleteRbacRoleRequest: DeleteRbacRol
 export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestDto, uuid: string, token: string): Promise<GetRbacRoleResponseDto> => {
 	try {
 		if (!checkGetRbacRoleRequest(getRbacRoleRequest)) {
-			console.error('ERROR', '获取 RBAC 角色失败，参数不合法')
+			logging('ERROR', '获取 RBAC 角色失败，参数不合法')
 			return { success: false, message: '获取 RBAC 角色失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '获取 RBAC 角色失败，用户 Token 校验未通过')
+			logging('ERROR', '获取 RBAC 角色失败，用户 Token 校验未通过')
 			return { success: false, message: '获取 RBAC 角色失败，用户 Token 校验未通过' }
 		}
 
@@ -496,7 +497,7 @@ export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestD
 			{ $skip: skip }, // 跳过指定数量的文档
 			{ $limit: pageSize }, // 限制返回的文档数量
 		]
-		
+
 		const { collectionName: rbacRoleCollectionName, schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
 		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
 
@@ -511,7 +512,7 @@ export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestD
 			|| typeof count !== 'number' || count < 0
 			|| ( Array.isArray(result) && !result )
 		) {
-			console.error('ERROR', '获取 RBAC 角色失败，获取数据失败')
+			logging('ERROR', '获取 RBAC 角色失败，获取数据失败')
 			return { success: false, message: '获取 RBAC 角色失败，获取数据失败' }
 		}
 
@@ -522,7 +523,7 @@ export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestD
 		}
 
 	} catch (error) {
-		console.error('ERROR', '获取 RBAC 角色时出错，未知错误', error)
+		logging('ERROR', '获取 RBAC 角色时出错，未知错误', error)
 		return { success: false, message: '获取 RBAC 角色时出错，未知错误' }
 	}
 }
@@ -537,12 +538,12 @@ export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestD
 export const updateApiPathPermissionsForRoleService = async (updateApiPathPermissionsForRoleRequest: UpdateApiPathPermissionsForRoleRequestDto, uuid: string, token: string): Promise<UpdateApiPathPermissionsForRoleResponseDto> => {
 	try {
 		if (!checkUpdateApiPathPermissionsForRoleRequest(updateApiPathPermissionsForRoleRequest)) {
-			console.error('ERROR', '为角色更新 API 路径权限失败，参数不合法')
+			logging('ERROR', '为角色更新 API 路径权限失败，参数不合法')
 			return { success: false, message: '为角色更新 API 路径权限失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '为角色更新 API 路径权限失败，用户 Token 校验未通过')
+			logging('ERROR', '为角色更新 API 路径权限失败，用户 Token 校验未通过')
 			return { success: false, message: '为角色更新 API 路径权限失败，用户 Token 校验未通过' }
 		}
 
@@ -555,7 +556,7 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 		const checkApiPathPermissionsCountWhere: QueryType<RbacApiList> = {
 			apiPath: { $in: uniqueApiPathPermissions },
 		}
-		
+
 		const checkApiPathPermissionsCountSelect: SelectType<RbacApiList> = {
 			apiPath: 1,
 		}
@@ -566,13 +567,13 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 
 		if (!checkApiPathPermissionsCountResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '为角色更新 API 路径权限失败，检查 API 路径失败')
+			logging('ERROR', '为角色更新 API 路径权限失败，检查 API 路径失败')
 			return { success: false, message: '为角色更新 API 路径权限失败，检查 API 路径失败' }
 		}
 
 		if (checkApiPathPermissionsCountResult.result.length !== uniqueApiPathPermissions.length) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '为角色更新 API 路径权限失败，检查 API 路径未通过，可能是因为将一个不存在的路径添加到角色中')
+			logging('ERROR', '为角色更新 API 路径权限失败，检查 API 路径未通过，可能是因为将一个不存在的路径添加到角色中')
 			return { success: false, message: '为角色更新 API 路径权限失败，检查 API 路径未通过，可能是因为将一个不存在的路径添加到角色中' }
 		}
 
@@ -582,7 +583,7 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 		const updateApiPathPermissions4RoleWhere: QueryType<RbacRole> = {
 			roleName,
 		}
-		
+
 		const now = new Date().getTime()
 		const updateApiPathPermissions4RoleData: UpdateType<RbacRole> = {
 			lastEditorUuid: uuid,
@@ -594,13 +595,13 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 
 		if (!updateApiPathPermissions4Role.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '为角色更新 API 路径权限失败，更新失败')
+			logging('ERROR', '为角色更新 API 路径权限失败，更新失败')
 			return { success: false, message: '为角色更新 API 路径权限失败，更新失败' }
 		}
 
 		return { success: true, message: '为角色更新 API 路径权限成功', result: updateApiPathPermissions4Role.result }
 	} catch (error) {
-		console.error('ERROR', '为角色更新 API 路径权限时出错，未知错误：', error)
+		logging('ERROR', '为角色更新 API 路径权限时出错，未知错误：', error)
 		return { success: false, message: '为角色更新 API 路径权限时出错，未知错误' }
 	}
 }
@@ -615,12 +616,12 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: AdminUpdateUserRoleRequestDto, adminUuid: string, adminToken: string): Promise<AdminUpdateUserRoleResponseDto> => {
 	try {
 		if (!checkAdminUpdateUserRoleRequest(adminUpdateUserRoleRequest)) {
-			console.error('ERROR', '管理员更新用户角色失败，参数不合法')
+			logging('ERROR', '管理员更新用户角色失败，参数不合法')
 			return { success: false, message: '管理员更新用户角色失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(adminUuid, adminToken)).success) {
-			console.error('ERROR', '管理员更新用户角色失败，用户 Token 校验未通过')
+			logging('ERROR', '管理员更新用户角色失败，用户 Token 校验未通过')
 			return { success: false, message: '管理员更新用户角色失败，用户 Token 校验未通过' }
 		}
 
@@ -633,7 +634,7 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 		}
 
 		if (!uuid) {
-			console.error('ERROR', '管理员更新用户角色失败，未找到用户 UUID')
+			logging('ERROR', '管理员更新用户角色失败，未找到用户 UUID')
 			return { success: false, message: '管理员更新用户角色失败，未找到用户 UUID' }
 		}
 
@@ -643,7 +644,7 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 		const checkNewRoelsCountWhere: QueryType<RbacRole> = {
 			roleName: { $in: uniqueNewRoels },
 		}
-		
+
 		const checkNewRoelsCountSelect: SelectType<RbacRole> = {
 			roleName: 1,
 		}
@@ -654,13 +655,13 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 
 		if (!checkNewRoelsCountResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '管理员更新用户角色失败，检查 API 路径失败')
+			logging('ERROR', '管理员更新用户角色失败，检查 API 路径失败')
 			return { success: false, message: '管理员更新用户角色失败，检查 API 路径失败' }
 		}
 
 		if (checkNewRoelsCountResult.result.length !== uniqueNewRoels.length) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '管理员更新用户角色失败，检查角色未通过，可能是因为将一个不存在的角色绑定给用户')
+			logging('ERROR', '管理员更新用户角色失败，检查角色未通过，可能是因为将一个不存在的角色绑定给用户')
 			return { success: false, message: '管理员更新用户角色失败，检查角色未通过，可能是因为将一个不存在的角色绑定给用户' }
 		}
 
@@ -670,7 +671,7 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 		const updateApiPathPermissions4RoleWhere: QueryType<UserAuth> = {
 			UUID: uuid,
 		}
-		
+
 		const now = new Date().getTime()
 		const updateApiPathPermissions4RoleData: UpdateType<UserAuth> = {
 			roles: uniqueNewRoels as UserAuth['roles'], // TODO: Mongoose issue: #12420
@@ -681,13 +682,13 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 
 		if (!updateRoles4UserResult.success) {
 			await abortAndEndSession(session)
-			console.error('ERROR', '管理员更新用户角色失败，更新失败')
+			logging('ERROR', '管理员更新用户角色失败，更新失败')
 			return { success: false, message: '管理员更新用户角色失败，更新失败' }
 		}
 
 		return { success: true, message: '管理员更新用户角色成功' }
 	} catch (error) {
-		console.error('ERROR', '管理员更新用户角色时出错，未知错误：', error)
+		logging('ERROR', '管理员更新用户角色时出错，未知错误：', error)
 		return { success: false, message: '管理员更新用户角色时出错，未知错误' }
 	}
 }
@@ -703,12 +704,12 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 export const adminGetUserRolesByUidService = async (adminGetUserRolesByUidRequest: AdminGetUserRolesByUidRequestDto, adminUuid: string, adminToken: string): Promise<AdminGetUserRolesByUidResponseDto> => {
 	try {
 		if (!checkAdminGetUserRolesByUidRequest(adminGetUserRolesByUidRequest)) {
-			console.error('ERROR', '通过 UID 获取一个用户的角色失败，参数不合法')
+			logging('ERROR', '通过 UID 获取一个用户的角色失败，参数不合法')
 			return { success: false, message: '通过 UID 获取一个用户的角色失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenByUuidService(adminUuid, adminToken)).success) {
-			console.error('ERROR', '通过 UID 获取一个用户的角色失败，用户 Token 校验未通过')
+			logging('ERROR', '通过 UID 获取一个用户的角色失败，用户 Token 校验未通过')
 			return { success: false, message: '通过 UID 获取一个用户的角色失败，用户 Token 校验未通过' }
 		}
 
@@ -759,7 +760,7 @@ export const adminGetUserRolesByUidService = async (adminGetUserRolesByUidReques
 
 		const { schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
 		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
-		
+
 
 		const adminGerUserRolesResult = await selectDataByAggregateFromMongoDB<{
 			uid: UserAuth['uid'];
@@ -772,13 +773,13 @@ export const adminGetUserRolesByUidService = async (adminGetUserRolesByUidReques
 		const adminGerUserRolesData = adminGerUserRolesResult.result?.[0]
 
 		if (!adminGerUserRolesResult.success || !adminGerUserRolesData) {
-			console.error('ERROR', '通过 UID 获取一个用户的角色失败，查询数据失败')
+			logging('ERROR', '通过 UID 获取一个用户的角色失败，查询数据失败')
 			return { success: false, message: '通过 UID 获取一个用户的角色失败，查询数据失败' }
 		}
 
 		return { success: true, message: '通过 UID 获取一个用户的角色成功', result: adminGerUserRolesData }
 	} catch (error) {
-		console.error('ERROR', '通过 UID 获取一个用户的角色时出错，未知错误：', error)
+		logging('ERROR', '通过 UID 获取一个用户的角色时出错，未知错误：', error)
 		return { success: false, message: '通过 UID 获取一个用户的角色时出错，未知错误' }
 	}
 }

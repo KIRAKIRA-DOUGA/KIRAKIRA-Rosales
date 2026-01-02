@@ -42,19 +42,6 @@ export const emitDanmakuController = async (ctx: koaCtx, next: koaNext) => {
 }
 
 
-export const getDanmakuListByKvidController = async (ctx: koaCtx, next: koaNext) => {
-	const videoId = ctx.query.videoId as string
-	const getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto = {
-		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
-	}
-	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest)
-	ctx.body = danmakuListResponse
-	await next()
-}
-
-/**
- * 获取本人已发布的弹幕（包含管理员删除或待审核，排除用户自行删除）
- */
 export const getSelfDanmakuListController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
@@ -63,5 +50,15 @@ export const getSelfDanmakuListController = async (ctx: koaCtx, next: koaNext) =
 	const request: GetSelfDanmakuRequestDto = { page, pageSize }
 	const resp = await getSelfDanmakuListService(request, uuid, token)
 	ctx.body = resp
+	await next()
+}
+
+export const getDanmakuListByKvidController = async (ctx: koaCtx, next: koaNext) => {
+	const videoId = ctx.query.videoId as string
+	const getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto = {
+		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
+	}
+	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest)
+	ctx.body = danmakuListResponse
 	await next()
 }

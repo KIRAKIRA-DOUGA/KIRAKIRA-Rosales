@@ -3,6 +3,7 @@ import { checkUserTokenByUuidService, checkUserTokenService, getUserInfoByUidSer
 import { findOneAndPlusByMongodbId, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { VideoDownvoteSchema, VideoUpvoteSchema } from '../dbPool/schema/VideoVoteSchema.js'
+import { logging } from './loggingService.js'
 
 /**
  * 用户给视频点赞
@@ -15,18 +16,18 @@ export const emitVideoUpvoteService = async (videoId: number, uuid: string, toke
     // WARN // TODO 应当添加更多安全验证，防刷！
     try {
         if (!videoId || !uuid || !token) {
-            console.error('ERROR', '视频点赞失败，参数异常', { videoId, uuid })
+            logging('ERROR', '视频点赞失败，参数异常', undefined, { videoId, uuid })
             return { success: false, message: '视频点赞失败，参数异常' }
         }
         
         if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-            console.error('ERROR', '视频点赞失败，用户校验未通过', { videoId, uuid })
+            logging('ERROR', '视频点赞失败，用户校验未通过', undefined, { videoId, uuid })
             return { success: false, message: '视频点赞失败，用户校验未通过' }
         }
 
         const uid = await getUserUid(uuid)
         if (uid === undefined || uid === null || uid < 1) {
-            console.error('ERROR', '视频点赞失败，获取用户 UID 失败', { uuid })
+            logging('ERROR', '视频点赞失败，获取用户 UID 失败', undefined, { uuid })
             return { success: false, message: '视频点赞失败，获取用户 UID 失败' }
         }
 
@@ -60,7 +61,7 @@ export const emitVideoUpvoteService = async (videoId: number, uuid: string, toke
                 voteResult = await updateData4MongoDB(updateVoteWhere, updateVoteUpdate, correctVideoUpvoteSchema, videoUpvoteCollectionName)
             } else {
                 // 已经是有效的点赞记录，无需操作
-                console.error('ERROR', '用户点赞时出错，用户已点赞', { videoId, uid })
+                logging('ERROR', '用户点赞时出错，用户已点赞', undefined, { videoId, uid })
                 return { success: false, message: '用户点赞时出错，用户已点赞' }
             }
         } else {
@@ -84,18 +85,18 @@ export const emitVideoUpvoteService = async (videoId: number, uuid: string, toke
                 if (cancelVideoDownvoteResult.success) {
                     return { success: true, message: '视频点赞成功' }
                 } else {
-                    console.error('ERROR', '视频点赞成功，但未能取消点踩', { videoId, uid })
+                    logging('ERROR', '视频点赞成功，但未能取消点踩', undefined, { videoId, uid })
                     return { success: false, message: '视频点赞成功，但未能取消点踩' }
                 }
             } else {
                 return { success: true, message: '视频点赞成功' }
             }
         } else {
-            console.error('ERROR', '视频点赞失败，存储数据失败', { videoId, uid })
+            logging('ERROR', '视频点赞失败，存储数据失败', undefined, { videoId, uid })
             return { success: false, message: '视频点赞失败，存储数据失败' }
         }
     } catch (error) {
-        console.error('ERROR', '视频点赞失败，未知错误：', error, { videoId, uuid })
+        logging('ERROR', '视频点赞失败，未知错误：', error, { videoId, uuid })
         return { success: false, message: '视频点赞失败，未知错误' }
     }
 }
@@ -110,12 +111,12 @@ export const emitVideoUpvoteService = async (videoId: number, uuid: string, toke
 export const cancelVideoUpvoteService = async (videoId: number, uid: number, token: string): Promise<{ success: boolean; message: string }> => {
     try {
         if (!videoId || !uid || !token) {
-            console.error('ERROR', '用户取消视频点赞失败，参数异常', { videoId, uid })
+            logging('ERROR', '用户取消视频点赞失败，参数异常', undefined, { videoId, uid })
             return { success: false, message: '用户取消视频点赞失败，参数异常' }
         }
 
         if (!(await checkUserTokenService(uid, token)).success) {
-            console.error('ERROR', '用户取消视频点赞失败，用户校验未通过', { videoId, uid })
+            logging('ERROR', '用户取消视频点赞失败，用户校验未通过', undefined, { videoId, uid })
             return { success: false, message: '用户取消视频点赞失败，用户校验未通过' }
         }
 
@@ -137,19 +138,19 @@ export const cancelVideoUpvoteService = async (videoId: number, uid: number, tok
                 if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
                     return { success: true, message: '用户取消视频点赞成功' }
                 } else {
-                    console.error('ERROR', '用户取消视频点赞时出错，更新数量为 0', { videoId, uid })
+                    logging('ERROR', '用户取消视频点赞时出错，更新数量为 0', undefined, { videoId, uid })
                     return { success: false, message: '用户取消视频点赞时出错，更新数量为 0' }
                 }
             } else {
-                console.error('ERROR', '用户取消视频点赞时出错，更新失败', { videoId, uid })
+                logging('ERROR', '用户取消视频点赞时出错，更新失败', undefined, { videoId, uid })
                 return { success: false, message: '用户取消视频点赞时出错，更新失败' }
             }
         } catch (error) {
-            console.error('ERROR', '用户取消视频点赞时出错，更新数据时出错', error, { videoId, uid })
+            logging('ERROR', '用户取消视频点赞时出错，更新数据时出错', error, { videoId, uid })
             return { success: false, message: '用户取消视频点赞时出错，更新数据时出错' }
         }
     } catch (error) {
-        console.error('ERROR', '用户取消视频点赞时出错，未知错误', error, { videoId, uid })
+        logging('ERROR', '用户取消视频点赞时出错，未知错误', error, { videoId, uid })
         return { success: false, message: '用户取消视频点赞时出错，未知错误' }
     }
 }
@@ -165,18 +166,18 @@ export const emitVideoDownvoteService = async (videoId: number, uuid: string, to
     // WARN // TODO 应当添加更多安全验证，防刷！
     try {
         if (!videoId || !uuid || !token) {
-            console.error('ERROR', '视频点踩失败，参数异常', { videoId, uuid })
+            logging('ERROR', '视频点踩失败，参数异常', undefined, { videoId, uuid })
             return { success: false, message: '视频点踩失败，参数异常' }
         }
         
         if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-            console.error('ERROR', '视频点踩失败，用户校验未通过', { videoId, uuid })
+            logging('ERROR', '视频点踩失败，用户校验未通过', undefined, { videoId, uuid })
             return { success: false, message: '视频点踩失败，用户校验未通过' }
         }
 
         const uid = await getUserUid(uuid)
         if (uid === undefined || uid === null || uid < 1) {
-            console.error('ERROR', '视频点踩失败，获取用户 UID 失败', { uuid })
+            logging('ERROR', '视频点踩失败，获取用户 UID 失败', undefined, { uuid })
             return { success: false, message: '视频点踩失败，获取用户 UID 失败' }
         }
 
@@ -210,7 +211,7 @@ export const emitVideoDownvoteService = async (videoId: number, uuid: string, to
                 voteResult = await updateData4MongoDB(updateVoteWhere, updateVoteUpdate, correctVideoDownvoteSchema, videoDownvoteCollectionName)
             } else {
                 // 已经是有效的点踩记录，无需操作
-                console.error('ERROR', '用户点踩时出错，用户已点踩', { videoId, uid })
+                logging('ERROR', '用户点踩时出错，用户已点踩', undefined, { videoId, uid })
                 return { success: false, message: '用户点踩时出错，用户已点踩' }
             }
         } else {
@@ -234,18 +235,18 @@ export const emitVideoDownvoteService = async (videoId: number, uuid: string, to
                 if (cancelVideoUpvoteResult.success) {
                     return { success: true, message: '视频点踩成功' }
                 } else {
-                    console.error('ERROR', '视频点踩成功，但未能取消点赞', { videoId, uid })
+                    logging('ERROR', '视频点踩成功，但未能取消点赞', undefined, { videoId, uid })
                     return { success: false, message: '视频点踩成功，但未能取消点赞' }
                 }
             } else {
                 return { success: true, message: '视频点踩成功' }
             }
         } else {
-            console.error('ERROR', '视频点踩失败，存储数据失败', { videoId, uid })
+            logging('ERROR', '视频点踩失败，存储数据失败', undefined, { videoId, uid })
             return { success: false, message: '视频点踩失败，存储数据失败' }
         }
     } catch (error) {
-        console.error('ERROR', '视频点踩失败，未知错误：', error, { videoId, uuid })
+        logging('ERROR', '视频点踩失败，未知错误：', error, { videoId, uuid })
         return { success: false, message: '视频点踩失败，未知错误' }
     }
 }
@@ -260,12 +261,12 @@ export const emitVideoDownvoteService = async (videoId: number, uuid: string, to
 export const cancelVideoDownvoteService = async (videoId: number, uid: number, token: string): Promise<{ success: boolean; message: string }> => {
     try {
         if (!videoId || !uid || !token) {
-            console.error('ERROR', '用户取消视频点踩失败，参数异常', { videoId, uid })
+            logging('ERROR', '用户取消视频点踩失败，参数异常', undefined, { videoId, uid })
             return { success: false, message: '用户取消视频点踩失败，参数异常' }
         }
 
         if (!(await checkUserTokenService(uid, token)).success) {
-            console.error('ERROR', '用户取消视频点踩失败，用户校验未通过', { videoId, uid })
+            logging('ERROR', '用户取消视频点踩失败，用户校验未通过', undefined, { videoId, uid })
             return { success: false, message: '用户取消视频点踩失败，用户校验未通过' }
         }
 
@@ -287,19 +288,19 @@ export const cancelVideoDownvoteService = async (videoId: number, uid: number, t
                 if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
                     return { success: true, message: '用户取消视频点踩成功' }
                 } else {
-                    console.error('ERROR', '用户取消视频点踩时出错，更新数量为 0', { videoId, uid })
+                    logging('ERROR', '用户取消视频点踩时出错，更新数量为 0', undefined, { videoId, uid })
                     return { success: false, message: '用户取消视频点踩时出错，更新数量为 0' }
                 }
             } else {
-                console.error('ERROR', '用户取消视频点踩时出错，更新失败', { videoId, uid })
+                logging('ERROR', '用户取消视频点踩时出错，更新失败', undefined, { videoId, uid })
                 return { success: false, message: '用户取消视频点踩时出错，更新失败' }
             }
         } catch (error) {
-            console.error('ERROR', '用户取消视频点踩时出错，更新数据时出错', error, { videoId, uid })
+            logging('ERROR', '用户取消视频点踩时出错，更新数据时出错', error, { videoId, uid })
             return { success: false, message: '用户取消视频点踩时出错，更新数据时出错' }
         }
     } catch (error) {
-        console.error('ERROR', '用户取消视频点踩时出错，未知错误', error, { videoId, uid })
+        logging('ERROR', '用户取消视频点踩时出错，未知错误', error, { videoId, uid })
         return { success: false, message: '用户取消视频点踩时出错，未知错误' }
     }
 }
@@ -312,7 +313,7 @@ export const cancelVideoDownvoteService = async (videoId: number, uid: number, t
 export const getVideoUpvoteCount = async (videoId: number): Promise<number> => {
 	try {
 		if (!videoId) {
-			console.error('获取视频点赞数失败：视频 ID 为空', { videoId })
+			logging('ERROR', '获取视频点赞数失败：视频 ID 为空', undefined, { videoId })
 			return 0
 		}
 		
@@ -335,11 +336,11 @@ export const getVideoUpvoteCount = async (videoId: number): Promise<number> => {
 				return 0
 			}
 		} catch (error) {
-			console.error('获取视频点赞数失败：查询失败', error, { videoId })
+			logging('ERROR', '获取视频点赞数失败：查询失败', error, { videoId })
 			return 0
 		}
 	} catch (error) {
-		console.error('获取视频点赞数失败：', error, { videoId })
+		logging('ERROR', '获取视频点赞数失败：', error, { videoId })
 		return 0
 	}
 }
@@ -352,7 +353,7 @@ export const getVideoUpvoteCount = async (videoId: number): Promise<number> => {
 export const getVideoDownvoteCount = async (videoId: number): Promise<number> => {
 	try {
 		if (!videoId) {
-			console.error('获取视频点踩数失败：视频 ID 为空', { videoId })
+			logging('ERROR', '获取视频点踩数失败：视频 ID 为空', undefined, { videoId })
 			return 0
 		}
 		
@@ -375,11 +376,11 @@ export const getVideoDownvoteCount = async (videoId: number): Promise<number> =>
 				return 0
 			}
 		} catch (error) {
-			console.error('获取视频点踩数失败：查询失败', error, { videoId })
+			logging('ERROR', '获取视频点踩数失败：查询失败', error, { videoId })
 			return 0
 		}
 	} catch (error) {
-		console.error('获取视频点踩数失败：', error, { videoId })
+		logging('ERROR', '获取视频点踩数失败：', error, { videoId })
 		return 0
 	}
 }
@@ -393,7 +394,7 @@ export const getVideoDownvoteCount = async (videoId: number): Promise<number> =>
 export const checkUserHasUpvoted = async (videoId: number, uid: number): Promise<boolean> => {
     try {
         if (!videoId || uid === undefined || uid === null) {
-            console.error('在验证用户是否已经对某视频点赞时出错：数据校验未通过', { videoId, uid })
+            logging('ERROR', '在验证用户是否已经对某视频点赞时出错：数据校验未通过', undefined, { videoId, uid })
             return false
         }
         
@@ -422,11 +423,11 @@ export const checkUserHasUpvoted = async (videoId: number, uid: number): Promise
                 return false // 悲观：查询失败，不算作用户点赞
             }
         } catch (error) {
-            console.error('在验证用户是否已经对某视频点赞时出错：获取用户点赞数据失败', error, { videoId, uid })
+            logging('ERROR', '在验证用户是否已经对某视频点赞时出错：获取用户点赞数据失败', error, { videoId, uid })
             return false
         }
     } catch (error) {
-        console.error('在验证用户是否已经对某视频点赞时出错：', error, { videoId, uid })
+        logging('ERROR', '在验证用户是否已经对某视频点赞时出错：', error, { videoId, uid })
         return false
     }
 }
@@ -440,7 +441,7 @@ export const checkUserHasUpvoted = async (videoId: number, uid: number): Promise
 export const checkUserHasDownvoted = async (videoId: number, uid: number): Promise<boolean> => {
     try {
         if (!videoId || uid === undefined || uid === null) {
-            console.error('在验证用户是否已经对某视频点踩时出错：数据校验未通过', { videoId, uid })
+            logging('ERROR', '在验证用户是否已经对某视频点踩时出错：数据校验未通过', undefined, { videoId, uid })
             return false
         }
         
@@ -469,11 +470,11 @@ export const checkUserHasDownvoted = async (videoId: number, uid: number): Promi
                 return false // 悲观：查询失败，不算作用户点踩
             }
         } catch (error) {
-            console.error('在验证用户是否已经对某视频点踩时出错：获取用户点踩数据失败', error, { videoId, uid })
+            logging('ERROR', '在验证用户是否已经对某视频点踩时出错：获取用户点踩数据失败', error, { videoId, uid })
             return false
         }
     } catch (error) {
-        console.error('在验证用户是否已经对某视频点踩时出错：', error, { videoId, uid })
+        logging('ERROR', '在验证用户是否已经对某视频点踩时出错：', error, { videoId, uid })
         return false
     }
 }

@@ -4,6 +4,7 @@ import { QueryType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { getUserUid } from './UserService.js'
+import { logging } from './loggingService.js'
 
 /**
  * 获取今天的日期字符串（格式：YYYY-MM-DD）
@@ -56,11 +57,11 @@ const checkUserWatchedToday = async (videoId: number, uuid: string): Promise<boo
 				return false // 今天还没有观看过
 			}
 		} catch (error) {
-			console.error('检查用户今天是否观看过视频失败：', error, { videoId, uuid })
+			logging('ERROR', '检查用户今天是否观看过视频失败：', error, { videoId, uuid })
 			return false // 出错时返回 false，不增加播放量
 		}
 	} catch (error) {
-		console.error('检查用户今天是否观看过视频失败：', error, { videoId, uuid })
+		logging('ERROR', '检查用户今天是否观看过视频失败：', error, { videoId, uuid })
 		return false
 	}
 }
@@ -74,7 +75,7 @@ const checkUserWatchedToday = async (videoId: number, uuid: string): Promise<boo
 export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string): Promise<boolean> => {
 	try {
 		if (!videoId || !uuid) {
-			console.error('记录视频播放失败：参数异常', { videoId, uuid })
+			logging('ERROR', '记录视频播放失败：参数异常', undefined, { videoId, uuid })
 			return false
 		}
 
@@ -87,7 +88,7 @@ export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: s
 
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
-			console.error('记录视频播放失败：获取用户 UID 失败', { uuid })
+			logging('ERROR', '记录视频播放失败：获取用户 UID 失败', undefined, { uuid })
 			return false
 		}
 
@@ -120,7 +121,7 @@ export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: s
 			if (!insertWatchRecordResult.success) {
 				await session.abortTransaction()
 				session.endSession()
-				console.error('记录视频播放失败：插入观看记录失败', { videoId, uuid })
+    	logging('ERROR', '记录视频播放失败：插入观看记录失败', undefined, { videoId, uuid })
 				return false
 			}
 
@@ -144,7 +145,7 @@ export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: s
 			if (!updateVideoResult.acknowledged || updateVideoResult.matchedCount === 0) {
 				await session.abortTransaction()
 				session.endSession()
-				console.error('记录视频播放失败：增加播放量失败', { videoId, uuid })
+    	logging('ERROR', '记录视频播放失败：增加播放量失败', undefined, { videoId, uuid })
 				return false
 			}
 
@@ -157,11 +158,11 @@ export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: s
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('记录视频播放失败：事务执行失败', error, { videoId, uuid })
+			logging('ERROR', '记录视频播放失败：事务执行失败', error, { videoId, uuid })
 			return false
 		}
 	} catch (error) {
-		console.error('记录视频播放失败：未知错误', error, { videoId, uuid })
+		logging('ERROR', '记录视频播放失败：未知错误', error, { videoId, uuid })
 		return false
 	}
 }

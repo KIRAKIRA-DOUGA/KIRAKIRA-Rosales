@@ -64,7 +64,7 @@ export type GetDanmakuByKvidResponseDto = {
 }
 
 /**
- * 获取本人已发布的弹幕的请求载荷
+ * 获取本人已发布的弹幕的请求
  */
 export type GetSelfDanmakuRequestDto = {
 	/** 分页：页码（可选，默认 1） */
