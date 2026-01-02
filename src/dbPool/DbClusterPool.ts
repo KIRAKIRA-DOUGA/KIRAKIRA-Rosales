@@ -3,6 +3,7 @@ import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, PipelineStage
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
+import { logging } from '../service/loggingService.js'
 
 /**
  * 虚拟属性，用于关联查询
@@ -72,19 +73,19 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 		const databasePassword = process.env.MONGODB_PASSWORD
 
 		if (!databaseHost) {
-			console.error('ERROR', '创建数据库连接失败， databaseHost 为空')
+			logging('ERROR', '创建数据库连接失败， databaseHost 为空', undefined, undefined, { recordingLogs: false })
 			process.exit()
 		}
 		if (!databaseName) {
-			console.error('ERROR', '创建数据库连接失败， databaseName 为空')
+			logging('ERROR', '创建数据库连接失败， databaseName 为空', undefined, undefined, { recordingLogs: false })
 			process.exit()
 		}
 		if (!databaseUsername) {
-			console.error('ERROR', '创建数据库连接失败， databaseUsername 为空')
+			logging('ERROR', '创建数据库连接失败， databaseUsername 为空', undefined, undefined, { recordingLogs: false })
 			process.exit()
 		}
 		if (!databasePassword) {
-			console.error('ERROR', '创建数据库连接失败， databasePassword 为空')
+			logging('ERROR', '创建数据库连接失败， databasePassword 为空', undefined, undefined, { recordingLogs: false })
 			process.exit()
 		}
 
@@ -97,7 +98,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 
 		if (databaseProtocol === 'mongodb+srv' && !databaseTlsCa) {
 			connectionOptions['tlsAllowInvalidCertificates'] = true
-			console.warn('WARN', 'WARNING', "Your MongoDB connection protocol is 'mongodb+srv', but can not find any TLS credentials. Communications with the database may be eavesdropped!")
+			logging('WARN', "Your MongoDB connection protocol is 'mongodb+srv', but can not find any TLS credentials. Communications with the database may be eavesdropped!", undefined, undefined, { recordingLogs: false })
 		}
 
 		if (databaseTlsCa && databaseTlsCert && databaseTlsKey) {
@@ -118,14 +119,13 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
 			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
 
-			console.info()
-			console.info('MongoDB Cluster Connect successfully!')
+			console.info('MongoDB Cluster Connect successfully!\n')
 		} catch (error) {
-			console.error('ERROR', '创建数据库连接失败：', error)
+			logging('ERROR', '创建数据库连接失败：', error, undefined, { recordingLogs: false })
 			process.exit()
 		}
 	} catch (error) {
-		console.error('ERROR', '创建数据库连接失败：connectMongoDBCluster 意外终止：', error)
+		logging('ERROR', '创建数据库连接失败：connectMongoDBCluster 意外终止：', error, undefined, { recordingLogs: false })
 		process.exit()
 	}
 }
@@ -158,11 +158,11 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 			const result = await model.save(options) as unknown as T & {_id: string}
 			return { success: true, message: '数据插入成功', result: [result] }
 		} catch (error) {
-			console.error('ERROR', '数据插入失败：', error)
+			logging('ERROR', '数据插入失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据插入失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', 'insertData2MongoDB 发生错误')
+		logging('ERROR', 'insertData2MongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据插入失败，insertData2MongoDB 中发生错误：', error }
 	}
 }
@@ -194,11 +194,11 @@ export const deleteDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 			const result = await mongoModel.deleteOne(where, options)
 			return { success: true, message: '数据查询成功', result }
 		} catch (error) {
-			console.error('ERROR', '数据查询失败：', error)
+			logging('ERROR', '数据查询失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据查询失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', 'selectDataFromMongoDB 发生错误')
+		logging('ERROR', 'selectDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
 	}
 }
@@ -256,11 +256,11 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 			}
 			return { success: true, message: '数据查询成功', result }
 		} catch (error) {
-			console.error('ERROR', '数据查询失败：', error)
+			logging('ERROR', '数据查询失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据查询失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', 'selectDataFromMongoDB 发生错误')
+		logging('ERROR', 'selectDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
 	}
 }
@@ -286,11 +286,11 @@ export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, col
 			const result = (await mongoModel.aggregate(props)) as T[]
 			return { success: true, message: '数据聚合查询成功', result }
 		} catch (error) {
-			console.error('ERROR', '数据聚合查询失败：', error)
+			logging('ERROR', '数据聚合查询失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据聚合查询失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', 'selectDataByAggregateFromMongoDB 发生错误')
+		logging('ERROR', 'selectDataByAggregateFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据聚合查询失败，selectDataByAggregateFromMongoDB 中发生错误：', error }
 	}
 }
@@ -327,19 +327,19 @@ export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: 
 				if (modifiedCount > 0) {
 					return { success: true, message: '数据更新成功', result: { acknowledged, matchedCount, modifiedCount } }
 				} else {
-					console.warn('WARN', 'WARNING', '已匹配到数据并尝试更新数据，但数据未（无需）更新，可能是因为数据更新前后的值相同', { where, update })
+					logging('WARN', '已匹配到数据并尝试更新数据，但数据未（无需）更新，可能是因为数据更新前后的值相同', undefined, { where, update }, { recordingLogs: false })
 					return { success: true, message: '尝试更新数据，但数据无需更新', result: { acknowledged, matchedCount, modifiedCount } }
 				}
 			} else {
-				console.warn('ERROR', '尝试更新数据，但更新失败，因为未匹配到到数据', { where, update })
+				logging('WARN', '尝试更新数据，但更新失败，因为未匹配到到数据', undefined, { where, update }, { recordingLogs: false })
 				return { success: false, message: '尝试更新数据，但更新失败，可能是未匹配到数据', result: { acknowledged, matchedCount, modifiedCount } }
 			}
 		} catch (error) {
-			console.error('ERROR', '数据更新失败：', error, { where, update })
+			logging('ERROR', '数据更新失败：', error, { where, update }, { recordingLogs: false })
 			throw { success: false, message: '数据更新失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', '数据更新失败，未知错误')
+		logging('ERROR', '数据更新失败，未知错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据更新失败，updateData4MongoDB 中发生错误：', error }
 	}
 }
@@ -374,15 +374,15 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 			if (updateResult) {
 				return { success: true, message: '数据更新成功', result: updateResult }
 			} else {
-				console.warn('ERROR', '数据更新失败，没有找到返回结果', { where, update })
+				logging('ERROR', '数据更新失败，没有找到返回结果', undefined, { where, update }, { recordingLogs: false })
 				return { success: false, message: '数据更新失败，没有找到返回结果' }
 			}
 		} catch (error) {
-			console.error('ERROR', '数据更新失败：', error, { where, update })
+			logging('ERROR', '数据更新失败：', error, { where, update }, { recordingLogs: false })
 			throw { success: false, message: '数据更新失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', '数据更新失败，未知错误')
+		logging('ERROR', '数据更新失败，未知错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据更新失败，findOneAndUpdateData4MongoDB 中发生错误：', error }
 	}
 }
@@ -431,15 +431,15 @@ export const getNextSequenceValuePool = async (sequenceId: string, sequenceDefau
 			if (sequenceDocument.sequenceValue !== undefined && !sequenceDocument.sequenceValue !== null) {
 				return { success: true, message: '自增 ID 查询成功', result: sequenceDocument.sequenceValue as number }
 			} else {
-				console.error('ERROR', '自增 ID 查询结果为空：')
+				logging('ERROR', '自增 ID 查询结果为空：', undefined, undefined, { recordingLogs: false })
 				throw { success: false, message: '自增 ID 查询结果为空' }
 			}
 		} catch (error) {
-			console.error('ERROR', '自增 ID 查询失败：', error)
+			logging('ERROR', '自增 ID 查询失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '自增 ID 查询失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', 'getNextSequenceValuePool 发生错误')
+		logging('ERROR', 'getNextSequenceValuePool 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '自增 ID 查询时发生错误', error }
 	}
 }
@@ -479,11 +479,11 @@ export const findOneAndPlusByMongodbId = async <T extends Record<string, unknown
 			)
 			return { success: true, message: '自增成功', result: sequenceDocument.sequenceValue as number }
 		} catch (error) {
-			console.error('ERROR', '自增失败：', error)
+			logging('ERROR', '自增失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '自增失败', error }
 		}
 	} catch (error) {
-		console.error('ERROR', 'findOneAndPlusByMongodbId 发生错误')
+		logging('ERROR', 'findOneAndPlusByMongodbId 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '自增时发生错误', error }
 	}
 }

@@ -8,6 +8,7 @@ import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, checkUserTokenService, getUserInfoByUidService, getUserUid, getUserUuid } from './UserService.js'
 import { buildBlockListMongooseFilter } from './BlockService.js'
 import { checkVideoBlockedByKvidService } from './VideoService.js'
+import { logging } from './loggingService.js'
 
 /**
  * 用户发送视频评论
@@ -19,23 +20,23 @@ import { checkVideoBlockedByKvidService } from './VideoService.js'
 export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideoCommentRequestDto, uuid: string, token: string): Promise<EmitVideoCommentResponseDto> => {
 	try {
 		if (!checkEmitVideoCommentRequest(emitVideoCommentRequest)) {
-			console.error('ERROR', '视频评论发送失败，弹幕数据校验未通过：', { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '视频评论发送失败，弹幕数据校验未通过：', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
 			return { success: false, message: '视频评论发送失败，视频评论数据错误' }
 		}
-		
+
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			console.error('ERROR', '视频评论发送失败，用户校验未通过', { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '视频评论发送失败，用户校验未通过', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
 			return { success: false, message: '视频评论发送失败，用户校验未通过' }
 		}
 
 		if (!uuid) {
-			console.error('ERROR', '评论发送失败，UUID 不存在', { uuid })
+			logging('ERROR', '评论发送失败，UUID 不存在', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
 			return { success: false, message: '评论发送失败，UUID 不存在' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
-			console.error('ERROR', '评论发送失败，获取发送者 UID 失败。', { uuid })
+			logging('ERROR', '评论发送失败，获取发送者 UID 失败。', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
 			return { success: false, message: '评论发送失败，获取发送者 UID 失败。' }
 		}
 
@@ -46,16 +47,16 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 
 		const checkVideoBlockedResult = await checkVideoBlockedByKvidService(videoId, selectorUuid, selectorToken)
 		if (!checkVideoBlockedResult.success) {
-			console.error('ERROR', '评论发送失败，检查视频是否被屏蔽失败', { uuid })
+			logging('ERROR', '评论发送失败，检查视频是否被屏蔽失败', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
 			return { success: false, message: '评论发送失败，检查视频是否被屏蔽失败' }
 		}
 
 		if (checkVideoBlockedResult.isBlockedByOther) {
-			console.error('ERROR', '评论发送失败，用户被其他用户屏蔽', { uuid })
+			logging('ERROR', '评论发送失败，用户被其他用户屏蔽', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
 			return { success: false, message: '评论发送失败，用户被其他用户屏蔽' }
 		}
 		if (checkVideoBlockedResult.isBlocked) {
-			console.error('ERROR', '评论发送失败，用户已屏蔽上传者', { uuid })
+			logging('ERROR', '评论发送失败，用户已屏蔽上传者', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
 			return { success: false, message: '评论发送失败，用户已屏蔽上传者' }
 		}
 
@@ -70,7 +71,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('ERROR', '视频评论发送失败，获取楼层数据失败，无法根据视频 ID 获取序列下一个值', { videoId: emitVideoCommentRequest.videoId, uid })
+			logging('ERROR', '视频评论发送失败，获取楼层数据失败，无法根据视频 ID 获取序列下一个值', undefined, { videoId: emitVideoCommentRequest.videoId, uid })
 			return { success: false, message: '视频评论发送失败，获取楼层数据失败' }
 		}
 
@@ -92,13 +93,13 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 		}
 		try {
 			const insertData2MongoDBResult = await insertData2MongoDB(videoComment, schemaInstance, collectionName, { session })
-			
+
 			if (!insertData2MongoDBResult || !insertData2MongoDBResult.success) {
 				if (session.inTransaction()) {
 					await session.abortTransaction()
 				}
 				session.endSession()
-				console.error('ERROR', '视频评论发送失败，未返回结果', { videoId: emitVideoCommentRequest.videoId, uid })
+				logging('ERROR', '视频评论发送失败，未返回结果', undefined, { videoId: emitVideoCommentRequest.videoId, uid })
 				return { success: false, message: '视频评论发送失败，存储视频评论数据失败' }
 			}
 
@@ -111,7 +112,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.warn('WARN', 'WARNING', '视频评论发送成功，但是获取回显数据为空', { videoId: emitVideoCommentRequest.videoId, uid })
+					logging('WARN', '视频评论发送成功，但是获取回显数据为空', undefined, { videoId: emitVideoCommentRequest.videoId, uid })
 					return { success: false, message: '视频评论发送成功，请尝试刷新页面' }
 				}
 
@@ -137,7 +138,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 					await session.abortTransaction()
 				}
 				session.endSession()
-				console.warn('WARN', 'WARNING', '视频评论发送成功，但是获取回显数据失败', error, { videoId: emitVideoCommentRequest.videoId, uid })
+				logging('ERROR', '视频评论发送成功，但是获取回显数据失败', error, { videoId: emitVideoCommentRequest.videoId, uid })
 				return { success: false, message: '视频评论发送成功，请刷新页面' }
 			}
 		} catch (error) {
@@ -145,11 +146,11 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 				await session.abortTransaction()
 			}
 			session.endSession()
-			console.error('ERROR', '视频评论发送失败，无法存储到 MongoDB', error, { videoId: emitVideoCommentRequest.videoId, uid })
+			logging('ERROR', '视频评论发送失败，无法存储到 MongoDB', error, { videoId: emitVideoCommentRequest.videoId, uid })
 			return { success: false, message: '视频评论发送失败，存储视频评论数据失败' }
 		}
 	} catch (error) {
-		console.error('ERROR', '视频评论发送失败，错误信息：', error, { videoId: emitVideoCommentRequest.videoId, uuid })
+		logging('ERROR', '视频评论发送失败，错误信息：', error, { videoId: emitVideoCommentRequest.videoId, uuid })
 		return { success: false, message: '视频评论发送失败，未知错误' }
 	}
 }
@@ -163,13 +164,13 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 	// WARN // TODO 应当添加更多安全验证，防刷！
 	try {
 		if (!checkGetVideoCommentByKvidRequest(getVideoCommentByKvidRequest)) {
-			console.error('ERROR', '获取视频评论列表失败，数据校验失败', { getVideoCommentByKvidRequest })
+			logging('ERROR', '获取视频评论列表失败，数据校验失败', undefined, { getVideoCommentByKvidRequest })
 			return { success: false, message: '获取视频评论列表失败，数据校验失败', videoCommentCount: 0, videoCommentList: [] }
 		}
 
 		if (uuid !== undefined && uuid !== null && token) { // 校验用户，如果校验通过，则获取当前用户对某一视频的点赞/点踩的评论的评论 ID 列表
 			if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-				console.error('ERROR', '获取视频评论列表失败，用户校验未通过', { getVideoCommentByKvidRequest })
+				logging('ERROR', '获取视频评论列表失败，用户校验未通过', undefined, { getVideoCommentByKvidRequest })
 				return { success: false, message: '获取视频评论列表失败，用户校验未通过', videoCommentCount: 0, videoCommentList: [] }
 			}
 		}
@@ -333,7 +334,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 		const videoCommentsResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, getVideoCommentsPipeline)
 
 		if (!videoCommentsResult.success || !videoCommentsCountResult.success) {
-			console.error('ERROR', '获取视频评论列表失败，查询数据失败', { getVideoCommentByKvidRequest })
+			logging('ERROR', '获取视频评论列表失败，查询数据失败', undefined, { getVideoCommentByKvidRequest })
 			return { success: false, message: '获取视频评论列表失败，查询数据失败', videoCommentCount: 0, videoCommentList: [] }
 		}
 
@@ -344,7 +345,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			videoCommentList: videoCommentsResult.result,
 		}
 	} catch (error) {
-		console.error('ERROR', '获取视频评论列表失败，错误信息：', error, { getVideoCommentByKvidRequest })
+		logging('ERROR', '获取视频评论列表失败，错误信息：', error, { getVideoCommentByKvidRequest })
 		return { success: false, message: '获取视频评论列表失败，未知原因', videoCommentCount: 0, videoCommentList: [] }
 	}
 }
@@ -383,19 +384,19 @@ const getVideoCommentUpvoteByUid = async (getVideoCommentUpvoteProps: GetVideoCo
 						return { success: true, message: '用户点赞情况为空', videoCommentUpvoteResult: [] }
 					}
 				} else {
-					console.warn('WARN', 'WARNING', '获取用户点赞情况失败，查询失败或结果为空：', { getVideoCommentUpvoteProps })
+					logging('ERROR', '获取用户点赞情况失败，查询失败或结果为空：', undefined, { getVideoCommentUpvoteProps })
 					return { success: false, message: '获取用户点赞情况失败，查询失败', videoCommentUpvoteResult: [] }
 				}
 			} catch (error) {
-				console.warn('WARN', 'WARNING', '获取用户点赞情况失败，查询失败：', error, { getVideoCommentUpvoteProps })
+				logging('ERROR', '获取用户点赞情况失败，查询失败：', error, { getVideoCommentUpvoteProps })
 				return { success: false, message: '获取用户点赞情况失败，查询失败', videoCommentUpvoteResult: [] }
 			}
 		} else {
-			console.warn('WARN', 'WARNING', '获取用户点赞情况失败，查询参数未通过校验', { getVideoCommentUpvoteProps })
+			logging('ERROR', '获取用户点赞情况失败，查询参数未通过校验', undefined, { getVideoCommentUpvoteProps })
 			return { success: false, message: '获取用户点赞情况失败，必要参数为空', videoCommentUpvoteResult: [] }
 		}
 	} catch (error) {
-		console.warn('WARN', 'WARNING', '获取用户点赞情况失败，错误信息：', error, { getVideoCommentUpvoteProps })
+		logging('ERROR', '获取用户点赞情况失败，错误信息：', error, { getVideoCommentUpvoteProps })
 		return { success: false, message: '获取用户点赞情况失败，未知错误', videoCommentUpvoteResult: [] }
 	}
 }
@@ -433,19 +434,19 @@ const getVideoCommentDownvoteByUid = async (getVideoCommentDownvoteProps: GetVid
 						return { success: true, message: '用户点踩情况为空', videoCommentDownvoteResult: [] }
 					}
 				} else {
-					console.warn('WARN', 'WARNING', '获取用户点踩情况失败，查询失败或结果为空：', { getVideoCommentDownvoteProps })
+					logging('ERROR', '获取用户点踩情况失败，查询失败或结果为空：', undefined, { getVideoCommentDownvoteProps })
 					return { success: false, message: '获取用户点踩情况失败，查询失败', videoCommentDownvoteResult: [] }
 				}
 			} catch (error) {
-				console.warn('WARN', 'WARNING', '获取用户点踩情况失败，查询失败：', error, { getVideoCommentDownvoteProps })
+				logging('ERROR', '获取用户点踩情况失败，查询失败：', error, { getVideoCommentDownvoteProps })
 				return { success: false, message: '获取用户点踩情况失败，查询失败', videoCommentDownvoteResult: [] }
 			}
 		} else {
-			console.warn('WARN', 'WARNING', '获取用户点踩情况失败，查询参数未通过校验', { getVideoCommentDownvoteProps })
+			logging('ERROR', '获取用户点踩情况失败，查询参数未通过校验', undefined, { getVideoCommentDownvoteProps })
 			return { success: false, message: '获取用户点踩情况失败，必要参数为空', videoCommentDownvoteResult: [] }
 		}
 	} catch (error) {
-		console.warn('WARN', 'WARNING', '获取用户点踩情况失败，错误信息：', error, { getVideoCommentDownvoteProps })
+		logging('ERROR', '获取用户点踩情况失败，错误信息：', error, { getVideoCommentDownvoteProps })
 		return { success: false, message: '获取用户点踩情况失败，未知错误', videoCommentDownvoteResult: [] }
 	}
 }
@@ -464,7 +465,7 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点赞
 				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 				if (!UUID) {
-					console.error('ERROR', '评论点赞失败，UUID 不存在', { uid })
+					logging('ERROR', '评论点赞失败，UUID 不存在', undefined, { uid })
 					return { success: false, message: '评论点赞失败，UUID 不存在' }
 				}
 
@@ -502,46 +503,46 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 											if (cancelVideoCommentDownvoteResult.success) {
 												return { success: true, message: '视频评论点赞成功' }
 											} else {
-												console.error('ERROR', '视频评论点赞成功，但未能取消点踩', { emitVideoCommentUpvoteRequest, uid })
+												logging('ERROR', '视频评论点赞成功，但未能取消点踩', undefined, { emitVideoCommentUpvoteRequest, uid })
 												return { success: false, message: '视频评论点赞成功，但未能取消点踩' }
 											}
 										} catch (error) {
-											console.error('ERROR', '视频评论点赞成功，但取消点踩的请求失败', error, { emitVideoCommentUpvoteRequest, uid })
+											logging('ERROR', '视频评论点赞成功，但取消点踩的请求失败', error, { emitVideoCommentUpvoteRequest, uid })
 											return { success: false, message: '视频评论点赞成功，但取消点踩失败' }
 										}
 									} else {
 										return { success: true, message: '视频评论点赞成功' }
 									}
 								} else {
-									console.error('ERROR', '视频评论点赞数据存储成功，但点赞合计未增加', { emitVideoCommentUpvoteRequest, uid })
+									logging('ERROR', '视频评论点赞数据存储成功，但点赞合计未增加', undefined, { emitVideoCommentUpvoteRequest, uid })
 									return { success: false, message: '视频评论点赞数据存储成功，但点赞合计未增加' }
 								}
 							} catch (error) {
-								console.error('ERROR', '视频评论点赞数据存储成功，但点赞合计增加失败', error, { emitVideoCommentUpvoteRequest, uid })
+								logging('ERROR', '视频评论点赞数据存储成功，但点赞合计增加失败', error, { emitVideoCommentUpvoteRequest, uid })
 								return { success: false, message: '视频评论点赞数据存储成功，但点赞合计增加失败' }
 							}
 						} else {
-							console.error('ERROR', '视频评论点赞失败', { emitVideoCommentUpvoteRequest, uid })
+							logging('ERROR', '视频评论点赞失败', undefined, { emitVideoCommentUpvoteRequest, uid })
 							return { success: false, message: '视频评论点赞失败，存储数据失败' }
 						}
 					} catch (error) {
-						console.error('ERROR', '视频评论点赞失败，无法存储到 MongoDB', error, { emitVideoCommentUpvoteRequest, uid })
+						logging('ERROR', '视频评论点赞失败，无法存储到 MongoDB', error, { emitVideoCommentUpvoteRequest, uid })
 						return { success: false, message: '视频评论点赞失败，存储数据失败' }
 					}
 				} else {
-					console.error('ERROR', '用户点赞时出错，用户已点赞', { emitVideoCommentUpvoteRequest, uid })
+					logging('ERROR', '用户点赞时出错，用户已点赞', undefined, { emitVideoCommentUpvoteRequest, uid })
 					return { success: false, message: '用户点赞时出错，用户已点赞' }
 				}
 			} else {
-				console.error('ERROR', '用户点赞时出错，用户校验未通过', { emitVideoCommentUpvoteRequest, uid })
+				logging('ERROR', '用户点赞时出错，用户校验未通过', undefined, { emitVideoCommentUpvoteRequest, uid })
 				return { success: false, message: '用户点赞时出错，用户校验未通过' }
 			}
 		} else {
-			console.error('ERROR', '用户点赞时出错，点赞数据校验未通过：', { emitVideoCommentUpvoteRequest, uid })
+			logging('ERROR', '用户点赞时出错，点赞数据校验未通过：', undefined, { emitVideoCommentUpvoteRequest, uid })
 			return { success: false, message: '用户点赞时出错，数据错误' }
 		}
 	} catch (error) {
-		console.error('ERROR', '点赞失败，未知错误：', error, { emitVideoCommentUpvoteRequest, uid })
+		logging('ERROR', '点赞失败，未知错误：', error, { emitVideoCommentUpvoteRequest, uid })
 		return { success: false, message: '点赞失败，未知错误' }
 	}
 }
@@ -579,32 +580,32 @@ export const cancelVideoCommentUpvoteService = async (cancelVideoCommentUpvoteRe
 								if (updateResult.success) {
 									return { success: true, message: '用户取消点赞成功' }
 								} else {
-									console.warn('WARN', 'WARNING', '用户取消点赞成功，但点赞总数未更新')
+									logging('WARN', '用户取消点赞成功，但点赞总数未更新')
 									return { success: true, message: '用户取消点赞成功，但点赞总数未更新' }
 								}
 							} catch (error) {
-								console.warn('WARN', 'WARNING', '用户取消点赞成功，但点赞总数更新失败')
+								logging('WARN', '用户取消点赞成功，但点赞总数更新失败')
 								return { success: true, message: '用户取消点赞成功，但点赞总数更新失败' }
 							}
 						} else {
-							console.error('ERROR', '用户取消点赞时出错，更新数量为 0', { cancelVideoCommentUpvoteRequest, uid })
+							logging('ERROR', '用户取消点赞时出错，更新数量为 0', undefined, { cancelVideoCommentUpvoteRequest, uid })
 							return { success: false, message: '用户取消点赞时出错，无法更新' }
 						}
 					}
 				} catch (error) {
-					console.error('ERROR', '用户取消点赞时出错，更新数据时出错', error, { cancelVideoCommentUpvoteRequest, uid })
+					logging('ERROR', '用户取消点赞时出错，更新数据时出错', error, { cancelVideoCommentUpvoteRequest, uid })
 					return { success: false, message: '用户取消点赞时出错，更新数据时出错' }
 				}
 			} else {
-				console.error('ERROR', '用户取消点赞时出错，用户校验未通过', { cancelVideoCommentUpvoteRequest, uid })
+				logging('ERROR', '用户取消点赞时出错，用户校验未通过', undefined, { cancelVideoCommentUpvoteRequest, uid })
 				return { success: false, message: '用户取消点赞时出错，用户校验未通过' }
 			}
 		} else {
-			console.error('ERROR', '用户取消点赞时出错，参数不合法或必要的参数为空', { cancelVideoCommentUpvoteRequest, uid })
+			logging('ERROR', '用户取消点赞时出错，参数不合法或必要的参数为空', undefined, { cancelVideoCommentUpvoteRequest, uid })
 			return { success: false, message: '用户取消点赞时出错，参数异常' }
 		}
 	} catch (error) {
-		console.error('ERROR', '用户取消点赞时出错，未知错误', error, { cancelVideoCommentUpvoteRequest, uid })
+		logging('ERROR', '用户取消点赞时出错，未知错误', error, { cancelVideoCommentUpvoteRequest, uid })
 		return { success: false, message: '用户取消点赞时出错，未知错误' }
 	}
 }
@@ -644,15 +645,15 @@ const checkUserHasUpvoted = async (commentId: string, uid: number): Promise<bool
 					return false // 悲观：查询失败，不算作用户点赞
 				}
 			} catch (error) {
-				console.error('在验证用户是否已经对某评论点赞时出错：获取用户点赞数据失败', { commentId, uid })
+				logging('ERROR', '在验证用户是否已经对某评论点赞时出错：获取用户点赞数据失败', undefined, { commentId, uid })
 				return false
 			}
 		} else {
-			console.error('在验证用户是否已经对某评论点赞时出错：数据校验未通过', { commentId, uid })
+			logging('ERROR', '在验证用户是否已经对某评论点赞时出错：数据校验未通过', undefined, { commentId, uid })
 			return false
 		}
 	} catch (error) {
-		console.error('在验证用户是否已经对某评论点赞时出错：', error, { commentId, uid })
+		logging('ERROR', '在验证用户是否已经对某评论点赞时出错：', error, { commentId, uid })
 		return false
 	}
 }
@@ -673,7 +674,7 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点踩
 				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 				if (!UUID) {
-					console.error('ERROR', '评论点踩失败，UUID 不存在', { uid })
+					logging('ERROR', '评论点踩失败，UUID 不存在', undefined, { uid })
 					return { success: false, message: '评论点踩失败，UUID 不存在' }
 				}
 
@@ -712,46 +713,46 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
 											if (cancelVideoCommentUpvoteResult.success) {
 												return { success: true, message: '视频评论点踩成功' }
 											} else {
-												console.error('ERROR', '视频评论点踩成功，但未能取消点赞', { emitVideoCommentDownvoteRequest, uid })
+												logging('ERROR', '视频评论点踩成功，但未能取消点赞', undefined, { emitVideoCommentDownvoteRequest, uid })
 												return { success: false, message: '视频评论点踩成功，但未能取消点赞' }
 											}
 										} catch (error) {
-											console.error('ERROR', '视频评论点踩成功，但取消点赞的请求失败', error, { emitVideoCommentDownvoteRequest, uid })
+											logging('ERROR', '视频评论点踩成功，但取消点赞的请求失败', error, { emitVideoCommentDownvoteRequest, uid })
 											return { success: false, message: '视频评论点踩成功，但取消点赞失败' }
 										}
 									} else {
 										return { success: true, message: '视频评论点踩成功' }
 									}
 								} else {
-									console.error('ERROR', '视频评论点踩数据存储成功，但点踩合计未增加', { emitVideoCommentDownvoteRequest, uid })
+									logging('ERROR', '视频评论点踩数据存储成功，但点踩合计未增加', undefined, { emitVideoCommentDownvoteRequest, uid })
 									return { success: false, message: '视频评论点踩数据存储成功，但点踩合计未增加' }
 								}
 							} catch (error) {
-								console.error('ERROR', '视频评论点踩数据存储成功，但点踩合计增加失败', error, { emitVideoCommentDownvoteRequest, uid })
+								logging('ERROR', '视频评论点踩数据存储成功，但点踩合计增加失败', error, { emitVideoCommentDownvoteRequest, uid })
 								return { success: false, message: '视频评论点踩数据存储成功，但点踩合计增加失败' }
 							}
 						} else {
-							console.error('ERROR', '视频评论点踩失败', { emitVideoCommentDownvoteRequest, uid })
+							logging('ERROR', '视频评论点踩失败', undefined, { emitVideoCommentDownvoteRequest, uid })
 							return { success: false, message: '视频评论点踩失败，存储数据失败' }
 						}
 					} catch (error) {
-						console.error('ERROR', '视频评论点踩失败，无法存储到 MongoDB', error, { emitVideoCommentDownvoteRequest, uid })
+						logging('ERROR', '视频评论点踩失败，无法存储到 MongoDB', error, { emitVideoCommentDownvoteRequest, uid })
 						return { success: false, message: '视频评论点踩失败，存储数据失败' }
 					}
 				} else {
-					console.error('ERROR', '用户点踩时出错，用户已点踩', { emitVideoCommentDownvoteRequest, uid })
+					logging('ERROR', '用户点踩时出错，用户已点踩', undefined, { emitVideoCommentDownvoteRequest, uid })
 					return { success: false, message: '用户点踩时出错，用户已点踩' }
 				}
 			} else {
-				console.error('ERROR', '用户点踩时出错，用户校验未通过', { emitVideoCommentDownvoteRequest, uid })
+				logging('ERROR', '用户点踩时出错，用户校验未通过', undefined, { emitVideoCommentDownvoteRequest, uid })
 				return { success: false, message: '用户点踩时出错，用户校验未通过' }
 			}
 		} else {
-			console.error('ERROR', '用户点踩时出错，点踩数据校验未通过：', { emitVideoCommentDownvoteRequest, uid })
+			logging('ERROR', '用户点踩时出错，点踩数据校验未通过：', undefined, { emitVideoCommentDownvoteRequest, uid })
 			return { success: false, message: '用户点踩时出错，数据错误' }
 		}
 	} catch (error) {
-		console.error('ERROR', '点踩失败，未知错误：', error, { emitVideoCommentDownvoteRequest, uid })
+		logging('ERROR', '点踩失败，未知错误：', error, { emitVideoCommentDownvoteRequest, uid })
 		return { success: false, message: '点踩失败，未知错误' }
 	}
 }
@@ -789,32 +790,32 @@ export const cancelVideoCommentDownvoteService = async (cancelVideoCommentDownvo
 								if (updateResult.success) {
 									return { success: true, message: '用户取消点踩成功' }
 								} else {
-									console.warn('WARN', 'WARNING', '用户取消点踩成功，但点踩总数未更新')
+									logging('WARN', '用户取消点踩成功，但点踩总数未更新')
 									return { success: true, message: '用户取消点踩成功，但点踩总数未更新' }
 								}
 							} catch (error) {
-								console.warn('WARN', 'WARNING', '用户取消点踩成功，但点踩总数更新失败')
+								logging('WARN', '用户取消点踩成功，但点踩总数更新失败')
 								return { success: true, message: '用户取消点踩成功，但点踩总数更新失败' }
 							}
 						} else {
-							console.error('ERROR', '用户取消点踩时出错，更新数量为 0', { cancelVideoCommentDownvoteRequest, uid })
+							logging('ERROR', '用户取消点踩时出错，更新数量为 0', undefined, { cancelVideoCommentDownvoteRequest, uid })
 							return { success: false, message: '用户取消点踩时出错，无法更新' }
 						}
 					}
 				} catch (error) {
-					console.error('ERROR', '用户取消点踩时出错，更新数据时出错', error, { cancelVideoCommentDownvoteRequest, uid })
+					logging('ERROR', '用户取消点踩时出错，更新数据时出错', error, { cancelVideoCommentDownvoteRequest, uid })
 					return { success: false, message: '用户取消点踩时出错，更新数据时出错' }
 				}
 			} else {
-				console.error('ERROR', '用户取消点踩时出错，用户校验未通过', { cancelVideoCommentDownvoteRequest, uid })
+				logging('ERROR', '用户取消点踩时出错，用户校验未通过', undefined, { cancelVideoCommentDownvoteRequest, uid })
 				return { success: false, message: '用户取消点踩时出错，用户校验未通过' }
 			}
 		} else {
-			console.error('ERROR', '用户取消点踩时出错，参数不合法或必要的参数为空', { cancelVideoCommentDownvoteRequest, uid })
+			logging('ERROR', '用户取消点踩时出错，参数不合法或必要的参数为空', undefined, { cancelVideoCommentDownvoteRequest, uid })
 			return { success: false, message: '用户取消点踩时出错，参数异常' }
 		}
 	} catch (error) {
-		console.error('ERROR', '用户取消点踩时出错，未知错误', error, { cancelVideoCommentDownvoteRequest, uid })
+		logging('ERROR', '用户取消点踩时出错，未知错误', error, { cancelVideoCommentDownvoteRequest, uid })
 		return { success: false, message: '用户取消点踩时出错，未知错误' }
 	}
 }
@@ -854,15 +855,15 @@ const checkUserHasDownvoted = async (commentId: string, uid: number): Promise<bo
 					return false // 悲观：查询失败，不算作用户点踩
 				}
 			} catch (error) {
-				console.error('在验证用户是否已经对某评论点踩时出错：获取用户点踩数据失败', { commentId, uid })
+				logging('ERROR', '在验证用户是否已经对某评论点踩时出错：获取用户点踩数据失败', undefined, { commentId, uid })
 				return false
 			}
 		} else {
-			console.error('在验证用户是否已经对某评论点踩时出错：数据校验未通过', { commentId, uid })
+			logging('ERROR', '在验证用户是否已经对某评论点踩时出错：数据校验未通过', undefined, { commentId, uid })
 			return false
 		}
 	} catch (error) {
-		console.error('在验证用户是否已经对某评论点踩时出错：', error, { commentId, uid })
+		logging('ERROR', '在验证用户是否已经对某评论点踩时出错：', error, { commentId, uid })
 		return false
 	}
 }
@@ -877,18 +878,18 @@ const checkUserHasDownvoted = async (commentId: string, uid: number): Promise<bo
 export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentRequest: DeleteSelfVideoCommentRequestDto, uid: number, token: string): Promise<DeleteSelfVideoCommentResponseDto> => {
 	try {
 		if (!checkDeleteSelfVideoCommentRequest(deleteSelfVideoCommentRequest)) {
-			console.error('删除视频评论失败，参数不合法')
+			logging('ERROR', '删除视频评论失败，参数不合法')
 			return { success: false, message: '删除视频评论失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenService(uid, token)).success) {
-			console.error('删除视频评论失败，用户校验未通过')
+			logging('ERROR', '删除视频评论失败，用户校验未通过')
 			return { success: false, message: '删除视频评论失败，用户校验未通过' }
 		}
 
 		const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 		if (!UUID) {
-			console.error('ERROR', '删除一条自己发布的视频评论失败，UUID 不存在', { uid })
+			logging('ERROR', '删除一条自己发布的视频评论失败，UUID 不存在', undefined, { uid })
 			return { success: false, message: '删除一条自己发布的视频评论失败，UUID 不存在' }
 		}
 
@@ -923,14 +924,14 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 			const deleteSelfVideoCommentSelectResult = await selectDataFromMongoDB<VideoComment>(deleteSelfVideoCommentWhere, deleteSelfVideoCommentSelect, videoCommentSchemaInstance, videoCommentSchemaName)
 
 			if (!deleteSelfVideoCommentSelectResult.success || !deleteSelfVideoCommentSelectResult.result || deleteSelfVideoCommentSelectResult.result.length !== 1) {
-				console.error('删除视频评论失败，检索视频评论结果为空或长度超过限制')
+				logging('ERROR', '删除视频评论失败，检索视频评论结果为空或长度超过限制')
 				return { success: false, message: '删除视频评论失败，检索视频评论结果为空或长度超过限制' }
 			}
 
 			const videoData = deleteSelfVideoCommentSelectResult.result[0]
 
 			if (videoData.uid !== uid) {
-				console.error('删除视频评论失败，只能删除自己的评论')
+				logging('ERROR', '删除视频评论失败，只能删除自己的评论')
 				return { success: false, message: '删除视频评论失败，只能删除自己的评论' }
 			}
 
@@ -953,7 +954,7 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('删除视频评论失败，保存已删除视频评论失败')
+					logging('ERROR', '删除视频评论失败，保存已删除视频评论失败')
 					return { success: false, message: '删除视频评论失败，记录失败' }
 				}
 
@@ -964,7 +965,7 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('删除视频评论失败，删除失败')
+					logging('ERROR', '删除视频评论失败，删除失败')
 					return { success: false, message: '删除视频评论失败，删除失败' }
 				}
 
@@ -976,15 +977,15 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 					await session.abortTransaction()
 				}
 				session.endSession()
-				console.error('删除视频评论时出错：保存已删除视频评论出错', error)
+				logging('ERROR', '删除视频评论时出错：保存已删除视频评论出错', error)
 				return { success: false, message: '删除视频评论时出错：无法存储记录' }
 			}
 		} catch (error) {
-			console.error('删除视频评论时出错：检索视频评论出错', error)
+			logging('ERROR', '删除视频评论时出错：检索视频评论出错', error)
 			return { success: false, message: '删除视频评论时出错：检索视频评论出错' }
 		}
 	} catch (error) {
-		console.error('删除视频评论时出错：未知错误', error)
+		logging('ERROR', '删除视频评论时出错：未知错误', error)
 		return { success: false, message: '删除视频评论时出错：未知错误' }
 	}
 }
@@ -999,18 +1000,18 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequest: AdminDeleteVideoCommentRequestDto, adminUid: number, adminToken: string): Promise<AdminDeleteVideoCommentResponseDto> => {
 	try {
 		if (!checkAdminDeleteVideoCommentRequest(adminDeleteVideoCommentRequest)) {
-			console.error('管理员删除视频评论失败，参数不合法')
+			logging('ERROR', '管理员删除视频评论失败，参数不合法')
 			return { success: false, message: '管理员删除视频评论失败，参数不合法' }
 		}
 
 		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
-			console.error('管理员删除视频评论失败，用户校验未通过')
+			logging('ERROR', '管理员删除视频评论失败，用户校验未通过')
 			return { success: false, message: '管理员删除视频评论失败，用户校验未通过' }
 		}
 
 		const adminUUID = await getUserUuid(adminUid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
 		if (!adminUUID) {
-			console.error('ERROR', '管理员删除一条视频评论失败，adminUUID 不存在', { adminUid })
+			logging('ERROR', '管理员删除一条视频评论失败，adminUUID 不存在', undefined, { adminUid })
 			return { success: false, message: '管理员删除一条视频评论失败，adminUUID 不存在' }
 		}
 
@@ -1045,7 +1046,7 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 			const deleteSelfVideoCommentSelectResult = await selectDataFromMongoDB<VideoComment>(deleteSelfVideoCommentWhere, deleteSelfVideoCommentSelect, videoCommentSchemaInstance, videoCommentSchemaName)
 
 			if (!deleteSelfVideoCommentSelectResult.success || !deleteSelfVideoCommentSelectResult.result || deleteSelfVideoCommentSelectResult.result.length !== 1) {
-				console.error('管理员删除视频评论失败，检索视频评论结果为空或长度超过限制')
+				logging('ERROR', '管理员删除视频评论失败，检索视频评论结果为空或长度超过限制')
 				return { success: false, message: '管理员删除视频评论失败，检索视频评论结果为空或长度超过限制' }
 			}
 
@@ -1068,7 +1069,7 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('管理员删除视频评论失败，保存已删除视频评论失败')
+					logging('ERROR', '管理员删除视频评论失败，保存已删除视频评论失败')
 					return { success: false, message: '管理员删除视频评论失败，记录失败' }
 				}
 
@@ -1079,7 +1080,7 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 						await session.abortTransaction()
 					}
 					session.endSession()
-					console.error('管理员删除视频评论失败，删除失败')
+					logging('ERROR', '管理员删除视频评论失败，删除失败')
 					return { success: false, message: '管理员删除视频评论失败，删除失败' }
 				}
 
@@ -1091,15 +1092,15 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 					await session.abortTransaction()
 				}
 				session.endSession()
-				console.error('管理员删除视频评论时出错：保存已删除视频评论出错', error)
+				logging('ERROR', '管理员删除视频评论时出错：保存已删除视频评论出错', error)
 				return { success: false, message: '管理员删除视频评论时出错：无法存储记录' }
 			}
 		} catch (error) {
-			console.error('管理员删除视频评论时出错：检索视频评论出错', error)
+			logging('ERROR', '管理员删除视频评论时出错：检索视频评论出错', error)
 			return { success: false, message: '管理员删除视频评论时出错：检索视频评论出错' }
 		}
 	} catch (error) {
-		console.error('管理员删除视频评论时出错：未知错误', error)
+		logging('ERROR', '管理员删除视频评论时出错：未知错误', error)
 		return { success: false, message: '管理员删除视频评论时出错：未知错误' }
 	}
 }

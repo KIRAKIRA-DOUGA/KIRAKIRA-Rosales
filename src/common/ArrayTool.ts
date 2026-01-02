@@ -1,3 +1,4 @@
+import { logging } from "../service/loggingService.js"
 
 /**
  *
@@ -64,11 +65,11 @@ export const removeDuplicateObjectsInDeepArrayStrong = <T>(inputArray: NestedArr
 			const flattenedArray = flattenArray<T>(inputArray)
 			return removeDuplicates<T>(flattenedArray)
 		} else {
-			console.error('something error in function removeDuplicateObjectsStrongInDeepArray, required data "inputArray" is empty')
+			logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray, required data "inputArray" is empty')
 			return []
 		}
 	} catch (error) {
-		console.error('something error in function removeDuplicateObjectsStrongInDeepArray')
+		logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray')
 		return []
 	}
 }
@@ -81,16 +82,16 @@ const objectsAreEqual = <T>(a: T, b: T): boolean => {
 		if (keysA.length !== keysB.length) {
 			return false
 		}
-			
+
 		for (let i = 0; i < keysA.length; i++) {
 			if (keysA[i] !== keysB[i] || a[keysA[i]] !== b[keysB[i]]) {
 				return false
 			}
 		}
-			
+
 		return true
 	} else {
-		console.error('something error in function objectsAreEqual, required data "a" or "b" is empty')
+		logging('ERROR', 'something error in function objectsAreEqual, required data "a" or "b" is empty')
 		return false
 	}
 }
@@ -129,11 +130,11 @@ export const removeDuplicateObjectsInDeepArrayAndDeepObjectStrong = <T>(inputArr
 			const flattenedArray = flattenArray<T>(inputArray)
 			return removeDuplicates<T>(flattenedArray)
 		} else {
-			console.error('something error in function removeDuplicateObjectsStrongInDeepArray, required data "inputArray" is empty')
+			logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray, required data "inputArray" is empty')
 			return []
 		}
 	} catch (error) {
-		console.error('something error in function removeDuplicateObjectsStrongInDeepArray')
+		logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray')
 		return []
 	}
 }
@@ -159,7 +160,7 @@ export const mergeAndDeduplicateObjectArrays = <T>(arr1: T[], arr2: T[]): T[] =>
 			const mergedArray: T[] = [...arr1, ...arr2]
 			const uniqueArray: T[] = []
 
-			
+
 			mergedArray.forEach((item: T) => {
 				if (!uniqueArray.some((uniqueItem: T) => objectsAreEqual(item, uniqueItem))) {
 					uniqueArray.push(item)
@@ -168,11 +169,11 @@ export const mergeAndDeduplicateObjectArrays = <T>(arr1: T[], arr2: T[]): T[] =>
 
 			return uniqueArray
 		} else {
-			console.error('something error in function mergeAndDeduplicateObjectArrays, required data "inputArray(arr1 and arr2)" is empty')
+			logging('ERROR', 'something error in function mergeAndDeduplicateObjectArrays, required data "inputArray(arr1 and arr2)" is empty')
 			return []
 		}
 	} catch (error) {
-		console.error('something error in function mergeAndDeduplicateObjectArrays')
+		logging('ERROR', 'something error in function mergeAndDeduplicateObjectArrays')
 		return []
 	}
 }

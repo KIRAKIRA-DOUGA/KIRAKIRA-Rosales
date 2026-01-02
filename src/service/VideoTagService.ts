@@ -5,6 +5,7 @@ import { VideoTagSchema } from '../dbPool/schema/VideoTagSchema.js'
 import { InferSchemaType } from 'mongoose'
 import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
+import { logging } from './loggingService.js'
 
 /**
  * 创建视频 TAG
@@ -37,27 +38,27 @@ export const createVideoTagService = async (createVideoTagRequest: CreateVideoTa
 						if (insert2MongoDBResult?.success) {
 							return { success: true, message: '创建视频 TAG 成功', result: { tagId, tagNameList } }
 						} else {
-							console.error('ERROR', '创建视频 TAG 时出错，向 MongoDB 插入 TAG 数据失败')
+							logging('ERROR', '创建视频 TAG 时出错，向 MongoDB 插入 TAG 数据失败')
 							return { success: false, message: '创建视频 TAG 时出错，数据插入失败' }
 						}
 					} else {
-						console.error('ERROR', '创建视频 TAG 时出错，获取到的 TAG 自增编号为空')
+						logging('ERROR', '创建视频 TAG 时出错，获取到的 TAG 自增编号为空')
 						return { success: false, message: '创建视频 TAG 时出错，生成的 TAG 编号为空' }
 					}
 				} catch (error) {
-					console.error('ERROR', '创建视频 TAG 时出错，获取 TAG 自增编号时出错')
+					logging('ERROR', '创建视频 TAG 时出错，获取 TAG 自增编号时出错')
 					return { success: false, message: '创建视频 TAG 时出错，获取 TAG 编号时出错' }
 				}
 			} else {
-				console.error('ERROR', '创建视频 TAG 时出错，用户非法')
+				logging('ERROR', '创建视频 TAG 时出错，用户非法')
 				return { success: false, message: '创建视频 TAG 时出错，用户未登录或未通过验证' }
 			}
 		} else {
-			console.error('ERROR', '创建视频 TAG 时出错，请求参数不正确')
+			logging('ERROR', '创建视频 TAG 时出错，请求参数不正确')
 			return { success: false, message: '创建视频 TAG 时出错，请求参数不正确' }
 		}
 	} catch (error) {
-		console.error('ERROR', '创建视频 TAG 时出错，未知原因：', error)
+		logging('ERROR', '创建视频 TAG 时出错，未知原因：', error)
 		return { success: false, message: '创建视频 TAG 时出错，未知原因' }
 	}
 }
@@ -92,19 +93,19 @@ export const searchVideoTagService = async (searchVideoTagRequest: SearchVideoTa
 						return { success: true, message: '搜索视频 TAG 的结果为空', result: [] }
 					}
 				} else {
-					console.error('ERROR', '搜索视频 TAG 时出错，在 MongoDB 中查询数据失败')
+					logging('ERROR', '搜索视频 TAG 时出错，在 MongoDB 中查询数据失败')
 					return { success: false, message: '搜索视频 TAG 失败，查询失败' }
 				}
 			} catch (error) {
-				console.error('ERROR', '搜索视频 TAG 时出错，在 MongoDB 中查询数据出错：', error)
+				logging('ERROR', '搜索视频 TAG 时出错，在 MongoDB 中查询数据出错：', error)
 				return { success: false, message: '搜索视频 TAG 时出错，数据查询出错' }
 			}
 		} else {
-			console.error('ERROR', '搜索视频 TAG 时出错，参数不合法')
+			logging('ERROR', '搜索视频 TAG 时出错，参数不合法')
 			return { success: false, message: '搜索视频 TAG 时出错，参数错误' }
 		}
 	} catch (error) {
-		console.error('ERROR', '搜索视频 TAG 时出错，未知原因：', error)
+		logging('ERROR', '搜索视频 TAG 时出错，未知原因：', error)
 		return { success: false, message: '搜索视频 TAG 时出错，未知原因' }
 	}
 }
@@ -138,19 +139,19 @@ export const getVideoTagByTagIdService = async (getVideoTagByTagIdRequest: GetVi
 						return { success: true, message: '获取视频 TAG 的结果为空', result: [] }
 					}
 				} else {
-					console.error('ERROR', '获取视频 TAG 时出错，在 MongoDB 中查询数据失败')
+					logging('ERROR', '获取视频 TAG 时出错，在 MongoDB 中查询数据失败')
 					return { success: false, message: '获取视频 TAG 失败，查询失败' }
 				}
 			} catch (error) {
-				console.error('ERROR', '获取视频 TAG 时出错，在 MongoDB 中查询数据出错：', error)
+				logging('ERROR', '获取视频 TAG 时出错，在 MongoDB 中查询数据出错：', error)
 				return { success: false, message: '获取视频 TAG 时出错，数据查询出错' }
 			}
 		} else {
-			console.error('ERROR', '获取视频 TAG 时出错，参数不合法')
+			logging('ERROR', '获取视频 TAG 时出错，参数不合法')
 			return { success: false, message: '获取视频 TAG 时出错，参数错误' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取视频 TAG 时出错，未知原因：', error)
+		logging('ERROR', '获取视频 TAG 时出错，未知原因：', error)
 		return { success: false, message: '获取视频 TAG 时出错，未知原因' }
 	}
 }

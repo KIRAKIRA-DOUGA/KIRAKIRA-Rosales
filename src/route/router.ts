@@ -17,9 +17,6 @@ import {
 	getUserAvatarUploadSignedUrlController,
 	getUserInfoByUidController,
 	getUserSettingsController,
-	requestSendChangeEmailVerificationCodeController,
-	requestSendChangePasswordVerificationCodeController,
-	requestSendVerificationCodeController,
 	updateOrCreateUserInfoController,
 	updateOrCreateUserSettingsController,
 	updateUserEmailController,
@@ -34,14 +31,13 @@ import {
 	confirmUserTotpAuthenticatorController,
 	checkUserHave2FAByUUIDController,
 	createUserEmailAuthenticatorController,
-	sendUserEmailAuthenticatorController,
 	deleteUserEmailAuthenticatorController,
-	sendDeleteUserEmailAuthenticatorController,
 	userExistsCheckByUIDController,
 	adminEditUserInfoController,
 	adminGetUserByInvitationCodeController,
 	forgotPasswordController,
-	requestSendForgotPasswordVerificationCodeController,
+	sendGeneral2FAEmailVerificationCodeController,
+	sendGeneralEmailVerificationCodeController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
@@ -104,21 +100,6 @@ router.post('/user/createEmailAuthenticator', createUserEmailAuthenticatorContro
 // https://localhost:9999/user/createEmailAuthenticator
 // cookie: uuid, token
 
-router.post('/user/sendUserEmailAuthenticator', sendUserEmailAuthenticatorController) // 用户发送 Email 身份验证器验证码
-// https://localhost:9999/user/sendUserEmailAuthenticator
-// {
-// 	 "email": "aaa@aaa.aaa",
-// 	 "passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-//   "clientLanguage": "zh-Hans-CN",
-// }
-
-router.post('/user/sendDeleteUserEmailAuthenticator', sendDeleteUserEmailAuthenticatorController) // 用户发送删除 Email 身份验证器验证码
-// https://localhost:9999/user/sendDeleteUserEmailAuthenticator
-// cookie: uuid, token
-// {
-//   "clientLanguage": "zh-Hans-CN",
-// }
-
 router.delete('/user/deleteUserEmailAuthenticator', deleteUserEmailAuthenticatorController) // 用户删除 Email 2FA
 // https://localhost:9999/user/deleteUserEmailAuthenticator
 // cookie: uuid, token
@@ -141,11 +122,11 @@ router.post('/user/update/email', updateUserEmailController) // 更新用户邮�
 // https://localhost:9999/user/update/email
 // cookie: uid, token
 // {
-// 	"uid": "XXXXXXXXX",
 // 	"oldEmail": "aaa@aaa.aaa",
 // 	"newEmail": "bbb@bbb.bbb",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-// 	"verificationCode": "XXXXXX"
+// 	"changeEmailVerificationCode": "XXXXXX",
+// 	"changeEmailNewEmailVerificationCode": "XXXXXX"
 // }
 
 router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或创建用户信息
@@ -184,10 +165,10 @@ router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或�
 
 router.post('/user/self', getSelfUserInfoController) // 获取当前登录的用户信息，可以通过 cookie 传递，也可以通过请求体
 // https://localhost:9999/user/self
-// cookie: uid, token
+// cookie: uuid, token
 // or
 // {
-// 	"uid": "XXXXXXXXX",
+// 	"uuid": "XXXXXXXXX",
 // 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 // }
 
@@ -211,7 +192,7 @@ router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 
 
 router.post('/user/settings', getUserSettingsController) // 在服务端或客户端获取用户设置信息用以正确渲染页面
 // https://localhost:9999/user/settings
-// cookie: uid, token
+// cookie: uuid, token
 // or
 // {
 // 	"uid": "XXXXXXXXX",
@@ -225,11 +206,23 @@ router.post('/user/settings/update', updateOrCreateUserSettingsController) // �
 // 	"coloredSideBar": "true"
 // }
 
-router.post('/user/requestSendVerificationCode', requestSendVerificationCodeController) // 请求发送验证码，用于注册时验证用户邮箱
-// https://localhost:9999/user/requestSendVerificationCode
+router.post('/user/sendGeneral2FAEmailVerificationCode', sendGeneral2FAEmailVerificationCodeController) // 发送通用 2FA 邮箱验证码
+// https://localhost:9999/user/sendGeneral2FAEmailVerificationCode
+// cookie: uuid, token
 // {
-// 	"email": "aaa@bbb.com",
-// 	"clientLanguage": "zh-Hans-CN"
+// 	"clientLanguage": "zh-Hans-CN",
+// 	"mailTemplate": "XXXXXXXX",
+// 	"exclusiveBusinessName": "xxxxxx"
+// }
+
+router.post('/user/sendGeneralEmailVerificationCode', sendGeneralEmailVerificationCodeController) // 发送通用邮箱验证码
+// https://localhost:9999/user/sendGeneralEmailVerificationCode
+// cookie: uuid, token
+// {
+// 	"email": "your-email@website.com",
+// 	"clientLanguage": "zh-Hans-CN",
+// 	"mailTemplate": "XXXXXXXX",
+// 	"exclusiveBusinessName": "xxxxxx"
 // }
 
 router.post('/user/createInvitationCode', createInvitationCodeController) // 生成邀请码
@@ -250,20 +243,6 @@ router.get('/user/getUserByInvitationCode', adminGetUserByInvitationCodeControll
 // https://localhost:9999/user/getUserByInvitationCode?invitationCode=KIRA-XXXX-XXXX
 // cookie: uuid, token
 
-router.post('/user/requestSendChangeEmailVerificationCode', requestSendChangeEmailVerificationCodeController) // 请求发送验证码，用于修改邮箱
-// https://localhost:9999/user/requestSendChangeEmailVerificationCode
-// cookie: uid, token
-// {
-// 	"clientLanguage": "zh-Hans-CN"
-// }
-
-router.post('/user/requestSendChangePasswordVerificationCode', requestSendChangePasswordVerificationCodeController) // 请求发送验证码，用于修改密码
-// https://localhost:9999/user/requestSendChangePasswordVerificationCode
-// cookie: uid, token
-// {
-// 	"clientLanguage": "zh-Hans-CN"
-// }
-
 router.post('/user/update/password', updateUserPasswordController) // 更新用户密码
 // https://localhost:9999/user/update/password
 // cookie: uid, token
@@ -271,13 +250,6 @@ router.post('/user/update/password', updateUserPasswordController) // 更新用�
 // 	"oldPasswordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 // 	"newPasswordHash": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
 // 	"verificationCode": "XXXXXX"
-// }
-
-router.post('/user/requestSendForgotPasswordVerificationCode', requestSendForgotPasswordVerificationCodeController) // 请求发送忘记密码的邮箱验证码
-// https://localhost:9999/user/requestSendForgotPasswordVerificationCode
-// {
-// 	"clientLanguage": "zh-Hans-CN",
-// 	"email": "your-email@website.com"
 // }
 
 router.post('/user/forgot/password', forgotPasswordController) // 找回密码（更新密码）
@@ -675,26 +647,6 @@ router.post('/feed/unfollowing', unfollowingUploaderController) // 取消关注�
 // 	"unfollowingUid": 999
 // }
 
-router.get('/feed/following/list', getFollowingListController) // 获取用户关注列表
-// https://localhost:9999/feed/following/list?targetUid=999&num=20&offset=0
-// cookie: uuid, token (可选，用于隐私检查)
-// Query: targetUid (目标用户 UID), num (返回数量，最大200), offset (偏移量)
-
-router.get('/feed/follower/list', getFollowerListController) // 获取用户粉丝列表
-// https://localhost:9999/feed/follower/list?targetUid=999&num=20&offset=0
-// cookie: uuid, token (可选，用于隐私检查)
-// Query: targetUid (目标用户 UID), num (返回数量，最大200), offset (偏移量)
-
-router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和粉丝数
-// https://localhost:9999/feed/stats?targetUid=999
-// cookie: uuid, token (可选)
-// Query: targetUid (目标用户 UID)
-
-router.get('/feed/following/videos', getFollowingVideosController) // 获取我关注对象的最新视频
-// https://localhost:9999/feed/following/videos?num=20&offset=0
-// cookie: uuid, token (必需)
-// Query: num (返回数量，最大200), offset (偏移量)
-
 router.post('/feed/createFeedGroup', createFeedGroupController) // 创建动态分组
 // https://localhost:9999/feed/createFeedGroup
 // cookie: uuid, token
@@ -765,6 +717,22 @@ router.get('/feed/getFeedContent', getFeedContentController) // 获取动态分�
 // {
 // 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx"
 // }
+
+router.get('/feed/following/list', getFollowingListController) // 获取用户关注列表
+// https://localhost:9999/feed/following/list?targetUid=999&num=20&offset=0
+// cookie: uuid, token (可选)
+
+router.get('/feed/follower/list', getFollowerListController) // 获取用户粉丝列表
+// https://localhost:9999/feed/follower/list?targetUid=999&num=20&offset=0
+// cookie: uuid, token (可选)
+
+router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和粉丝数
+// https://localhost:9999/feed/stats?targetUid=999
+// cookie: uuid, token (可选)
+
+router.get('/feed/following/videos', getFollowingVideosController) // 获取我关注对象的最新视频
+// https://localhost:9999/feed/following/videos?num=20&offset=0
+// cookie: uuid, token
 
 
 
