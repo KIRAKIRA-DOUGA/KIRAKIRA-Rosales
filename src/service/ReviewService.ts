@@ -26,8 +26,11 @@ import { UserAuthSchema } from '../dbPool/schema/UserSchema.js'
 import { VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
+import { ReviewLogSchema } from '../dbPool/schema/ReviewLogSchema.js'
 import { checkUserTokenByUuidService } from './UserService.js'
 import { logging } from './loggingService.js'
+import { GetSelfReviewLogRequestDto, GetSelfReviewLogResponseDto, ReviewLogItem } from '../controller/ReviewControllerDto.js'
+import { getUserUid } from './UserService.js'
 
 /**
  * 获取待审核视频列表
@@ -376,6 +379,37 @@ export const getPendingReviewDanmakuListService = async (
 }
 
 /**
+ * 记录一条审核日志
+ */
+const createReviewLog = async (log: {
+	ownerUUID: string
+	ownerUid: number
+	reviewerUUID: string
+	reviewerUid: number
+	targetType: 'video' | 'comment' | 'danmaku'
+	targetId: string
+	action: 'approve' | 'reject'
+	reason?: string
+	extra?: Record<string, any>
+}) => {
+	try {
+		const { collectionName, schemaInstance } = ReviewLogSchema
+		type ReviewLog = InferSchemaType<typeof schemaInstance>
+		const now = Date.now()
+		const data: ReviewLog = {
+			...log,
+			reason: log.reason ?? '',
+			createDateTime: now,
+			editDateTime: now,
+		}
+		await insertData2MongoDB(data, schemaInstance, collectionName)
+	} catch (error) {
+		// 不影响主流程
+		logging('ERROR', '写入审核日志失败', error, { log })
+	}
+}
+
+/**
  * 通过视频审核
  * @param approveVideoReviewRequest 通过视频审核的请求载荷
  * @param uuid 用户的 UUID
@@ -410,6 +444,9 @@ export const approveVideoReviewService = async (
 		const checkSelect: SelectType<Video> = {
 			videoId: 1,
 			pendingReview: 1,
+			uploaderUUID: 1,
+			uploaderId: 1,
+			title: 1,
 		}
 		const checkResult = await selectDataFromMongoDB<Video>(checkWhere, checkSelect, videoSchemaInstance, videoCollectionName)
 
@@ -432,6 +469,21 @@ export const approveVideoReviewService = async (
 		if (!updateResult.success) {
 			logging('ERROR', '通过视频审核失败：更新失败')
 			return { success: false, message: '通过视频审核失败：更新失败' }
+		}
+
+		const reviewerUid = await getUserUid(uuid)
+		const video = checkResult.result[0]
+		if (reviewerUid && video?.uploaderUUID && typeof video.uploaderId === 'number') {
+			await createReviewLog({
+				ownerUUID: video.uploaderUUID,
+				ownerUid: video.uploaderId,
+				reviewerUUID: uuid,
+				reviewerUid,
+				targetType: 'video',
+				targetId: String(video.videoId),
+				action: 'approve',
+				extra: { title: video.title },
+			})
 		}
 
 		return { success: true, message: '通过视频审核成功' }
@@ -464,7 +516,7 @@ export const rejectVideoReviewService = async (
 			return { success: false, message: '退回视频审核失败：用户验证失败' }
 		}
 
-		const { videoId } = rejectVideoReviewRequest
+		const { videoId, reason } = rejectVideoReviewRequest
 		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 		type Video = InferSchemaType<typeof videoSchemaInstance>
 
@@ -476,6 +528,9 @@ export const rejectVideoReviewService = async (
 		const checkSelect: SelectType<Video> = {
 			videoId: 1,
 			pendingReview: 1,
+			uploaderUUID: 1,
+			uploaderId: 1,
+			title: 1,
 		}
 		const checkResult = await selectDataFromMongoDB<Video>(checkWhere, checkSelect, videoSchemaInstance, videoCollectionName)
 
@@ -484,8 +539,24 @@ export const rejectVideoReviewService = async (
 			return { success: false, message: '退回视频审核失败：视频不存在或不是待审核状态' }
 		}
 
-		// 退回审核：保持 pendingReview 为 true，但可以添加其他标记或记录
-		// 这里我们只是确认操作成功，实际业务可能需要记录退回原因等
+		// 退回审核：保持 pendingReview 为 true
+
+		const reviewerUid = await getUserUid(uuid)
+		const video = checkResult.result[0]
+		if (reviewerUid && video?.uploaderUUID && typeof video.uploaderId === 'number') {
+			await createReviewLog({
+				ownerUUID: video.uploaderUUID,
+				ownerUid: video.uploaderId,
+				reviewerUUID: uuid,
+				reviewerUid,
+				targetType: 'video',
+				targetId: String(video.videoId),
+				action: 'reject',
+				reason,
+				extra: { title: video.title },
+			})
+		}
+
 		return { success: true, message: '退回视频审核成功' }
 	} catch (error) {
 		logging('ERROR', '退回视频审核失败：未知错误', error)
@@ -530,6 +601,10 @@ export const approveCommentReviewService = async (
 		const checkSelect: SelectType<VideoComment> = {
 			commentRoute: 1,
 			pendingReview: 1,
+			UUID: 1,
+			uid: 1,
+			videoId: 1,
+			text: 1,
 		}
 		const checkResult = await selectDataFromMongoDB<VideoComment>(checkWhere, checkSelect, commentSchemaInstance, commentCollectionName)
 
@@ -554,6 +629,21 @@ export const approveCommentReviewService = async (
 		if (!updateResult.success) {
 			logging('ERROR', '通过评论审核失败：更新失败')
 			return { success: false, message: '通过评论审核失败：更新失败' }
+		}
+
+		const reviewerUid = await getUserUid(uuid)
+		const comment = checkResult.result[0]
+		if (reviewerUid && comment?.UUID && typeof comment.uid === 'number') {
+			await createReviewLog({
+				ownerUUID: comment.UUID,
+				ownerUid: comment.uid,
+				reviewerUUID: uuid,
+				reviewerUid,
+				targetType: 'comment',
+				targetId: comment.commentRoute,
+				action: 'approve',
+				extra: { videoId: comment.videoId, text: comment.text },
+			})
 		}
 
 		return { success: true, message: '通过评论审核成功' }
@@ -586,7 +676,7 @@ export const rejectCommentReviewService = async (
 			return { success: false, message: '退回评论审核失败：用户验证失败' }
 		}
 
-		const { commentRoute } = rejectCommentReviewRequest
+		const { commentRoute, reason } = rejectCommentReviewRequest
 		const { collectionName: commentCollectionName, schemaInstance: commentSchemaInstance } = VideoCommentSchema
 		type VideoComment = InferSchemaType<typeof commentSchemaInstance>
 
@@ -600,6 +690,10 @@ export const rejectCommentReviewService = async (
 		const checkSelect: SelectType<VideoComment> = {
 			commentRoute: 1,
 			pendingReview: 1,
+			UUID: 1,
+			uid: 1,
+			videoId: 1,
+			text: 1,
 		}
 		const checkResult = await selectDataFromMongoDB<VideoComment>(checkWhere, checkSelect, commentSchemaInstance, commentCollectionName)
 
@@ -609,6 +703,22 @@ export const rejectCommentReviewService = async (
 		}
 
 		// 退回审核：保持 pendingReview 为 true
+
+		const reviewerUid = await getUserUid(uuid)
+		const comment = checkResult.result[0]
+		if (reviewerUid && comment?.UUID && typeof comment.uid === 'number') {
+			await createReviewLog({
+				ownerUUID: comment.UUID,
+				ownerUid: comment.uid,
+				reviewerUUID: uuid,
+				reviewerUid,
+				targetType: 'comment',
+				targetId: comment.commentRoute,
+				action: 'reject',
+				reason,
+				extra: { videoId: comment.videoId, text: comment.text },
+			})
+		}
 		return { success: true, message: '退回评论审核成功' }
 	} catch (error) {
 		logging('ERROR', '退回评论审核失败：未知错误', error)
@@ -653,6 +763,10 @@ export const approveDanmakuReviewService = async (
 		const checkSelect: any = {
 			_id: 1,
 			pendingReview: 1,
+			UUID: 1,
+			uid: 1,
+			videoId: 1,
+			text: 1,
 		}
 		const checkResult = await selectDataFromMongoDB<Danmaku>(checkWhere, checkSelect, danmakuSchemaInstance, danmakuCollectionName)
 
@@ -677,6 +791,21 @@ export const approveDanmakuReviewService = async (
 		if (!updateResult.success) {
 			logging('ERROR', '通过弹幕审核失败：更新失败')
 			return { success: false, message: '通过弹幕审核失败：更新失败' }
+		}
+
+		const reviewerUid = await getUserUid(uuid)
+		const danmaku = checkResult.result[0] as any
+		if (reviewerUid && danmaku?.UUID && typeof danmaku.uid === 'number') {
+			await createReviewLog({
+				ownerUUID: danmaku.UUID,
+				ownerUid: danmaku.uid,
+				reviewerUUID: uuid,
+				reviewerUid,
+				targetType: 'danmaku',
+				targetId: String(danmaku._id),
+				action: 'approve',
+				extra: { videoId: danmaku.videoId, text: danmaku.text },
+			})
 		}
 
 		return { success: true, message: '通过弹幕审核成功' }
@@ -709,7 +838,7 @@ export const rejectDanmakuReviewService = async (
 			return { success: false, message: '退回弹幕审核失败：用户验证失败' }
 		}
 
-		const { danmakuId } = rejectDanmakuReviewRequest
+		const { danmakuId, reason } = rejectDanmakuReviewRequest
 		const { collectionName: danmakuCollectionName, schemaInstance: danmakuSchemaInstance } = DanmakuSchema
 		type Danmaku = InferSchemaType<typeof danmakuSchemaInstance>
 
@@ -723,6 +852,10 @@ export const rejectDanmakuReviewService = async (
 		const checkSelect: any = {
 			_id: 1,
 			pendingReview: 1,
+			UUID: 1,
+			uid: 1,
+			videoId: 1,
+			text: 1,
 		}
 		const checkResult = await selectDataFromMongoDB<Danmaku>(checkWhere, checkSelect, danmakuSchemaInstance, danmakuCollectionName)
 
@@ -732,6 +865,23 @@ export const rejectDanmakuReviewService = async (
 		}
 
 		// 退回审核：保持 pendingReview 为 true
+
+		const reviewerUid = await getUserUid(uuid)
+		const danmaku = checkResult.result[0] as any
+		if (reviewerUid && danmaku?.UUID && typeof danmaku.uid === 'number') {
+			await createReviewLog({
+				ownerUUID: danmaku.UUID,
+				ownerUid: danmaku.uid,
+				reviewerUUID: uuid,
+				reviewerUid,
+				targetType: 'danmaku',
+				targetId: String(danmaku._id),
+				action: 'reject',
+				reason,
+				extra: { videoId: danmaku.videoId, text: danmaku.text },
+			})
+		}
+
 		return { success: true, message: '退回弹幕审核成功' }
 	} catch (error) {
 		logging('ERROR', '退回弹幕审核失败：未知错误', error)
@@ -795,7 +945,7 @@ const checkApproveVideoReviewRequest = (request: ApproveVideoReviewRequestDto): 
  * 校验退回视频审核的请求载荷
  */
 const checkRejectVideoReviewRequest = (request: RejectVideoReviewRequestDto): boolean => {
-	return request.videoId !== undefined && request.videoId !== null && request.videoId > 0
+	return request.videoId !== undefined && request.videoId !== null && request.videoId > 0 && !!request.reason
 }
 
 /**
@@ -809,7 +959,7 @@ const checkApproveCommentReviewRequest = (request: ApproveCommentReviewRequestDt
  * 校验退回评论审核的请求载荷
  */
 const checkRejectCommentReviewRequest = (request: RejectCommentReviewRequestDto): boolean => {
-	return !!request.commentRoute
+	return !!request.commentRoute && !!request.reason
 }
 
 /**
@@ -823,6 +973,105 @@ const checkApproveDanmakuReviewRequest = (request: ApproveDanmakuReviewRequestDt
  * 校验退回弹幕审核的请求载荷
  */
 const checkRejectDanmakuReviewRequest = (request: RejectDanmakuReviewRequestDto): boolean => {
-	return !!request.danmakuId
+	return !!request.danmakuId && !!request.reason
 }
+
+/**
+ * 获取本人审核记录列表
+ * @param getSelfReviewLogRequest 获取本人审核记录的请求载荷
+ * @param uuid 用户 UUID
+ * @param token 用户 token
+ * @returns 获取本人审核记录的响应
+ */
+export const getSelfReviewLogListService = async (
+	getSelfReviewLogRequest: GetSelfReviewLogRequestDto,
+	uuid: string,
+	token: string
+): Promise<GetSelfReviewLogResponseDto> => {
+	try {
+		if (!uuid || !token) {
+			return { success: false, message: '获取审核记录失败，缺少鉴权信息', totalCount: 0, logs: [] }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			return { success: false, message: '获取审核记录失败，用户校验未通过', totalCount: 0, logs: [] }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			return { success: false, message: '获取审核记录失败，用户 UID 不存在', totalCount: 0, logs: [] }
+		}
+
+		const page = getSelfReviewLogRequest.page ?? 1
+		const pageSize = getSelfReviewLogRequest.pageSize ?? 20
+		const skip = page > 0 && pageSize > 0 ? (page - 1) * pageSize : 0
+
+		const { collectionName, schemaInstance } = ReviewLogSchema
+		type ReviewLog = InferSchemaType<typeof schemaInstance>
+
+		const matchStage: PipelineStage = {
+			$match: {
+				ownerUid: uid,
+			},
+		}
+
+		const sortStage: PipelineStage = { $sort: { createDateTime: -1 } }
+		const skipStage: PipelineStage = { $skip: skip }
+		const limitStage: PipelineStage = { $limit: pageSize }
+		const projectStage: PipelineStage = {
+			$project: {
+				ownerUUID: 1,
+				ownerUid: 1,
+				reviewerUUID: 1,
+				reviewerUid: 1,
+				targetType: 1,
+				targetId: 1,
+				action: 1,
+				reason: 1,
+				extra: 1,
+				createDateTime: 1,
+			},
+		}
+
+		const listPipeline: PipelineStage[] = [
+			matchStage,
+			sortStage,
+			skipStage,
+			limitStage,
+			projectStage,
+		]
+
+		const countPipeline: PipelineStage[] = [
+			matchStage,
+			{ $count: 'totalCount' },
+		]
+
+		const countResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, countPipeline)
+		const listResult = await selectDataByAggregateFromMongoDB<ReviewLog>(schemaInstance, collectionName, listPipeline)
+
+		if (!countResult.success || !listResult.success) {
+			return { success: false, message: '获取审核记录失败，查询失败', totalCount: 0, logs: [] }
+		}
+
+		const total = countResult.result?.[0]?.totalCount ?? 0
+		const logs = (listResult.result || []).map((item: any): ReviewLogItem => ({
+			ownerUUID: item.ownerUUID,
+			ownerUid: item.ownerUid,
+			reviewerUUID: item.reviewerUUID,
+			reviewerUid: item.reviewerUid,
+			targetType: item.targetType,
+			targetId: item.targetId,
+			action: item.action,
+			reason: item.reason ?? '',
+			extra: item.extra,
+			createDateTime: item.createDateTime,
+		}))
+
+		return { success: true, message: '获取审核记录成功', totalCount: total, logs }
+	} catch (error) {
+		logging('ERROR', '获取审核记录失败：未知错误', error, { getSelfReviewLogRequest, uuid })
+		return { success: false, message: '获取审核记录失败，未知错误', totalCount: 0, logs: [] }
+	}
+}
+
 

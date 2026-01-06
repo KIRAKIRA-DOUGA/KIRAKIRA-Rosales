@@ -41,7 +41,7 @@ import {
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getSelfVideoCommentListController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
-import { approveCommentReviewController, approveDanmakuReviewController, approveVideoReviewController, getPendingReviewCommentListController, getPendingReviewDanmakuListController, getPendingReviewVideoListController, rejectCommentReviewController, rejectDanmakuReviewController, rejectVideoReviewController } from '../controller/ReviewController.js'
+import { approveCommentReviewController, approveDanmakuReviewController, approveVideoReviewController, getPendingReviewCommentListController, getPendingReviewDanmakuListController, getPendingReviewVideoListController, rejectCommentReviewController, rejectDanmakuReviewController, rejectVideoReviewController, getSelfReviewLogListController } from '../controller/ReviewController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { cancelVideoDownvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, emitVideoUpvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
@@ -532,6 +532,10 @@ router.post('/review/danmaku/reject', rejectDanmakuReviewController) // 退回�
 // {
 // 	"danmakuId": "507f1f77bcf86cd799439011"
 // }
+//
+router.get('/review/self/log', getSelfReviewLogListController) // 获取本人审核记录（被审核人查看自己的审核通过/退回记录）
+// https://localhost:9999/review/self/log?page=1&pageSize=20
+// cookie: uuid, token
 
 
 

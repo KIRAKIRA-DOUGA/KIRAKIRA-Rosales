@@ -162,6 +162,8 @@ export type ApproveVideoReviewResponseDto = {
 export type RejectVideoReviewRequestDto = {
 	/** 视频 ID (KVID) */
 	videoId: number;
+	/** 退回原因 */
+	reason: string;
 }
 
 /**
@@ -198,6 +200,8 @@ export type ApproveCommentReviewResponseDto = {
 export type RejectCommentReviewRequestDto = {
 	/** 评论的路由 */
 	commentRoute: string;
+	/** 退回原因 */
+	reason: string;
 }
 
 /**
@@ -234,6 +238,8 @@ export type ApproveDanmakuReviewResponseDto = {
 export type RejectDanmakuReviewRequestDto = {
 	/** 弹幕的 MongoDB _id */
 	danmakuId: string;
+	/** 退回原因 */
+	reason: string;
 }
 
 /**
@@ -245,4 +251,55 @@ export type RejectDanmakuReviewResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+
+/**
+ * 单条审核记录
+ */
+export type ReviewLogItem = {
+	/** 被审核内容所属用户 UUID */
+	ownerUUID: string;
+	/** 被审核内容所属用户 UID */
+	ownerUid: number;
+	/** 审核人 UUID */
+	reviewerUUID: string;
+	/** 审核人 UID */
+	reviewerUid: number;
+	/** 审核目标类型：video/comment/danmaku */
+	targetType: 'video' | 'comment' | 'danmaku';
+	/** 审核目标 ID：视频为 videoId，评论为 commentRoute，弹幕为 danmakuId 等 */
+	targetId: string;
+	/** 审核动作：approve/reject */
+	action: 'approve' | 'reject';
+	/** 审核备注/原因（可能为空字符串，但字段始终存在） */
+	reason: string;
+	/** 额外信息（如视频标题快照等） */
+	extra?: Record<string, any>;
+	/** 审核时间 */
+	createDateTime: number;
+}
+
+/**
+ * 获取本人审核记录的请求载荷
+ */
+export type GetSelfReviewLogRequestDto = {
+	/** 分页参数：页码（可选，默认 1） */
+	page?: number;
+	/** 分页参数：每页大小（可选，默认 20） */
+	pageSize?: number;
+}
+
+/**
+ * 获取本人审核记录的响应
+ */
+export type GetSelfReviewLogResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 总数 */
+	totalCount?: number;
+	/** 审核记录列表 */
+	logs?: ReviewLogItem[];
+}
+
 

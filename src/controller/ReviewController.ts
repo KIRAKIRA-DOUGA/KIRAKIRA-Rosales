@@ -8,6 +8,7 @@ import {
 	rejectCommentReviewService,
 	rejectDanmakuReviewService,
 	rejectVideoReviewService,
+	getSelfReviewLogListService,
 } from '../service/ReviewService.js'
 import {
 	ApproveCommentReviewRequestDto,
@@ -19,6 +20,7 @@ import {
 	RejectCommentReviewRequestDto,
 	RejectDanmakuReviewRequestDto,
 	RejectVideoReviewRequestDto,
+	GetSelfReviewLogRequestDto,
 } from './ReviewControllerDto.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
@@ -194,8 +196,13 @@ export const rejectVideoReviewController = async (ctx: koaCtx, next: koaNext) =>
 	}
 
 	const data = ctx.request.body as Partial<RejectVideoReviewRequestDto>
+	if (!data.reason || !data.videoId) {
+		ctx.body = { success: false, message: '参数不合法：缺少 videoId 或 reason' }
+		return
+	}
 	const rejectVideoReviewRequest: RejectVideoReviewRequestDto = {
-		videoId: data.videoId ?? 0,
+		videoId: data.videoId,
+		reason: data.reason,
 	}
 
 	ctx.body = await rejectVideoReviewService(rejectVideoReviewRequest, uuid, token)
@@ -252,8 +259,13 @@ export const rejectCommentReviewController = async (ctx: koaCtx, next: koaNext) 
 	}
 
 	const data = ctx.request.body as Partial<RejectCommentReviewRequestDto>
+	if (!data.commentRoute || !data.reason) {
+		ctx.body = { success: false, message: '参数不合法：缺少 commentRoute 或 reason' }
+		return
+	}
 	const rejectCommentReviewRequest: RejectCommentReviewRequestDto = {
-		commentRoute: data.commentRoute ?? '',
+		commentRoute: data.commentRoute,
+		reason: data.reason,
 	}
 
 	ctx.body = await rejectCommentReviewService(rejectCommentReviewRequest, uuid, token)
@@ -310,11 +322,49 @@ export const rejectDanmakuReviewController = async (ctx: koaCtx, next: koaNext) 
 	}
 
 	const data = ctx.request.body as Partial<RejectDanmakuReviewRequestDto>
+	if (!data.danmakuId || !data.reason) {
+		ctx.body = { success: false, message: '参数不合法：缺少 danmakuId 或 reason' }
+		return
+	}
 	const rejectDanmakuReviewRequest: RejectDanmakuReviewRequestDto = {
-		danmakuId: data.danmakuId ?? '',
+		danmakuId: data.danmakuId,
+		reason: data.reason,
 	}
 
 	ctx.body = await rejectDanmakuReviewService(rejectDanmakuReviewRequest, uuid, token)
 	await next()
 }
+
+/**
+ * 获取本人审核记录列表
+ * @param ctx context
+ * @param next context
+ * @returns 获取本人审核记录列表的响应
+ */
+export const getSelfReviewLogListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
+
+	// RBAC 权限验证（需要登录用户，但不限制角色）
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const page = parseInteger(ctx.query.page as string) ?? 1
+	const pageSize = parseInteger(ctx.query.pageSize as string) ?? 20
+
+	const request: GetSelfReviewLogRequestDto = {
+		page,
+		pageSize,
+	}
+
+	ctx.body = await getSelfReviewLogListService(request, uuid, token)
+	await next()
+}
+
 
