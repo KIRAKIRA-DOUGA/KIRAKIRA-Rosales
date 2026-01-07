@@ -28,7 +28,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/kirakira-rosales
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/kirakira-rosales-nightly
           tags: |
             type=raw,value=develop
             type=sha
