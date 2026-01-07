@@ -19,13 +19,11 @@ import {
 	RejectVideoReviewRequestDto,
 	RejectVideoReviewResponseDto,
 } from '../controller/ReviewControllerDto.js'
-import { selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndUpdateData4MongoDB } from '../dbPool/DbClusterPool.js'
+import { selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { DanmakuSchema } from '../dbPool/schema/DanmakuSchema.js'
-import { UserAuthSchema } from '../dbPool/schema/UserSchema.js'
 import { VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
-import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { ReviewLogSchema } from '../dbPool/schema/ReviewLogSchema.js'
 import { checkUserTokenByUuidService } from './UserService.js'
 import { logging } from './loggingService.js'
