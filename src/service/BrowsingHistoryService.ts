@@ -4,6 +4,7 @@ import { selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB } from '
 import { QueryType } from '../dbPool/DbClusterPoolTypes.js'
 import { BrowsingHistorySchema } from '../dbPool/schema/BrowsingHistorySchema.js'
 import { checkUserTokenByUuidService, checkUserTokenService, getUserUid } from './UserService.js'
+import { logging } from './loggingService.js'
 
 /**
  * 更新或创建用户浏览历史
@@ -18,23 +19,23 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 		const nowDate = new Date().getTime()
 
 		if (!checkCreateOrUpdateBrowsingHistoryRequest(createOrUpdateBrowsingHistoryRequest)) {
-			console.error('ERROR', '更新或创建用户浏览历史时出错，参数不合法')
+			logging('ERROR', '更新或创建用户浏览历史时出错，参数不合法')
 			return { success: false, message: '更新或创建用户浏览历史时出错，参数不合法' }
 		}
 
 		if (uuid !== cookieUuid) {
-			console.error('ERROR', '更新或创建用户浏览历史时出错，更新历史记录的目标用户与当前登录用户不一致，不允许更新其他用户的历史记录！')
+			logging('ERROR', '更新或创建用户浏览历史时出错，更新历史记录的目标用户与当前登录用户不一致，不允许更新其他用户的历史记录！')
 			return { success: false, message: '更新或创建用户浏览历史时出错，更新历史记录的目标用户与当前登录用户不一致，不允许更新其他用户的历史记录！' }
 		}
 
 		if (!(await checkUserTokenByUuidService(cookieUuid, token)).success) {
-			console.error('ERROR', '更新或创建用户浏览历史时出错，用户校验失败')
+			logging('ERROR', '更新或创建用户浏览历史时出错，用户校验失败')
 			return { success: false, message: '更新或创建用户浏览历史时出错，用户校验失败' }
 		}
 
-		const uid = await getUserUid(uuid) 
+		const uid = await getUserUid(uuid)
 		if (uid === undefined || typeof uid !== 'number' || uid <= 0) {
-			console.error('ERROR', '更新或创建用户浏览历史时出错，UID 不存在', { uuid })
+			logging('ERROR', '更新或创建用户浏览历史时出错，UID 不存在', undefined, { uuid })
 			return { success: false, message: '更新或创建用户浏览历史时出错，UID 不存在' }
 		}
 
@@ -67,11 +68,11 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 				return { success: true, message: '更新或创建用户浏览历史成功', result: result as CreateOrUpdateBrowsingHistoryResponseDto['result'] }
 			}
 		} catch (error) {
-			console.error('ERROR', '更新或创建用户浏览历史时出错，插入数据时出错')
+			logging('ERROR', '更新或创建用户浏览历史时出错，插入数据时出错')
 			return { success: false, message: '更新或创建用户浏览历史时出错，插入数据时出错' }
 		}
 	} catch (error) {
-		console.error('ERROR', '更新或创建用户浏览历史时出错，未知原因：', error)
+		logging('ERROR', '更新或创建用户浏览历史时出错，未知原因：', error)
 		return { success: false, message: '更新或创建用户浏览历史时出错，未知原因' }
 	}
 }
@@ -89,7 +90,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 			if ((await checkUserTokenService(uid, token)).success) {
 				const { collectionName, schemaInstance } = BrowsingHistorySchema
 
-				// TODO: 下方这个 Aggregate 只适用于视频历史记录的搜索
+				// TODO: 下方这个 Aggregate 只适用于视频历史记录的搜索，不支持其他内容的历史记录
 				const videoHistoryAggregateProps: PipelineStage[] = [
 					{
 						$match: {
@@ -164,23 +165,23 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 							return { success: true, message: '用户的浏览历史为空', result: [] }
 						}
 					} else {
-						console.error('ERROR', '获取用户浏览历史时出错，未获取到数据')
+						logging('ERROR', '获取用户浏览历史时出错，未获取到数据')
 						return { success: false, message: '获取用户浏览历史时出错，未获取到数据' }
 					}
 				} catch (error) {
-					console.error('ERROR', '获取用户浏览历史时出错，获取用户浏览历史数据失败')
+					logging('ERROR', '获取用户浏览历史时出错，获取用户浏览历史数据失败')
 					return { success: false, message: '获取用户浏览历史时出错，获取用户浏览历史数据失败' }
 				}
 			} else {
-				console.error('ERROR', '获取用户浏览历史时出错，用户校验失败')
+				logging('ERROR', '获取用户浏览历史时出错，用户校验失败')
 				return { success: false, message: '获取用户浏览历史时出错，用户校验失败' }
 			}
 		} else {
-			console.error('ERROR', '获取用户浏览历史时出错，请求参数不合法')
+			logging('ERROR', '获取用户浏览历史时出错，请求参数不合法')
 			return { success: false, message: '获取用户浏览历史时出错，请求参数不合法' }
 		}
 	} catch (error) {
-		console.error('ERROR', '获取用户浏览历史时出错，未知原因：', error)
+		logging('ERROR', '获取用户浏览历史时出错，未知原因：', error)
 		return { success: false, message: '获取用户浏览历史时出错，未知原因' }
 	}
 }
