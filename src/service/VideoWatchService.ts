@@ -79,13 +79,6 @@ export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: s
 			return false
 		}
 
-		// 检查今天是否已经观看过
-		const alreadyWatched = await checkUserWatchedToday(videoId, uuid)
-		if (alreadyWatched) {
-			// 今天已经观看过，不重复增加播放量
-			return true
-		}
-
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
 			logging('ERROR', '记录视频播放失败：获取用户 UID 失败', undefined, { uuid })
@@ -100,7 +93,7 @@ export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: s
 		session.startTransaction()
 
 		try {
-			// 1. 记录观看记录
+			// 1. 记录观看记录（幂等），仅在首次观看时插入
 			const { collectionName: watchRecordCollectionName, schemaInstance: watchRecordSchemaInstance } = VideoWatchRecordSchema
 			type VideoWatchRecord = InferSchemaType<typeof watchRecordSchemaInstance>
 			const watchRecordWhere: QueryType<VideoWatchRecord> = {
@@ -117,18 +110,36 @@ export const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: s
 				editDateTime: nowDate,
 			}
 
-			const insertWatchRecordResult = await findOneAndUpdateData4MongoDB(watchRecordWhere, watchRecordData, watchRecordSchemaInstance, watchRecordCollectionName, { session })
-			if (!insertWatchRecordResult.success) {
+			let watchRecordModel: mongoose.Model<VideoWatchRecord>
+			if (mongoose.models[watchRecordCollectionName]) {
+				watchRecordModel = mongoose.models[watchRecordCollectionName] as mongoose.Model<VideoWatchRecord>
+			} else {
+				watchRecordModel = mongoose.model<VideoWatchRecord>(watchRecordCollectionName, watchRecordSchemaInstance)
+			}
+
+			const upsertWatchRecordResult = await watchRecordModel.updateOne(
+				watchRecordWhere,
+				{ $setOnInsert: watchRecordData },
+				{ upsert: true, session },
+			)
+
+			// 若已存在当日观看记录，不再递增播放量
+			if (!upsertWatchRecordResult.acknowledged) {
 				await session.abortTransaction()
 				session.endSession()
-    	logging('ERROR', '记录视频播放失败：插入观看记录失败', undefined, { videoId, uuid })
+				logging('ERROR', '记录视频播放失败：插入观看记录未被确认', undefined, { videoId, uuid })
+				return false
+			}
+			if ((upsertWatchRecordResult.upsertedCount ?? 0) === 0) {
+				await session.commitTransaction()
+				session.endSession()
 				return false
 			}
 
 			// 2. 增加视频播放量
 			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 			type Video = InferSchemaType<typeof videoSchemaInstance>
-			
+
 			// 直接使用 MongoDB 模型来支持 $inc 操作符
 			let mongoModel: mongoose.Model<Video>
 			if (mongoose.models[videoCollectionName]) {
