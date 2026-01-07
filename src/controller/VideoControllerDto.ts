@@ -295,11 +295,6 @@ export type DeleteVideoResponseDto = {
 }
 
 /**
- * 等待被审核的视频列表
- */
-export type PendingReviewVideoResponseDto = {} & ThumbVideoResponseDto
-
-/**
  * 通过一个待审核视频的请求载荷
  */
 export type ApprovePendingReviewVideoRequestDto = {

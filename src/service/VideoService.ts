@@ -4,7 +4,7 @@ import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
-import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
@@ -965,91 +965,6 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 	} catch (error) {
 		logging('ERROR', '删除一个视频时出错，未知错误：', error)
 		return { success: false, message: '删除一个视频时出错，未知错误' }
-	}
-}
-
-
-/**
- * 获取待审核视频列表
- * @param adminUid 管理员 UID
- * @param adminToken 管理员 token
- * @returns 获取待审核视频列表的请求响应
- */
-export const getPendingReviewVideoService = async (adminUid: number, adminToken: string): Promise<PendingReviewVideoResponseDto> => {
-	try {
-		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
-			logging('ERROR', '获取待审核视频列表失败，用户校验失败！')
-			return { success: false, message: '获取待审核视频列表失败，用户校验失败！', videosCount: 0, videos: [] }
-		}
-
-		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
-		const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
-		type Video = InferSchemaType<typeof videoSchemaInstance>
-		type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
-		const where: QueryType<Video> = {}
-		const select: SelectType<Video> = {
-			videoId: 1,
-			title: 1,
-			image: 1,
-			uploadDate: 1,
-			watchedCount: 1,
-			uploaderId: 1,
-			duration: 1,
-			description: 1,
-			editDateTime: 1,
-		}
-		const orderBy: OrderByType<Video> = {
-			editDateTime: -1,
-		}
-		const uploaderInfoKey = 'uploaderInfo'
-		const option: DbPoolOptions<Video, UserInfo> = {
-			virtual: {
-				name: uploaderInfoKey, // 虚拟属性名
-				options: {
-					ref: userInfoCollectionName, // 关联的子模型
-					localField: 'uploaderId', // 父模型中用于关联的字段
-					foreignField: 'uid', // 子模型中用于关联的字段
-					justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
-				},
-			},
-			populate: uploaderInfoKey,
-		}
-		try {
-			const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option, orderBy)
-			const videoResult = result.result
-			if (result.success && videoResult) {
-				const videosCount = videoResult?.length
-				if (videosCount && videosCount > 0) {
-					return {
-						success: true,
-						message: '获取待审核视频成功',
-						videosCount,
-						videos: videoResult.map(video => {
-							if (video) {
-								const uploaderInfo = uploaderInfoKey in video && video?.[uploaderInfoKey] as UserInfo
-								if (uploaderInfo) {
-									const uploader = uploaderInfo.userNickname ?? uploaderInfo.username
-									return { ...video, uploader }
-								}
-							}
-							return { ...video, uploader: undefined }
-						}),
-					}
-				} else {
-					logging('ERROR', '获取待审核视频列表失败，获取到的视频数组长度小于等于 0')
-					return { success: false, message: '获取待审核视频列表失败，视频数量为 0', videosCount: 0, videos: [] }
-				}
-			} else {
-				logging('ERROR', '获取待审核视频列表失败，获取到的视频结果或视频数组为空')
-				return { success: false, message: '获取待审核视频列表失败，未获取到视频', videosCount: 0, videos: [] }
-			}
-		} catch (error) {
-			logging('ERROR', '获取待审核视频列表时出错，获取视频时出现异常，查询失败：', error)
-			return { success: false, message: '获取待审核视频列表时出错，查询失败', videosCount: 0, videos: [] }
-		}
-	} catch (error) {
-		logging('ERROR', '获取待审核视频列表时出错，获取视频出错：', error)
-		return { success: false, message: '获取待审核视频列表时出错，获取视频出错', videosCount: 0, videos: [] }
 	}
 }
 
