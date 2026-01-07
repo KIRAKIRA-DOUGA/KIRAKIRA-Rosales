@@ -40,7 +40,7 @@ import {
 	sendGeneralEmailVerificationCodeController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getSelfVideoCommentListController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
+import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { approveCommentReviewController, approveDanmakuReviewController, approveVideoReviewController, getPendingReviewCommentListController, getPendingReviewDanmakuListController, getPendingReviewVideoListController, rejectCommentReviewController, rejectDanmakuReviewController, rejectVideoReviewController, getSelfReviewLogListController } from '../controller/ReviewController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { cancelVideoDownvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, emitVideoUpvoteController } from '../controller/VideoVoteController.js'
@@ -468,10 +468,6 @@ router.delete('/video/delete', deleteVideoByKvidController) // 根据视频 ID �
 // {
 // 	"videoId": XXX
 // }
-
-router.get('/video/pending', getPendingReviewVideoController) // 获取待审核视频列表 // WARN: 仅限管理员
-// https://localhost:9999/video/pending
-// cookie: uid, token
 
 router.post('/video/pending/approved', approvePendingReviewVideoController) // 通过一个待审核视频 // WARN: 仅限管理员
 // https://localhost:9999/video/pending/approved
