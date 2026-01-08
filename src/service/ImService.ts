@@ -1137,7 +1137,6 @@ export const recallMessageService = async (
 		}
 		
 		const { messageId } = recallMessageRequest
-		const RECALL_TIME_LIMIT = 2 * 60 * 1000 // 2分钟内可以撤回
 		
 		// 验证消息是否存在且用户是发送者
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
@@ -1150,7 +1149,6 @@ export const recallMessageService = async (
 		const messageSelect: SelectType<Message> = {
 			messageId: 1,
 			senderUuid: 1,
-			createDateTime: 1,
 			isRecalled: 1,
 		}
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
@@ -1168,15 +1166,8 @@ export const recallMessageService = async (
 			return { success: false, message: '撤回消息失败：消息已被撤回' }
 		}
 		
-		// 检查是否超过撤回时间限制
-		const now = new Date().getTime()
-		const timeSinceCreation = now - message.createDateTime
-		if (timeSinceCreation > RECALL_TIME_LIMIT) {
-			logging('ERROR', '撤回消息失败：超过撤回时间限制（2分钟）')
-			return { success: false, message: '撤回消息失败：超过撤回时间限制（2分钟）' }
-		}
-		
 		// 更新消息为已撤回（不修改content，保留原始内容）
+		const now = new Date().getTime()
 		const updateWhere: QueryType<Message> = {
 			messageId,
 		}
