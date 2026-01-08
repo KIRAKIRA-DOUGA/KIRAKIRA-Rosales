@@ -724,8 +724,7 @@ export const markMessageReadService = async (
 		}
 
 		const conversation = conversationResult.result[0]
-		const [uuid1, uuid2] = [conversation.user1Uuid, conversation.user2Uuid].sort()
-		const isUser1 = uuid === uuid1
+		const isUser1 = uuid === conversation.user1Uuid
 		const unreadCountField = isUser1 ? 'user1UnreadCount' : 'user2UnreadCount'
 
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
