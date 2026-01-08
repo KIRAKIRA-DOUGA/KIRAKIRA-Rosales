@@ -1,10 +1,10 @@
 import { IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
 
 /**
- * 发送消息请求DTO
+ * 发送消息的请求载荷
  */
 export type SendMessageRequestDto = {
-	/** 接收者UID */
+	/** 接收者 UID */
 	receiverUid: number
 	/** 消息类型 */
 	messageType: IM_MESSAGE_TYPE
@@ -13,7 +13,7 @@ export type SendMessageRequestDto = {
 }
 
 /**
- * 发送消息响应DTO
+ * 发送消息的请求载荷
  */
 export type SendMessageResponseDto = {
 	success: boolean
@@ -23,7 +23,7 @@ export type SendMessageResponseDto = {
 }
 
 /**
- * 获取会话列表请求DTO
+ * 获取会话列表的请求载荷
  */
 export type GetConversationListRequestDto = {
 	/** 分页：页码 */
@@ -33,10 +33,10 @@ export type GetConversationListRequestDto = {
 }
 
 /**
- * 会话信息
+ * 会话信息的请求响应
  */
 export type ConversationInfo = {
-	/** 会话ID */
+	/** 会话 ID */
 	conversationId: string
 	/** 对方用户信息 */
 	otherUser: {
@@ -61,7 +61,7 @@ export type ConversationInfo = {
 }
 
 /**
- * 获取会话列表响应DTO
+ * 获取会话列表的请求响应
  */
 export type GetConversationListResponseDto = {
 	success: boolean
@@ -71,7 +71,7 @@ export type GetConversationListResponseDto = {
 }
 
 /**
- * 获取消息列表请求DTO
+ * 获取消息列表的请求载荷
  */
 export type GetMessageListRequestDto = {
 	/** 会话ID */
@@ -85,14 +85,14 @@ export type GetMessageListRequestDto = {
 }
 
 /**
- * 消息信息
+ * 消息信息的请求响应
  */
 export type MessageInfo = {
 	/** 消息ID */
 	messageId: string
-	/** 发送者UUID */
+	/** 发送者 UUID */
 	senderUuid: string
-	/** 接收者UUID */
+	/** 接收者 UUID */
 	receiverUuid: string
 	/** 消息类型 */
 	messageType: IM_MESSAGE_TYPE
@@ -111,7 +111,7 @@ export type MessageInfo = {
 }
 
 /**
- * 获取消息列表响应DTO
+ * 获取消息列表的请求响应
  */
 export type GetMessageListResponseDto = {
 	success: boolean
@@ -121,17 +121,17 @@ export type GetMessageListResponseDto = {
 }
 
 /**
- * 标记消息已读请求DTO
+ * 标记消息已读的请求载荷
  */
 export type MarkMessageReadRequestDto = {
-	/** 会话ID */
+	/** 会话 ID */
 	conversationId: string
-	/** 消息ID列表（如果为空则标记该会话所有未读消息为已读） */
+	/** 消息 ID 列表（如果为空则标记该会话所有未读消息为已读） */
 	messageIds?: string[]
 }
 
 /**
- * 标记消息已读响应DTO
+ * 标记消息已读的请求响应
  */
 export type MarkMessageReadResponseDto = {
 	success: boolean
@@ -140,15 +140,15 @@ export type MarkMessageReadResponseDto = {
 }
 
 /**
- * 删除会话请求DTO
+ * 删除会话的请求载荷
  */
 export type DeleteConversationRequestDto = {
-	/** 会话ID */
+	/** 会话 ID */
 	conversationId: string
 }
 
 /**
- * 删除会话响应DTO
+ * 删除会话的请求响应
  */
 export type DeleteConversationResponseDto = {
 	success: boolean
@@ -156,15 +156,15 @@ export type DeleteConversationResponseDto = {
 }
 
 /**
- * 删除消息请求DTO
+ * 删除消息的请求载荷
  */
 export type DeleteMessageRequestDto = {
-	/** 消息ID */
+	/** 消息 ID */
 	messageId: string
 }
 
 /**
- * 删除消息响应DTO
+ * 删除消息的请求响应
  */
 export type DeleteMessageResponseDto = {
 	success: boolean
@@ -172,15 +172,15 @@ export type DeleteMessageResponseDto = {
 }
 
 /**
- * 撤回消息请求DTO
+ * 撤回消息的请求载荷
  */
 export type RecallMessageRequestDto = {
-	/** 消息ID */
+	/** 消息 ID */
 	messageId: string
 }
 
 /**
- * 撤回消息响应DTO
+ * 撤回消息的请求响应
  */
 export type RecallMessageResponseDto = {
 	success: boolean
@@ -188,14 +188,7 @@ export type RecallMessageResponseDto = {
 }
 
 /**
- * 获取未读消息总数请求DTO
- */
-export type GetUnreadMessageCountRequestDto = {
-	// 无需参数
-}
-
-/**
- * 获取未读消息总数响应DTO
+ * 获取未读消息总数的请求响应
  */
 export type GetUnreadMessageCountResponseDto = {
 	success: boolean

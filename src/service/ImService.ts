@@ -12,7 +12,6 @@ import {
 	DeleteConversationResponseDto,
 	DeleteMessageRequestDto,
 	DeleteMessageResponseDto,
-	GetUnreadMessageCountRequestDto,
 	GetUnreadMessageCountResponseDto,
 	RecallMessageRequestDto,
 	RecallMessageResponseDto,
@@ -20,13 +19,12 @@ import {
 	MessageInfo,
 } from '../controller/ImControllerDto.js'
 import { ImConversationSchema, ImMessageSchema, IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
-import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserService.js'
+import { checkUserTokenByUuidService, getUserUuid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '../common/MongoDBSessionTool.js'
 import { BlockListSchema } from '../dbPool/schema/BlockSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
-import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
 
@@ -88,7 +86,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		const conversationId = generateConversationId(senderUuid, receiverUuid)
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
-		
+
 		// 查找会话中是否有发送者发送的消息
 		const senderMessageWhere: QueryType<Message> = {
 			conversationId,
@@ -101,11 +99,11 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			createDateTime: 1,
 		}
 		const senderMessages = await selectDataFromMongoDB<Message>(senderMessageWhere, senderMessageSelect, messageSchemaInstance, messageCollectionName)
-		
+
 		if (!senderMessages.success || !senderMessages.result || senderMessages.result.length === 0) {
 			return false
 		}
-		
+
 		// 查找是否有接收者回复的消息
 		const receiverMessageWhere: QueryType<Message> = {
 			conversationId,
@@ -117,7 +115,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			messageId: 1,
 		}
 		const receiverMessages = await selectDataFromMongoDB<Message>(receiverMessageWhere, receiverMessageSelect, messageSchemaInstance, messageCollectionName)
-		
+
 		// 如果发送者有消息，但接收者没有回复，则返回true
 		if (receiverMessages.success && receiverMessages.result && receiverMessages.result.length > 0) {
 			// 检查接收者的最后一条消息是否在发送者的最后一条消息之后
@@ -125,7 +123,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			const lastReceiverMessage = receiverMessages.result.sort((a, b) => b.createDateTime - a.createDateTime)[0]
 			return lastReceiverMessage.createDateTime < lastSenderMessage.createDateTime
 		}
-		
+
 		return receiverMessages.success && (!receiverMessages.result || receiverMessages.result.length === 0)
 	} catch (error) {
 		logging('ERROR', '检查是否有未回复消息失败：', error)
@@ -141,14 +139,14 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 		const conversationId = generateConversationId(user1Uuid, user2Uuid)
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-		
+
 		// 尝试查找现有会话（即使被删除也可以恢复）
 		const where: QueryType<Conversation> = {
 			conversationId,
 		}
 		const select: SelectType<Conversation> = {}
 		const existing = await selectDataFromMongoDB<Conversation>(where, select, conversationSchemaInstance, conversationCollectionName)
-		
+
 		if (existing.success && existing.result && existing.result.length > 0) {
 			const conversation = existing.result[0]
 			const now = new Date().getTime()
@@ -156,7 +154,7 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 			const isUser1 = user1Uuid === uuid1
 			const deletedField = isUser1 ? 'user1Deleted' : 'user2Deleted'
 			const otherDeletedField = isUser1 ? 'user2Deleted' : 'user1Deleted'
-			
+
 			// 如果会话被当前用户删除，恢复它（保留删除时间戳）
 			// 如果双方都删除了，同时恢复双方（这样对方也能看到新消息）
 			if (conversation[deletedField]) {
@@ -167,12 +165,12 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 					[deletedField]: false,
 					editDateTime: now,
 				}
-				
+
 				// 如果对方也删除了，同时恢复对方
 				if (conversation[otherDeletedField]) {
 					updateData[otherDeletedField] = false
 				}
-				
+
 				const updateResult = await findOneAndUpdateData4MongoDB<Conversation>(
 					updateWhere,
 					updateData,
@@ -185,7 +183,7 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 			}
 			return { success: true, conversation }
 		}
-		
+
 		// 创建新会话
 		const now = new Date().getTime()
 		const [uuid1, uuid2] = [user1Uuid, user2Uuid].sort()
@@ -200,13 +198,13 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 			createDateTime: now,
 			editDateTime: now,
 		}
-		
+
 		const insertResult = await insertData2MongoDB<Conversation>(conversationData, conversationSchemaInstance, conversationCollectionName)
-		
+
 		if (!insertResult.success) {
 			return { success: false }
 		}
-		
+
 		return { success: true, conversation: conversationData }
 	} catch (error) {
 		logging('ERROR', '获取或创建会话失败：', error)
@@ -228,38 +226,38 @@ export const sendMessageService = async (
 			logging('ERROR', '发送消息失败：参数不合法')
 			return { success: false, message: '发送消息失败：参数不合法' }
 		}
-		
+
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(senderUuid, token)).success) {
 			logging('ERROR', '发送消息失败：用户验证失败')
 			return { success: false, message: '发送消息失败：用户验证失败' }
 		}
-		
+
 		const { receiverUid, messageType, content } = sendMessageRequest
-		
+
 		// 获取接收者UUID
 		const receiverUuid = await getUserUuid(receiverUid)
 		if (!receiverUuid) {
 			logging('ERROR', '发送消息失败：接收者不存在')
 			return { success: false, message: '发送消息失败：接收者不存在' }
 		}
-		
+
 		// 不能给自己发消息
 		if (senderUuid === receiverUuid) {
 			logging('ERROR', '发送消息失败：不能给自己发消息')
 			return { success: false, message: '发送消息失败：不能给自己发消息' }
 		}
-		
+
 		// 检查接收者是否拉黑了发送者
 		const isBlocked = await checkUserIsBlocked(receiverUuid, senderUuid)
 		if (isBlocked) {
 			logging('ERROR', '发送消息失败：对方已拉黑你')
 			return { success: false, message: '发送消息失败：对方已拉黑你' }
 		}
-		
+
 		// 检查发送者是否关注了接收者
 		const isFollowing = await checkUserIsFollowing(senderUuid, receiverUuid)
-		
+
 		// 如果发送者没有关注接收者，检查是否已经发送过消息但对方未回复
 		if (!isFollowing) {
 			const hasUnreplied = await checkHasUnrepliedMessage(senderUuid, receiverUuid)
@@ -268,7 +266,7 @@ export const sendMessageService = async (
 				return { success: false, message: '发送消息失败：对方未回复你的上一条消息，且你未关注对方' }
 			}
 		}
-		
+
 		// 验证消息内容
 		if (messageType === IM_MESSAGE_TYPE.text) {
 			if (!content || content.trim().length === 0) {
@@ -280,9 +278,9 @@ export const sendMessageService = async (
 				return { success: false, message: '发送消息失败：消息内容过长' }
 			}
 		}
-		
+
 		const session = await createAndStartSession()
-		
+
 		try {
 			// 获取或创建会话
 			const conversationResult = await getOrCreateConversation(senderUuid, receiverUuid)
@@ -291,16 +289,16 @@ export const sendMessageService = async (
 				logging('ERROR', '发送消息失败：创建会话失败')
 				return { success: false, message: '发送消息失败：创建会话失败' }
 			}
-			
+
 			const conversation = conversationResult.conversation
 			const conversationId = conversation.conversationId
-			
+
 			// 创建消息
 			const now = new Date().getTime()
 			const messageId = `msg_${uuidV4()}`
 			const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 			type Message = InferSchemaType<typeof messageSchemaInstance>
-			
+
 			const messageData: Message = {
 				messageId,
 				conversationId,
@@ -315,19 +313,19 @@ export const sendMessageService = async (
 				createDateTime: now,
 				editDateTime: now,
 			}
-			
+
 			const insertMessageResult = await insertData2MongoDB<Message>(messageData, messageSchemaInstance, messageCollectionName, { session })
 			if (!insertMessageResult.success) {
 				await abortAndEndSession(session)
 				logging('ERROR', '发送消息失败：插入消息失败')
 				return { success: false, message: '发送消息失败：插入消息失败' }
 			}
-			
+
 			// 更新会话信息
 			const [uuid1, uuid2] = [senderUuid, receiverUuid].sort()
 			const isUser1 = senderUuid === uuid1
 			const updateField = isUser1 ? 'user2UnreadCount' : 'user1UnreadCount'
-			
+
 			const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 			type Conversation = InferSchemaType<typeof conversationSchemaInstance>
 			const updateWhere: QueryType<Conversation> = {
@@ -339,7 +337,7 @@ export const sendMessageService = async (
 				[updateField]: (conversation[updateField] || 0) + 1,
 				editDateTime: now,
 			}
-			
+
 			const updateConversationResult = await findOneAndUpdateData4MongoDB<Conversation>(
 				updateWhere,
 				updateData,
@@ -347,13 +345,13 @@ export const sendMessageService = async (
 				conversationCollectionName,
 				{ session }
 			)
-			
+
 			if (!updateConversationResult.success) {
 				await abortAndEndSession(session)
 				logging('ERROR', '发送消息失败：更新会话失败')
 				return { success: false, message: '发送消息失败：更新会话失败' }
 			}
-			
+
 			await commitAndEndSession(session)
 			return {
 				success: true,
@@ -385,13 +383,12 @@ export const getConversationListService = async (
 			logging('ERROR', '获取会话列表失败：用户验证失败')
 			return { success: false, message: '获取会话列表失败：用户验证失败' }
 		}
-		
+
 		const { page = 1, pageSize = 20 } = getConversationListRequest
 		const skip = (page - 1) * pageSize
-		
+
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
-		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-		
+
 		// 构建查询管道
 		const pipeline: PipelineStage[] = [
 			{
@@ -491,7 +488,7 @@ export const getConversationListService = async (
 				},
 			},
 		]
-		
+
 		// 获取总数
 		const countPipeline: PipelineStage[] = [
 			{
@@ -506,15 +503,15 @@ export const getConversationListService = async (
 				$count: 'total',
 			},
 		]
-		
+
 		const conversationsResult = await selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, pipeline)
 		const countResult = await selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, countPipeline)
-		
+
 		if (!conversationsResult.success) {
 			logging('ERROR', '获取会话列表失败：查询失败')
 			return { success: false, message: '获取会话列表失败：查询失败' }
 		}
-		
+
 		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
 		const conversations = (conversationsResult.result || []).map((item: any): ConversationInfo => ({
 			conversationId: item.conversationId || '',
@@ -529,7 +526,7 @@ export const getConversationListService = async (
 			unreadCount: item.unreadCount || 0,
 			lastMessageTime: item.lastMessageTime,
 		}))
-		
+
 		return {
 			success: true,
 			message: '获取会话列表成功',
@@ -556,15 +553,15 @@ export const getMessageListService = async (
 			logging('ERROR', '获取消息列表失败：用户验证失败')
 			return { success: false, message: '获取消息列表失败：用户验证失败' }
 		}
-		
+
 		if (!checkGetMessageListRequest(getMessageListRequest)) {
 			logging('ERROR', '获取消息列表失败：参数不合法')
 			return { success: false, message: '获取消息列表失败：参数不合法' }
 		}
-		
+
 		const { conversationId, page = 1, pageSize = 50, markAsRead = false } = getMessageListRequest
 		const skip = (page - 1) * pageSize
-		
+
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
@@ -579,15 +576,15 @@ export const getMessageListService = async (
 			conversationId: 1,
 		}
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
-		
+
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
 			logging('ERROR', '获取消息列表失败：会话不存在或无权限')
 			return { success: false, message: '获取消息列表失败：会话不存在或无权限' }
 		}
-		
+
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
-		
+
 		// 构建查询管道
 		const pipeline: PipelineStage[] = [
 			{
@@ -623,7 +620,7 @@ export const getMessageListService = async (
 				},
 			},
 		]
-		
+
 		// 获取总数
 		const countPipeline: PipelineStage[] = [
 			{
@@ -639,15 +636,15 @@ export const getMessageListService = async (
 				$count: 'total',
 			},
 		]
-		
+
 		const messagesResult = await selectDataByAggregateFromMongoDB(messageSchemaInstance, messageCollectionName, pipeline)
 		const countResult = await selectDataByAggregateFromMongoDB(messageSchemaInstance, messageCollectionName, countPipeline)
-		
+
 		if (!messagesResult.success) {
 			logging('ERROR', '获取消息列表失败：查询失败')
 			return { success: false, message: '获取消息列表失败：查询失败' }
 		}
-		
+
 		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
 		const messages = (messagesResult.result || []).map((item: any): MessageInfo => ({
 			messageId: item.messageId || '',
@@ -661,7 +658,7 @@ export const getMessageListService = async (
 			recalledTime: item.recalledTime,
 			createDateTime: item.createDateTime || 0,
 		}))
-		
+
 		// 如果需要标记为已读
 		if (markAsRead && messages.length > 0) {
 			const unreadMessageIds = messages.filter(m => !m.isRead && m.receiverUuid === uuid).map(m => m.messageId)
@@ -669,7 +666,7 @@ export const getMessageListService = async (
 				await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
 			}
 		}
-		
+
 		return {
 			success: true,
 			message: '获取消息列表成功',
@@ -696,14 +693,14 @@ export const markMessageReadService = async (
 			logging('ERROR', '标记消息已读失败：用户验证失败')
 			return { success: false, message: '标记消息已读失败：用户验证失败' }
 		}
-		
+
 		if (!checkMarkMessageReadRequest(markMessageReadRequest)) {
 			logging('ERROR', '标记消息已读失败：参数不合法')
 			return { success: false, message: '标记消息已读失败：参数不合法' }
 		}
-		
+
 		const { conversationId, messageIds } = markMessageReadRequest
-		
+
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
@@ -720,26 +717,26 @@ export const markMessageReadService = async (
 			user2Uuid: 1,
 		}
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
-		
+
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
 			logging('ERROR', '标记消息已读失败：会话不存在或无权限')
 			return { success: false, message: '标记消息已读失败：会话不存在或无权限' }
 		}
-		
+
 		const conversation = conversationResult.result[0]
 		const [uuid1, uuid2] = [conversation.user1Uuid, conversation.user2Uuid].sort()
 		const isUser1 = uuid === uuid1
 		const unreadCountField = isUser1 ? 'user1UnreadCount' : 'user2UnreadCount'
-		
+
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
-		
+
 		const session = await createAndStartSession()
-		
+
 		try {
 			const now = new Date().getTime()
 			let markedCount = 0
-			
+
 			if (messageIds && messageIds.length > 0) {
 				// 标记指定消息为已读
 				for (const messageId of messageIds) {
@@ -776,7 +773,7 @@ export const markMessageReadService = async (
 					messageId: 1,
 				}
 				const unreadMessages = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName, { session })
-				
+
 				if (unreadMessages.success && unreadMessages.result) {
 					for (const msg of unreadMessages.result) {
 						const messageUpdate: UpdateType<Message> = {
@@ -797,7 +794,7 @@ export const markMessageReadService = async (
 					}
 				}
 			}
-			
+
 			// 更新会话的未读消息数
 			if (markedCount > 0) {
 				const conversationUpdateWhere: QueryType<Conversation> = {
@@ -815,7 +812,7 @@ export const markMessageReadService = async (
 					{ session }
 				)
 			}
-			
+
 			await commitAndEndSession(session)
 			return {
 				success: true,
@@ -835,25 +832,21 @@ export const markMessageReadService = async (
 /**
  * 删除会话
  */
-export const deleteConversationService = async (
-	deleteConversationRequest: DeleteConversationRequestDto,
-	uuid: string,
-	token: string
-): Promise<DeleteConversationResponseDto> => {
+export const deleteConversationService = async (deleteConversationRequest: DeleteConversationRequestDto, uuid: string, token: string): Promise<DeleteConversationResponseDto> => {
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '删除会话失败：用户验证失败')
 			return { success: false, message: '删除会话失败：用户验证失败' }
 		}
-		
+
 		if (!checkDeleteConversationRequest(deleteConversationRequest)) {
 			logging('ERROR', '删除会话失败：参数不合法')
 			return { success: false, message: '删除会话失败：参数不合法' }
 		}
-		
+
 		const { conversationId } = deleteConversationRequest
-		
+
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
@@ -870,17 +863,17 @@ export const deleteConversationService = async (
 			user2Uuid: 1,
 		}
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
-		
+
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
 			logging('ERROR', '删除会话失败：会话不存在或无权限')
 			return { success: false, message: '删除会话失败：会话不存在或无权限' }
 		}
-		
+
 		const conversation = conversationResult.result[0]
 		const isUser1 = conversation.user1Uuid === uuid
 		const updateField = isUser1 ? 'user1Deleted' : 'user2Deleted'
 		const updateTimeField = isUser1 ? 'user1DeletedTime' : 'user2DeletedTime'
-		
+
 		const now = new Date().getTime()
 		const updateWhere: QueryType<Conversation> = {
 			conversationId,
@@ -890,19 +883,19 @@ export const deleteConversationService = async (
 			[updateTimeField]: now,
 			editDateTime: now,
 		}
-		
+
 		const updateResult = await findOneAndUpdateData4MongoDB<Conversation>(
 			updateWhere,
 			updateData,
 			conversationSchemaInstance,
 			conversationCollectionName
 		)
-		
+
 		if (!updateResult.success) {
 			logging('ERROR', '删除会话失败：更新失败')
 			return { success: false, message: '删除会话失败：更新失败' }
 		}
-		
+
 		return { success: true, message: '删除会话成功' }
 	} catch (error) {
 		logging('ERROR', '删除会话失败：未知错误', error)
@@ -913,25 +906,21 @@ export const deleteConversationService = async (
 /**
  * 删除消息
  */
-export const deleteMessageService = async (
-	deleteMessageRequest: DeleteMessageRequestDto,
-	uuid: string,
-	token: string
-): Promise<DeleteMessageResponseDto> => {
+export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRequestDto, uuid: string, token: string): Promise<DeleteMessageResponseDto> => {
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '删除消息失败：用户验证失败')
 			return { success: false, message: '删除消息失败：用户验证失败' }
 		}
-		
+
 		if (!checkDeleteMessageRequest(deleteMessageRequest)) {
 			logging('ERROR', '删除消息失败：参数不合法')
 			return { success: false, message: '删除消息失败：参数不合法' }
 		}
-		
+
 		const { messageId } = deleteMessageRequest
-		
+
 		// 验证消息是否存在且用户有权限删除
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
@@ -948,16 +937,16 @@ export const deleteMessageService = async (
 			receiverUuid: 1,
 		}
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
-		
+
 		if (!messageResult.success || !messageResult.result || messageResult.result.length === 0) {
 			logging('ERROR', '删除消息失败：消息不存在或无权限')
 			return { success: false, message: '删除消息失败：消息不存在或无权限' }
 		}
-		
+
 		const message = messageResult.result[0]
 		const isSender = message.senderUuid === uuid
 		const updateField = isSender ? 'senderDeleted' : 'receiverDeleted'
-		
+
 		const now = new Date().getTime()
 		const updateWhere: QueryType<Message> = {
 			messageId,
@@ -966,19 +955,18 @@ export const deleteMessageService = async (
 			[updateField]: true,
 			editDateTime: now,
 		}
-		
+
 		const updateResult = await findOneAndUpdateData4MongoDB<Message>(
 			updateWhere,
 			updateData,
 			messageSchemaInstance,
 			messageCollectionName
 		)
-		
+
 		if (!updateResult.success) {
 			logging('ERROR', '删除消息失败：更新失败')
 			return { success: false, message: '删除消息失败：更新失败' }
 		}
-		
 		return { success: true, message: '删除消息成功' }
 	} catch (error) {
 		logging('ERROR', '删除消息失败：未知错误', error)
@@ -989,21 +977,17 @@ export const deleteMessageService = async (
 /**
  * 获取未读消息总数
  */
-export const getUnreadMessageCountService = async (
-	getUnreadMessageCountRequest: GetUnreadMessageCountRequestDto,
-	uuid: string,
-	token: string
-): Promise<GetUnreadMessageCountResponseDto> => {
+export const getUnreadMessageCountService = async (uuid: string, token: string): Promise<GetUnreadMessageCountResponseDto> => {
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '获取未读消息总数失败：用户验证失败')
 			return { success: false, message: '获取未读消息总数失败：用户验证失败' }
 		}
-		
+
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-		
+
 		// 构建聚合管道
 		const pipeline: PipelineStage[] = [
 			{
@@ -1032,16 +1016,16 @@ export const getUnreadMessageCountService = async (
 				},
 			},
 		]
-		
+
 		const result = await selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, pipeline)
-		
+
 		if (!result.success) {
 			logging('ERROR', '获取未读消息总数失败：查询失败')
 			return { success: false, message: '获取未读消息总数失败：查询失败' }
 		}
-		
+
 		const totalUnreadCount = result.result && result.result.length > 0 ? result.result[0].totalUnreadCount : 0
-		
+
 		return {
 			success: true,
 			message: '获取未读消息总数成功',
@@ -1130,14 +1114,14 @@ export const recallMessageService = async (
 			logging('ERROR', '撤回消息失败：用户验证失败')
 			return { success: false, message: '撤回消息失败：用户验证失败' }
 		}
-		
+
 		if (!checkRecallMessageRequest(recallMessageRequest)) {
 			logging('ERROR', '撤回消息失败：参数不合法')
 			return { success: false, message: '撤回消息失败：参数不合法' }
 		}
-		
+
 		const { messageId } = recallMessageRequest
-		
+
 		// 验证消息是否存在且用户是发送者
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
@@ -1152,20 +1136,20 @@ export const recallMessageService = async (
 			isRecalled: 1,
 		}
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
-		
+
 		if (!messageResult.success || !messageResult.result || messageResult.result.length === 0) {
 			logging('ERROR', '撤回消息失败：消息不存在或无权限')
 			return { success: false, message: '撤回消息失败：消息不存在或无权限' }
 		}
-		
+
 		const message = messageResult.result[0]
-		
+
 		// 检查是否已经撤回
 		if (message.isRecalled) {
 			logging('ERROR', '撤回消息失败：消息已被撤回')
 			return { success: false, message: '撤回消息失败：消息已被撤回' }
 		}
-		
+
 		// 更新消息为已撤回（不修改content，保留原始内容）
 		const now = new Date().getTime()
 		const updateWhere: QueryType<Message> = {
@@ -1176,19 +1160,19 @@ export const recallMessageService = async (
 			recalledTime: now,
 			editDateTime: now,
 		}
-		
+
 		const updateResult = await findOneAndUpdateData4MongoDB<Message>(
 			updateWhere,
 			updateData,
 			messageSchemaInstance,
 			messageCollectionName
 		)
-		
+
 		if (!updateResult.success) {
 			logging('ERROR', '撤回消息失败：更新失败')
 			return { success: false, message: '撤回消息失败：更新失败' }
 		}
-		
+
 		return { success: true, message: '撤回消息成功' }
 	} catch (error) {
 		logging('ERROR', '撤回消息失败：未知错误', error)
