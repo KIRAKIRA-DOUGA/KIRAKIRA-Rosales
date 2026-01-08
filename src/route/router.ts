@@ -733,6 +733,10 @@ router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和�
 router.get('/feed/following/videos', getFollowingVideosController) // 获取我关注对象的最新视频
 // https://localhost:9999/feed/following/videos?num=20&offset=0
 // cookie: uuid, token
+//
+// Query:
+// num
+// offset
 
 
 

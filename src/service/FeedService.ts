@@ -901,105 +901,6 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 }
 
 /**
- * 校验用户关注一个创作者的请求载荷
- * @param followingUploaderRequest 用户关注一个创作者的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkFollowingUploaderRequest = (followingUploaderRequest: FollowingUploaderRequestDto): boolean => {
-	return ( followingUploaderRequest.followingUid !== undefined && followingUploaderRequest.followingUid !== null && followingUploaderRequest.followingUid > 0 )
-}
-
-/**
- * 校验用户取消关注一个创作者的请求载荷
- * @param followingUploaderRequest 用户取消关注一个创作者的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkUnfollowingUploaderRequest = (unfollowingUploaderRequest: UnfollowingUploaderRequestDto): boolean => {
-	return ( unfollowingUploaderRequest.unfollowingUid !== undefined && unfollowingUploaderRequest.unfollowingUid !== null && unfollowingUploaderRequest.unfollowingUid > 0 )
-}
-
-/**
- * 校验创建动态分组的请求载荷
- * @param createFeedGroupRequest 创建动态分组的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkCreateFeedGroupRequest = (createFeedGroupRequest: CreateFeedGroupRequestDto): boolean => {
-	return ( !!createFeedGroupRequest.feedGroupName )
-}
-
-/**
- * 校验向一个动态分组中添加新的 UID 的请求载荷
- * @param addNewUser2FeedGroupRequest 向一个动态分组中添加新的 UID 的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkAddNewUser2FeedGroupRequest = (addNewUser2FeedGroupRequest: AddNewUid2FeedGroupRequestDto): boolean => {
-	return (
-		!!addNewUser2FeedGroupRequest.feedGroupUuid
-		&& !!addNewUser2FeedGroupRequest.uidList && addNewUser2FeedGroupRequest.uidList.every(uid => uid !== undefined && uid !== null && uid > 0)
-	)
-}
-
-/**
- * 校验从一个动态分组中移除 UID 的请求载荷
- * @param removeUidFromFeedGroupRequest 从一个动态分组中移除 UID 的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkRemoveUidFromFeedGroupRequest = (removeUidFromFeedGroupRequest: RemoveUidFromFeedGroupRequestDto): boolean => {
-	return (
-		!!removeUidFromFeedGroupRequest.feedGroupUuid
-		&& !!removeUidFromFeedGroupRequest.uidList && removeUidFromFeedGroupRequest.uidList.every(uid => uid !== undefined && uid !== null && uid > 0)
-	)
-}
-
-/**
- * 校验删除动态分组的请求载荷
- * @param deleteFeedGroupRequest 删除动态分组的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkDeleteFeedGroupRequest = (deleteFeedGroupRequest: DeleteFeedGroupRequestDto): boolean => {
-	return ( !!deleteFeedGroupRequest.feedGroupUuid )
-}
-
-/**
- * 校验创建或更新动态分组信息的请求载荷
- * @param createOrEditFeedGroupInfoRequest 创建或更新动态分组信息的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkCreateOrEditFeedGroupInfoRequest = (createOrEditFeedGroupInfoRequest: CreateOrEditFeedGroupInfoRequestDto): boolean => {
-	return ( !!createOrEditFeedGroupInfoRequest.feedGroupUuid )
-}
-
-/**
- * 校验管理员通过动态分组信息更新审核的请求载荷
- * @param administratorApproveFeedGroupInfoChangeRequest 管理员通过动态分组信息更新审核的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkAdministratorApproveFeedGroupInfoChangeRequest = (administratorApproveFeedGroupInfoChangeRequest: AdministratorApproveFeedGroupInfoChangeRequestDto): boolean => {
-	return ( !!administratorApproveFeedGroupInfoChangeRequest.feedGroupUuid )
-}
-
-/**
- * 校验管理员通过动态分组信息更新审核的请求载荷
- * @param administratorDeleteFeedGroupRequest 管理员通过动态分组信息更新审核的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkAdministratorDeleteFeedGroupRequest = (administratorDeleteFeedGroupRequest: AdministratorDeleteFeedGroupRequestDto): boolean => {
-	return ( !!administratorDeleteFeedGroupRequest.feedGroupUuid )
-}
-
-/**
- * 校验获取动态内容的请求载荷
- * @param getFeedContentRequest 获取动态内容的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequestDto): boolean => {
-	return (
-		!!getFeedContentRequest.pagination
-		&& getFeedContentRequest.pagination.page >= 0 && getFeedContentRequest.pagination.pageSize > 0 && getFeedContentRequest.pagination.pageSize <= 200
-	);
-}
-
-/**
  * 获取我关注对象的最新视频
  * @param getFollowingVideosRequest 获取我关注对象的最新视频的请求载荷
  * @param uuid 用户的 UUID
@@ -1135,98 +1036,6 @@ export const getFollowingVideosService = async (getFollowingVideosRequest: GetFo
 	}
 }
 
-/**
- * 校验获取我关注对象的最新视频的请求载荷
- * @param getFollowingVideosRequest 获取我关注对象的最新视频的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkGetFollowingVideosRequest = (getFollowingVideosRequest: GetFollowingVideosRequestDto): boolean => {
-	return (
-		getFollowingVideosRequest.num !== undefined &&
-		getFollowingVideosRequest.num !== null &&
-		getFollowingVideosRequest.num > 0 &&
-		getFollowingVideosRequest.num <= 200 &&
-		getFollowingVideosRequest.offset !== undefined &&
-		getFollowingVideosRequest.offset !== null &&
-		getFollowingVideosRequest.offset >= 0
-	)
-}
-
-/**
- * 检查用户是否可以查看目标用户的隐私数据
- * @param targetUuid 目标用户的 UUID
- * @param viewerUuid 查看者的 UUID（可选，如果未登录则为 undefined）
- * @param privacyId 隐私数据项 ID（如 'privary.follow' 或 'privary.fans'）
- * @returns 可以查看返回 true，否则返回 false
- */
-const checkPrivacyPermission = async (targetUuid: string, viewerUuid: string | undefined, privacyId: 'privary.follow' | 'privary.fans'): Promise<boolean> => {
-	try {
-		// 如果是自己查看，总是允许
-		if (viewerUuid && viewerUuid === targetUuid) {
-			return true
-		}
-
-		// 获取目标用户的隐私设置
-		const { collectionName, schemaInstance } = UserSettingsSchema
-		type UserSettings = InferSchemaType<typeof schemaInstance>
-		const where: QueryType<UserSettings> = {
-			UUID: targetUuid,
-		}
-		const select: SelectType<UserSettings> = {
-			userPrivaryVisibilitiesSetting: 1,
-		}
-		const result = await selectDataFromMongoDB<UserSettings>(where, select, schemaInstance, collectionName)
-		
-		if (!result.success || !result.result || result.result.length === 0) {
-			// 如果没有设置，默认公开
-			return true
-		}
-
-		const settings = result.result[0]
-		const privacySetting = settings.userPrivaryVisibilitiesSetting?.find(s => s.privaryId === privacyId)
-		
-		// 如果没有设置，默认公开
-		if (!privacySetting) {
-			return true
-		}
-
-		const visibilityType = privacySetting.visibilitiesType
-
-		// public: 所有人能看
-		if (visibilityType === 'public') {
-			return true
-		}
-
-		// private: 隐藏，只有自己能看
-		if (visibilityType === 'private') {
-			return false
-		}
-
-		// following: 仅关注能看，需要检查查看者是否关注了目标用户
-		if (visibilityType === 'following') {
-			if (!viewerUuid) {
-				return false
-			}
-			const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-			type Following = InferSchemaType<typeof followingSchemaInstance>
-			const followingWhere: QueryType<Following> = {
-				followerUuid: viewerUuid,
-				followingUuid: targetUuid,
-			}
-			const followingSelect: any = {
-				_id: 1,
-			}
-			const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
-			return followingResult.success && followingResult.result && followingResult.result.length > 0
-		}
-
-		// 默认不允许
-		return false
-	} catch (error) {
-		logging('ERROR', '检查隐私权限失败：', error)
-		return false
-	}
-}
 
 /**
  * 获取用户关注列表
@@ -1563,6 +1372,105 @@ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStat
 }
 
 /**
+ * 校验用户关注一个创作者的请求载荷
+ * @param followingUploaderRequest 用户关注一个创作者的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkFollowingUploaderRequest = (followingUploaderRequest: FollowingUploaderRequestDto): boolean => {
+	return ( followingUploaderRequest.followingUid !== undefined && followingUploaderRequest.followingUid !== null && followingUploaderRequest.followingUid > 0 )
+}
+
+/**
+ * 校验用户取消关注一个创作者的请求载荷
+ * @param followingUploaderRequest 用户取消关注一个创作者的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkUnfollowingUploaderRequest = (unfollowingUploaderRequest: UnfollowingUploaderRequestDto): boolean => {
+	return ( unfollowingUploaderRequest.unfollowingUid !== undefined && unfollowingUploaderRequest.unfollowingUid !== null && unfollowingUploaderRequest.unfollowingUid > 0 )
+}
+
+/**
+ * 校验创建动态分组的请求载荷
+ * @param createFeedGroupRequest 创建动态分组的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkCreateFeedGroupRequest = (createFeedGroupRequest: CreateFeedGroupRequestDto): boolean => {
+	return ( !!createFeedGroupRequest.feedGroupName )
+}
+
+/**
+ * 校验向一个动态分组中添加新的 UID 的请求载荷
+ * @param addNewUser2FeedGroupRequest 向一个动态分组中添加新的 UID 的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkAddNewUser2FeedGroupRequest = (addNewUser2FeedGroupRequest: AddNewUid2FeedGroupRequestDto): boolean => {
+	return (
+		!!addNewUser2FeedGroupRequest.feedGroupUuid
+		&& !!addNewUser2FeedGroupRequest.uidList && addNewUser2FeedGroupRequest.uidList.every(uid => uid !== undefined && uid !== null && uid > 0)
+	)
+}
+
+/**
+ * 校验从一个动态分组中移除 UID 的请求载荷
+ * @param removeUidFromFeedGroupRequest 从一个动态分组中移除 UID 的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkRemoveUidFromFeedGroupRequest = (removeUidFromFeedGroupRequest: RemoveUidFromFeedGroupRequestDto): boolean => {
+	return (
+		!!removeUidFromFeedGroupRequest.feedGroupUuid
+		&& !!removeUidFromFeedGroupRequest.uidList && removeUidFromFeedGroupRequest.uidList.every(uid => uid !== undefined && uid !== null && uid > 0)
+	)
+}
+
+/**
+ * 校验删除动态分组的请求载荷
+ * @param deleteFeedGroupRequest 删除动态分组的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkDeleteFeedGroupRequest = (deleteFeedGroupRequest: DeleteFeedGroupRequestDto): boolean => {
+	return ( !!deleteFeedGroupRequest.feedGroupUuid )
+}
+
+/**
+ * 校验创建或更新动态分组信息的请求载荷
+ * @param createOrEditFeedGroupInfoRequest 创建或更新动态分组信息的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkCreateOrEditFeedGroupInfoRequest = (createOrEditFeedGroupInfoRequest: CreateOrEditFeedGroupInfoRequestDto): boolean => {
+	return ( !!createOrEditFeedGroupInfoRequest.feedGroupUuid )
+}
+
+/**
+ * 校验管理员通过动态分组信息更新审核的请求载荷
+ * @param administratorApproveFeedGroupInfoChangeRequest 管理员通过动态分组信息更新审核的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkAdministratorApproveFeedGroupInfoChangeRequest = (administratorApproveFeedGroupInfoChangeRequest: AdministratorApproveFeedGroupInfoChangeRequestDto): boolean => {
+	return ( !!administratorApproveFeedGroupInfoChangeRequest.feedGroupUuid )
+}
+
+/**
+ * 校验管理员通过动态分组信息更新审核的请求载荷
+ * @param administratorDeleteFeedGroupRequest 管理员通过动态分组信息更新审核的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkAdministratorDeleteFeedGroupRequest = (administratorDeleteFeedGroupRequest: AdministratorDeleteFeedGroupRequestDto): boolean => {
+	return ( !!administratorDeleteFeedGroupRequest.feedGroupUuid )
+}
+
+/**
+ * 校验获取动态内容的请求载荷
+ * @param getFeedContentRequest 获取动态内容的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequestDto): boolean => {
+	return (
+		!!getFeedContentRequest.pagination
+		&& getFeedContentRequest.pagination.page >= 0 && getFeedContentRequest.pagination.pageSize > 0 && getFeedContentRequest.pagination.pageSize <= 200
+	);
+}
+
+/**
  * 校验获取用户关注列表的请求载荷
  * @param getFollowingListRequest 获取用户关注列表的请求载荷
  * @returns 合法返回 true, 不合法返回 false
@@ -1613,4 +1521,96 @@ const checkGetFollowStatsRequest = (getFollowStatsRequest: GetFollowStatsRequest
 		getFollowStatsRequest.targetUid !== null &&
 		getFollowStatsRequest.targetUid > 0
 	)
+}
+/**
+ * 校验获取我关注对象的最新视频的请求载荷
+ * @param getFollowingVideosRequest 获取我关注对象的最新视频的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkGetFollowingVideosRequest = (getFollowingVideosRequest: GetFollowingVideosRequestDto): boolean => {
+	return (
+		getFollowingVideosRequest.num !== undefined &&
+		getFollowingVideosRequest.num !== null &&
+		getFollowingVideosRequest.num > 0 &&
+		getFollowingVideosRequest.num <= 200 &&
+		getFollowingVideosRequest.offset !== undefined &&
+		getFollowingVideosRequest.offset !== null &&
+		getFollowingVideosRequest.offset >= 0
+	)
+}
+
+/**
+ * 检查用户是否可以查看目标用户的隐私数据
+ * @param targetUuid 目标用户的 UUID
+ * @param viewerUuid 查看者的 UUID（可选，如果未登录则为 undefined）
+ * @param privacyId 隐私数据项 ID（如 'privary.follow' 或 'privary.fans'）
+ * @returns 可以查看返回 true，否则返回 false
+ */
+const checkPrivacyPermission = async (targetUuid: string, viewerUuid: string | undefined, privacyId: 'privary.follow' | 'privary.fans'): Promise<boolean> => {
+	try {
+		// 如果是自己查看，总是允许
+		if (viewerUuid && viewerUuid === targetUuid) {
+			return true
+		}
+
+		// 获取目标用户的隐私设置
+		const { collectionName, schemaInstance } = UserSettingsSchema
+		type UserSettings = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<UserSettings> = {
+			UUID: targetUuid,
+		}
+		const select: SelectType<UserSettings> = {
+			userPrivaryVisibilitiesSetting: 1,
+		}
+		const result = await selectDataFromMongoDB<UserSettings>(where, select, schemaInstance, collectionName)
+		
+		if (!result.success || !result.result || result.result.length === 0) {
+			// 如果没有设置，默认公开
+			return true
+		}
+
+		const settings = result.result[0]
+		const privacySetting = settings.userPrivaryVisibilitiesSetting?.find(s => s.privaryId === privacyId)
+		
+		// 如果没有设置，默认公开
+		if (!privacySetting) {
+			return true
+		}
+
+		const visibilityType = privacySetting.visibilitiesType
+
+		// public: 所有人能看
+		if (visibilityType === 'public') {
+			return true
+		}
+
+		// private: 隐藏，只有自己能看
+		if (visibilityType === 'private') {
+			return false
+		}
+
+		// following: 仅关注能看，需要检查查看者是否关注了目标用户
+		if (visibilityType === 'following') {
+			if (!viewerUuid) {
+				return false
+			}
+			const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+			type Following = InferSchemaType<typeof followingSchemaInstance>
+			const followingWhere: QueryType<Following> = {
+				followerUuid: viewerUuid,
+				followingUuid: targetUuid,
+			}
+			const followingSelect: any = {
+				_id: 1,
+			}
+			const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
+			return followingResult.success && followingResult.result && followingResult.result.length > 0
+		}
+
+		// 默认不允许
+		return false
+	} catch (error) {
+		logging('ERROR', '检查隐私权限失败：', error)
+		return false
+	}
 }
