@@ -1,4 +1,5 @@
 import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { isPassRbacCheck } from '../service/RbacService.js'
 import {
 	sendMessageService,
 	getConversationListService,
@@ -27,6 +28,12 @@ import { IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
 export const sendMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+	
 	const data = ctx.request.body as Partial<SendMessageRequestDto>
 	
 	const sendMessageRequest: SendMessageRequestDto = {
@@ -47,6 +54,11 @@ export const getConversationListController = async (ctx: koaCtx, next: koaNext) 
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+	
 	const getConversationListRequest: GetConversationListRequestDto = {
 		page: ctx.query.page ? parseInt(ctx.query.page as string) : undefined,
 		pageSize: ctx.query.pageSize ? parseInt(ctx.query.pageSize as string) : undefined,
@@ -63,6 +75,11 @@ export const getConversationListController = async (ctx: koaCtx, next: koaNext) 
 export const getMessageListController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
 	
 	const getMessageListRequest: GetMessageListRequestDto = {
 		conversationId: ctx.query.conversationId as string,
@@ -82,6 +99,12 @@ export const getMessageListController = async (ctx: koaCtx, next: koaNext) => {
 export const markMessageReadController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+	
 	const data = ctx.request.body as Partial<MarkMessageReadRequestDto>
 	
 	const markMessageReadRequest: MarkMessageReadRequestDto = {
@@ -100,6 +123,12 @@ export const markMessageReadController = async (ctx: koaCtx, next: koaNext) => {
 export const deleteConversationController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+	
 	const data = ctx.request.body as Partial<DeleteConversationRequestDto>
 	
 	const deleteConversationRequest: DeleteConversationRequestDto = {
@@ -117,6 +146,12 @@ export const deleteConversationController = async (ctx: koaCtx, next: koaNext) =
 export const deleteMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+	
 	const data = ctx.request.body as Partial<DeleteMessageRequestDto>
 	
 	const deleteMessageRequest: DeleteMessageRequestDto = {
@@ -135,6 +170,11 @@ export const getUnreadMessageCountController = async (ctx: koaCtx, next: koaNext
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+	
 	const getUnreadMessageCountRequest: GetUnreadMessageCountRequestDto = {}
 	
 	const getUnreadMessageCountResult = await getUnreadMessageCountService(getUnreadMessageCountRequest, uuid, token)
@@ -148,6 +188,12 @@ export const getUnreadMessageCountController = async (ctx: koaCtx, next: koaNext
 export const recallMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+	
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+	
 	const data = ctx.request.body as Partial<RecallMessageRequestDto>
 	
 	const recallMessageRequest: RecallMessageRequestDto = {
