@@ -13,7 +13,7 @@ export type SendMessageRequestDto = {
 }
 
 /**
- * 发送消息的请求载荷
+ * 发送消息的请求响应
  */
 export type SendMessageResponseDto = {
 	success: boolean
@@ -36,7 +36,7 @@ export type GetConversationListRequestDto = {
 }
 
 /**
- * 会话信息的请求响应
+ * 会话信息
  */
 export type ConversationInfo = {
 	/** 会话 ID */
@@ -91,7 +91,7 @@ export type GetMessageListRequestDto = {
 }
 
 /**
- * 消息信息的请求响应
+ * 消息信息
  */
 export type MessageInfo = {
 	/** 消息ID */
