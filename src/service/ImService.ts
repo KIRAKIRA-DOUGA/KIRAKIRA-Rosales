@@ -214,12 +214,12 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 
 /**
  * 发送消息
+ * @param sendMessageRequest 发送消息的请求载荷
+ * @param senderUuid 发送者的 UUID
+ * @param token 发送者的 token
+ * @returns 发送消息的结果
  */
-export const sendMessageService = async (
-	sendMessageRequest: SendMessageRequestDto,
-	senderUuid: string,
-	token: string
-): Promise<SendMessageResponseDto> => {
+export const sendMessageService = async (sendMessageRequest: SendMessageRequestDto, senderUuid: string, token: string): Promise<SendMessageResponseDto> => {
 	try {
 		// 验证请求参数
 		if (!checkSendMessageRequest(sendMessageRequest)) {
@@ -371,12 +371,12 @@ export const sendMessageService = async (
 
 /**
  * 获取会话列表
+ * @param getConversationListRequest 获取会话列表的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 会话列表的结果
  */
-export const getConversationListService = async (
-	getConversationListRequest: GetConversationListRequestDto,
-	uuid: string,
-	token: string
-): Promise<GetConversationListResponseDto> => {
+export const getConversationListService = async (getConversationListRequest: GetConversationListRequestDto, uuid: string, token: string): Promise<GetConversationListResponseDto> => {
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
@@ -384,7 +384,8 @@ export const getConversationListService = async (
 			return { success: false, message: '获取会话列表失败：用户验证失败' }
 		}
 
-		const { page = 1, pageSize = 20 } = getConversationListRequest
+		const { pagination } = getConversationListRequest
+		const { page, pageSize } = pagination
 		const skip = (page - 1) * pageSize
 
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
@@ -541,12 +542,12 @@ export const getConversationListService = async (
 
 /**
  * 获取消息列表
+ * @param getMessageListRequest 获取消息列表的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 消息列表的结果
  */
-export const getMessageListService = async (
-	getMessageListRequest: GetMessageListRequestDto,
-	uuid: string,
-	token: string
-): Promise<GetMessageListResponseDto> => {
+export const getMessageListService = async (getMessageListRequest: GetMessageListRequestDto, uuid: string, token: string): Promise<GetMessageListResponseDto> => {
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
@@ -559,7 +560,8 @@ export const getMessageListService = async (
 			return { success: false, message: '获取消息列表失败：参数不合法' }
 		}
 
-		const { conversationId, page = 1, pageSize = 50, markAsRead = false } = getMessageListRequest
+		const { conversationId, pagination, markAsRead = false } = getMessageListRequest
+		const { page, pageSize } = pagination
 		const skip = (page - 1) * pageSize
 
 		// 验证会话是否存在且用户有权限访问
@@ -681,12 +683,12 @@ export const getMessageListService = async (
 
 /**
  * 标记消息已读
+ * @param markMessageReadRequest 标记消息已读的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 标记消息已读的结果
  */
-export const markMessageReadService = async (
-	markMessageReadRequest: MarkMessageReadRequestDto,
-	uuid: string,
-	token: string
-): Promise<MarkMessageReadResponseDto> => {
+export const markMessageReadService = async (markMessageReadRequest: MarkMessageReadRequestDto, uuid: string, token: string): Promise<MarkMessageReadResponseDto> => {
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
@@ -830,6 +832,10 @@ export const markMessageReadService = async (
 
 /**
  * 删除会话
+ * @param deleteConversationRequest 删除会话的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 删除会话的结果
  */
 export const deleteConversationService = async (deleteConversationRequest: DeleteConversationRequestDto, uuid: string, token: string): Promise<DeleteConversationResponseDto> => {
 	try {
@@ -904,6 +910,10 @@ export const deleteConversationService = async (deleteConversationRequest: Delet
 
 /**
  * 删除消息
+ * @param deleteMessageRequest 删除消息的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 删除消息的结果
  */
 export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRequestDto, uuid: string, token: string): Promise<DeleteMessageResponseDto> => {
 	try {
@@ -975,6 +985,9 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 
 /**
  * 获取未读消息总数
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 未读消息总数的结果
  */
 export const getUnreadMessageCountService = async (uuid: string, token: string): Promise<GetUnreadMessageCountResponseDto> => {
 	try {
@@ -1037,76 +1050,13 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 }
 
 /**
- * 验证发送消息请求
- */
-const checkSendMessageRequest = (request: SendMessageRequestDto): boolean => {
-	return (
-		request.receiverUid !== undefined &&
-		request.receiverUid !== null &&
-		request.receiverUid > 0 &&
-		request.messageType !== undefined &&
-		Object.values(IM_MESSAGE_TYPE).includes(request.messageType) &&
-		request.content !== undefined &&
-		typeof request.content === 'string'
-	)
-}
-
-/**
- * 验证获取消息列表请求
- */
-const checkGetMessageListRequest = (request: GetMessageListRequestDto): boolean => {
-	return (
-		request.conversationId !== undefined &&
-		request.conversationId !== null &&
-		typeof request.conversationId === 'string' &&
-		request.conversationId.length > 0
-	)
-}
-
-/**
- * 验证标记消息已读请求
- */
-const checkMarkMessageReadRequest = (request: MarkMessageReadRequestDto): boolean => {
-	return (
-		request.conversationId !== undefined &&
-		request.conversationId !== null &&
-		typeof request.conversationId === 'string' &&
-		request.conversationId.length > 0
-	)
-}
-
-/**
- * 验证删除会话请求
- */
-const checkDeleteConversationRequest = (request: DeleteConversationRequestDto): boolean => {
-	return (
-		request.conversationId !== undefined &&
-		request.conversationId !== null &&
-		typeof request.conversationId === 'string' &&
-		request.conversationId.length > 0
-	)
-}
-
-/**
- * 验证删除消息请求
- */
-const checkDeleteMessageRequest = (request: DeleteMessageRequestDto): boolean => {
-	return (
-		request.messageId !== undefined &&
-		request.messageId !== null &&
-		typeof request.messageId === 'string' &&
-		request.messageId.length > 0
-	)
-}
-
-/**
  * 撤回消息
+ * @param recallMessageRequest 撤回消息的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 撤回消息的结果
  */
-export const recallMessageService = async (
-	recallMessageRequest: RecallMessageRequestDto,
-	uuid: string,
-	token: string
-): Promise<RecallMessageResponseDto> => {
+export const recallMessageService = async (recallMessageRequest: RecallMessageRequestDto, uuid: string, token: string): Promise<RecallMessageResponseDto> => {
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
@@ -1177,6 +1127,69 @@ export const recallMessageService = async (
 		logging('ERROR', '撤回消息失败：未知错误', error)
 		return { success: false, message: '撤回消息失败：未知错误' }
 	}
+}
+
+/**
+ * 验证发送消息请求
+ */
+const checkSendMessageRequest = (request: SendMessageRequestDto): boolean => {
+	return (
+		request.receiverUid !== undefined &&
+		request.receiverUid !== null &&
+		request.receiverUid > 0 &&
+		request.messageType !== undefined &&
+		Object.values(IM_MESSAGE_TYPE).includes(request.messageType) &&
+		request.content !== undefined &&
+		typeof request.content === 'string'
+	)
+}
+
+/**
+ * 验证获取消息列表请求
+ */
+const checkGetMessageListRequest = (request: GetMessageListRequestDto): boolean => {
+	return (
+		request.conversationId !== undefined &&
+		request.conversationId !== null &&
+		typeof request.conversationId === 'string' &&
+		request.conversationId.length > 0
+	)
+}
+
+/**
+ * 验证标记消息已读请求
+ */
+const checkMarkMessageReadRequest = (request: MarkMessageReadRequestDto): boolean => {
+	return (
+		request.conversationId !== undefined &&
+		request.conversationId !== null &&
+		typeof request.conversationId === 'string' &&
+		request.conversationId.length > 0
+	)
+}
+
+/**
+ * 验证删除会话请求
+ */
+const checkDeleteConversationRequest = (request: DeleteConversationRequestDto): boolean => {
+	return (
+		request.conversationId !== undefined &&
+		request.conversationId !== null &&
+		typeof request.conversationId === 'string' &&
+		request.conversationId.length > 0
+	)
+}
+
+/**
+ * 验证删除消息请求
+ */
+const checkDeleteMessageRequest = (request: DeleteMessageRequestDto): boolean => {
+	return (
+		request.messageId !== undefined &&
+		request.messageId !== null &&
+		typeof request.messageId === 'string' &&
+		request.messageId.length > 0
+	)
 }
 
 /**

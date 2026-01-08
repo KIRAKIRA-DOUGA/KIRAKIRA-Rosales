@@ -23,7 +23,10 @@ import { IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
 import { parseInteger } from '../common/ValidTool.js'
 
 /**
- * 发送消息
+ * 用户发送消息
+ * @param ctx context
+ * @param next context
+ * @returns 发送消息的结果
  */
 export const sendMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
@@ -49,19 +52,22 @@ export const sendMessageController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 获取会话列表
+ * @param ctx context
+ * @param next context
+ * @returns 会话列表的结果
  */
 export const getConversationListController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
+	const page = ctx.query.page as string | undefined
+	const pageSize = ctx.query.pageSize as string | undefined
 
 	const getConversationListRequest: GetConversationListRequestDto = {
-		page: ctx.query.page ? parseInteger(ctx.query.page as string) : undefined,
-		pageSize: ctx.query.pageSize ? parseInteger(ctx.query.pageSize as string) : undefined,
+		pagination: {
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: Number.isFinite(parseInteger(pageSize)) ? parseInteger(pageSize) : Number.MAX_SAFE_INTEGER,
+		},
 	}
 
 	const getConversationListResult = await getConversationListService(getConversationListRequest, uuid, token)
@@ -71,20 +77,23 @@ export const getConversationListController = async (ctx: koaCtx, next: koaNext) 
 
 /**
  * 获取消息列表
+ * @param ctx context
+ * @param next context
+ * @returns 消息列表的结果
  */
 export const getMessageListController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
+	const page = ctx.query.page as string | undefined
+	const pageSize = ctx.query.pageSize as string | undefined
 
 	const getMessageListRequest: GetMessageListRequestDto = {
 		conversationId: ctx.query.conversationId as string,
-		page: ctx.query.page ? parseInteger(ctx.query.page as string) : 1,
-		pageSize: ctx.query.pageSize ? parseInteger(ctx.query.pageSize as string) : undefined,
+		pagination: {
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: Number.isFinite(parseInteger(pageSize)) ? parseInteger(pageSize) : Number.MAX_SAFE_INTEGER,
+		},
 		markAsRead: ctx.query.markAsRead === 'true',
 	}
 
@@ -95,15 +104,13 @@ export const getMessageListController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 标记消息已读
+ * @param ctx context
+ * @param next context
+ * @returns 标记消息已读的结果
  */
 export const markMessageReadController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
 
 	const data = ctx.request.body as Partial<MarkMessageReadRequestDto>
 
@@ -119,6 +126,9 @@ export const markMessageReadController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 删除会话
+ * @param ctx context
+ * @param next context
+ * @returns 删除会话的结果
  */
 export const deleteConversationController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
@@ -142,6 +152,9 @@ export const deleteConversationController = async (ctx: koaCtx, next: koaNext) =
 
 /**
  * 删除消息
+ * @param ctx context
+ * @param next context
+ * @returns 删除消息的结果
  */
 export const deleteMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
@@ -165,6 +178,9 @@ export const deleteMessageController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 获取未读消息总数
+ * @param ctx context
+ * @param next context
+ * @returns 未读消息总数的结果
  */
 export const getUnreadMessageCountController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
@@ -182,6 +198,9 @@ export const getUnreadMessageCountController = async (ctx: koaCtx, next: koaNext
 
 /**
  * 撤回消息
+ * @param ctx context
+ * @param next context
+ * @returns 撤回消息的结果
  */
 export const recallMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')

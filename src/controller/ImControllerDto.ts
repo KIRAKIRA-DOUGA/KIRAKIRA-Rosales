@@ -26,10 +26,13 @@ export type SendMessageResponseDto = {
  * 获取会话列表的请求载荷
  */
 export type GetConversationListRequestDto = {
-	/** 分页：页码 */
-	page?: number
-	/** 分页：每页数量 */
-	pageSize?: number
+	/** 分页信息 */
+	pagination: {
+		/** 当前在第几页 */
+		page: number
+		/** 一页显示多少条 */
+		pageSize: number
+	}
 }
 
 /**
@@ -76,10 +79,13 @@ export type GetConversationListResponseDto = {
 export type GetMessageListRequestDto = {
 	/** 会话ID */
 	conversationId: string
-	/** 分页：页码 */
-	page?: number
-	/** 分页：每页数量 */
-	pageSize?: number
+	/** 分页信息 */
+	pagination: {
+		/** 当前在第几页 */
+		page: number
+		/** 一页显示多少条 */
+		pageSize: number
+	}
 	/** 是否在获取后标记为已读 */
 	markAsRead?: boolean
 }
