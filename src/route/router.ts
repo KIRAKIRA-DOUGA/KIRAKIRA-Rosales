@@ -1,7 +1,7 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
-import { addToFavoritesController, createFavoritesController, deleteFavoritesController, getFavoritesByUidController, getFavoritesController, getFavoritesCoverUploadSignedUrlController, getFavoritesDetailController, removeFromFavoritesController, reorderFavoritesDetailController, updateFavoritesController } from '../controller/FavoritesController.js'
+import { addEditorToFavoritesController, addToFavoritesController, createFavoritesController, deleteFavoritesController, getFavoritesByUidController, getFavoritesController, getFavoritesCoverUploadSignedUrlController, getFavoritesDetailController, removeEditorFromFavoritesController, removeFromFavoritesController, reorderFavoritesDetailController, updateFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
 	adminClearUserInfoController,
@@ -684,6 +684,22 @@ router.post('/favorites/reorder', reorderFavoritesDetailController) // 调整收
 // 			"sortOrder": 1
 // 		}
 // 	]
+// }
+
+router.post('/favorites/addEditor', addEditorToFavoritesController) // 添加维护者到收藏夹
+// https://localhost:9999/favorites/addEditor
+// cookie: uuid, token
+// {
+// 	"favoritesId": 1,
+// 	"editorUid": 123
+// }
+
+router.delete('/favorites/removeEditor', removeEditorFromFavoritesController) // 移除收藏夹维护者
+// https://localhost:9999/favorites/removeEditor
+// cookie: uuid, token
+// {
+// 	"favoritesId": 1,
+// 	"editorUid": 123
 // }
 
 

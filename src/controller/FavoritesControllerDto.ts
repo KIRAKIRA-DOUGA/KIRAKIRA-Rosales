@@ -245,6 +245,50 @@ export type ReorderFavoritesDetailResponseDto = {
 }
 
 /**
+ * 添加维护者到收藏夹的请求载荷
+ */
+export type AddEditorToFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+	/** 要添加的维护者 UID - 非空 */
+	editorUid: number;
+}
+
+/**
+ * 添加维护者到收藏夹的请求响应
+ */
+export type AddEditorToFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回更新后的收藏夹数据 */
+	result?: Favorites;
+}
+
+/**
+ * 移除收藏夹维护者的请求载荷
+ */
+export type RemoveEditorFromFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+	/** 要移除的维护者 UID - 非空 */
+	editorUid: number;
+}
+
+/**
+ * 移除收藏夹维护者的请求响应
+ */
+export type RemoveEditorFromFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回更新后的收藏夹数据 */
+	result?: Favorites;
+}
+
+/**
  * 获取用于上传收藏夹封面图的预签名 URL 的响应结果
  */
 export type GetFavoritesCoverUploadSignedUrlResponseDto = {

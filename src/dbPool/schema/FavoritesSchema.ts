@@ -67,3 +67,43 @@ class FavoritesDetailSchemaFactory {
 	}
 }
 export const FavoritesDetailSchema = new FavoritesDetailSchemaFactory()
+
+/**
+ * 已删除的收藏夹数据表
+ */
+class RemovedFavoritesSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 原来的收藏夹数据集合 */
+		...FavoritesSchema.schema,
+		/** 操作者 UUID - 非空 */
+		_operatorUUID_: { type: String, required: true },
+		/** 操作者 UID - 非空 */
+		_operatorUid_: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'removed-favorites'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const RemovedFavoritesSchema = new RemovedFavoritesSchemaFactory()
+
+/**
+ * 已删除的收藏夹明细数据表
+ */
+class RemovedFavoritesDetailSchemaFactory {
+	/** MongoDB Schema */
+	schema = {
+		/** 原来的收藏夹明细数据集合 */
+		...FavoritesDetailSchema.schema,
+		/** 操作者 UUID - 非空 */
+		_operatorUUID_: { type: String, required: true },
+		/** 操作者 UID - 非空 */
+		_operatorUid_: { type: Number, required: true },
+	}
+	/** MongoDB 集合名 */
+	collectionName = 'removed-favorites-detail'
+	/** Mongoose Schema 实例 */
+	schemaInstance = new Schema(this.schema)
+}
+export const RemovedFavoritesDetailSchema = new RemovedFavoritesDetailSchemaFactory()

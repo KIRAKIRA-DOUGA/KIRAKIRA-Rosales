@@ -1,8 +1,8 @@
 import mongoose, { InferSchemaType } from 'mongoose'
-import { AddToFavoritesRequestDto, AddToFavoritesResponseDto, CreateFavoritesRequestDto, CreateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, GetFavoritesCoverUploadSignedUrlResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, GetFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
+import { AddEditorToFavoritesRequestDto, AddEditorToFavoritesResponseDto, AddToFavoritesRequestDto, AddToFavoritesResponseDto, CreateFavoritesRequestDto, CreateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, GetFavoritesCoverUploadSignedUrlResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, GetFavoritesResponseDto, RemoveEditorFromFavoritesRequestDto, RemoveEditorFromFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
 import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { FavoritesDetailSchema, FavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
+import { FavoritesDetailSchema, FavoritesSchema, RemovedFavoritesDetailSchema, RemovedFavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
@@ -668,7 +668,16 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 			favoritesId: deleteFavoritesRequest.favoritesId,
 		}
 		const checkSelect: SelectType<FavoritesType> = {
+			favoritesId: 1,
 			creator: 1,
+			editor: 1,
+			favoritesTitle: 1,
+			favoritesBio: 1,
+			favoritesCover: 1,
+			favoritesVisibility: 1,
+			favoritesCreateDateTime: 1,
+			createDateTime: 1,
+			editDateTime: 1,
 		}
 		const checkResult = await selectDataFromMongoDB<FavoritesType>(checkWhere, checkSelect, favoritesSchemaInstance, favoritesCollectionName)
 		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
@@ -680,21 +689,72 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 			return { success: false, message: '删除收藏夹失败，只有创建者可以删除收藏夹' }
 		}
 
+		const favoritesData = checkResult.result[0]
+		const now = new Date().getTime()
+
 		// 启动事务
 		const session = await mongoose.startSession()
 		session.startTransaction()
 
 		try {
-			// 1. 删除收藏夹明细
+			const option = { session }
+
+			// 1. 获取收藏夹明细数据
 			const { collectionName: detailCollectionName, schemaInstance: detailSchemaInstance } = FavoritesDetailSchema
 			type FavoritesDetailType = InferSchemaType<typeof detailSchemaInstance>
 			const detailWhere: QueryType<FavoritesDetailType> = {
 				favoritesListId: deleteFavoritesRequest.favoritesId,
 			}
-			await deleteDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSchemaInstance, detailCollectionName, { session })
+			const detailSelect: SelectType<FavoritesDetailType> = {
+				favoritesListId: 1,
+				operator: 1,
+				category: 1,
+				id: 1,
+				addedDateTime: 1,
+				sortOrder: 1,
+				editDateTime: 1,
+			}
+			const detailResult = await selectDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSelect, detailSchemaInstance, detailCollectionName, option)
 
-			// 2. 删除收藏夹
-			await deleteDataFromMongoDB<FavoritesType>(checkWhere, favoritesSchemaInstance, favoritesCollectionName, { session })
+			// 2. 将收藏夹明细移到废弃集合
+			if (detailResult.success && detailResult.result && detailResult.result.length > 0) {
+				const { collectionName: removedDetailCollectionName, schemaInstance: removedDetailSchemaInstance } = RemovedFavoritesDetailSchema
+				type RemovedFavoritesDetailType = InferSchemaType<typeof removedDetailSchemaInstance>
+				for (const detail of detailResult.result) {
+					const removedDetailData: RemovedFavoritesDetailType = {
+						...detail as FavoritesDetailType,
+						_operatorUUID_: uuid,
+						_operatorUid_: uid,
+						editDateTime: now,
+					}
+					await insertData2MongoDB<RemovedFavoritesDetailType>(removedDetailData, removedDetailSchemaInstance, removedDetailCollectionName, option)
+				}
+			}
+
+			// 3. 将收藏夹移到废弃集合
+			const { collectionName: removedFavoritesCollectionName, schemaInstance: removedFavoritesSchemaInstance } = RemovedFavoritesSchema
+			type RemovedFavoritesType = InferSchemaType<typeof removedFavoritesSchemaInstance>
+			const removedFavoritesData: RemovedFavoritesType = {
+				...favoritesData as FavoritesType,
+				_operatorUUID_: uuid,
+				_operatorUid_: uid,
+				editDateTime: now,
+			}
+			const saveRemovedFavoritesResult = await insertData2MongoDB<RemovedFavoritesType>(removedFavoritesData, removedFavoritesSchemaInstance, removedFavoritesCollectionName, option)
+			if (!saveRemovedFavoritesResult.success) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				logging('ERROR', '删除收藏夹失败，保存废弃记录失败')
+				return { success: false, message: '删除收藏夹失败，保存废弃记录失败' }
+			}
+
+			// 4. 从原集合删除收藏夹明细
+			await deleteDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSchemaInstance, detailCollectionName, option)
+
+			// 5. 从原集合删除收藏夹
+			await deleteDataFromMongoDB<FavoritesType>(checkWhere, favoritesSchemaInstance, favoritesCollectionName, option)
 
 			await session.commitTransaction()
 			session.endSession()
@@ -894,6 +954,202 @@ export const getFavoritesCoverUploadSignedUrlService = async (uuid: string, toke
 	} catch (error) {
 		logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 时出错：', error)
 		return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 时出错，未知原因' }
+	}
+}
+
+/**
+ * 添加维护者到收藏夹
+ * @param addEditorToFavoritesRequest 添加维护者到收藏夹的请求载荷
+ * @param uuid 用户 UUID
+ * @param token 用户 Token
+ * @returns 添加维护者到收藏夹的请求响应
+ */
+export const addEditorToFavoritesService = async (addEditorToFavoritesRequest: AddEditorToFavoritesRequestDto, uuid: string, token: string): Promise<AddEditorToFavoritesResponseDto> => {
+	try {
+		if (!checkAddEditorToFavoritesRequest(addEditorToFavoritesRequest)) {
+			logging('ERROR', '添加维护者到收藏夹失败，参数校验失败')
+			return { success: false, message: '添加维护者到收藏夹失败，参数校验失败' }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '添加维护者到收藏夹失败，用户校验失败')
+			return { success: false, message: '添加维护者到收藏夹失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			logging('ERROR', '添加维护者到收藏夹失败，用户ID不存在')
+			return { success: false, message: '添加维护者到收藏夹失败，用户ID不存在' }
+		}
+
+		// 检查用户是否有权限操作该收藏夹（只有创建者可以添加维护者）
+		const { collectionName, schemaInstance } = FavoritesSchema
+		type FavoritesType = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<FavoritesType> = {
+			favoritesId: addEditorToFavoritesRequest.favoritesId,
+		}
+		const select: SelectType<FavoritesType> = {
+			creator: 1,
+			editor: 1,
+		}
+		const checkResult = await selectDataFromMongoDB<FavoritesType>(where, select, schemaInstance, collectionName)
+		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
+			logging('ERROR', '添加维护者到收藏夹失败，收藏夹不存在')
+			return { success: false, message: '添加维护者到收藏夹失败，收藏夹不存在' }
+		}
+
+		const favorites = checkResult.result[0]
+		if (favorites.creator !== uid) {
+			logging('ERROR', '添加维护者到收藏夹失败，只有创建者可以添加维护者')
+			return { success: false, message: '添加维护者到收藏夹失败，只有创建者可以添加维护者' }
+		}
+
+		// 检查要添加的用户是否已经是维护者
+		if (favorites.editor && favorites.editor.includes(addEditorToFavoritesRequest.editorUid)) {
+			logging('ERROR', '添加维护者到收藏夹失败，该用户已经是维护者')
+			return { success: false, message: '添加维护者到收藏夹失败，该用户已经是维护者' }
+		}
+
+		// 检查要添加的用户是否是创建者
+		if (favorites.creator === addEditorToFavoritesRequest.editorUid) {
+			logging('ERROR', '添加维护者到收藏夹失败，不能将创建者添加为维护者')
+			return { success: false, message: '添加维护者到收藏夹失败，不能将创建者添加为维护者' }
+		}
+
+		// 更新维护者列表
+		const update: UpdateType<FavoritesType> = {
+			editDateTime: new Date().getTime(),
+		}
+		if (favorites.editor && Array.isArray(favorites.editor)) {
+			update.editor = [...favorites.editor, addEditorToFavoritesRequest.editorUid]
+		} else {
+			update.editor = [addEditorToFavoritesRequest.editorUid]
+		}
+
+		try {
+			const updateResult = await updateData4MongoDB<FavoritesType>(where, update, schemaInstance, collectionName)
+			if (updateResult.success && updateResult.result && updateResult.result.modifiedCount > 0) {
+				// 重新查询更新后的数据
+				const getSelect: SelectType<FavoritesType> = {
+					favoritesId: 1,
+					creator: 1,
+					editor: 1,
+					favoritesTitle: 1,
+					favoritesBio: 1,
+					favoritesCover: 1,
+					favoritesVisibility: 1,
+					favoritesCreateDateTime: 1,
+				}
+				const getResult = await selectDataFromMongoDB<FavoritesType>(where, getSelect, schemaInstance, collectionName)
+				if (getResult.success && getResult.result && getResult.result.length > 0) {
+					return { success: true, message: '添加维护者到收藏夹成功', result: getResult.result[0] }
+				} else {
+					return { success: true, message: '添加维护者到收藏夹成功' }
+				}
+			} else {
+				logging('ERROR', '添加维护者到收藏夹失败，更新数据失败')
+				return { success: false, message: '添加维护者到收藏夹失败，更新数据失败' }
+			}
+		} catch (error) {
+			logging('ERROR', '添加维护者到收藏夹失败，更新数据时出错：', error)
+			return { success: false, message: '添加维护者到收藏夹失败，更新数据时出错' }
+		}
+	} catch (error) {
+		logging('ERROR', '添加维护者到收藏夹失败，未知原因：', error)
+		return { success: false, message: '添加维护者到收藏夹失败，未知原因' }
+	}
+}
+
+/**
+ * 移除收藏夹维护者
+ * @param removeEditorFromFavoritesRequest 移除收藏夹维护者的请求载荷
+ * @param uuid 用户 UUID
+ * @param token 用户 Token
+ * @returns 移除收藏夹维护者的请求响应
+ */
+export const removeEditorFromFavoritesService = async (removeEditorFromFavoritesRequest: RemoveEditorFromFavoritesRequestDto, uuid: string, token: string): Promise<RemoveEditorFromFavoritesResponseDto> => {
+	try {
+		if (!checkRemoveEditorFromFavoritesRequest(removeEditorFromFavoritesRequest)) {
+			logging('ERROR', '移除收藏夹维护者失败，参数校验失败')
+			return { success: false, message: '移除收藏夹维护者失败，参数校验失败' }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '移除收藏夹维护者失败，用户校验失败')
+			return { success: false, message: '移除收藏夹维护者失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			logging('ERROR', '移除收藏夹维护者失败，用户ID不存在')
+			return { success: false, message: '移除收藏夹维护者失败，用户ID不存在' }
+		}
+
+		// 检查用户是否有权限操作该收藏夹（只有创建者可以移除维护者）
+		const { collectionName, schemaInstance } = FavoritesSchema
+		type FavoritesType = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<FavoritesType> = {
+			favoritesId: removeEditorFromFavoritesRequest.favoritesId,
+		}
+		const select: SelectType<FavoritesType> = {
+			creator: 1,
+			editor: 1,
+		}
+		const checkResult = await selectDataFromMongoDB<FavoritesType>(where, select, schemaInstance, collectionName)
+		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
+			logging('ERROR', '移除收藏夹维护者失败，收藏夹不存在')
+			return { success: false, message: '移除收藏夹维护者失败，收藏夹不存在' }
+		}
+
+		const favorites = checkResult.result[0]
+		if (favorites.creator !== uid) {
+			logging('ERROR', '移除收藏夹维护者失败，只有创建者可以移除维护者')
+			return { success: false, message: '移除收藏夹维护者失败，只有创建者可以移除维护者' }
+		}
+
+		// 检查要移除的用户是否是维护者
+		if (!favorites.editor || !favorites.editor.includes(removeEditorFromFavoritesRequest.editorUid)) {
+			logging('ERROR', '移除收藏夹维护者失败，该用户不是维护者')
+			return { success: false, message: '移除收藏夹维护者失败，该用户不是维护者' }
+		}
+
+		// 更新维护者列表
+		const update: UpdateType<FavoritesType> = {
+			editDateTime: new Date().getTime(),
+			editor: favorites.editor.filter(editorUid => editorUid !== removeEditorFromFavoritesRequest.editorUid),
+		}
+
+		try {
+			const updateResult = await updateData4MongoDB<FavoritesType>(where, update, schemaInstance, collectionName)
+			if (updateResult.success && updateResult.result && updateResult.result.modifiedCount > 0) {
+				// 重新查询更新后的数据
+				const getSelect: SelectType<FavoritesType> = {
+					favoritesId: 1,
+					creator: 1,
+					editor: 1,
+					favoritesTitle: 1,
+					favoritesBio: 1,
+					favoritesCover: 1,
+					favoritesVisibility: 1,
+					favoritesCreateDateTime: 1,
+				}
+				const getResult = await selectDataFromMongoDB<FavoritesType>(where, getSelect, schemaInstance, collectionName)
+				if (getResult.success && getResult.result && getResult.result.length > 0) {
+					return { success: true, message: '移除收藏夹维护者成功', result: getResult.result[0] }
+				} else {
+					return { success: true, message: '移除收藏夹维护者成功' }
+				}
+			} else {
+				logging('ERROR', '移除收藏夹维护者失败，更新数据失败')
+				return { success: false, message: '移除收藏夹维护者失败，更新数据失败' }
+			}
+		} catch (error) {
+			logging('ERROR', '移除收藏夹维护者失败，更新数据时出错：', error)
+			return { success: false, message: '移除收藏夹维护者失败，更新数据时出错' }
+		}
+	} catch (error) {
+		logging('ERROR', '移除收藏夹维护者失败，未知原因：', error)
+		return { success: false, message: '移除收藏夹维护者失败，未知原因' }
 	}
 }
 
@@ -1138,4 +1394,28 @@ const checkReorderFavoritesDetailRequest = (reorderFavoritesDetailRequest: Reord
 		}
 	}
 	return true
+}
+
+/**
+ * 检查添加维护者到收藏夹的请求载荷
+ * @param addEditorToFavoritesRequest 添加维护者到收藏夹的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkAddEditorToFavoritesRequest = (addEditorToFavoritesRequest: AddEditorToFavoritesRequestDto): boolean => {
+	return (
+		!!addEditorToFavoritesRequest.favoritesId &&
+		!!addEditorToFavoritesRequest.editorUid
+	)
+}
+
+/**
+ * 检查移除收藏夹维护者的请求载荷
+ * @param removeEditorFromFavoritesRequest 移除收藏夹维护者的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkRemoveEditorFromFavoritesRequest = (removeEditorFromFavoritesRequest: RemoveEditorFromFavoritesRequestDto): boolean => {
+	return (
+		!!removeEditorFromFavoritesRequest.favoritesId &&
+		!!removeEditorFromFavoritesRequest.editorUid
+	)
 }
