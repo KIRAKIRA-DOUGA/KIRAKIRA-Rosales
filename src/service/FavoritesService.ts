@@ -452,15 +452,79 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 			id: removeFromFavoritesRequest.id,
 		}
 
+		// 启动事务
+		const session = await mongoose.startSession()
+		session.startTransaction()
+
 		try {
-			const deleteResult = await deleteDataFromMongoDB<FavoritesDetailType>(where, schemaInstance, collectionName)
-			if (deleteResult.success && deleteResult.result && deleteResult.result.deletedCount > 0) {
-				return { success: true, message: '从收藏夹移除内容成功' }
-			} else {
+			const option = { session }
+
+			// 1. 查询要删除的记录
+			const select: SelectType<FavoritesDetailType> = {
+				favoritesListId: 1,
+				operator: 1,
+				category: 1,
+				id: 1,
+				addedDateTime: 1,
+				sortOrder: 1,
+				editDateTime: 1,
+			}
+			const queryResult = await selectDataFromMongoDB<FavoritesDetailType>(where, select, schemaInstance, collectionName, option)
+			if (!queryResult.success || !queryResult.result || queryResult.result.length === 0) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
 				logging('ERROR', '从收藏夹移除内容失败，未找到要删除的内容')
 				return { success: false, message: '从收藏夹移除内容失败，未找到要删除的内容' }
 			}
+
+			const detailData = queryResult.result[0]
+			const now = new Date().getTime()
+
+			// 2. 将记录移到废弃集合（每次删除都创建新记录，保留完整的删除历史）
+			const { collectionName: removedDetailCollectionName, schemaInstance: removedDetailSchemaInstance } = RemovedFavoritesDetailSchema
+			type RemovedFavoritesDetailType = InferSchemaType<typeof removedDetailSchemaInstance>
+			const removedDetailData: RemovedFavoritesDetailType = {
+				...detailData as FavoritesDetailType,
+				_operatorUUID_: uuid,
+				_operatorUid_: uid,
+				editDateTime: now,
+			}
+			const saveRemovedResult = await insertData2MongoDB<RemovedFavoritesDetailType>(
+				removedDetailData,
+				removedDetailSchemaInstance,
+				removedDetailCollectionName,
+				option
+			)
+			if (!saveRemovedResult.success) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				logging('ERROR', '从收藏夹移除内容失败，保存废弃记录失败')
+				return { success: false, message: '从收藏夹移除内容失败，保存废弃记录失败' }
+			}
+
+			// 3. 从原集合删除记录
+			const deleteResult = await deleteDataFromMongoDB<FavoritesDetailType>(where, schemaInstance, collectionName, option)
+			if (!deleteResult.success || !deleteResult.result || deleteResult.result.deletedCount === 0) {
+				if (session.inTransaction()) {
+					await session.abortTransaction()
+				}
+				session.endSession()
+				logging('ERROR', '从收藏夹移除内容失败，删除数据失败')
+				return { success: false, message: '从收藏夹移除内容失败，删除数据失败' }
+			}
+
+			await session.commitTransaction()
+			session.endSession()
+			return { success: true, message: '从收藏夹移除内容成功' }
 		} catch (error) {
+			if (session.inTransaction()) {
+				await session.abortTransaction()
+			}
+			session.endSession()
 			logging('ERROR', '从收藏夹移除内容失败，删除数据时出错：', error)
 			return { success: false, message: '从收藏夹移除内容失败，删除数据时出错' }
 		}
@@ -1338,8 +1402,10 @@ const checkAddToFavoritesRequest = (addToFavoritesRequest: AddToFavoritesRequest
 const checkRemoveFromFavoritesRequest = (removeFromFavoritesRequest: RemoveFromFavoritesRequestDto): boolean => {
 	return (
 		!!removeFromFavoritesRequest.favoritesListId &&
+		removeFromFavoritesRequest.favoritesListId > 0 &&
 		!!removeFromFavoritesRequest.category &&
-		!!removeFromFavoritesRequest.id
+		!!removeFromFavoritesRequest.id &&
+		removeFromFavoritesRequest.id.length > 0
 	)
 }
 

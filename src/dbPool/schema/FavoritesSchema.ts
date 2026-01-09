@@ -105,5 +105,11 @@ class RemovedFavoritesDetailSchemaFactory {
 	collectionName = 'removed-favorites-detail'
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema)
+
+	// 构造器
+	constructor() {
+		// 不添加唯一索引，允许同一个视频在同一个收藏夹中被多次删除时保留多条删除记录
+		// 这样可以保留完整的删除历史
+	}
 }
 export const RemovedFavoritesDetailSchema = new RemovedFavoritesDetailSchemaFactory()
