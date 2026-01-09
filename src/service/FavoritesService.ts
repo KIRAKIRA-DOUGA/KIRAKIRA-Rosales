@@ -207,52 +207,7 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 			return await getFavoritesService(uuid, token)
 		}
 
-		// 第一层验证：检查用户整体的收藏夹可见性设置（privary.favorites）
-		const { collectionName: userSettingsCollectionName, schemaInstance: userSettingsSchemaInstance } = UserSettingsSchema
-		type UserSettings = InferSchemaType<typeof userSettingsSchemaInstance>
-		const userSettingsWhere: QueryType<UserSettings> = {
-			UUID: targetUuid,
-		}
-		const userSettingsSelect: SelectType<UserSettings> = {
-			userPrivaryVisibilitiesSetting: 1,
-		}
-		const userSettingsResult = await selectDataFromMongoDB<UserSettings>(userSettingsWhere, userSettingsSelect, userSettingsSchemaInstance, userSettingsCollectionName)
-		
-		if (userSettingsResult.success && userSettingsResult.result && userSettingsResult.result.length > 0) {
-			const userSettings = userSettingsResult.result[0]
-			const favoritesPrivacySetting = userSettings.userPrivaryVisibilitiesSetting?.find(
-				(setting: any) => setting.privaryId === 'privary.favorites'
-			)
-
-			if (favoritesPrivacySetting) {
-				if (favoritesPrivacySetting.visibilitiesType === 'private') {
-					logging('ERROR', '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有')
-					return { success: false, message: '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有' }
-				} else if (favoritesPrivacySetting.visibilitiesType === 'following') {
-					// 需要检查是否关注了目标用户
-					const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-					type Following = InferSchemaType<typeof followingSchemaInstance>
-					const followingWhere: QueryType<Following> = {
-						followerUuid: uuid,
-						followingUuid: targetUuid,
-					}
-					const followingSelect: SelectType<Following> = {
-						followerUuid: 1,
-						followingUuid: 1,
-					}
-					const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
-					if (!followingResult.success || !followingResult.result || followingResult.result.length === 0) {
-						logging('ERROR', '获取指定用户收藏夹列表失败，需要关注该用户才能查看收藏夹')
-						return { success: false, message: '获取指定用户收藏夹列表失败，需要关注该用户才能查看收藏夹' }
-					}
-					// 已关注，继续获取收藏夹列表
-				}
-				// 'public' 继续获取收藏夹列表
-			}
-			// 如果没有设置用户整体可见性，默认视为 'public'，继续获取收藏夹列表
-		}
-
-		// 第二层验证：获取收藏夹列表，并根据单个收藏夹的可见性设置过滤
+		// 先获取收藏夹列表，检查查看者是否是任何收藏夹的维护者
 		const { collectionName, schemaInstance } = FavoritesSchema
 		type FavoritesType = InferSchemaType<typeof schemaInstance>
 		const getFavoritesQuery: QueryType<FavoritesType> = {
@@ -269,19 +224,83 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 			favoritesCreateDateTime: 1,
 		}
 
-		try {
-			const getFavoritesResult = await selectDataFromMongoDB<FavoritesType>(getFavoritesQuery, getFavoritesSelect, schemaInstance, collectionName)
-			const favorites = getFavoritesResult?.result
-			if (!getFavoritesResult.success || !favorites) {
-				logging('ERROR', '获取指定用户收藏夹列表失败，查询收藏夹数据失败')
-				return { success: false, message: '获取指定用户收藏夹列表失败，查询收藏夹数据失败' }
-			}
+		const getFavoritesResult = await selectDataFromMongoDB<FavoritesType>(getFavoritesQuery, getFavoritesSelect, schemaInstance, collectionName)
+		const favorites = getFavoritesResult?.result
+		if (!getFavoritesResult.success || !favorites) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，查询收藏夹数据失败')
+			return { success: false, message: '获取指定用户收藏夹列表失败，查询收藏夹数据失败' }
+		}
 
-			// 过滤：只返回查看者有权限查看的收藏夹
+		// 检查查看者是否是任何收藏夹的维护者
+		const isEditor = favorites.some(fav => fav.editor && fav.editor.includes(viewerUid))
+
+		// 第一层验证：检查用户整体的收藏夹可见性设置（privary.favorites）
+		// 如果查看者是维护者，可以绕过第一层验证
+		if (!isEditor) {
+			const { collectionName: userSettingsCollectionName, schemaInstance: userSettingsSchemaInstance } = UserSettingsSchema
+			type UserSettings = InferSchemaType<typeof userSettingsSchemaInstance>
+			const userSettingsWhere: QueryType<UserSettings> = {
+				UUID: targetUuid,
+			}
+			const userSettingsSelect: SelectType<UserSettings> = {
+				userPrivaryVisibilitiesSetting: 1,
+			}
+			const userSettingsResult = await selectDataFromMongoDB<UserSettings>(userSettingsWhere, userSettingsSelect, userSettingsSchemaInstance, userSettingsCollectionName)
+			
+			if (userSettingsResult.success && userSettingsResult.result && userSettingsResult.result.length > 0) {
+				const userSettings = userSettingsResult.result[0]
+				const favoritesPrivacySetting = userSettings.userPrivaryVisibilitiesSetting?.find(
+					(setting: any) => setting.privaryId === 'privary.favorites'
+				)
+
+				if (favoritesPrivacySetting) {
+					if (favoritesPrivacySetting.visibilitiesType === 'private') {
+						logging('ERROR', '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有')
+						return { success: false, message: '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有' }
+					} else if (favoritesPrivacySetting.visibilitiesType === 'following') {
+						// 需要检查是否关注了目标用户
+						const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+						type Following = InferSchemaType<typeof followingSchemaInstance>
+						const followingWhere: QueryType<Following> = {
+							followerUuid: uuid,
+							followingUuid: targetUuid,
+						}
+						const followingSelect: SelectType<Following> = {
+							followerUuid: 1,
+							followingUuid: 1,
+						}
+						const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
+						if (!followingResult.success || !followingResult.result || followingResult.result.length === 0) {
+							logging('ERROR', '获取指定用户收藏夹列表失败，需要关注该用户才能查看收藏夹')
+							return { success: false, message: '获取指定用户收藏夹列表失败，需要关注该用户才能查看收藏夹' }
+						}
+						// 已关注，继续获取收藏夹列表
+					}
+					// 'public' 继续获取收藏夹列表
+				}
+				// 如果没有设置用户整体可见性，默认视为 'public'，继续获取收藏夹列表
+			}
+		}
+
+		// 第二层验证：过滤收藏夹列表
+		// 所有者或维护者可以看到他们有权限的收藏夹，即使隐私设置不允许
+		// 非所有者非维护者需要检查可见性权限
+		try {
 			const visibleFavorites = []
 			for (const fav of favorites) {
-				if (await checkFavoritesViewPermission(fav.favoritesId, viewerUid, uuid)) {
+				// 如果是创建者（所有者），直接可以看到
+				if (fav.creator === viewerUid) {
 					visibleFavorites.push(fav)
+				}
+				// 如果是维护者，直接可以看到
+				else if (fav.editor && fav.editor.includes(viewerUid)) {
+					visibleFavorites.push(fav)
+				}
+				// 非所有者非维护者，需要检查可见性权限
+				else {
+					if (await checkFavoritesViewPermission(fav.favoritesId, viewerUid, uuid)) {
+						visibleFavorites.push(fav)
+					}
 				}
 			}
 
