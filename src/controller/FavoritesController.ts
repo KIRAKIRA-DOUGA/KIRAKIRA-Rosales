@@ -1,4 +1,4 @@
-import { addToFavoritesService, createFavoritesService, deleteFavoritesService, getFavoritesByUidService, getFavoritesDetailService, getFavoritesService, removeFromFavoritesService, reorderFavoritesDetailService, updateFavoritesService } from '../service/FavoritesService.js'
+import { addToFavoritesService, createFavoritesService, deleteFavoritesService, getFavoritesByUidService, getFavoritesCoverUploadSignedUrlService, getFavoritesDetailService, getFavoritesService, removeFromFavoritesService, reorderFavoritesDetailService, updateFavoritesService } from '../service/FavoritesService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { AddToFavoritesRequestDto, CreateFavoritesRequestDto, DeleteFavoritesRequestDto, GetFavoritesByUidRequestDto, GetFavoritesDetailRequestDto, RemoveFromFavoritesRequestDto, ReorderFavoritesDetailRequestDto, UpdateFavoritesRequestDto } from './FavoritesControllerDto.js'
@@ -203,5 +203,22 @@ export const reorderFavoritesDetailController = async (ctx: koaCtx, next: koaNex
 	}
 	const reorderFavoritesDetailResponse = await reorderFavoritesDetailService(reorderFavoritesDetailRequest, uuid, token)
 	ctx.body = reorderFavoritesDetailResponse
+	await next()
+}
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL
+ * @param ctx context
+ * @param next context
+ */
+export const getFavoritesCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
+	const getFavoritesCoverUploadSignedUrlResponse = await getFavoritesCoverUploadSignedUrlService(uuid, token)
+	ctx.body = getFavoritesCoverUploadSignedUrlResponse
 	await next()
 }

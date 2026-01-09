@@ -1,10 +1,12 @@
 import mongoose, { InferSchemaType } from 'mongoose'
-import { AddToFavoritesRequestDto, AddToFavoritesResponseDto, CreateFavoritesRequestDto, CreateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, GetFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
+import { AddToFavoritesRequestDto, AddToFavoritesResponseDto, CreateFavoritesRequestDto, CreateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, GetFavoritesCoverUploadSignedUrlResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, GetFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
 import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesDetailSchema, FavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
+import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
+import { generateSecureRandomString } from '../common/RandomTool.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
 import { logging } from './loggingService.js'
@@ -542,17 +544,29 @@ export const updateFavoritesService = async (updateFavoritesRequest: UpdateFavor
 			return { success: false, message: '更新收藏夹信息失败，用户ID不存在' }
 		}
 
-		// 检查用户是否有权限操作该收藏夹
-		if (!(await checkFavoritesPermission(updateFavoritesRequest.favoritesId, uid))) {
-			logging('ERROR', '更新收藏夹信息失败，没有权限操作该收藏夹')
-			return { success: false, message: '更新收藏夹信息失败，没有权限操作该收藏夹' }
+		// 检查用户是否有权限操作该收藏夹（只有创建者可以修改收藏夹信息，维护者不能修改）
+		const { collectionName: favoritesCollectionName, schemaInstance: favoritesSchemaInstance } = FavoritesSchema
+		type FavoritesType = InferSchemaType<typeof favoritesSchemaInstance>
+		const checkWhere: QueryType<FavoritesType> = {
+			favoritesId: updateFavoritesRequest.favoritesId,
+		}
+		const checkSelect: SelectType<FavoritesType> = {
+			creator: 1,
+		}
+		const checkResult = await selectDataFromMongoDB<FavoritesType>(checkWhere, checkSelect, favoritesSchemaInstance, favoritesCollectionName)
+		if (!checkResult.success || !checkResult.result || checkResult.result.length === 0) {
+			logging('ERROR', '更新收藏夹信息失败，收藏夹不存在')
+			return { success: false, message: '更新收藏夹信息失败，收藏夹不存在' }
+		}
+		if (checkResult.result[0].creator !== uid) {
+			logging('ERROR', '更新收藏夹信息失败，只有创建者可以修改收藏夹信息')
+			return { success: false, message: '更新收藏夹信息失败，只有创建者可以修改收藏夹信息' }
 		}
 
-		const { collectionName, schemaInstance } = FavoritesSchema
-		type FavoritesType = InferSchemaType<typeof schemaInstance>
 		const where: QueryType<FavoritesType> = {
 			favoritesId: updateFavoritesRequest.favoritesId,
 		}
+		const { collectionName, schemaInstance } = FavoritesSchema
 		const update: UpdateType<FavoritesType> = {
 			editDateTime: new Date().getTime(),
 		}
@@ -832,6 +846,35 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 	} catch (error) {
 		logging('ERROR', '调整收藏夹内部排序失败，未知原因：', error)
 		return { success: false, message: '调整收藏夹内部排序失败，未知原因' }
+	}
+}
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL
+ * @param uuid 用户 UUID
+ * @param token 用户 Token
+ * @returns 获取用于上传收藏夹封面图的预签名 URL 的请求响应
+ */
+export const getFavoritesCoverUploadSignedUrlService = async (uuid: string, token: string): Promise<GetFavoritesCoverUploadSignedUrlResponseDto> => {
+	try {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，用户校验未通过')
+			return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，用户校验未通过' }
+		}
+		const now = new Date().getTime()
+		const fileName = `favorites-cover-${uuid}-${generateSecureRandomString(32)}-${now}`
+		try {
+			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
+			if (signedUrl) {
+				return { success: true, message: '获取用于上传收藏夹封面图的预签名 URL 成功', result: { fileName, signedUrl } }
+			}
+		} catch (error) {
+			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，请求失败', error)
+			return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，请求失败' }
+		}
+	} catch (error) {
+		logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 时出错：', error)
+		return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 时出错，未知原因' }
 	}
 }
 

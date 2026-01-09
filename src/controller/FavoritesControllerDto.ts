@@ -243,3 +243,20 @@ export type ReorderFavoritesDetailResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 }
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL 的响应结果
+ */
+export type GetFavoritesCoverUploadSignedUrlResponseDto = {
+	/** 请求是否成功，成功返回 true，否则返回 false */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 请求到的收藏夹封面图上传预签名 URL 数据 */
+	result?: {
+		/** 预签名 URL */
+		signedUrl: string;
+		/** 文件名 */
+		fileName: string;
+	};
+}
