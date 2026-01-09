@@ -1,7 +1,7 @@
-import { addToFavoritesService, createFavoritesService, deleteFavoritesService, getFavoritesDetailService, getFavoritesService, removeFromFavoritesService, reorderFavoritesDetailService, updateFavoritesService } from '../service/FavoritesService.js'
+import { addToFavoritesService, createFavoritesService, deleteFavoritesService, getFavoritesByUidService, getFavoritesDetailService, getFavoritesService, removeFromFavoritesService, reorderFavoritesDetailService, updateFavoritesService } from '../service/FavoritesService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { parseInteger } from '../common/ValidTool.js'
-import { AddToFavoritesRequestDto, CreateFavoritesRequestDto, DeleteFavoritesRequestDto, GetFavoritesDetailRequestDto, RemoveFromFavoritesRequestDto, ReorderFavoritesDetailRequestDto, UpdateFavoritesRequestDto } from './FavoritesControllerDto.js'
+import { AddToFavoritesRequestDto, CreateFavoritesRequestDto, DeleteFavoritesRequestDto, GetFavoritesByUidRequestDto, GetFavoritesDetailRequestDto, RemoveFromFavoritesRequestDto, ReorderFavoritesDetailRequestDto, UpdateFavoritesRequestDto } from './FavoritesControllerDto.js'
 
 /**
  * 创建收藏夹
@@ -28,7 +28,7 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 }
 
 /**
- * 获取当前登录用户的收藏夹列表
+ * 获取当前登录用户自己的收藏夹列表
  * @param ctx context
  * @param next context
  */
@@ -41,6 +41,31 @@ export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const getFavoritesResponse = await getFavoritesService(uuid, token)
 	ctx.body = getFavoritesResponse
+	await next()
+}
+
+/**
+ * 获取指定用户的收藏夹列表（需要验证用户整体可见性设置）
+ * @param ctx context
+ * @param next context
+ */
+export const getFavoritesByUidController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInteger(ctx.query.uid as string)
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	if (!uuid || !token) {
+		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
+		return
+	}
+	if (!uid || uid < 1) {
+		ctx.body = { success: false, message: '参数不合法：uid 无效' }
+		return
+	}
+	const getFavoritesByUidRequest: GetFavoritesByUidRequestDto = {
+		uid,
+	}
+	const getFavoritesByUidResponse = await getFavoritesByUidService(getFavoritesByUidRequest, uuid, token)
+	ctx.body = getFavoritesByUidResponse
 	await next()
 }
 

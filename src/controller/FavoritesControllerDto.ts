@@ -52,7 +52,7 @@ export type CreateFavoritesResponseDto = {
 }
 
 /**
- * 获取某个用户的收藏夹
+ * 获取当前登录用户自己的收藏夹列表
  */
 export type GetFavoritesResponseDto = {
 	/** 是否请求成功 */
@@ -60,6 +60,26 @@ export type GetFavoritesResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 	/** 如果成功，返回用户所有的收藏夹 */
+	result?: Favorites[];
+}
+
+/**
+ * 获取指定用户收藏夹列表的请求载荷
+ */
+export type GetFavoritesByUidRequestDto = {
+	/** 目标用户 UID - 非空 */
+	uid: number;
+}
+
+/**
+ * 获取指定用户收藏夹列表的请求响应
+ */
+export type GetFavoritesByUidResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回可见的收藏夹列表 */
 	result?: Favorites[];
 }
 

@@ -1,9 +1,10 @@
 import mongoose, { InferSchemaType } from 'mongoose'
-import { AddToFavoritesRequestDto, AddToFavoritesResponseDto, CreateFavoritesRequestDto, CreateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, GetFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
+import { AddToFavoritesRequestDto, AddToFavoritesResponseDto, CreateFavoritesRequestDto, CreateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, GetFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
 import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesDetailSchema, FavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
+import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
 import { logging } from './loggingService.js'
@@ -108,10 +109,10 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 }
 
 /**
- * 获取当前登录用户的收藏夹列表
+ * 获取当前登录用户自己的收藏夹列表
  * @param uuid 用户 UUID
  * @param token 用户 Token
- * @returns 获取当前登录用户的收藏夹列表的请求响应
+ * @returns 获取当前登录用户自己的收藏夹列表的请求响应
  */
 export const getFavoritesService = async (uuid: string, token: string): Promise<GetFavoritesResponseDto> => {
 	try {
@@ -164,6 +165,132 @@ export const getFavoritesService = async (uuid: string, token: string): Promise<
 	} catch (error) {
 		logging('ERROR', '获取收藏夹失败，未知原因：', error)
 		return { success: false, message: '获取收藏夹失败，未知原因' }
+	}
+}
+
+/**
+ * 获取指定用户的收藏夹列表（需要验证用户整体可见性设置）
+ * @param getFavoritesByUidRequest 获取指定用户收藏夹列表的请求载荷
+ * @param uuid 查看者用户 UUID
+ * @param token 查看者用户 Token
+ * @returns 获取指定用户收藏夹列表的请求响应
+ */
+export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavoritesByUidRequestDto, uuid: string, token: string): Promise<GetFavoritesByUidResponseDto> => {
+	try {
+		if (!getFavoritesByUidRequest.uid) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，参数校验失败')
+			return { success: false, message: '获取指定用户收藏夹列表失败，参数校验失败' }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，用户校验失败')
+			return { success: false, message: '获取指定用户收藏夹列表失败，用户校验失败' }
+		}
+
+		const viewerUid = await getUserUid(uuid)
+		if (!viewerUid) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，查看者用户ID不存在')
+			return { success: false, message: '获取指定用户收藏夹列表失败，查看者用户ID不存在' }
+		}
+
+		const targetUid = getFavoritesByUidRequest.uid
+		const targetUuid = await getUserUuid(targetUid)
+		if (!targetUuid) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，目标用户不存在')
+			return { success: false, message: '获取指定用户收藏夹列表失败，目标用户不存在' }
+		}
+
+		// 如果是查看自己的收藏夹，直接返回所有收藏夹
+		if (targetUid === viewerUid) {
+			return await getFavoritesService(uuid, token)
+		}
+
+		// 第一层验证：检查用户整体的收藏夹可见性设置（privary.favorites）
+		const { collectionName: userSettingsCollectionName, schemaInstance: userSettingsSchemaInstance } = UserSettingsSchema
+		type UserSettings = InferSchemaType<typeof userSettingsSchemaInstance>
+		const userSettingsWhere: QueryType<UserSettings> = {
+			UUID: targetUuid,
+		}
+		const userSettingsSelect: SelectType<UserSettings> = {
+			userPrivaryVisibilitiesSetting: 1,
+		}
+		const userSettingsResult = await selectDataFromMongoDB<UserSettings>(userSettingsWhere, userSettingsSelect, userSettingsSchemaInstance, userSettingsCollectionName)
+		
+		if (userSettingsResult.success && userSettingsResult.result && userSettingsResult.result.length > 0) {
+			const userSettings = userSettingsResult.result[0]
+			const favoritesPrivacySetting = userSettings.userPrivaryVisibilitiesSetting?.find(
+				(setting: any) => setting.privaryId === 'privary.favorites'
+			)
+
+			if (favoritesPrivacySetting) {
+				if (favoritesPrivacySetting.visibilitiesType === 'private') {
+					logging('ERROR', '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有')
+					return { success: false, message: '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有' }
+				} else if (favoritesPrivacySetting.visibilitiesType === 'following') {
+					// 需要检查是否关注了目标用户
+					const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+					type Following = InferSchemaType<typeof followingSchemaInstance>
+					const followingWhere: QueryType<Following> = {
+						followerUuid: uuid,
+						followingUuid: targetUuid,
+					}
+					const followingSelect: SelectType<Following> = {
+						followerUuid: 1,
+						followingUuid: 1,
+					}
+					const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
+					if (!followingResult.success || !followingResult.result || followingResult.result.length === 0) {
+						logging('ERROR', '获取指定用户收藏夹列表失败，需要关注该用户才能查看收藏夹')
+						return { success: false, message: '获取指定用户收藏夹列表失败，需要关注该用户才能查看收藏夹' }
+					}
+					// 已关注，继续获取收藏夹列表
+				}
+				// 'public' 继续获取收藏夹列表
+			}
+			// 如果没有设置用户整体可见性，默认视为 'public'，继续获取收藏夹列表
+		}
+
+		// 第二层验证：获取收藏夹列表，并根据单个收藏夹的可见性设置过滤
+		const { collectionName, schemaInstance } = FavoritesSchema
+		type FavoritesType = InferSchemaType<typeof schemaInstance>
+		const getFavoritesQuery: QueryType<FavoritesType> = {
+			creator: targetUid,
+		}
+		const getFavoritesSelect: SelectType<FavoritesType> = {
+			favoritesId: 1,
+			creator: 1,
+			editor: 1,
+			favoritesTitle: 1,
+			favoritesBio: 1,
+			favoritesCover: 1,
+			favoritesVisibility: 1,
+			favoritesCreateDateTime: 1,
+		}
+
+		try {
+			const getFavoritesResult = await selectDataFromMongoDB<FavoritesType>(getFavoritesQuery, getFavoritesSelect, schemaInstance, collectionName)
+			const favorites = getFavoritesResult?.result
+			if (!getFavoritesResult.success || !favorites) {
+				logging('ERROR', '获取指定用户收藏夹列表失败，查询收藏夹数据失败')
+				return { success: false, message: '获取指定用户收藏夹列表失败，查询收藏夹数据失败' }
+			}
+
+			// 过滤：只返回查看者有权限查看的收藏夹
+			const visibleFavorites = []
+			for (const fav of favorites) {
+				if (await checkFavoritesViewPermission(fav.favoritesId, viewerUid, uuid)) {
+					visibleFavorites.push(fav)
+				}
+			}
+
+			return { success: true, message: '获取指定用户收藏夹列表成功', result: visibleFavorites }
+		} catch (error) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，查询收藏夹数据时出错', error)
+			return { success: false, message: '获取指定用户收藏夹列表失败，查询收藏夹数据时出错' }
+		}
+	} catch (error) {
+		logging('ERROR', '获取指定用户收藏夹列表失败，未知原因：', error)
+		return { success: false, message: '获取指定用户收藏夹列表失败，未知原因' }
 	}
 }
 
@@ -769,7 +896,7 @@ const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: numb
 		const favorites = result.result[0]
 		const { creator, editor, favoritesVisibility } = favorites
 
-		// 如果是创建者或维护者，始终可以查看
+		// 如果是创建者或维护者，始终可以查看（不受任何可见性设置限制）
 		if (creator === viewerUid) {
 			return true
 		}
@@ -777,13 +904,61 @@ const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: numb
 			return true
 		}
 
-		// 根据可见性设置判断
+		// 如果不是创建者或维护者，需要检查两层可见性设置
+
+		// 第一层：检查用户整体的收藏夹可见性设置（privary.favorites）
+		const creatorUuid = await getUserUuid(creator)
+		if (creatorUuid) {
+			const { collectionName: userSettingsCollectionName, schemaInstance: userSettingsSchemaInstance } = UserSettingsSchema
+			type UserSettings = InferSchemaType<typeof userSettingsSchemaInstance>
+			const userSettingsWhere: QueryType<UserSettings> = {
+				UUID: creatorUuid,
+			}
+			const userSettingsSelect: SelectType<UserSettings> = {
+				userPrivaryVisibilitiesSetting: 1,
+			}
+			const userSettingsResult = await selectDataFromMongoDB<UserSettings>(userSettingsWhere, userSettingsSelect, userSettingsSchemaInstance, userSettingsCollectionName)
+			if (userSettingsResult.success && userSettingsResult.result && userSettingsResult.result.length > 0) {
+				const userSettings = userSettingsResult.result[0]
+				const favoritesPrivacySetting = userSettings.userPrivaryVisibilitiesSetting?.find(
+					(setting: any) => setting.privaryId === 'privary.favorites'
+				)
+
+				if (favoritesPrivacySetting) {
+					if (favoritesPrivacySetting.visibilitiesType === 'private') {
+						// 用户整体设置为私有，拒绝访问
+						return false
+					} else if (favoritesPrivacySetting.visibilitiesType === 'following') {
+						// 用户整体设置为仅关注者，需要检查是否关注了创建者
+						const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+						type Following = InferSchemaType<typeof followingSchemaInstance>
+						const followingWhere: QueryType<Following> = {
+							followerUuid: viewerUuid,
+							followingUuid: creatorUuid,
+						}
+						const followingSelect: SelectType<Following> = {
+							followerUuid: 1,
+							followingUuid: 1,
+						}
+						const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
+						if (!followingResult.success || !followingResult.result || followingResult.result.length === 0) {
+							// 未关注，拒绝访问
+							return false
+						}
+						// 已关注，继续检查单个收藏夹的可见性设置
+					}
+					// 'public' 继续检查单个收藏夹的可见性设置
+				}
+				// 如果没有设置用户整体可见性，默认视为 'public'，继续检查单个收藏夹的可见性设置
+			}
+		}
+
+		// 第二层：检查单个收藏夹的可见性设置
 		if (favoritesVisibility === -1) {
 			// 私有：只有创建者和维护者可以查看（上面已检查）
 			return false
 		} else if (favoritesVisibility === 0) {
 			// 仅关注者：需要检查查看者是否关注了创建者
-			const creatorUuid = await getUserUuid(creator)
 			if (!creatorUuid) {
 				return false
 			}

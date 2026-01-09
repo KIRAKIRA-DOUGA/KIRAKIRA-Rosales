@@ -1,7 +1,7 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
-import { addToFavoritesController, createFavoritesController, deleteFavoritesController, getFavoritesController, getFavoritesDetailController, removeFromFavoritesController, reorderFavoritesDetailController, updateFavoritesController } from '../controller/FavoritesController.js'
+import { addToFavoritesController, createFavoritesController, deleteFavoritesController, getFavoritesByUidController, getFavoritesController, getFavoritesDetailController, removeFromFavoritesController, reorderFavoritesDetailController, updateFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
 	adminClearUserInfoController,
@@ -619,8 +619,12 @@ router.post('/favorites/create', createFavoritesController) // 创建收藏夹
 // 	"favoritesVisibility": 1
 // }
 
-router.get('/favorites', getFavoritesController) // 获取当前登录用户的收藏夹列表
+router.get('/favorites', getFavoritesController) // 获取当前登录用户自己的收藏夹列表
 // https://localhost:9999/favorites
+// cookie: uuid, token
+
+router.get('/favorites/byUid', getFavoritesByUidController) // 获取指定用户的收藏夹列表（需要验证用户整体可见性设置）
+// https://localhost:9999/favorites/byUid?uid=123
 // cookie: uuid, token
 
 router.post('/favorites/add', addToFavoritesController) // 添加内容到收藏夹
