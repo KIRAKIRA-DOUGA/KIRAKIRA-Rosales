@@ -42,6 +42,20 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 					return { success: false, message: '创建收藏夹失败，收藏夹数量已达上限（100个）' }
 				}
 
+				// 检查是否已存在同名收藏夹（不考虑已删除的收藏夹）
+				const duplicateWhere: QueryType<FavoritesType> = {
+					creator: uid,
+					favoritesTitle: createFavoritesRequest.favoritesTitle,
+				}
+				const duplicateSelect: SelectType<FavoritesType> = {
+					favoritesId: 1,
+				}
+				const duplicateResult = await selectDataFromMongoDB<FavoritesType>(duplicateWhere, duplicateSelect, favoritesSchemaInstance, favoritesCollectionName)
+				if (duplicateResult.success && duplicateResult.result && duplicateResult.result.length > 0) {
+					logging('ERROR', '创建收藏夹失败，已存在同名收藏夹')
+					return { success: false, message: '创建收藏夹失败，不能创建同名收藏夹' }
+				}
+
 				const { favoritesTitle, favoritesBio, favoritesCover, favoritesVisibility } = createFavoritesRequest
 				const { collectionName, schemaInstance } = FavoritesSchema
 				const now = new Date().getTime()
