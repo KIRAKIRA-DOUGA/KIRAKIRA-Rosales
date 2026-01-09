@@ -41,6 +41,7 @@ import {
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
+import { cancelVideoDownvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, emitVideoUpvoteController } from '../controller/VideoVoteController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
@@ -446,6 +447,34 @@ router.get('/video/pending', getPendingReviewVideoController) // 获取待审核
 router.post('/video/pending/approved', approvePendingReviewVideoController) // 通过一个待审核视频 // WARN: 仅限管理员
 // https://localhost:9999/video/pending/approved
 // cookie: uid, token
+
+router.post('/video/upvote', emitVideoUpvoteController) // 用户为视频点赞
+// https://localhost:9999/video/upvote
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
+
+router.post('/video/downvote', emitVideoDownvoteController) // 用户为视频点踩
+// https://localhost:9999/video/downvote
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
+
+router.delete('/video/upvote/cancel', cancelVideoUpvoteController) // 用户取消一个视频的点赞
+// https://localhost:9999/video/upvote/cancel
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
+
+router.delete('/video/downvote/cancel', cancelVideoDownvoteController) // 用户取消一个视频的点踩
+// https://localhost:9999/video/downvote/cancel
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
 
 
 

@@ -18,6 +18,7 @@ import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUser
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { logging } from './loggingService.js'
+import { getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 
 /**
  * 上传视频
@@ -488,6 +489,12 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					video.uploaderInfo.isSelf = true
 				}
 			}
+
+			// 8. 计算视频的点赞数和点踩数
+			const upvoteCount = await getVideoUpvoteCount(video.videoId)
+			const downvoteCount = await getVideoDownvoteCount(video.videoId)
+			video.upvoteCount = upvoteCount
+			video.downvoteCount = downvoteCount
 
 			return {
 				success: true,

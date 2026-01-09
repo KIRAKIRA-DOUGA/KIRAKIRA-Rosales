@@ -172,6 +172,10 @@ export type GetVideoByKvidResponseDto = {
 		copyright: string;
 		/** 视频 TAG */
 		videoTagList: VideoTag[];
+		/** 视频点赞数 */
+		upvoteCount?: number;
+		/** 视频点踩数 */
+		downvoteCount?: number;
 	};
 } & BlockState
 
