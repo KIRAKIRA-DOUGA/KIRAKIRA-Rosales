@@ -172,6 +172,8 @@ export type GetVideoByKvidResponseDto = {
 		copyright: string;
 		/** 视频 TAG */
 		videoTagList: VideoTag[];
+		/** 视频收藏数（被同一个人收藏进多个收藏夹也只算一个） */
+		favoritesCount?: number;
 	};
 } & BlockState
 

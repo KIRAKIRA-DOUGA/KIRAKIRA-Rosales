@@ -8,6 +8,7 @@ import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseD
 import { DbPoolOptions, deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
+import { FavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
@@ -487,6 +488,30 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				if (video.uploaderUUID === selectorUuid) {
 					video.uploaderInfo.isSelf = true
 				}
+			}
+
+			// 8. 计算视频收藏数（被同一个人收藏进多个收藏夹也只算一个）
+			try {
+				const { collectionName: favoritesDetailCollectionName, schemaInstance: favoritesDetailSchemaInstance } = FavoritesDetailSchema
+				type FavoritesDetailType = InferSchemaType<typeof favoritesDetailSchemaInstance>
+				const favoritesWhere: QueryType<FavoritesDetailType> = {
+					category: 'video',
+					id: String(video.videoId),
+				}
+				const favoritesSelect: SelectType<FavoritesDetailType> = {
+					operator: 1,
+				}
+				const favoritesResult = await selectDataFromMongoDB<FavoritesDetailType>(favoritesWhere, favoritesSelect, favoritesDetailSchemaInstance, favoritesDetailCollectionName)
+				if (favoritesResult.success && favoritesResult.result) {
+					// 使用 Set 去重，确保每个用户只计算一次
+					const uniqueOperators = new Set(favoritesResult.result.map(item => item.operator))
+					video.favoritesCount = uniqueOperators.size
+				} else {
+					video.favoritesCount = 0
+				}
+			} catch (error) {
+				logging('ERROR', '计算视频收藏数失败：', error)
+				video.favoritesCount = 0
 			}
 
 			return {
