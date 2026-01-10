@@ -44,7 +44,7 @@ import { approvePendingReviewVideoController, checkVideoExistController, deleteV
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
-import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowingListController, getFollowerListController, getFollowStatsController, getFollowingVideosController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
+import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowingListController, getFollowerListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
 
 const router = new Router()
@@ -730,13 +730,6 @@ router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和�
 // https://localhost:9999/feed/stats?targetUid=999
 // cookie: uuid, token (可选)
 
-router.get('/feed/following/videos', getFollowingVideosController) // 获取我关注对象的最新视频
-// https://localhost:9999/feed/following/videos?num=20&offset=0
-// cookie: uuid, token
-//
-// Query:
-// num
-// offset
 
 
 
