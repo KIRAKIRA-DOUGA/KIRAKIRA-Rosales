@@ -30,6 +30,9 @@ import { logging } from './loggingService.js'
 
 /**
  * 生成会话ID（确保两个用户之间的会话ID唯一且一致）
+ * @param user1Uid 用户1的UID
+ * @param user2Uid 用户2的UID
+ * @returns 格式化的会话ID字符串，格式为 conv_{uid1}_{uid2}，其中uid按数字大小排序
  */
 const generateConversationId = (user1Uid: number, user2Uid: number): string => {
 	// 按数字大小排序，确保两个用户之间的会话ID唯一
@@ -39,6 +42,9 @@ const generateConversationId = (user1Uid: number, user2Uid: number): string => {
 
 /**
  * 检查是否已经发送过消息但对方未回复
+ * @param senderUuid 发送者的UUID
+ * @param receiverUuid 接收者的UUID
+ * @returns 如果发送者已发送消息但接收者未回复（或接收者的最后一条消息在发送者的最后一条消息之前），返回true；否则返回false
  */
 const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string): Promise<boolean> => {
 	try {
@@ -97,6 +103,9 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 
 /**
  * 获取或创建会话
+ * @param user1Uuid 用户1的UUID
+ * @param user2Uuid 用户2的UUID
+ * @returns 包含成功状态和会话信息的对象。如果成功，返回 { success: true, conversation: ... }；如果失败，返回 { success: false }
  */
 const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
 	try {
@@ -1118,6 +1127,8 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 
 /**
  * 验证发送消息请求
+ * @param request 发送消息的请求载荷
+ * @returns 如果请求合法返回true，否则返回false
  */
 const checkSendMessageRequest = (request: SendMessageRequestDto): boolean => {
 	return (
@@ -1133,6 +1144,8 @@ const checkSendMessageRequest = (request: SendMessageRequestDto): boolean => {
 
 /**
  * 验证获取消息列表请求
+ * @param request 获取消息列表的请求载荷
+ * @returns 如果请求合法返回true，否则返回false
  */
 const checkGetMessageListRequest = (request: GetMessageListRequestDto): boolean => {
 	return (
@@ -1145,6 +1158,8 @@ const checkGetMessageListRequest = (request: GetMessageListRequestDto): boolean 
 
 /**
  * 验证标记消息已读请求
+ * @param request 标记消息已读的请求载荷
+ * @returns 如果请求合法返回true，否则返回false
  */
 const checkMarkMessageReadRequest = (request: MarkMessageReadRequestDto): boolean => {
 	return (
@@ -1157,6 +1172,8 @@ const checkMarkMessageReadRequest = (request: MarkMessageReadRequestDto): boolea
 
 /**
  * 验证删除会话请求
+ * @param request 删除会话的请求载荷
+ * @returns 如果请求合法返回true，否则返回false
  */
 const checkDeleteConversationRequest = (request: DeleteConversationRequestDto): boolean => {
 	return (
@@ -1169,6 +1186,8 @@ const checkDeleteConversationRequest = (request: DeleteConversationRequestDto): 
 
 /**
  * 验证删除消息请求
+ * @param request 删除消息的请求载荷
+ * @returns 如果请求合法返回true，否则返回false
  */
 const checkDeleteMessageRequest = (request: DeleteMessageRequestDto): boolean => {
 	return (
@@ -1181,6 +1200,8 @@ const checkDeleteMessageRequest = (request: DeleteMessageRequestDto): boolean =>
 
 /**
  * 验证撤回消息请求
+ * @param request 撤回消息的请求载荷
+ * @returns 如果请求合法返回true，否则返回false
  */
 const checkRecallMessageRequest = (request: RecallMessageRequestDto): boolean => {
 	return (
