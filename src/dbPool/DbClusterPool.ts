@@ -138,7 +138,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
  * @param options 设置项
  * @returns 插入数据的状态和结果
  */
-export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T, schema: Schema, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultsType<T & {_id: string}> > => {
+export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultsType<T & {_id: string}> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -150,7 +150,7 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
+			mongoModel = mongoose.model(collectionName, schema) as mongoose.Model<T> // WARN: ‘as mongoose.Model<T>’ is for fixing issue [mongoose/issues/15681](https://github.com/Automattic/mongoose/issues/15681)
 		}
 		mongoModel.createIndexes()
 		const model = new mongoModel(data)
@@ -187,7 +187,7 @@ export const deleteDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
+			mongoModel = mongoose.model(collectionName, schema) as mongoose.Model<T> // WARN: ‘as mongoose.Model<T>’ is for fixing issue [mongoose/issues/15681](https://github.com/Automattic/mongoose/issues/15681)
 		}
 
 		try {
@@ -237,7 +237,7 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
+			mongoModel = mongoose.model(collectionName, schema) as mongoose.Model<T> // WARN: ‘as mongoose.Model<T>’ is for fixing issue [mongoose/issues/15681](https://github.com/Automattic/mongoose/issues/15681)
 		}
 
 		let pageSize = undefined
@@ -279,7 +279,7 @@ export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, col
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
+			mongoModel = mongoose.model(collectionName, schema) as mongoose.Model<T> // WARN: ‘as mongoose.Model<T>’ is for fixing issue [mongoose/issues/15681](https://github.com/Automattic/mongoose/issues/15681)
 		}
 
 		try {
@@ -316,7 +316,7 @@ export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: 
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
+			mongoModel = mongoose.model(collectionName, schema) as mongoose.Model<T> // WARN: ‘as mongoose.Model<T>’ is for fixing issue [mongoose/issues/15681](https://github.com/Automattic/mongoose/issues/15681)
 		}
 		try {
 			const updateResult = await mongoModel.updateMany(where, { $set: update }, options)
@@ -366,7 +366,7 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
+			mongoModel = mongoose.model(collectionName, schema) as mongoose.Model<T> // WARN: ‘as mongoose.Model<T>’ is for fixing issue [mongoose/issues/15681](https://github.com/Automattic/mongoose/issues/15681)
 		}
 		try {
 			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: true, upsert, ...options }))?.toObject() as T
@@ -446,7 +446,7 @@ export const getNextSequenceValuePool = async (sequenceId: string, sequenceDefau
 
 /**
  * 在指定的 schema 及 collectionName 中，通过 MongoDB 唯一 ID 找到一个值并自增
- * @param mongodbId MongoDB 唯一 ID
+ * @param collectionUniqueId - MongoDB 集合的 _id 字段值
  * @param key 查找到的 MongoDB 文档中被自增的项
  * @param schema MongoDB Schema 对象
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名），需要与 schema 一致
@@ -457,7 +457,7 @@ export const getNextSequenceValuePool = async (sequenceId: string, sequenceDefau
 type KeysMatching<T, V> = {
   [K in keyof T]: T[K] extends V ? K : never
 }[keyof T]
-export const findOneAndPlusByMongodbId = async <T extends Record<string, unknown>, U extends KeysMatching<T, number>, P = unknown>(mongodbId: string, key: U, schema: Schema<T>, collectionName: string, sequenceStep: number = 1, options?: DbPoolOptions<T, P>): Promise< DbPoolResultType<number> > => {
+export const findOneAndPlusByMongodbId = async <T, U extends KeysMatching<T, number>, P = unknown>(collectionUniqueId: string, key: U, schema: Schema<T>, collectionName: string, sequenceStep: number = 1, options?: DbPoolOptions<T, P>): Promise< DbPoolResultType<number> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -469,15 +469,18 @@ export const findOneAndPlusByMongodbId = async <T extends Record<string, unknown
 		if (mongoose.models[collectionName]) {
 			mongoModel = mongoose.models[collectionName]
 		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
+			mongoModel = mongoose.model(collectionName, schema) as mongoose.Model<T> // WARN: ‘as mongoose.Model<T>’ is for fixing issue [mongoose/issues/15681](https://github.com/Automattic/mongoose/issues/15681)
 		}
 		try {
 			const sequenceDocument = await mongoModel.findOneAndUpdate(
-				{ _id: mongodbId },
+				{ _id: collectionUniqueId },
 				{ $inc: ({ [key]: sequenceStep }) as AnyKeys<T> }, // key: 自增键；sequenceStep: 步长（可以为负数）
-				{ new: false, options },
+				{ new: false, ...options },
 			)
-			return { success: true, message: '自增成功', result: sequenceDocument.sequenceValue as number }
+			if (!sequenceDocument || !(key in sequenceDocument)) {
+				logging('ERROR', '自增失败，未找到对应的文档或键不存在：', undefined, { collectionName, collectionUniqueId, key }, { recordingLogs: false })
+			}
+			return { success: true, message: '自增成功', result: sequenceDocument[key] as number }
 		} catch (error) {
 			logging('ERROR', '自增失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '自增失败', error }
