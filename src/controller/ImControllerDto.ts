@@ -16,9 +16,13 @@ export type SendMessageRequestDto = {
  * 发送消息的请求响应
  */
 export type SendMessageResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
+	/** 消息 ID */
 	messageId?: string
+	/** 会话 ID */
 	conversationId?: string
 }
 
@@ -43,18 +47,28 @@ export type ConversationInfo = {
 	conversationId: string
 	/** 对方用户信息 */
 	otherUser: {
+		/** 用户 UID */
 		uid: number
+		/** 用户 UUID */
 		uuid: string
+		/** 用户名 */
 		username?: string
+		/** 用户昵称 */
 		userNickname?: string
+		/** 用户头像 */
 		avatar?: string
 	}
 	/** 最后一条消息 */
 	lastMessage?: {
+		/** 消息 ID */
 		messageId: string
+		/** 消息类型 */
 		messageType: IM_MESSAGE_TYPE
+		/** 消息内容 */
 		content: string
+		/** 发送者 UUID */
 		senderUuid: string
+		/** 创建时间 */
 		createDateTime: number
 	}
 	/** 未读消息数 */
@@ -67,9 +81,13 @@ export type ConversationInfo = {
  * 获取会话列表的请求响应
  */
 export type GetConversationListResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
+	/** 会话列表 */
 	conversations?: ConversationInfo[]
+	/** 总数 */
 	totalCount?: number
 }
 
@@ -120,9 +138,13 @@ export type MessageInfo = {
  * 获取消息列表的请求响应
  */
 export type GetMessageListResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
+	/** 消息列表 */
 	messages?: MessageInfo[]
+	/** 总数 */
 	totalCount?: number
 }
 
@@ -140,8 +162,11 @@ export type MarkMessageReadRequestDto = {
  * 标记消息已读的请求响应
  */
 export type MarkMessageReadResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
+	/** 已标记的消息数量 */
 	markedCount?: number
 }
 
@@ -157,7 +182,9 @@ export type DeleteConversationRequestDto = {
  * 删除会话的请求响应
  */
 export type DeleteConversationResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
 }
 
@@ -173,7 +200,9 @@ export type DeleteMessageRequestDto = {
  * 删除消息的请求响应
  */
 export type DeleteMessageResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
 }
 
@@ -189,7 +218,9 @@ export type RecallMessageRequestDto = {
  * 撤回消息的请求响应
  */
 export type RecallMessageResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
 }
 
@@ -197,8 +228,11 @@ export type RecallMessageResponseDto = {
  * 获取未读消息总数的请求响应
  */
 export type GetUnreadMessageCountResponseDto = {
+	/** 执行结果 */
 	success: boolean
+	/** 文本消息 */
 	message: string
+	/** 未读消息总数 */
 	totalUnreadCount?: number
 }
 
