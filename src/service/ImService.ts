@@ -41,10 +41,10 @@ const generateConversationId = (user1Uid: number, user2Uid: number): string => {
 }
 
 /**
- * 检查是否已经发送过消息但对方未回复
+ * 检查是否已经发送过3条或更多消息但对方未回复
  * @param senderUuid 发送者的UUID
  * @param receiverUuid 接收者的UUID
- * @returns 如果发送者已发送消息但接收者未回复（或接收者的最后一条消息在发送者的最后一条消息之前），返回true；否则返回false
+ * @returns 如果发送者已发送3条或更多消息但接收者未回复（或接收者的最后一条消息在发送者的最后一条消息之前），返回true；否则返回false
  */
 const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string): Promise<boolean> => {
 	try {
@@ -74,6 +74,11 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			return false
 		}
 
+		// 如果发送的消息少于3条，允许继续发送
+		if (senderMessages.result.length < 3) {
+			return false
+		}
+
 		// 查找是否有接收者回复的消息
 		const receiverMessageWhere: QueryType<Message> = {
 			conversationId,
@@ -83,10 +88,11 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		}
 		const receiverMessageSelect: SelectType<Message> = {
 			messageId: 1,
+			createdDateTime: 1,
 		}
 		const receiverMessages = await selectDataFromMongoDB<Message>(receiverMessageWhere, receiverMessageSelect, messageSchemaInstance, messageCollectionName)
 
-		// 如果发送者有消息，但接收者没有回复，则返回true
+		// 如果发送者有3条或更多消息，但接收者没有回复，则返回true
 		if (receiverMessages.success && receiverMessages.result && receiverMessages.result.length > 0) {
 			// 检查接收者的最后一条消息是否在发送者的最后一条消息之后
 			const lastSenderMessage = senderMessages.result.sort((a, b) => b.createdDateTime - a.createdDateTime)[0]
@@ -94,6 +100,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			return lastReceiverMessage.createdDateTime < lastSenderMessage.createdDateTime
 		}
 
+		// 如果接收者完全没有回复，且发送者已发送3条或更多消息，则返回true
 		return receiverMessages.success && (!receiverMessages.result || receiverMessages.result.length === 0)
 	} catch (error) {
 		logging('ERROR', '检查是否有未回复消息失败：', error)
@@ -251,15 +258,15 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			return { success: false, message: '发送消息失败：对方已拉黑你' }
 		}
 
-		// 检查发送者是否关注了接收者
-		const isFollowing = await checkUserIsFollowing(senderUuid, receiverUuid)
+		// 检查接收者是否关注了发送者（如果B关注了A，那么A可以无限发消息给B）
+		const isFollowing = await checkUserIsFollowing(receiverUuid, senderUuid)
 
-		// 如果发送者没有关注接收者，检查是否已经发送过消息但对方未回复
+		// 如果接收者没有关注发送者，检查是否已经发送过3条或更多消息但对方未回复
 		if (!isFollowing) {
 			const hasUnreplied = await checkHasUnrepliedMessage(senderUuid, receiverUuid)
 			if (hasUnreplied) {
-				logging('ERROR', '发送消息失败：对方未回复你的上一条消息，且你未关注对方')
-				return { success: false, message: '发送消息失败：对方未回复你的上一条消息，且你未关注对方' }
+				logging('ERROR', '发送消息失败：对方未回复你的消息，且对方未关注你（最多可发送3条消息）')
+				return { success: false, message: '发送消息失败：对方未回复你的消息，且对方未关注你（最多可发送3条消息）' }
 			}
 		}
 
