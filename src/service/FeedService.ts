@@ -1476,6 +1476,20 @@ const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequest
 }
 
 /**
+ * 验证获取用户关注列表的参数
+ * @param targetUid 目标用户 UID
+ * @param num 分页参数：返回数量
+ * @param offset 分页参数：偏移量
+ * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
+ */
+export const validateGetFollowingListParams = (targetUid: number | null | undefined, num: number | null | undefined, offset: number | null | undefined): { success: boolean; message?: string } => {
+	if (!targetUid || !num || offset === undefined) {
+		return { success: false, message: '参数不合法' }
+	}
+	return { success: true }
+}
+
+/**
  * 校验获取用户关注列表的请求载荷
  * @param getFollowingListRequest 获取用户关注列表的请求载荷
  * @returns 合法返回 true, 不合法返回 false

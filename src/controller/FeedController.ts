@@ -1,5 +1,5 @@
 import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, getFollowingVideosService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, getFollowingVideosService, removeUidFromFeedGroupService, unfollowingUploaderService, validateGetFollowingListParams } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
 import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowingListRequestDto, GetFollowerListRequestDto, GetFollowStatsRequestDto, GetFollowingVideosRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
@@ -297,15 +297,16 @@ export const getFollowingListController = async (ctx: koaCtx, next: koaNext) => 
 	const num = parseInteger(numStr)
 	const offset = parseInteger(offsetStr)
 
-	if (!targetUid || !num || offset === undefined) {
-		ctx.body = { success: false, message: '参数不合法' }
+	const validationResult = validateGetFollowingListParams(targetUid, num, offset)
+	if (!validationResult.success) {
+		ctx.body = { success: false, message: validationResult.message || '参数不合法' }
 		return
 	}
 
 	const getFollowingListRequest: GetFollowingListRequestDto = {
-		targetUid,
-		num,
-		offset,
+		targetUid: targetUid!,
+		num: num!,
+		offset: offset!,
 	}
 
 	ctx.body = await getFollowingListService(getFollowingListRequest, uuid, token)
