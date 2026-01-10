@@ -298,8 +298,6 @@ export type GetFeedContentResponseDto = {
 export type UserInfoForFollowList = {
 	/** 用户 UID */
 	uid: number;
-	/** 用户 UUID */
-	uuid: string;
 	/** 用户名 */
 	username?: string;
 	/** 用户昵称 */

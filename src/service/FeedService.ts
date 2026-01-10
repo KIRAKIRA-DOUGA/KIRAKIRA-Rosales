@@ -1138,7 +1138,6 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 
 		const result: UserInfoForFollowList[] = (listResult.result || []).map((item: any) => ({
 			uid: item.uid || 0,
-			uuid: item.uuid || '',
 			username: item.username,
 			userNickname: item.userNickname,
 			avatar: item.avatar,
@@ -1257,7 +1256,8 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 		}
 
 		// 如果查看者已登录，检查查看者是否关注了每个粉丝
-		let result: UserInfoForFollowList[] = (listResult.result || []).map((item: any) => ({
+		// 先创建包含 uuid 的临时数组用于内部逻辑
+		const tempResult = (listResult.result || []).map((item: any) => ({
 			uid: item.uid || 0,
 			uuid: item.uuid || '',
 			username: item.username,
@@ -1267,9 +1267,11 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 			isFollowing: false,
 		}))
 
+		let result: UserInfoForFollowList[] = tempResult.map(({ uuid, ...rest }) => rest)
+
 		if (uuid) {
 			// 批量检查查看者是否关注了这些用户
-			const followerUuids = result.map(r => r.uuid).filter(Boolean)
+			const followerUuids = tempResult.map(r => r.uuid).filter(Boolean)
 			if (followerUuids.length > 0) {
 				const followingWhere: QueryType<Following> = {
 					followerUuid: uuid,
@@ -1281,10 +1283,13 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 				const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
 				if (followingResult.success && followingResult.result) {
 					const followingUuidSet = new Set(followingResult.result.map(f => f.followingUuid))
-					result = result.map(r => ({
-						...r,
-						isFollowing: followingUuidSet.has(r.uuid),
-					}))
+					result = tempResult.map(r => {
+						const { uuid, ...rest } = r
+						return {
+							...rest,
+							isFollowing: followingUuidSet.has(uuid),
+						}
+					})
 				}
 			}
 		}
