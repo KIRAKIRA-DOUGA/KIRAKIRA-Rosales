@@ -282,6 +282,8 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			}
 		}
 
+		// TODO: 增加消息审核 / 关键词过滤
+
 		const session = await createAndStartSession()
 
 		try {
