@@ -23,7 +23,7 @@ import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserServ
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '../common/MongoDBSessionTool.js'
-import { BlockListSchema } from '../dbPool/schema/BlockSchema.js'
+import { checkIsBlockedByOtherUserService } from './BlockService.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
@@ -35,27 +35,6 @@ const generateConversationId = (user1Uid: number, user2Uid: number): string => {
 	// 按数字大小排序，确保两个用户之间的会话ID唯一
 	const [uid1, uid2] = [user1Uid, user2Uid].sort((a, b) => a - b)
 	return `conv_${uid1}_${uid2}`
-}
-
-/**
- * 检查用户是否被拉黑
- */
-const checkUserIsBlocked = async (blockerUuid: string, blockedUuid: string): Promise<boolean> => {
-	try {
-		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
-		type BlockList = InferSchemaType<typeof blockListSchemaInstance>
-		const where: QueryType<BlockList> = {
-			type: 'block',
-			operatorUUID: blockerUuid,
-			value: blockedUuid,
-		}
-		const select: SelectType<BlockList> = {}
-		const result = await selectDataFromMongoDB<BlockList>(where, select, blockListSchemaInstance, blockListCollectionName)
-		return result.success && result.result && result.result.length > 0
-	} catch (error) {
-		logging('ERROR', '检查用户是否被拉黑失败：', error)
-		return false
-	}
 }
 
 /**
@@ -262,8 +241,8 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 		}
 
 		// 检查接收者是否拉黑了发送者
-		const isBlocked = await checkUserIsBlocked(receiverUuid, senderUuid)
-		if (isBlocked) {
+		const checkBlockResult = await checkIsBlockedByOtherUserService({ targetUid: receiverUid }, senderUuid, token)
+		if (checkBlockResult.success && checkBlockResult.isBlocked) {
 			logging('ERROR', '发送消息失败：对方已拉黑你')
 			return { success: false, message: '发送消息失败：对方已拉黑你' }
 		}
