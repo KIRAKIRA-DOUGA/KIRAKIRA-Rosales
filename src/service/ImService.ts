@@ -144,7 +144,7 @@ const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: nu
 		if (existing.success && existing.result && existing.result.length > 0) {
 			const conversation = existing.result[0]
 			const now = new Date().getTime()
-			
+
 			// 确定当前用户在会话中是 user1 还是 user2（通过比较 UUID）
 			const isUser1 = currentUserUuid === conversation.user1Uuid
 			const deletedField = isUser1 ? 'user1Deleted' : 'user2Deleted'
@@ -666,7 +666,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			senderUuid: item.senderUuid || '',
 			receiverUuid: item.receiverUuid || '',
 			messageType: item.messageType || IM_MESSAGE_TYPE.text,
-			content: (item.isRecalled ? '[消息已撤回]' : item.content) || '', // 如果已撤回，显示"[消息已撤回]"
+			content: (item.isRecalled ? '' : item.content) || '',
 			isRead: item.isRead || false,
 			readTime: item.readTime,
 			isRecalled: item.isRecalled || false,
