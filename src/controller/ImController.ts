@@ -134,11 +134,6 @@ export const deleteConversationController = async (ctx: koaCtx, next: koaNext) =
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
-
 	const data = ctx.request.body as Partial<DeleteConversationRequestDto>
 
 	const deleteConversationRequest: DeleteConversationRequestDto = {
@@ -160,11 +155,6 @@ export const deleteMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
-
 	const data = ctx.request.body as Partial<DeleteMessageRequestDto>
 
 	const deleteMessageRequest: DeleteMessageRequestDto = {
@@ -185,11 +175,6 @@ export const deleteMessageController = async (ctx: koaCtx, next: koaNext) => {
 export const getUnreadMessageCountController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
 
 	const getUnreadMessageCountResult = await getUnreadMessageCountService(uuid, token)
 	ctx.body = getUnreadMessageCountResult
