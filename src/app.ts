@@ -27,7 +27,7 @@ app
 
 // 连接 MongoDB
 await connectMongoDBCluster().catch(error => {
-	logging('ERROR', '无法连接到 MongoDB', error, {}, { recordingLogs: false })
+	logging('ERROR', '无法连接到 MongoDB', error, undefined, { recordingLogs: false })
 	process.exit()
 })
 
