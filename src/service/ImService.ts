@@ -112,9 +112,10 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
  * 获取或创建会话
  * @param currentUserUuid 当前用户的UUID（发送者）
  * @param otherUserUid 对方的UID（接收者）
+ * @param session 可选的 MongoDB 会话（用于事务）
  * @returns 包含成功状态和会话信息的对象。如果成功，返回 { success: true, conversation: ... }；如果失败，返回 { success: false }
  */
-const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: number): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
+const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: number, session?: any): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
 	try {
 		// 获取当前用户的UID
 		const currentUserUid = await getUserUid(currentUserUuid)
@@ -138,7 +139,7 @@ const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: nu
 			conversationId,
 		}
 		const select: SelectType<Conversation> = {}
-		const existing = await selectDataFromMongoDB<Conversation>(where, select, conversationSchemaInstance, conversationCollectionName)
+		const existing = await selectDataFromMongoDB<Conversation>(where, select, conversationSchemaInstance, conversationCollectionName, session ? { session } : undefined)
 
 		if (existing.success && existing.result && existing.result.length > 0) {
 			const conversation = existing.result[0]
@@ -170,7 +171,8 @@ const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: nu
 					updateWhere,
 					updateData,
 					conversationSchemaInstance,
-					conversationCollectionName
+					conversationCollectionName,
+					session ? { session } : undefined
 				)
 				if (updateResult.success && updateResult.result) {
 					return { success: true, conversation: updateResult.result }
@@ -197,7 +199,7 @@ const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: nu
 			editedBy: currentUserUuid, // 使用发起创建的用户（发送者）
 		}
 
-		const insertResult = await insertData2MongoDB<Conversation>(conversationData, conversationSchemaInstance, conversationCollectionName)
+		const insertResult = await insertData2MongoDB<Conversation>(conversationData, conversationSchemaInstance, conversationCollectionName, session ? { session } : undefined)
 
 		if (!insertResult.success) {
 			return { success: false }
@@ -288,7 +290,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 
 		try {
 			// 获取或创建会话（传入当前用户的UUID和对方的UID）
-			const conversationResult = await getOrCreateConversation(senderUuid, receiverUid)
+			const conversationResult = await getOrCreateConversation(senderUuid, receiverUid, session)
 			if (!conversationResult.success || !conversationResult.conversation) {
 				await abortAndEndSession(session)
 				logging('ERROR', '发送消息失败：创建会话失败')
