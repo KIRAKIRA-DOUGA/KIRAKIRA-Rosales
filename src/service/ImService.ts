@@ -24,7 +24,7 @@ import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.
 import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '../common/MongoDBSessionTool.js'
 import { checkIsBlockedByOtherUserService } from './BlockService.js'
-import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
+import { checkUserIsFollowing } from './FeedService.js'
 import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
 
@@ -35,26 +35,6 @@ const generateConversationId = (user1Uid: number, user2Uid: number): string => {
 	// 按数字大小排序，确保两个用户之间的会话ID唯一
 	const [uid1, uid2] = [user1Uid, user2Uid].sort((a, b) => a - b)
 	return `conv_${uid1}_${uid2}`
-}
-
-/**
- * 检查用户是否关注了对方
- */
-const checkUserIsFollowing = async (followerUuid: string, followingUuid: string): Promise<boolean> => {
-	try {
-		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-		type Following = InferSchemaType<typeof followingSchemaInstance>
-		const where: QueryType<Following> = {
-			followerUuid,
-			followingUuid,
-		}
-		const select: SelectType<Following> = {}
-		const result = await selectDataFromMongoDB<Following>(where, select, followingSchemaInstance, followingCollectionName)
-		return result.success && result.result && result.result.length > 0
-	} catch (error) {
-		logging('ERROR', '检查用户是否关注失败：', error)
-		return false
-	}
 }
 
 /**

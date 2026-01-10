@@ -97,6 +97,52 @@ export const followingUploaderService = async (followingUploaderRequest: Followi
 }
 
 /**
+ * 检查用户是否关注了对方
+ * @param followerUuid 关注者的 UUID
+ * @param followingUuid 被关注者的 UUID
+ * @returns 如果关注返回 true，否则返回 false
+ */
+export const checkUserIsFollowing = async (followerUuid: string, followingUuid: string): Promise<boolean> => {
+	try {
+		// 参数验证
+		if (!followerUuid || !followingUuid) {
+			logging('ERROR', '检查用户是否关注失败：参数不合法')
+			return false
+		}
+
+		// 不能自己关注自己
+		if (followerUuid === followingUuid) {
+			return false
+		}
+
+		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+		type Following = InferSchemaType<typeof followingSchemaInstance>
+
+		const where: QueryType<Following> = {
+			followerUuid,
+			followingUuid,
+		}
+
+		const select: SelectType<Following> = {
+			followerUuid: 1,
+			followingUuid: 1,
+		}
+
+		const result = await selectDataFromMongoDB<Following>(where, select, followingSchemaInstance, followingCollectionName)
+
+		if (!result.success) {
+			logging('ERROR', '检查用户是否关注失败：查询失败')
+			return false
+		}
+
+		return result.result && result.result.length > 0
+	} catch (error) {
+		logging('ERROR', '检查用户是否关注失败：未知错误', error)
+		return false
+	}
+}
+
+/**
  * 用户取消关注一个创作者
  * @param followingUploaderRequest 用户取消关注一个创作者的请求载荷
  * @param uuid 用户的 UUID
