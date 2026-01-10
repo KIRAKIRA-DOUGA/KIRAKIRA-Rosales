@@ -96,7 +96,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		}
 		const senderMessageSelect: SelectType<Message> = {
 			messageId: 1,
-			createDateTime: 1,
+			createdDateTime: 1,
 		}
 		const senderMessages = await selectDataFromMongoDB<Message>(senderMessageWhere, senderMessageSelect, messageSchemaInstance, messageCollectionName)
 
@@ -119,9 +119,9 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		// 如果发送者有消息，但接收者没有回复，则返回true
 		if (receiverMessages.success && receiverMessages.result && receiverMessages.result.length > 0) {
 			// 检查接收者的最后一条消息是否在发送者的最后一条消息之后
-			const lastSenderMessage = senderMessages.result.sort((a, b) => b.createDateTime - a.createDateTime)[0]
-			const lastReceiverMessage = receiverMessages.result.sort((a, b) => b.createDateTime - a.createDateTime)[0]
-			return lastReceiverMessage.createDateTime < lastSenderMessage.createDateTime
+			const lastSenderMessage = senderMessages.result.sort((a, b) => b.createdDateTime - a.createdDateTime)[0]
+			const lastReceiverMessage = receiverMessages.result.sort((a, b) => b.createdDateTime - a.createdDateTime)[0]
+			return lastReceiverMessage.createdDateTime < lastSenderMessage.createdDateTime
 		}
 
 		return receiverMessages.success && (!receiverMessages.result || receiverMessages.result.length === 0)
@@ -163,7 +163,8 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 				}
 				const updateData: UpdateType<Conversation> = {
 					[deletedField]: false,
-					editDateTime: now,
+					editedDateTime: now,
+					editedBy: user1Uuid, // 使用发起恢复的用户
 				}
 
 				// 如果对方也删除了，同时恢复对方
@@ -195,8 +196,10 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 			user2UnreadCount: 0,
 			user1Deleted: false,
 			user2Deleted: false,
-			createDateTime: now,
-			editDateTime: now,
+			createdDateTime: now,
+			createdBy: user1Uuid, // 使用发起创建的用户（发送者）
+			editedDateTime: now,
+			editedBy: user1Uuid, // 使用发起创建的用户（发送者）
 		}
 
 		const insertResult = await insertData2MongoDB<Conversation>(conversationData, conversationSchemaInstance, conversationCollectionName)
@@ -310,8 +313,10 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 				senderDeleted: false,
 				receiverDeleted: false,
 				isRecalled: false,
-				createDateTime: now,
-				editDateTime: now,
+				createdDateTime: now,
+				createdBy: senderUuid,
+				editedDateTime: now,
+				editedBy: senderUuid,
 			}
 
 			const insertMessageResult = await insertData2MongoDB<Message>(messageData, messageSchemaInstance, messageCollectionName, { session })
@@ -335,7 +340,8 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 				lastMessageId: messageId,
 				lastMessageTime: now,
 				[updateField]: (conversation[updateField] || 0) + 1,
-				editDateTime: now,
+				editedDateTime: now,
+				editedBy: senderUuid,
 			}
 
 			const updateConversationResult = await findOneAndUpdateData4MongoDB<Conversation>(
@@ -401,7 +407,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 				},
 			},
 			{
-				$sort: { lastMessageTime: -1, editDateTime: -1 },
+				$sort: { lastMessageTime: -1, editedDateTime: -1 },
 			},
 			{
 				$skip: skip,
@@ -479,7 +485,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 									},
 								},
 								senderUuid: '$lastMessageData.senderUuid',
-								createDateTime: '$lastMessageData.createDateTime',
+								createdDateTime: '$lastMessageData.createdDateTime',
 							},
 							else: null,
 						},
@@ -599,7 +605,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 				},
 			},
 			{
-				$sort: { createDateTime: -1 },
+				$sort: { createdDateTime: -1 },
 			},
 			{
 				$skip: skip,
@@ -618,7 +624,10 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 					readTime: 1,
 					isRecalled: 1,
 					recalledTime: 1,
-					createDateTime: 1,
+					createdDateTime: 1,
+					createdBy: 1,
+					editedDateTime: 1,
+					editedBy: 1,
 				},
 			},
 		]
@@ -658,7 +667,10 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			readTime: item.readTime,
 			isRecalled: item.isRecalled || false,
 			recalledTime: item.recalledTime,
-			createDateTime: item.createDateTime || 0,
+			createdDateTime: item.createdDateTime || 0,
+			createdBy: item.createdBy || '',
+			editedDateTime: item.editedDateTime || 0,
+			editedBy: item.editedBy || '',
 		}))
 
 		// 如果需要标记为已读
@@ -750,7 +762,8 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 					const messageUpdate: UpdateType<Message> = {
 						isRead: true,
 						readTime: now,
-						editDateTime: now,
+						editedDateTime: now,
+						editedBy: uuid,
 					}
 					const updateResult = await findOneAndUpdateData4MongoDB<Message>(
 						messageWhere,
@@ -780,7 +793,8 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 						const messageUpdate: UpdateType<Message> = {
 							isRead: true,
 							readTime: now,
-							editDateTime: now,
+							editedDateTime: now,
+							editedBy: uuid,
 						}
 						const updateResult = await findOneAndUpdateData4MongoDB<Message>(
 							{ messageId: msg.messageId },
@@ -803,7 +817,8 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 				}
 				const conversationUpdate: UpdateType<Conversation> = {
 					[unreadCountField]: Math.max(0, (conversation[unreadCountField] || 0) - markedCount),
-					editDateTime: now,
+					editedDateTime: now,
+					editedBy: uuid,
 				}
 				await findOneAndUpdateData4MongoDB<Conversation>(
 					conversationUpdateWhere,
@@ -886,7 +901,8 @@ export const deleteConversationService = async (deleteConversationRequest: Delet
 		const updateData: UpdateType<Conversation> = {
 			[updateField]: true,
 			[updateTimeField]: now,
-			editDateTime: now,
+			editedDateTime: now,
+			editedBy: uuid,
 		}
 
 		const updateResult = await findOneAndUpdateData4MongoDB<Conversation>(
@@ -962,7 +978,8 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 		}
 		const updateData: UpdateType<Message> = {
 			[updateField]: true,
-			editDateTime: now,
+			editedDateTime: now,
+			editedBy: uuid,
 		}
 
 		const updateResult = await findOneAndUpdateData4MongoDB<Message>(
@@ -1107,7 +1124,8 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 		const updateData: UpdateType<Message> = {
 			isRecalled: true,
 			recalledTime: now,
-			editDateTime: now,
+			editedDateTime: now,
+			editedBy: uuid,
 		}
 
 		const updateResult = await findOneAndUpdateData4MongoDB<Message>(

@@ -42,9 +42,13 @@ class ImConversationSchemaFactory {
 		/** 用户2删除会话的时间 */
 		user2DeletedTime: { type: Number },
 		/** 系统专用字段-创建时间 - 非空 */
-		createDateTime: { type: Number, required: true },
+		createdDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建者 - 非空 */
+		createdBy: { type: String, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
+		editedDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑者 - 非空 */
+		editedBy: { type: String, required: true },
 	}
 	/** MongoDB 集合名 */
 	collectionName = 'im-conversation'
@@ -55,8 +59,8 @@ class ImConversationSchemaFactory {
 		// 添加复合索引：确保两个用户之间只有一个会话
 		this.schemaInstance.index({ user1Uuid: 1, user2Uuid: 1 }, { unique: true })
 		// 添加索引：用于查询用户的会话列表
-		this.schemaInstance.index({ user1Uuid: 1, editDateTime: -1 })
-		this.schemaInstance.index({ user2Uuid: 1, editDateTime: -1 })
+		this.schemaInstance.index({ user1Uuid: 1, editedDateTime: -1 })
+		this.schemaInstance.index({ user2Uuid: 1, editedDateTime: -1 })
 	}
 }
 export const ImConversationSchema = new ImConversationSchemaFactory()
@@ -93,9 +97,13 @@ class ImMessageSchemaFactory {
 		/** 撤回时间 */
 		recalledTime: { type: Number },
 		/** 系统专用字段-创建时间 - 非空 */
-		createDateTime: { type: Number, required: true },
+		createdDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建者 - 非空 */
+		createdBy: { type: String, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
+		editedDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑者 - 非空 */
+		editedBy: { type: String, required: true },
 	}
 	/** MongoDB 集合名 */
 	collectionName = 'im-message'
@@ -104,9 +112,9 @@ class ImMessageSchemaFactory {
 	
 	constructor() {
 		// 添加索引：用于查询会话的消息列表
-		this.schemaInstance.index({ conversationId: 1, createDateTime: -1 })
+		this.schemaInstance.index({ conversationId: 1, createdDateTime: -1 })
 		// 添加索引：用于查询用户的未读消息
-		this.schemaInstance.index({ receiverUuid: 1, isRead: 1, createDateTime: -1 })
+		this.schemaInstance.index({ receiverUuid: 1, isRead: 1, createdDateTime: -1 })
 	}
 }
 export const ImMessageSchema = new ImMessageSchemaFactory()

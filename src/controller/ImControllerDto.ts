@@ -69,7 +69,7 @@ export type ConversationInfo = {
 		/** 发送者 UUID */
 		senderUuid: string
 		/** 创建时间 */
-		createDateTime: number
+		createdDateTime: number
 	}
 	/** 未读消息数 */
 	unreadCount: number
@@ -131,7 +131,13 @@ export type MessageInfo = {
 	/** 撤回时间 */
 	recalledTime?: number
 	/** 创建时间 */
-	createDateTime: number
+	createdDateTime: number
+	/** 创建者 UUID */
+	createdBy: string
+	/** 最后编辑时间 */
+	editedDateTime: number
+	/** 最后编辑者 UUID */
+	editedBy: string
 }
 
 /**
