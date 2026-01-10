@@ -21,7 +21,7 @@
 			"script": "dev-hot",
 			"problemMatcher": [],
 			"label": "npm: dev-hot",
-			"detail": "npm dev-hot - 启动本地后端开发热重载服务器"
+			"detail": "npm dev-hot - 启动本地后端开发服务器，并启用自动重载"
 		}
 	]
 }
