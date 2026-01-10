@@ -18,6 +18,7 @@ import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUser
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { logging } from './loggingService.js'
+import { recordVideoWatchAndIncrementCount } from './VideoWatchService.js'
 
 /**
  * 上传视频
@@ -456,8 +457,14 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					return { success: true, message: '视频页 - 未获取到视频，你已屏蔽该用户', isBlockedByOther, isBlocked: true, isHidden }
 				}
 
+				// 5. 记录视频播放量（一人一天看一个视频不管看多少次都只加一次播放量）
+				const watchCountIncremented = await recordVideoWatchAndIncrementCount(videoId, selectorUuid)
+				if (watchCountIncremented) {
+					// 如果成功增加播放量，更新返回的视频信息中的播放量
+					video.watchedCount = (video.watchedCount || 0) + 1
+				}
 
-				// 5. 存储浏览历史记录
+				// 6. 存储浏览历史记录
 				const createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto = {
 					uuid: selectorUuid,
 					category: 'video',
@@ -465,7 +472,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 				await createOrUpdateBrowsingHistoryService(createOrUpdateBrowsingHistoryRequest, selectorUuid, selectorToken)
 
-				// 6. 查询上传者是否被当前登录用户关注
+				// 7. 查询上传者是否被当前登录用户关注
 				const { collectionName: followingSchemaCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
 				type Following = InferSchemaType<typeof followingSchemaInstance>
 				const followingWhere: QueryType<Following> = {
@@ -483,7 +490,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					video.uploaderInfo.isFollowing = true
 				}
 
-				// 7. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
+				// 8. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
 				if (video.uploaderUUID === selectorUuid) {
 					video.uploaderInfo.isSelf = true
 				}
