@@ -62,7 +62,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			conversationId,
 			senderUuid,
 			receiverUuid,
-			senderDeleted: { $ne: true } as any,
+			senderDeleted: false,
 		}
 		const senderMessageSelect: SelectType<Message> = {
 			messageId: 1,
@@ -84,7 +84,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			conversationId,
 			senderUuid: receiverUuid,
 			receiverUuid: senderUuid,
-			senderDeleted: { $ne: true } as any,
+			senderDeleted: false,
 		}
 		const receiverMessageSelect: SelectType<Message> = {
 			messageId: 1,
@@ -405,8 +405,8 @@ export const getConversationListService = async (getConversationListRequest: Get
 			{
 				$match: {
 					$or: [
-						{ user1Uuid: uuid, user1Deleted: { $ne: true } },
-						{ user2Uuid: uuid, user2Deleted: { $ne: true } },
+						{ user1Uuid: uuid, user1Deleted: false },
+						{ user2Uuid: uuid, user2Deleted: false },
 					],
 				},
 			},
@@ -505,8 +505,8 @@ export const getConversationListService = async (getConversationListRequest: Get
 			{
 				$match: {
 					$or: [
-						{ user1Uuid: uuid, user1Deleted: { $ne: true } },
-						{ user2Uuid: uuid, user2Deleted: { $ne: true } },
+						{ user1Uuid: uuid, user1Deleted: false },
+						{ user2Uuid: uuid, user2Deleted: false },
 					],
 				},
 			},
@@ -603,8 +603,8 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 				$match: {
 					conversationId,
 					$or: [
-						{ senderUuid: uuid, senderDeleted: { $ne: true } },
-						{ receiverUuid: uuid, receiverDeleted: { $ne: true } },
+						{ senderUuid: uuid, senderDeleted: false },
+						{ receiverUuid: uuid, receiverDeleted: false },
 					],
 				},
 			},
@@ -642,8 +642,8 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 				$match: {
 					conversationId,
 					$or: [
-						{ senderUuid: uuid, senderDeleted: { $ne: true } },
-						{ receiverUuid: uuid, receiverDeleted: { $ne: true } },
+						{ senderUuid: uuid, senderDeleted: false },
+						{ receiverUuid: uuid, receiverDeleted: false },
 					],
 				},
 			},
@@ -1026,8 +1026,8 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 			{
 				$match: {
 					$or: [
-						{ user1Uuid: uuid, user1Deleted: { $ne: true } },
-						{ user2Uuid: uuid, user2Deleted: { $ne: true } },
+						{ user1Uuid: uuid, user1Deleted: false },
+						{ user2Uuid: uuid, user2Deleted: false },
 					],
 				},
 			},
