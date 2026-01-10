@@ -316,10 +316,13 @@ export type UserInfoForFollowList = {
 export type GetFollowingListRequestDto = {
 	/** 目标用户的 UID */
 	targetUid: number;
-	/** 分页参数：返回数量 */
-	num: number;
-	/** 分页参数：偏移量 */
-	offset: number;
+	/** 分页查询 */
+	pagination: {
+		/** 当前在第几页 */
+		page: number;
+		/** 一页显示多少条 */
+		pageSize: number;
+	};
 }
 
 /**
@@ -342,10 +345,13 @@ export type GetFollowingListResponseDto = {
 export type GetFollowerListRequestDto = {
 	/** 目标用户的 UID */
 	targetUid: number;
-	/** 分页参数：返回数量 */
-	num: number;
-	/** 分页参数：偏移量 */
-	offset: number;
+	/** 分页查询 */
+	pagination: {
+		/** 当前在第几页 */
+		page: number;
+		/** 一页显示多少条 */
+		pageSize: number;
+	};
 }
 
 /**
@@ -388,10 +394,13 @@ export type GetFollowStatsResponseDto = {
  * 获取我关注对象的最新视频的请求载荷
  */
 export type GetFollowingVideosRequestDto = {
-	/** 分页参数：返回数量 */
-	num: number;
-	/** 分页参数：偏移量 */
-	offset: number;
+	/** 分页查询 */
+	pagination: {
+		/** 当前在第几页 */
+		page: number;
+		/** 一页显示多少条 */
+		pageSize: number;
+	};
 }
 
 /**

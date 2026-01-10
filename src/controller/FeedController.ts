@@ -1,5 +1,5 @@
 import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, getFollowingVideosService, removeUidFromFeedGroupService, unfollowingUploaderService, validateGetFollowingListParams } from "../service/FeedService.js";
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, getFollowingVideosService, removeUidFromFeedGroupService, unfollowingUploaderService, validateGetFollowingListParams, validateGetFollowerListParams, validateGetFollowingVideosParams } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
 import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowingListRequestDto, GetFollowerListRequestDto, GetFollowStatsRequestDto, GetFollowingVideosRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
@@ -290,14 +290,14 @@ export const getFollowingListController = async (ctx: koaCtx, next: koaNext) => 
 	const token = ctx.cookies.get('token')
 	
 	const targetUidStr = ctx.query.targetUid as string
-	const numStr = ctx.query.num as string
-	const offsetStr = ctx.query.offset as string
+	const pageStr = ctx.query.page as string
+	const pageSizeStr = ctx.query.pageSize as string
 
 	const targetUid = parseInteger(targetUidStr)
-	const num = parseInteger(numStr)
-	const offset = parseInteger(offsetStr)
+	const page = parseInteger(pageStr)
+	const pageSize = parseInteger(pageSizeStr)
 
-	const validationResult = validateGetFollowingListParams(targetUid, num, offset)
+	const validationResult = validateGetFollowingListParams(targetUid, page, pageSize)
 	if (!validationResult.success) {
 		ctx.body = { success: false, message: validationResult.message || '参数不合法' }
 		return
@@ -305,8 +305,10 @@ export const getFollowingListController = async (ctx: koaCtx, next: koaNext) => 
 
 	const getFollowingListRequest: GetFollowingListRequestDto = {
 		targetUid: targetUid!,
-		num: num!,
-		offset: offset!,
+		pagination: {
+			page: page!,
+			pageSize: pageSize!,
+		},
 	}
 
 	ctx.body = await getFollowingListService(getFollowingListRequest, uuid, token)
@@ -324,22 +326,25 @@ export const getFollowerListController = async (ctx: koaCtx, next: koaNext) => {
 	const token = ctx.cookies.get('token')
 	
 	const targetUidStr = ctx.query.targetUid as string
-	const numStr = ctx.query.num as string
-	const offsetStr = ctx.query.offset as string
+	const pageStr = ctx.query.page as string
+	const pageSizeStr = ctx.query.pageSize as string
 
 	const targetUid = parseInteger(targetUidStr)
-	const num = parseInteger(numStr)
-	const offset = parseInteger(offsetStr)
+	const page = parseInteger(pageStr)
+	const pageSize = parseInteger(pageSizeStr)
 
-	if (!targetUid || !num || offset === undefined) {
-		ctx.body = { success: false, message: '参数不合法' }
+	const validationResult = validateGetFollowerListParams(targetUid, page, pageSize)
+	if (!validationResult.success) {
+		ctx.body = { success: false, message: validationResult.message || '参数不合法' }
 		return
 	}
 
 	const getFollowerListRequest: GetFollowerListRequestDto = {
-		targetUid,
-		num,
-		offset,
+		targetUid: targetUid!,
+		pagination: {
+			page: page!,
+			pageSize: pageSize!,
+		},
 	}
 
 	ctx.body = await getFollowerListService(getFollowerListRequest, uuid, token)
@@ -382,14 +387,15 @@ export const getFollowingVideosController = async (ctx: koaCtx, next: koaNext) =
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	
-	const numStr = ctx.query.num as string
-	const offsetStr = ctx.query.offset as string
+	const pageStr = ctx.query.page as string
+	const pageSizeStr = ctx.query.pageSize as string
 
-	const num = parseInteger(numStr)
-	const offset = parseInteger(offsetStr)
+	const page = parseInteger(pageStr)
+	const pageSize = parseInteger(pageSizeStr)
 
-	if (!num || offset === undefined) {
-		ctx.body = { success: false, message: '参数不合法', videosCount: 0, videos: [] }
+	const validationResult = validateGetFollowingVideosParams(page, pageSize)
+	if (!validationResult.success) {
+		ctx.body = { success: false, message: validationResult.message || '参数不合法', videosCount: 0, videos: [] }
 		return
 	}
 
@@ -400,8 +406,10 @@ export const getFollowingVideosController = async (ctx: koaCtx, next: koaNext) =
 	}
 
 	const getFollowingVideosRequest: GetFollowingVideosRequestDto = {
-		num,
-		offset,
+		pagination: {
+			page: page!,
+			pageSize: pageSize!,
+		},
 	}
 
 	ctx.body = await getFollowingVideosService(getFollowingVideosRequest, uuid, token)

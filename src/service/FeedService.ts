@@ -919,7 +919,9 @@ export const getFollowingVideosService = async (getFollowingVideosRequest: GetFo
 			return { success: false, message: '获取关注对象最新视频失败：用户验证失败', videosCount: 0, videos: [] }
 		}
 
-		const { num, offset } = getFollowingVideosRequest
+		const { pagination } = getFollowingVideosRequest
+		const { page, pageSize } = pagination
+		const offset = (page - 1) * pageSize
 
 		// 1. 获取当前用户关注的所有用户 UUID 列表
 		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
@@ -986,7 +988,7 @@ export const getFollowingVideosService = async (getFollowingVideosRequest: GetFo
 				$skip: offset,
 			},
 			{
-				$limit: num,
+				$limit: pageSize,
 			},
 			{
 				$project: {
@@ -1057,7 +1059,9 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 			return { success: false, message: '获取关注列表失败：用户验证失败' }
 		}
 
-		const { targetUid, num, offset } = getFollowingListRequest
+		const { targetUid, pagination } = getFollowingListRequest
+		const { page, pageSize } = pagination
+		const offset = (page - 1) * pageSize
 		const targetUuid = await getUserUuid(targetUid)
 		if (!targetUuid) {
 			logging('ERROR', '获取关注列表失败：目标用户不存在')
@@ -1102,7 +1106,7 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 				$skip: offset,
 			},
 			{
-				$limit: num,
+				$limit: pageSize,
 			},
 			{
 				$lookup: {
@@ -1176,7 +1180,9 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 			return { success: false, message: '获取粉丝列表失败：用户验证失败' }
 		}
 
-		const { targetUid, num, offset } = getFollowerListRequest
+		const { targetUid, pagination } = getFollowerListRequest
+		const { page, pageSize } = pagination
+		const offset = (page - 1) * pageSize
 		const targetUuid = await getUserUuid(targetUid)
 		if (!targetUuid) {
 			logging('ERROR', '获取粉丝列表失败：目标用户不存在')
@@ -1221,7 +1227,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 				$skip: offset,
 			},
 			{
-				$limit: num,
+				$limit: pageSize,
 			},
 			{
 				$lookup: {
@@ -1478,12 +1484,48 @@ const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequest
 /**
  * 验证获取用户关注列表的参数
  * @param targetUid 目标用户 UID
- * @param num 分页参数：返回数量
- * @param offset 分页参数：偏移量
+ * @param page 分页参数：当前页码
+ * @param pageSize 分页参数：每页数量
  * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
  */
-export const validateGetFollowingListParams = (targetUid: number | null | undefined, num: number | null | undefined, offset: number | null | undefined): { success: boolean; message?: string } => {
-	if (!targetUid || !num || offset === undefined) {
+export const validateGetFollowingListParams = (targetUid: number | null | undefined, page: number | null | undefined, pageSize: number | null | undefined): { success: boolean; message?: string } => {
+	if (!targetUid || !page || !pageSize) {
+		return { success: false, message: '参数不合法' }
+	}
+	if (page < 1 || pageSize < 1 || pageSize > 200) {
+		return { success: false, message: '参数不合法' }
+	}
+	return { success: true }
+}
+
+/**
+ * 验证获取用户粉丝列表的参数
+ * @param targetUid 目标用户 UID
+ * @param page 分页参数：当前页码
+ * @param pageSize 分页参数：每页数量
+ * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
+ */
+export const validateGetFollowerListParams = (targetUid: number | null | undefined, page: number | null | undefined, pageSize: number | null | undefined): { success: boolean; message?: string } => {
+	if (!targetUid || !page || !pageSize) {
+		return { success: false, message: '参数不合法' }
+	}
+	if (page < 1 || pageSize < 1 || pageSize > 200) {
+		return { success: false, message: '参数不合法' }
+	}
+	return { success: true }
+}
+
+/**
+ * 验证获取关注对象最新视频的参数
+ * @param page 分页参数：当前页码
+ * @param pageSize 分页参数：每页数量
+ * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
+ */
+export const validateGetFollowingVideosParams = (page: number | null | undefined, pageSize: number | null | undefined): { success: boolean; message?: string } => {
+	if (!page || !pageSize) {
+		return { success: false, message: '参数不合法' }
+	}
+	if (page < 1 || pageSize < 1 || pageSize > 200) {
 		return { success: false, message: '参数不合法' }
 	}
 	return { success: true }
@@ -1499,13 +1541,14 @@ const checkGetFollowingListRequest = (getFollowingListRequest: GetFollowingListR
 		getFollowingListRequest.targetUid !== undefined &&
 		getFollowingListRequest.targetUid !== null &&
 		getFollowingListRequest.targetUid > 0 &&
-		getFollowingListRequest.num !== undefined &&
-		getFollowingListRequest.num !== null &&
-		getFollowingListRequest.num > 0 &&
-		getFollowingListRequest.num <= 200 &&
-		getFollowingListRequest.offset !== undefined &&
-		getFollowingListRequest.offset !== null &&
-		getFollowingListRequest.offset >= 0
+		getFollowingListRequest.pagination !== undefined &&
+		getFollowingListRequest.pagination.page !== undefined &&
+		getFollowingListRequest.pagination.page !== null &&
+		getFollowingListRequest.pagination.page > 0 &&
+		getFollowingListRequest.pagination.pageSize !== undefined &&
+		getFollowingListRequest.pagination.pageSize !== null &&
+		getFollowingListRequest.pagination.pageSize > 0 &&
+		getFollowingListRequest.pagination.pageSize <= 200
 	)
 }
 
@@ -1519,13 +1562,14 @@ const checkGetFollowerListRequest = (getFollowerListRequest: GetFollowerListRequ
 		getFollowerListRequest.targetUid !== undefined &&
 		getFollowerListRequest.targetUid !== null &&
 		getFollowerListRequest.targetUid > 0 &&
-		getFollowerListRequest.num !== undefined &&
-		getFollowerListRequest.num !== null &&
-		getFollowerListRequest.num > 0 &&
-		getFollowerListRequest.num <= 200 &&
-		getFollowerListRequest.offset !== undefined &&
-		getFollowerListRequest.offset !== null &&
-		getFollowerListRequest.offset >= 0
+		getFollowerListRequest.pagination !== undefined &&
+		getFollowerListRequest.pagination.page !== undefined &&
+		getFollowerListRequest.pagination.page !== null &&
+		getFollowerListRequest.pagination.page > 0 &&
+		getFollowerListRequest.pagination.pageSize !== undefined &&
+		getFollowerListRequest.pagination.pageSize !== null &&
+		getFollowerListRequest.pagination.pageSize > 0 &&
+		getFollowerListRequest.pagination.pageSize <= 200
 	)
 }
 
@@ -1548,13 +1592,14 @@ const checkGetFollowStatsRequest = (getFollowStatsRequest: GetFollowStatsRequest
  */
 const checkGetFollowingVideosRequest = (getFollowingVideosRequest: GetFollowingVideosRequestDto): boolean => {
 	return (
-		getFollowingVideosRequest.num !== undefined &&
-		getFollowingVideosRequest.num !== null &&
-		getFollowingVideosRequest.num > 0 &&
-		getFollowingVideosRequest.num <= 200 &&
-		getFollowingVideosRequest.offset !== undefined &&
-		getFollowingVideosRequest.offset !== null &&
-		getFollowingVideosRequest.offset >= 0
+		getFollowingVideosRequest.pagination !== undefined &&
+		getFollowingVideosRequest.pagination.page !== undefined &&
+		getFollowingVideosRequest.pagination.page !== null &&
+		getFollowingVideosRequest.pagination.page > 0 &&
+		getFollowingVideosRequest.pagination.pageSize !== undefined &&
+		getFollowingVideosRequest.pagination.pageSize !== null &&
+		getFollowingVideosRequest.pagination.pageSize > 0 &&
+		getFollowingVideosRequest.pagination.pageSize <= 200
 	)
 }
 
