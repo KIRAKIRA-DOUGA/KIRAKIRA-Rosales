@@ -19,7 +19,7 @@ import {
 	MessageInfo,
 } from '../controller/ImControllerDto.js'
 import { ImConversationSchema, ImMessageSchema, IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
-import { checkUserTokenByUuidService, getUserUuid } from './UserService.js'
+import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '../common/MongoDBSessionTool.js'
@@ -31,10 +31,10 @@ import { logging } from './loggingService.js'
 /**
  * 生成会话ID（确保两个用户之间的会话ID唯一且一致）
  */
-const generateConversationId = (user1Uuid: string, user2Uuid: string): string => {
-	// 按字典序排序，确保两个用户之间的会话ID唯一
-	const [uuid1, uuid2] = [user1Uuid, user2Uuid].sort()
-	return `conv_${uuid1}_${uuid2}`
+const generateConversationId = (user1Uid: number, user2Uid: number): string => {
+	// 按数字大小排序，确保两个用户之间的会话ID唯一
+	const [uid1, uid2] = [user1Uid, user2Uid].sort((a, b) => a - b)
+	return `conv_${uid1}_${uid2}`
 }
 
 /**
@@ -83,7 +83,12 @@ const checkUserIsFollowing = async (followerUuid: string, followingUuid: string)
  */
 const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string): Promise<boolean> => {
 	try {
-		const conversationId = generateConversationId(senderUuid, receiverUuid)
+		const senderUid = await getUserUid(senderUuid)
+		const receiverUid = await getUserUid(receiverUuid)
+		if (!senderUid || !receiverUid) {
+			return false
+		}
+		const conversationId = generateConversationId(senderUid, receiverUid)
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
 
@@ -136,7 +141,12 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
  */
 const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
 	try {
-		const conversationId = generateConversationId(user1Uuid, user2Uuid)
+		const user1Uid = await getUserUid(user1Uuid)
+		const user2Uid = await getUserUid(user2Uuid)
+		if (!user1Uid || !user2Uid) {
+			return { success: false }
+		}
+		const conversationId = generateConversationId(user1Uid, user2Uid)
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
 
