@@ -103,18 +103,26 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 
 /**
  * 获取或创建会话
- * @param user1Uuid 用户1的UUID
- * @param user2Uuid 用户2的UUID
+ * @param currentUserUuid 当前用户的UUID（发送者）
+ * @param otherUserUid 对方的UID（接收者）
  * @returns 包含成功状态和会话信息的对象。如果成功，返回 { success: true, conversation: ... }；如果失败，返回 { success: false }
  */
-const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
+const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: number): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
 	try {
-		const user1Uid = await getUserUid(user1Uuid)
-		const user2Uid = await getUserUid(user2Uuid)
-		if (!user1Uid || !user2Uid) {
+		// 获取当前用户的UID
+		const currentUserUid = await getUserUid(currentUserUuid)
+		if (!currentUserUid) {
 			return { success: false }
 		}
-		const conversationId = generateConversationId(user1Uid, user2Uid)
+
+		// 获取对方的UUID（仅用于数据库存储，不暴露给用户）
+		const otherUserUuid = await getUserUuid(otherUserUid)
+		if (!otherUserUuid) {
+			return { success: false }
+		}
+
+		// 生成会话ID（使用UID）
+		const conversationId = generateConversationId(currentUserUid, otherUserUid)
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
 
@@ -128,8 +136,9 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 		if (existing.success && existing.result && existing.result.length > 0) {
 			const conversation = existing.result[0]
 			const now = new Date().getTime()
-			const [uuid1, uuid2] = [user1Uuid, user2Uuid].sort()
-			const isUser1 = user1Uuid === uuid1
+			
+			// 确定当前用户在会话中是 user1 还是 user2（通过比较 UUID）
+			const isUser1 = currentUserUuid === conversation.user1Uuid
 			const deletedField = isUser1 ? 'user1Deleted' : 'user2Deleted'
 			const otherDeletedField = isUser1 ? 'user2Deleted' : 'user1Deleted'
 
@@ -142,7 +151,7 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 				const updateData: UpdateType<Conversation> = {
 					[deletedField]: false,
 					editedDateTime: now,
-					editedBy: user1Uuid, // 使用发起恢复的用户
+					editedBy: currentUserUuid, // 使用发起恢复的用户
 				}
 
 				// 如果对方也删除了，同时恢复对方
@@ -165,7 +174,8 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 
 		// 创建新会话
 		const now = new Date().getTime()
-		const [uuid1, uuid2] = [user1Uuid, user2Uuid].sort()
+		// 按 UUID 字典序排序，确保存储一致性
+		const [uuid1, uuid2] = [currentUserUuid, otherUserUuid].sort()
 		const conversationData: Conversation = {
 			conversationId,
 			user1Uuid: uuid1,
@@ -175,9 +185,9 @@ const getOrCreateConversation = async (user1Uuid: string, user2Uuid: string): Pr
 			user1Deleted: false,
 			user2Deleted: false,
 			createdDateTime: now,
-			createdBy: user1Uuid, // 使用发起创建的用户（发送者）
+			createdBy: currentUserUuid, // 使用发起创建的用户（发送者）
 			editedDateTime: now,
-			editedBy: user1Uuid, // 使用发起创建的用户（发送者）
+			editedBy: currentUserUuid, // 使用发起创建的用户（发送者）
 		}
 
 		const insertResult = await insertData2MongoDB<Conversation>(conversationData, conversationSchemaInstance, conversationCollectionName)
@@ -216,7 +226,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 
 		const { receiverUid, messageType, content } = sendMessageRequest
 
-		// 获取接收者UUID
+		// 获取接收者UUID（仅用于内部验证，不暴露）
 		const receiverUuid = await getUserUuid(receiverUid)
 		if (!receiverUuid) {
 			logging('ERROR', '发送消息失败：接收者不存在')
@@ -224,7 +234,12 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 		}
 
 		// 不能给自己发消息
-		if (senderUuid === receiverUuid) {
+		const senderUid = await getUserUid(senderUuid)
+		if (!senderUid) {
+			logging('ERROR', '发送消息失败：发送者不存在')
+			return { success: false, message: '发送消息失败：发送者不存在' }
+		}
+		if (senderUid === receiverUid) {
 			logging('ERROR', '发送消息失败：不能给自己发消息')
 			return { success: false, message: '发送消息失败：不能给自己发消息' }
 		}
@@ -263,8 +278,8 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 		const session = await createAndStartSession()
 
 		try {
-			// 获取或创建会话
-			const conversationResult = await getOrCreateConversation(senderUuid, receiverUuid)
+			// 获取或创建会话（传入当前用户的UUID和对方的UID）
+			const conversationResult = await getOrCreateConversation(senderUuid, receiverUid)
 			if (!conversationResult.success || !conversationResult.conversation) {
 				await abortAndEndSession(session)
 				logging('ERROR', '发送消息失败：创建会话失败')
@@ -305,8 +320,8 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			}
 
 			// 更新会话信息
-			const [uuid1, uuid2] = [senderUuid, receiverUuid].sort()
-			const isUser1 = senderUuid === uuid1
+			// 确定发送者在会话中是 user1 还是 user2（通过比较 UUID）
+			const isUser1 = senderUuid === conversation.user1Uuid
 			const updateField = isUser1 ? 'user2UnreadCount' : 'user1UnreadCount'
 
 			const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
