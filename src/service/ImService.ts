@@ -23,6 +23,7 @@ import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserServ
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '../common/MongoDBSessionTool.js'
+import { ClientSession } from 'mongoose'
 import { checkIsBlockedByOtherUserService } from './BlockService.js'
 import { checkUserIsFollowing } from './FeedService.js'
 import { v4 as uuidV4 } from 'uuid'
@@ -114,7 +115,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
  * @param session 可选的 MongoDB 会话（用于事务）
  * @returns 包含成功状态和会话信息的对象。如果成功，返回 { success: true, conversation: ... }；如果失败，返回 { success: false }
  */
-const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: number, session?: any): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
+const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: number, session?: ClientSession): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
 	try {
 		// 获取当前用户的UID
 		const currentUserUid = await getUserUid(currentUserUuid)
@@ -519,35 +520,38 @@ export const getConversationListService = async (getConversationListRequest: Get
 		}
 
 		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
-		const conversations = (conversationsResult.result || []).map((item: any): ConversationInfo => {
+		const conversations = (conversationsResult.result || []).map((item: unknown): ConversationInfo => {
+			const itemData = item as Record<string, unknown>
+			const lastMessageData = itemData.lastMessage as Record<string, unknown> | undefined
 			let lastMessage = undefined
-			if (item.lastMessage) {
+			if (lastMessageData) {
 				// 判断当前用户是否删除了这条消息
-				const isSender = item.lastMessage.senderUuid === uuid
-				const isDeleted = isSender ? item.lastMessage.senderDeleted : item.lastMessage.receiverDeleted
+				const isSender = lastMessageData.senderUuid === uuid
+				const isDeleted = isSender ? lastMessageData.senderDeleted : lastMessageData.receiverDeleted
 				
 				lastMessage = {
-					messageId: item.lastMessage.messageId || '',
-					messageType: item.lastMessage.messageType,
-					content: item.lastMessage.content || '',
-					senderUuid: item.lastMessage.senderUuid || '',
-					isRecalled: item.lastMessage.isRecalled || false,
-					isDeleted: isDeleted || false,
-					createdDateTime: item.lastMessage.createdDateTime || 0,
+					messageId: (lastMessageData.messageId as string) || '',
+					messageType: lastMessageData.messageType as IM_MESSAGE_TYPE,
+					content: (lastMessageData.content as string) || '',
+					senderUuid: (lastMessageData.senderUuid as string) || '',
+					isRecalled: (lastMessageData.isRecalled as boolean) || false,
+					isDeleted: (isDeleted as boolean) || false,
+					createdDateTime: (lastMessageData.createdDateTime as number) || 0,
 				}
 			}
 			
+			const otherUserData = itemData.otherUser as Record<string, unknown> | undefined
 			return {
-				conversationId: item.conversationId || '',
+				conversationId: (itemData.conversationId as string) || '',
 				otherUser: {
-					uid: item.otherUser?.uid || 0,
-					username: item.otherUser?.username,
-					userNickname: item.otherUser?.userNickname,
-					avatar: item.otherUser?.avatar,
+					uid: (otherUserData?.uid as number) || 0,
+					username: otherUserData?.username as string | undefined,
+					userNickname: otherUserData?.userNickname as string | undefined,
+					avatar: otherUserData?.avatar as string | undefined,
 				},
 				lastMessage,
-				unreadCount: item.unreadCount || 0,
-				lastMessageTime: item.lastMessageTime,
+				unreadCount: (itemData.unreadCount as number) || 0,
+				lastMessageTime: itemData.lastMessageTime as number | undefined,
 			}
 		})
 
@@ -590,13 +594,13 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-		const conversationWhere: QueryType<Conversation> = {
+		const conversationWhere = {
 			conversationId,
 			$or: [
 				{ user1Uuid: uuid },
 				{ user2Uuid: uuid },
 			],
-		} as any
+		} as QueryType<Conversation>
 		const conversationSelect: SelectType<Conversation> = {
 			conversationId: 1,
 		}
@@ -674,21 +678,24 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		}
 
 		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
-		const messages = (messagesResult.result || []).map((item: any): MessageInfo => ({
-			messageId: item.messageId || '',
-			senderUuid: item.senderUuid || '',
-			receiverUuid: item.receiverUuid || '',
-			messageType: item.messageType || IM_MESSAGE_TYPE.text,
-			content: (item.isRecalled ? '' : item.content) || '',
-			isRead: item.isRead || false,
-			readTime: item.readTime,
-			isRecalled: item.isRecalled || false,
-			recalledTime: item.recalledTime,
-			createdDateTime: item.createdDateTime || 0,
-			createdBy: item.createdBy || '',
-			editedDateTime: item.editedDateTime || 0,
-			editedBy: item.editedBy || '',
-		}))
+		const messages = (messagesResult.result || []).map((item: unknown): MessageInfo => {
+			const itemData = item as Record<string, unknown>
+			return {
+				messageId: (itemData.messageId as string) || '',
+				senderUuid: (itemData.senderUuid as string) || '',
+				receiverUuid: (itemData.receiverUuid as string) || '',
+				messageType: (itemData.messageType as IM_MESSAGE_TYPE) || IM_MESSAGE_TYPE.text,
+				content: ((itemData.isRecalled as boolean) ? '' : (itemData.content as string)) || '',
+				isRead: (itemData.isRead as boolean) || false,
+				readTime: itemData.readTime as number | undefined,
+				isRecalled: (itemData.isRecalled as boolean) || false,
+				recalledTime: itemData.recalledTime as number | undefined,
+				createdDateTime: (itemData.createdDateTime as number) || 0,
+				createdBy: (itemData.createdBy as string) || '',
+				editedDateTime: (itemData.editedDateTime as number) || 0,
+				editedBy: (itemData.editedBy as string) || '',
+			}
+		})
 
 		// 如果需要标记为已读
 		if (markAsRead && messages.length > 0) {
@@ -735,13 +742,13 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-		const conversationWhere: QueryType<Conversation> = {
+		const conversationWhere = {
 			conversationId,
 			$or: [
 				{ user1Uuid: uuid },
 				{ user2Uuid: uuid },
 			],
-		} as any
+		} as QueryType<Conversation>
 		const conversationSelect: SelectType<Conversation> = {
 			conversationId: 1,
 			user1Uuid: 1,
@@ -887,13 +894,13 @@ export const deleteConversationService = async (deleteConversationRequest: Delet
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-		const conversationWhere: QueryType<Conversation> = {
+		const conversationWhere = {
 			conversationId,
 			$or: [
 				{ user1Uuid: uuid },
 				{ user2Uuid: uuid },
 			],
-		} as any
+		} as QueryType<Conversation>
 		const conversationSelect: SelectType<Conversation> = {
 			conversationId: 1,
 			user1Uuid: 1,
@@ -966,13 +973,13 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 		// 验证消息是否存在且用户有权限删除
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
-		const messageWhere: QueryType<Message> = {
+		const messageWhere = {
 			messageId,
 			$or: [
 				{ senderUuid: uuid },
 				{ receiverUuid: uuid },
 			],
-		} as any
+		} as QueryType<Message>
 		const messageSelect: SelectType<Message> = {
 			messageId: 1,
 			senderUuid: 1,
