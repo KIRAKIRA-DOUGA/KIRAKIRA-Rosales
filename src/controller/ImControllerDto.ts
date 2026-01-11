@@ -49,8 +49,6 @@ export type ConversationInfo = {
 	otherUser: {
 		/** 用户 UID */
 		uid: number
-		/** 用户 UUID */
-		uuid: string
 		/** 用户名 */
 		username?: string
 		/** 用户昵称 */
@@ -68,6 +66,10 @@ export type ConversationInfo = {
 		content: string
 		/** 发送者 UUID */
 		senderUuid: string
+		/** 是否已撤回 */
+		isRecalled: boolean
+		/** 是否已删除（当前用户是否删除了这条消息） */
+		isDeleted: boolean
 		/** 创建时间 */
 		createdDateTime: number
 	}

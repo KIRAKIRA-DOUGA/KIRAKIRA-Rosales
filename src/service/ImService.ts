@@ -469,7 +469,6 @@ export const getConversationListService = async (getConversationListRequest: Get
 					conversationId: 1,
 					otherUser: {
 						uid: '$otherUserInfo.uid',
-						uuid: '$otherUserUuid',
 						username: '$otherUserInfo.username',
 						userNickname: '$otherUserInfo.userNickname',
 						avatar: '$otherUserInfo.avatar',
@@ -480,14 +479,11 @@ export const getConversationListService = async (getConversationListRequest: Get
 							then: {
 								messageId: '$lastMessageData.messageId',
 								messageType: '$lastMessageData.messageType',
-								content: {
-									$cond: {
-										if: '$lastMessageData.isRecalled',
-										then: '[消息已撤回]',
-										else: '$lastMessageData.content',
-									},
-								},
+								content: '$lastMessageData.content',
 								senderUuid: '$lastMessageData.senderUuid',
+								isRecalled: '$lastMessageData.isRecalled',
+								senderDeleted: '$lastMessageData.senderDeleted',
+								receiverDeleted: '$lastMessageData.receiverDeleted',
 								createdDateTime: '$lastMessageData.createdDateTime',
 							},
 							else: null,
@@ -523,19 +519,37 @@ export const getConversationListService = async (getConversationListRequest: Get
 		}
 
 		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
-		const conversations = (conversationsResult.result || []).map((item: any): ConversationInfo => ({
-			conversationId: item.conversationId || '',
-			otherUser: {
-				uid: item.otherUser?.uid || 0,
-				uuid: item.otherUser?.uuid || '',
-				username: item.otherUser?.username,
-				userNickname: item.otherUser?.userNickname,
-				avatar: item.otherUser?.avatar,
-			},
-			lastMessage: item.lastMessage || undefined,
-			unreadCount: item.unreadCount || 0,
-			lastMessageTime: item.lastMessageTime,
-		}))
+		const conversations = (conversationsResult.result || []).map((item: any): ConversationInfo => {
+			let lastMessage = undefined
+			if (item.lastMessage) {
+				// 判断当前用户是否删除了这条消息
+				const isSender = item.lastMessage.senderUuid === uuid
+				const isDeleted = isSender ? item.lastMessage.senderDeleted : item.lastMessage.receiverDeleted
+				
+				lastMessage = {
+					messageId: item.lastMessage.messageId || '',
+					messageType: item.lastMessage.messageType,
+					content: item.lastMessage.content || '',
+					senderUuid: item.lastMessage.senderUuid || '',
+					isRecalled: item.lastMessage.isRecalled || false,
+					isDeleted: isDeleted || false,
+					createdDateTime: item.lastMessage.createdDateTime || 0,
+				}
+			}
+			
+			return {
+				conversationId: item.conversationId || '',
+				otherUser: {
+					uid: item.otherUser?.uid || 0,
+					username: item.otherUser?.username,
+					userNickname: item.otherUser?.userNickname,
+					avatar: item.otherUser?.avatar,
+				},
+				lastMessage,
+				unreadCount: item.unreadCount || 0,
+				lastMessageTime: item.lastMessageTime,
+			}
+		})
 
 		return {
 			success: true,
