@@ -1441,6 +1441,7 @@ const checkGetFollowStatsRequest = (getFollowStatsRequest: GetFollowStatsRequest
 		getFollowStatsRequest.targetUid > 0
 	)
 }
+
 /**
  * 检查用户是否可以查看目标用户的隐私数据
  * @param targetUuid 目标用户的 UUID
