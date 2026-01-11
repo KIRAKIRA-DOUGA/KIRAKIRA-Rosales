@@ -1008,12 +1008,7 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 			followingCreateTime: item.followingCreateTime,
 		}))
 
-		return {
-			success: true,
-			message: '获取关注列表成功',
-			totalCount,
-			result,
-		}
+		return {success: true, message: '获取关注列表成功', totalCount, result,}
 	} catch (error) {
 		logging('ERROR', '获取关注列表失败：未知错误', error)
 		return { success: false, message: '获取关注列表失败：未知错误' }
@@ -1160,12 +1155,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 			}
 		}
 
-		return {
-			success: true,
-			message: '获取粉丝列表成功',
-			totalCount,
-			result,
-		}
+		return {success: true, message: '获取粉丝列表成功', totalCount, result,}
 	} catch (error) {
 		logging('ERROR', '获取粉丝列表失败：未知错误', error)
 		return { success: false, message: '获取粉丝列表失败：未知错误' }
@@ -1230,12 +1220,7 @@ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStat
 		const followerCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followerCountPipeline)
 		const followerCount = followerCountResult.success && followerCountResult.result && followerCountResult.result.length > 0 ? followerCountResult.result[0].total : 0
 
-		return {
-			success: true,
-			message: '获取关注统计成功',
-			followingCount,
-			followerCount,
-		}
+		return {success: true, message: '获取关注统计成功', followingCount, followerCount,}
 	} catch (error) {
 		logging('ERROR', '获取关注统计失败：未知错误', error)
 		return { success: false, message: '获取关注统计失败：未知错误' }
@@ -1344,15 +1329,14 @@ const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequest
 /**
  * 验证获取用户关注列表的参数
  * @param targetUid 目标用户 UID
- * @param page 分页参数：当前页码
- * @param pageSize 分页参数：每页数量
+ * @param pagination 分页参数
  * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
  */
-export const validateGetFollowingListParams = (targetUid: number | null | undefined, page: number | null | undefined, pageSize: number | null | undefined): { success: boolean; message?: string } => {
-	if (!targetUid || !page || !pageSize) {
+export const validateGetFollowingListParams = (targetUid: number | null | undefined, pagination: { page: number | null | undefined; pageSize: number | null | undefined } | null | undefined): { success: boolean; message?: string } => {
+	if (!targetUid || !pagination || !pagination.page || !pagination.pageSize) {
 		return { success: false, message: '参数不合法' }
 	}
-	if (page < 1 || pageSize < 1 || pageSize > 200) {
+	if (pagination.page < 1 || pagination.pageSize < 1 || pagination.pageSize > 200) {
 		return { success: false, message: '参数不合法' }
 	}
 	return { success: true }
@@ -1361,15 +1345,14 @@ export const validateGetFollowingListParams = (targetUid: number | null | undefi
 /**
  * 验证获取用户粉丝列表的参数
  * @param targetUid 目标用户 UID
- * @param page 分页参数：当前页码
- * @param pageSize 分页参数：每页数量
+ * @param pagination 分页参数
  * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
  */
-export const validateGetFollowerListParams = (targetUid: number | null | undefined, page: number | null | undefined, pageSize: number | null | undefined): { success: boolean; message?: string } => {
-	if (!targetUid || !page || !pageSize) {
+export const validateGetFollowerListParams = (targetUid: number | null | undefined, pagination: { page: number | null | undefined; pageSize: number | null | undefined } | null | undefined): { success: boolean; message?: string } => {
+	if (!targetUid || !pagination || !pagination.page || !pagination.pageSize) {
 		return { success: false, message: '参数不合法' }
 	}
-	if (page < 1 || pageSize < 1 || pageSize > 200) {
+	if (pagination.page < 1 || pagination.pageSize < 1 || pagination.pageSize > 200) {
 		return { success: false, message: '参数不合法' }
 	}
 	return { success: true }

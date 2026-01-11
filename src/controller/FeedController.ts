@@ -294,10 +294,12 @@ export const getFollowingListController = async (ctx: koaCtx, next: koaNext) => 
 	const pageSizeStr = ctx.query.pageSize as string
 
 	const targetUid = parseInteger(targetUidStr)
-	const page = parseInteger(pageStr)
-	const pageSize = parseInteger(pageSizeStr)
+	const pagination = {
+		page: parseInteger(pageStr),
+		pageSize: parseInteger(pageSizeStr),
+	}
 
-	const validationResult = validateGetFollowingListParams(targetUid, page, pageSize)
+	const validationResult = validateGetFollowingListParams(targetUid, pagination)
 	if (!validationResult.success) {
 		ctx.body = { success: false, message: validationResult.message || '参数不合法' }
 		return
@@ -306,8 +308,8 @@ export const getFollowingListController = async (ctx: koaCtx, next: koaNext) => 
 	const getFollowingListRequest: GetFollowingListRequestDto = {
 		targetUid: targetUid!,
 		pagination: {
-			page: page!,
-			pageSize: pageSize!,
+			page: pagination.page!,
+			pageSize: pagination.pageSize!,
 		},
 	}
 
@@ -330,10 +332,12 @@ export const getFollowerListController = async (ctx: koaCtx, next: koaNext) => {
 	const pageSizeStr = ctx.query.pageSize as string
 
 	const targetUid = parseInteger(targetUidStr)
-	const page = parseInteger(pageStr)
-	const pageSize = parseInteger(pageSizeStr)
+	const pagination = {
+		page: parseInteger(pageStr),
+		pageSize: parseInteger(pageSizeStr),
+	}
 
-	const validationResult = validateGetFollowerListParams(targetUid, page, pageSize)
+	const validationResult = validateGetFollowerListParams(targetUid, pagination)
 	if (!validationResult.success) {
 		ctx.body = { success: false, message: validationResult.message || '参数不合法' }
 		return
@@ -342,8 +346,8 @@ export const getFollowerListController = async (ctx: koaCtx, next: koaNext) => {
 	const getFollowerListRequest: GetFollowerListRequestDto = {
 		targetUid: targetUid!,
 		pagination: {
-			page: page!,
-			pageSize: pageSize!,
+			page: pagination.page!,
+			pageSize: pagination.pageSize!,
 		},
 	}
 
