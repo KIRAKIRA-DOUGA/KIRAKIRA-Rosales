@@ -986,7 +986,6 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 			{
 				$project: {
 					uid: '$userInfo.uid',
-					uuid: '$followingUuid',
 					username: '$userInfo.username',
 					userNickname: '$userInfo.userNickname',
 					avatar: '$userInfo.avatar',
@@ -1107,7 +1106,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 			{
 				$project: {
 					uid: '$userInfo.uid',
-					uuid: '$followerUuid',
+					_followerUuid: '$followerUuid', // 内部使用，不返回给前端
 					username: '$userInfo.username',
 					userNickname: '$userInfo.userNickname',
 					avatar: '$userInfo.avatar',
@@ -1126,7 +1125,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 		// 先创建包含 uuid 的临时数组用于内部逻辑
 		const tempResult = (listResult.result || []).map((item: any) => ({
 			uid: item.uid || 0,
-			uuid: item.uuid || '',
+			_followerUuid: item._followerUuid || '',
 			username: item.username,
 			userNickname: item.userNickname,
 			avatar: item.avatar,
@@ -1134,11 +1133,11 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 			isFollowing: false,
 		}))
 
-		let result: UserInfoForFollowList[] = tempResult.map(({ uuid, ...rest }) => rest)
+		let result: UserInfoForFollowList[] = tempResult.map(({ _followerUuid, ...rest }) => rest)
 
 		if (uuid) {
 			// 批量检查查看者是否关注了这些用户
-			const followerUuids = tempResult.map(r => r.uuid).filter(Boolean)
+			const followerUuids = tempResult.map(r => r._followerUuid).filter(Boolean)
 			if (followerUuids.length > 0) {
 				const followingWhere: QueryType<Following> = {
 					followerUuid: uuid,
@@ -1151,10 +1150,10 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 				if (followingResult.success && followingResult.result) {
 					const followingUuidSet = new Set(followingResult.result.map(f => f.followingUuid))
 					result = tempResult.map(r => {
-						const { uuid, ...rest } = r
+						const { _followerUuid, ...rest } = r
 						return {
 							...rest,
-							isFollowing: followingUuidSet.has(uuid),
+							isFollowing: followingUuidSet.has(_followerUuid),
 						}
 					})
 				}
