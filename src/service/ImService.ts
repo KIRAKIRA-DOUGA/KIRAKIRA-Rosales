@@ -44,7 +44,7 @@ const generateConversationId = (user1Uid: number, user2Uid: number): string => {
  * 检查是否已经发送过3条或更多消息但对方未回复
  * @param senderUuid 发送者的UUID
  * @param receiverUuid 接收者的UUID
- * @returns 如果发送者已发送3条或更多消息但接收者未回复（或接收者的最后一条消息在发送者的最后一条消息之前），返回true；否则返回false
+ * @returns 如果发送者已发送3条或更多消息但接收者从未回复过，返回true（不允许继续发送）；如果接收者曾经回复过，返回false（允许继续无限发送）
  */
 const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string): Promise<boolean> => {
 	try {
@@ -94,10 +94,9 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 
 		// 如果发送者有3条或更多消息，但接收者没有回复，则返回true
 		if (receiverMessages.success && receiverMessages.result && receiverMessages.result.length > 0) {
-			// 检查接收者的最后一条消息是否在发送者的最后一条消息之后
-			const lastSenderMessage = senderMessages.result.sort((a, b) => b.createdDateTime - a.createdDateTime)[0]
-			const lastReceiverMessage = receiverMessages.result.sort((a, b) => b.createdDateTime - a.createdDateTime)[0]
-			return lastReceiverMessage.createdDateTime < lastSenderMessage.createdDateTime
+			// 如果接收者曾经回复过（有任何回复消息），就允许发送者继续无限发送（返回false）
+			// 不需要检查最后一条消息的时间，只要曾经回复过即可
+			return false
 		}
 
 		// 如果接收者完全没有回复，且发送者已发送3条或更多消息，则返回true
