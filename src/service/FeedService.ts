@@ -1155,7 +1155,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollower
 			}
 		}
 
-		return {success: true, message: '获取粉丝列表成功', totalCount, result,}
+		return { success: true, message: '获取粉丝列表成功', totalCount, result }
 	} catch (error) {
 		logging('ERROR', '获取粉丝列表失败：未知错误', error)
 		return { success: false, message: '获取粉丝列表失败：未知错误' }
@@ -1220,7 +1220,7 @@ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStat
 		const followerCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followerCountPipeline)
 		const followerCount = followerCountResult.success && followerCountResult.result && followerCountResult.result.length > 0 ? followerCountResult.result[0].total : 0
 
-		return {success: true, message: '获取关注统计成功', followingCount, followerCount,}
+		return { success: true, message: '获取关注统计成功', followingCount, followerCount }
 	} catch (error) {
 		logging('ERROR', '获取关注统计失败：未知错误', error)
 		return { success: false, message: '获取关注统计失败：未知错误' }
