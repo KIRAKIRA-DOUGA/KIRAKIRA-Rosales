@@ -1,5 +1,5 @@
 import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService, validateGetFollowingListParams, validateGetFollowerListParams } from "../service/FeedService.js";
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowingListService, getFollowerListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService, validateGetFollowingListParams, validateGetFollowerListParams, validateGetFollowStatsParams } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
 import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowingListRequestDto, GetFollowerListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
@@ -364,13 +364,14 @@ export const getFollowStatsController = async (ctx: koaCtx, next: koaNext) => {
 	const targetUidStr = ctx.query.targetUid as string
 	const targetUid = parseInteger(targetUidStr)
 
-	if (!targetUid) {
-		ctx.body = { success: false, message: '参数不合法' }
+	const validationResult = validateGetFollowStatsParams(targetUid)
+	if (!validationResult.success) {
+		ctx.body = { success: false, message: validationResult.message || '参数不合法' }
 		return
 	}
 
 	const getFollowStatsRequest: GetFollowStatsRequestDto = {
-		targetUid,
+		targetUid: targetUid!,
 	}
 
 	ctx.body = await getFollowStatsService(getFollowStatsRequest, uuid, token)

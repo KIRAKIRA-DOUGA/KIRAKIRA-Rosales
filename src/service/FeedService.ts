@@ -1377,6 +1377,18 @@ export const validateGetFollowerListParams = (targetUid: number | null | undefin
 }
 
 /**
+ * 验证获取用户关注数和粉丝数的参数
+ * @param targetUid 目标用户 UID
+ * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
+ */
+export const validateGetFollowStatsParams = (targetUid: number | null | undefined): { success: boolean; message?: string } => {
+	if (!targetUid || targetUid <= 0) {
+		return { success: false, message: '参数不合法' }
+	}
+	return { success: true }
+}
+
+/**
  * 校验获取用户关注列表的请求载荷
  * @param getFollowingListRequest 获取用户关注列表的请求载荷
  * @returns 合法返回 true, 不合法返回 false
@@ -1454,7 +1466,7 @@ const checkPrivacyPermission = async (targetUuid: string, viewerUuid: string | u
 			userPrivaryVisibilitiesSetting: 1,
 		}
 		const result = await selectDataFromMongoDB<UserSettings>(where, select, schemaInstance, collectionName)
-		
+
 		if (!result.success || !result.result || result.result.length === 0) {
 			// 如果没有设置，默认公开
 			return true
@@ -1462,7 +1474,7 @@ const checkPrivacyPermission = async (targetUuid: string, viewerUuid: string | u
 
 		const settings = result.result[0]
 		const privacySetting = settings.userPrivaryVisibilitiesSetting?.find(s => s.privaryId === privacyId)
-		
+
 		// 如果没有设置，默认公开
 		if (!privacySetting) {
 			return true
