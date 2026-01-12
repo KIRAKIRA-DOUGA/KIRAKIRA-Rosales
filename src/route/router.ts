@@ -44,7 +44,7 @@ import { approvePendingReviewVideoController, checkVideoExistController, deleteV
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
-import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowingListController, getFollowerListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
+import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowerListController, getFollowingListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
 
 const router = new Router()
@@ -718,19 +718,30 @@ router.get('/feed/getFeedContent', getFeedContentController) // 获取动态分�
 // 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx"
 // }
 
-router.get('/feed/following/list', getFollowingListController) // 获取用户关注列表
-// https://localhost:9999/feed/following/list?targetUid=999&num=20&offset=0
-// cookie: uuid, token (可选)
-
-router.get('/feed/follower/list', getFollowerListController) // 获取用户粉丝列表
-// https://localhost:9999/feed/follower/list?targetUid=999&num=20&offset=0
-// cookie: uuid, token (可选)
-
 router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和粉丝数
 // https://localhost:9999/feed/stats?targetUid=999
-// cookie: uuid, token (可选)
+// cookie: uuid, token
+//
+// Query:
+// targetUid
 
+router.get('/feed/following/list', getFollowingListController) // 获取用户关注列表
+// https://localhost:9999/feed/following/list?targetUid=999&page=1&pageSize=30
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+// page
+// pageSize
 
+router.get('/feed/follower/list', getFollowerListController) // 获取用户粉丝列表
+// https://localhost:9999/feed/follower/list?targetUid=999&page=1&pageSize=30
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+// page
+// pageSize
 
 
 

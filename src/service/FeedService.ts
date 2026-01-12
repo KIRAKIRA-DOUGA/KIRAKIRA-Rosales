@@ -1,6 +1,7 @@
 import { InferSchemaType, PipelineStage } from "mongoose";
-import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowingListRequestDto, GetFollowingListResponseDto, GetFollowerListRequestDto, GetFollowerListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto, UserInfoForFollowList} from "../controller/FeedControllerDto.js";
+import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowListRequestDto, GetFollowListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto, UserInfoForFollowList } from "../controller/FeedControllerDto.js";
 import { FeedGroupSchema, FollowingSchema, UnfollowingSchema } from "../dbPool/schema/FeedSchema.js";
+import { UserSettingsSchema } from "../dbPool/schema/UserSchema.js";
 import { checkUserExistsByUuidService, checkUserTokenByUuidService, getUserUuid } from "./UserService.js";
 import { QueryType, SelectType, UpdateType } from "../dbPool/DbClusterPoolTypes.js";
 import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from "../dbPool/DbClusterPool.js";
@@ -10,7 +11,6 @@ import { v4 as uuidV4 } from 'uuid'
 import { generateSecureRandomString } from "../common/RandomTool.js";
 import { createCloudflareImageUploadSignedUrl } from "../cloudflare/index.js";
 import { VideoSchema } from "../dbPool/schema/VideoSchema.js";
-import { UserInfoSchema, UserSettingsSchema } from "../dbPool/schema/UserSchema.js";
 import { logging } from "./loggingService.js";
 
 /**
@@ -901,285 +901,17 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 }
 
 /**
- * 获取用户关注列表
- * @param getFollowingListRequest 获取用户关注列表的请求载荷
- * @param uuid 查看者的 UUID
- * @param token 查看者的 token
- * @returns 获取用户关注列表的请求响应
- */
-export const getFollowingListService = async (getFollowingListRequest: GetFollowingListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowingListResponseDto> => {
-	try {
-		if (!checkGetFollowingListRequest(getFollowingListRequest)) {
-			logging('ERROR', '获取关注列表失败：参数不合法')
-			return { success: false, message: '获取关注列表失败：参数不合法' }
-		}
-
-		// 验证 token（如果提供了）
-		if (uuid && token && !(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取关注列表失败：用户验证失败')
-			return { success: false, message: '获取关注列表失败：用户验证失败' }
-		}
-
-		const { targetUid, pagination } = getFollowingListRequest
-		const { page, pageSize } = pagination
-		const offset = (page - 1) * pageSize
-		const targetUuid = await getUserUuid(targetUid)
-		if (!targetUuid) {
-			logging('ERROR', '获取关注列表失败：目标用户不存在')
-			return { success: false, message: '获取关注列表失败：目标用户不存在' }
-		}
-
-		// 检查隐私权限
-		const canView = await checkPrivacyPermission(targetUuid, uuid, 'privary.follow')
-		if (!canView) {
-			logging('ERROR', '获取关注列表失败：没有权限查看')
-			return { success: false, message: '获取关注列表失败：没有权限查看该用户的关注列表' }
-		}
-
-		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-		type Following = InferSchemaType<typeof followingSchemaInstance>
-
-		// 获取总数
-		const countPipeline: PipelineStage[] = [
-			{
-				$match: {
-					followerUuid: targetUuid,
-				},
-			},
-			{
-				$count: 'total',
-			},
-		]
-		const countResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, countPipeline)
-		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
-
-		// 获取列表数据
-		const listPipeline: PipelineStage[] = [
-			{
-				$match: {
-					followerUuid: targetUuid,
-				},
-			},
-			{
-				$sort: { followingCreateTime: -1 },
-			},
-			{
-				$skip: offset,
-			},
-			{
-				$limit: pageSize,
-			},
-			{
-				$lookup: {
-					from: 'user-infos',
-					localField: 'followingUuid',
-					foreignField: 'UUID',
-					as: 'userInfo',
-				},
-			},
-			{
-				$unwind: {
-					path: '$userInfo',
-					preserveNullAndEmptyArrays: true,
-				},
-			},
-			{
-				$project: {
-					uid: '$userInfo.uid',
-					username: '$userInfo.username',
-					userNickname: '$userInfo.userNickname',
-					avatar: '$userInfo.avatar',
-					followingCreateTime: '$followingCreateTime',
-				},
-			},
-		]
-		const listResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, listPipeline)
-
-		if (!listResult.success) {
-			logging('ERROR', '获取关注列表失败：查询失败')
-			return { success: false, message: '获取关注列表失败：查询失败' }
-		}
-
-		const result: UserInfoForFollowList[] = (listResult.result || []).map((item: any) => ({
-			uid: item.uid || 0,
-			username: item.username,
-			userNickname: item.userNickname,
-			avatar: item.avatar,
-			followingCreateTime: item.followingCreateTime,
-		}))
-
-		return {success: true, message: '获取关注列表成功', totalCount, result,}
-	} catch (error) {
-		logging('ERROR', '获取关注列表失败：未知错误', error)
-		return { success: false, message: '获取关注列表失败：未知错误' }
-	}
-}
-
-/**
- * 获取用户粉丝列表
- * @param getFollowerListRequest 获取用户粉丝列表的请求载荷
- * @param uuid 查看者的 UUID
- * @param token 查看者的 token
- * @returns 获取用户粉丝列表的请求响应
- */
-export const getFollowerListService = async (getFollowerListRequest: GetFollowerListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowerListResponseDto> => {
-	try {
-		if (!checkGetFollowerListRequest(getFollowerListRequest)) {
-			logging('ERROR', '获取粉丝列表失败：参数不合法')
-			return { success: false, message: '获取粉丝列表失败：参数不合法' }
-		}
-
-		// 验证 token（如果提供了）
-		if (uuid && token && !(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取粉丝列表失败：用户验证失败')
-			return { success: false, message: '获取粉丝列表失败：用户验证失败' }
-		}
-
-		const { targetUid, pagination } = getFollowerListRequest
-		const { page, pageSize } = pagination
-		const offset = (page - 1) * pageSize
-		const targetUuid = await getUserUuid(targetUid)
-		if (!targetUuid) {
-			logging('ERROR', '获取粉丝列表失败：目标用户不存在')
-			return { success: false, message: '获取粉丝列表失败：目标用户不存在' }
-		}
-
-		// 检查隐私权限
-		const canView = await checkPrivacyPermission(targetUuid, uuid, 'privary.fans')
-		if (!canView) {
-			logging('ERROR', '获取粉丝列表失败：没有权限查看')
-			return { success: false, message: '获取粉丝列表失败：没有权限查看该用户的粉丝列表' }
-		}
-
-		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-		type Following = InferSchemaType<typeof followingSchemaInstance>
-
-		// 获取总数
-		const countPipeline: PipelineStage[] = [
-			{
-				$match: {
-					followingUuid: targetUuid,
-				},
-			},
-			{
-				$count: 'total',
-			},
-		]
-		const countResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, countPipeline)
-		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
-
-		// 获取列表数据
-		const listPipeline: PipelineStage[] = [
-			{
-				$match: {
-					followingUuid: targetUuid,
-				},
-			},
-			{
-				$sort: { followingCreateTime: -1 },
-			},
-			{
-				$skip: offset,
-			},
-			{
-				$limit: pageSize,
-			},
-			{
-				$lookup: {
-					from: 'user-infos',
-					localField: 'followerUuid',
-					foreignField: 'UUID',
-					as: 'userInfo',
-				},
-			},
-			{
-				$unwind: {
-					path: '$userInfo',
-					preserveNullAndEmptyArrays: true,
-				},
-			},
-			{
-				$project: {
-					uid: '$userInfo.uid',
-					_followerUuid: '$followerUuid', // 内部使用，不返回给前端
-					username: '$userInfo.username',
-					userNickname: '$userInfo.userNickname',
-					avatar: '$userInfo.avatar',
-					followingCreateTime: '$followingCreateTime',
-				},
-			},
-		]
-		const listResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, listPipeline)
-
-		if (!listResult.success) {
-			logging('ERROR', '获取粉丝列表失败：查询失败')
-			return { success: false, message: '获取粉丝列表失败：查询失败' }
-		}
-
-		// 如果查看者已登录，检查查看者是否关注了每个粉丝
-		// 先创建包含 uuid 的临时数组用于内部逻辑
-		const tempResult = (listResult.result || []).map((item: any) => ({
-			uid: item.uid || 0,
-			_followerUuid: item._followerUuid || '',
-			username: item.username,
-			userNickname: item.userNickname,
-			avatar: item.avatar,
-			followingCreateTime: item.followingCreateTime,
-			isFollowing: false,
-		}))
-
-		let result: UserInfoForFollowList[] = tempResult.map(({ _followerUuid, ...rest }) => rest)
-
-		if (uuid) {
-			// 批量检查查看者是否关注了这些用户
-			const followerUuids = tempResult.map(r => r._followerUuid).filter(Boolean)
-			if (followerUuids.length > 0) {
-				const followingWhere: QueryType<Following> = {
-					followerUuid: uuid,
-					followingUuid: { $in: followerUuids },
-				}
-				const followingSelect: SelectType<Following> = {
-					followingUuid: 1,
-				}
-				const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
-				if (followingResult.success && followingResult.result) {
-					const followingUuidSet = new Set(followingResult.result.map(f => f.followingUuid))
-					result = tempResult.map(r => {
-						const { _followerUuid, ...rest } = r
-						return {
-							...rest,
-							isFollowing: followingUuidSet.has(_followerUuid),
-						}
-					})
-				}
-			}
-		}
-
-		return { success: true, message: '获取粉丝列表成功', totalCount, result }
-	} catch (error) {
-		logging('ERROR', '获取粉丝列表失败：未知错误', error)
-		return { success: false, message: '获取粉丝列表失败：未知错误' }
-	}
-}
-
-/**
  * 获取用户关注数和粉丝数
  * @param getFollowStatsRequest 获取用户关注数和粉丝数的请求载荷
  * @param uuid 查看者的 UUID（可选）
  * @param token 查看者的 token（可选）
  * @returns 获取用户关注数和粉丝数的请求响应
  */
-export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStatsRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowStatsResponseDto> => {
+ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStatsRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowStatsResponseDto> => {
 	try {
 		if (!checkGetFollowStatsRequest(getFollowStatsRequest)) {
 			logging('ERROR', '获取关注统计失败：参数不合法')
 			return { success: false, message: '获取关注统计失败：参数不合法' }
-		}
-
-		// 验证 token（如果提供了）
-		if (uuid && token && !(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取关注统计失败：用户验证失败')
-			return { success: false, message: '获取关注统计失败：用户验证失败' }
 		}
 
 		const { targetUid } = getFollowStatsRequest
@@ -1190,7 +922,6 @@ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStat
 		}
 
 		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-		type Following = InferSchemaType<typeof followingSchemaInstance>
 
 		// 获取关注数（目标用户关注了多少人）
 		const followingCountPipeline: PipelineStage[] = [
@@ -1199,12 +930,7 @@ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStat
 					followerUuid: targetUuid,
 				},
 			},
-			{
-				$count: 'total',
-			},
 		]
-		const followingCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followingCountPipeline)
-		const followingCount = followingCountResult.success && followingCountResult.result && followingCountResult.result.length > 0 ? followingCountResult.result[0].total : 0
 
 		// 获取粉丝数（有多少人关注了目标用户）
 		const followerCountPipeline: PipelineStage[] = [
@@ -1213,19 +939,238 @@ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStat
 					followingUuid: targetUuid,
 				},
 			},
-			{
-				$count: 'total',
-			},
 		]
-		const followerCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followerCountPipeline)
-		const followerCount = followerCountResult.success && followerCountResult.result && followerCountResult.result.length > 0 ? followerCountResult.result[0].total : 0
+		
+		const countStep = {
+			$count: 'totalCount', // 统计总文档数
+		}
+		followingCountPipeline.push(countStep)
+		followerCountPipeline.push(countStep)
 
-		return { success: true, message: '获取关注统计成功', followingCount, followerCount }
+		try {
+			const followingCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followingCountPipeline)
+			const followerCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followerCountPipeline)
+			if (!followingCountResult.success || !followerCountResult.success) {
+				logging('ERROR', '获取关注统计失败，查询数据失败')
+				return { success: false, message: '获取关注统计失败，查询数据失败' }
+			}
+
+			return { success: true, message: '获取关注统计成功', followingCount: followingCountResult.result?.[0]?.totalCount ?? 0, followerCount: followerCountResult.result?.[0]?.totalCount ?? 0 }
+		} catch (error) {
+			logging('ERROR', '获取关注统计失败，查询数据时出错：', error)
+			return { success: false, message: '获取关注统计失败，查询数据时出错' }
+		}
 	} catch (error) {
 		logging('ERROR', '获取关注统计失败：未知错误', error)
 		return { success: false, message: '获取关注统计失败：未知错误' }
 	}
 }
+
+/**
+ * 获取用户关注列表
+ * @param getFollowingListRequest 获取用户关注列表的请求载荷
+ * @param uuid 查看者的 UUID（可选）
+ * @param token 查看者的 token（可选）
+ * @returns 获取用户关注列表的请求响应
+ */
+export const getFollowingListService = async (getFollowingListRequest: GetFollowListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowListResponseDto> => {
+	try {
+		if (!checkGetFollowListRequest(getFollowingListRequest)) {
+			logging('ERROR', '获取关注列表失败：参数不合法')
+			return { success: false, message: '获取关注列表失败：参数不合法' }
+		}
+
+		let pageSize = undefined
+		let skip = 0
+		if (getFollowingListRequest.pagination && getFollowingListRequest.pagination.page > 0 && getFollowingListRequest.pagination.pageSize > 0) {
+			skip = (getFollowingListRequest.pagination.page - 1) * getFollowingListRequest.pagination.pageSize
+			pageSize = getFollowingListRequest.pagination.pageSize
+		}
+
+		const targetUuid = await getUserUuid(getFollowingListRequest.targetUid)
+		if (!targetUuid) {
+			logging('ERROR', '获取关注列表失败：目标用户不存在')
+			return { success: false, message: '获取关注列表失败：目标用户不存在' }
+		}
+
+		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, 'privacy.follow')
+		if (!canView) {
+			logging('ERROR', '获取关注列表失败：没有权限查看')
+			return { success: false, message: '获取关注列表失败：没有权限查看该用户的关注列表' }
+		}
+
+		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+		const followingCountPipeline: PipelineStage[] = [
+			{
+				$match: {
+					followerUuid: targetUuid,
+				},
+			},
+		]
+
+		const followingListPipeline: PipelineStage[] = [
+			{
+				$match: {
+					followerUuid: targetUuid,
+				},
+			},
+			{
+				$lookup: {
+					from: 'user-infos',
+					localField: 'followingUuid',
+					foreignField: 'UUID',
+					as: 'user_info_data',
+				},
+			},
+			{
+				$unwind: {
+					path: '$user_info_data',
+					preserveNullAndEmptyArrays: true,
+				},
+			},
+			{ $sort: { followingCreateTime: -1 }},
+			{ $skip: skip }, // 跳过指定数量的文档
+			{ $limit: pageSize }, // 限制返回的文档数量
+		]
+
+		const countStep = {
+			$count: 'totalCount', // 统计总文档数
+		}
+		followingCountPipeline.push(countStep)
+
+		const projectStep = {
+			$project: {
+				uid: '$user_info_data.uid',
+				username: '$user_info_data.username',
+				userNickname: '$user_info_data.userNickname',
+				avatar: '$user_info_data.avatar',
+				followingCreateTime: '$followingCreateTime',
+			},
+		}
+		followingListPipeline.push(projectStep)
+
+		try {
+			const followingCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followingCountPipeline)
+			const followingListResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followingListPipeline)
+			if (!followingCountResult.success || !followingListResult.success) {
+				logging('ERROR', '获取关注列表失败：查询数据失败')
+				return { success: false, message: '获取关注列表失败：查询数据失败' }
+			}
+
+			return { success: true, message: '获取关注列表成功', totalCount: followingCountResult.result?.[0]?.totalCount ?? 0, result: followingListResult.result }
+		} catch (error) {
+			logging('ERROR', '获取关注列表失败：查询数据时出错：', error)
+			return { success: false, message: '获取关注列表失败：查询数据时出错' }
+		}
+	} catch (error) {
+		logging('ERROR', '获取关注列表失败：未知错误', error)
+		return { success: false, message: '获取关注列表失败：未知错误' }
+	}
+}
+
+/**
+ * 获取用户粉丝列表
+ * @param getFollowerListRequest 获取用户粉丝列表的请求载荷
+ * @param uuid 查看者的 UUID（可选）
+ * @param token 查看者的 token（可选）
+ * @returns 获取用户粉丝列表的请求响应
+ */
+export const getFollowerListService = async (getFollowerListRequest: GetFollowListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowListResponseDto> => {
+	try {
+		if (!checkGetFollowListRequest(getFollowerListRequest)) {
+			logging('ERROR', '获取粉丝列表失败：参数不合法')
+			return { success: false, message: '获取粉丝列表失败：参数不合法' }
+		}
+
+		let pageSize = undefined
+		let skip = 0
+		if (getFollowerListRequest.pagination && getFollowerListRequest.pagination.page > 0 && getFollowerListRequest.pagination.pageSize > 0) {
+			skip = (getFollowerListRequest.pagination.page - 1) * getFollowerListRequest.pagination.pageSize
+			pageSize = getFollowerListRequest.pagination.pageSize
+		}
+
+		const targetUuid = await getUserUuid(getFollowerListRequest.targetUid)
+		if (!targetUuid) {
+			logging('ERROR', '获取关注列表失败：目标用户不存在')
+			return { success: false, message: '获取关注列表失败：目标用户不存在' }
+		}
+
+		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, 'privacy.fans')
+		if (!canView) {
+			logging('ERROR', '获取粉丝列表失败：没有权限查看')
+			return { success: false, message: '获取粉丝列表失败：没有权限查看该用户的粉丝列表' }
+		}
+
+		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+
+		const followerCountPipeline: PipelineStage[] = [
+			{
+				$match: {
+					followingUuid: targetUuid,
+				},
+			},
+		]
+
+		const followerListPipeline: PipelineStage[] = [
+			{
+				$match: {
+					followingUuid: targetUuid,
+				},
+			},
+			{
+				$lookup: {
+					from: 'user-infos',
+					localField: 'followerUuid',
+					foreignField: 'UUID',
+					as: 'user_info_data',
+				},
+			},
+			{
+				$unwind: {
+					path: '$user_info_data',
+					preserveNullAndEmptyArrays: true,
+				},
+			},
+			{ $sort: { followingCreateTime: -1 }},
+			{ $skip: skip }, // 跳过指定数量的文档
+			{ $limit: pageSize }, // 限制返回的文档数量
+		]
+
+		const countStep = {
+			$count: 'totalCount', // 统计总文档数
+		}
+		followerCountPipeline.push(countStep)
+
+		const projectStep = {
+			$project: {
+				uid: '$user_info_data.uid',
+				username: '$user_info_data.username',
+				userNickname: '$user_info_data.userNickname',
+				avatar: '$user_info_data.avatar',
+				followingCreateTime: '$followingCreateTime',
+			},
+		}
+		followerListPipeline.push(projectStep)
+
+		try {
+			const followerCountResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followerCountPipeline)
+			const followerListResult = await selectDataByAggregateFromMongoDB(followingSchemaInstance, followingCollectionName, followerListPipeline)
+			if (!followerCountResult.success || !followerListResult.success) {
+				logging('ERROR', '获取粉丝列表失败：查询数据失败')
+				return { success: false, message: '获取粉丝列表失败：查询数据失败' }
+			}
+
+			return { success: true, message: '获取粉丝列表成功', totalCount: followerCountResult.result?.[0]?.totalCount ?? 0, result: followerListResult.result }
+		} catch (error) {
+			logging('ERROR', '获取粉丝列表失败：查询数据时出错：', error)
+			return { success: false, message: '获取粉丝列表失败：查询数据时出错' }
+		}
+	} catch (error) {
+		logging('ERROR', '获取粉丝列表失败：未知错误', error)
+		return { success: false, message: '获取粉丝列表失败：未知错误' }
+	}
+}
+
 
 /**
  * 校验用户关注一个创作者的请求载荷
@@ -1327,92 +1272,6 @@ const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequest
 }
 
 /**
- * 验证获取用户关注列表的参数
- * @param targetUid 目标用户 UID
- * @param pagination 分页参数
- * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
- */
-export const validateGetFollowingListParams = (targetUid: number | null | undefined, pagination: { page: number | null | undefined; pageSize: number | null | undefined } | null | undefined): { success: boolean; message?: string } => {
-	if (!targetUid || !pagination || !pagination.page || !pagination.pageSize) {
-		return { success: false, message: '参数不合法' }
-	}
-	if (pagination.page < 1 || pagination.pageSize < 1 || pagination.pageSize > 200) {
-		return { success: false, message: '参数不合法' }
-	}
-	return { success: true }
-}
-
-/**
- * 验证获取用户粉丝列表的参数
- * @param targetUid 目标用户 UID
- * @param pagination 分页参数
- * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
- */
-export const validateGetFollowerListParams = (targetUid: number | null | undefined, pagination: { page: number | null | undefined; pageSize: number | null | undefined } | null | undefined): { success: boolean; message?: string } => {
-	if (!targetUid || !pagination || !pagination.page || !pagination.pageSize) {
-		return { success: false, message: '参数不合法' }
-	}
-	if (pagination.page < 1 || pagination.pageSize < 1 || pagination.pageSize > 200) {
-		return { success: false, message: '参数不合法' }
-	}
-	return { success: true }
-}
-
-/**
- * 验证获取用户关注数和粉丝数的参数
- * @param targetUid 目标用户 UID
- * @returns 验证结果，合法返回 { success: true }，不合法返回 { success: false, message: string }
- */
-export const validateGetFollowStatsParams = (targetUid: number | null | undefined): { success: boolean; message?: string } => {
-	if (!targetUid || targetUid <= 0) {
-		return { success: false, message: '参数不合法' }
-	}
-	return { success: true }
-}
-
-/**
- * 校验获取用户关注列表的请求载荷
- * @param getFollowingListRequest 获取用户关注列表的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkGetFollowingListRequest = (getFollowingListRequest: GetFollowingListRequestDto): boolean => {
-	return (
-		getFollowingListRequest.targetUid !== undefined &&
-		getFollowingListRequest.targetUid !== null &&
-		getFollowingListRequest.targetUid > 0 &&
-		getFollowingListRequest.pagination !== undefined &&
-		getFollowingListRequest.pagination.page !== undefined &&
-		getFollowingListRequest.pagination.page !== null &&
-		getFollowingListRequest.pagination.page > 0 &&
-		getFollowingListRequest.pagination.pageSize !== undefined &&
-		getFollowingListRequest.pagination.pageSize !== null &&
-		getFollowingListRequest.pagination.pageSize > 0 &&
-		getFollowingListRequest.pagination.pageSize <= 200
-	)
-}
-
-/**
- * 校验获取用户粉丝列表的请求载荷
- * @param getFollowerListRequest 获取用户粉丝列表的请求载荷
- * @returns 合法返回 true, 不合法返回 false
- */
-const checkGetFollowerListRequest = (getFollowerListRequest: GetFollowerListRequestDto): boolean => {
-	return (
-		getFollowerListRequest.targetUid !== undefined &&
-		getFollowerListRequest.targetUid !== null &&
-		getFollowerListRequest.targetUid > 0 &&
-		getFollowerListRequest.pagination !== undefined &&
-		getFollowerListRequest.pagination.page !== undefined &&
-		getFollowerListRequest.pagination.page !== null &&
-		getFollowerListRequest.pagination.page > 0 &&
-		getFollowerListRequest.pagination.pageSize !== undefined &&
-		getFollowerListRequest.pagination.pageSize !== null &&
-		getFollowerListRequest.pagination.pageSize > 0 &&
-		getFollowerListRequest.pagination.pageSize <= 200
-	)
-}
-
-/**
  * 校验获取用户关注数和粉丝数的请求载荷
  * @param getFollowStatsRequest 获取用户关注数和粉丝数的请求载荷
  * @returns 合法返回 true, 不合法返回 false
@@ -1426,13 +1285,29 @@ const checkGetFollowStatsRequest = (getFollowStatsRequest: GetFollowStatsRequest
 }
 
 /**
- * 检查用户是否可以查看目标用户的隐私数据
+ * 校验获取用户关注或粉丝列表的请求载荷
+ * @param getFollowListRequest 获取用户关注列表的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkGetFollowListRequest = (getFollowListRequest: GetFollowListRequestDto): boolean => {
+	return (
+		getFollowListRequest.targetUid !== undefined &&
+		getFollowListRequest.targetUid !== null &&
+		getFollowListRequest.targetUid > 0 &&
+		!!getFollowListRequest.pagination &&
+		getFollowListRequest.pagination.page > 0 &&
+		getFollowListRequest.pagination.pageSize > 0
+	)
+}
+
+/**
+ * 检查用户隐私权限
  * @param targetUuid 目标用户的 UUID
  * @param viewerUuid 查看者的 UUID（可选，如果未登录则为 undefined）
- * @param privacyId 隐私数据项 ID（如 'privary.follow' 或 'privary.fans'）
+ * @param privacyId 隐私数据项 ID（如 'privacy.follow' 或 'privacy.fans'）
  * @returns 可以查看返回 true，否则返回 false
  */
-const checkPrivacyPermission = async (targetUuid: string, viewerUuid: string | undefined, privacyId: 'privary.follow' | 'privary.fans'): Promise<boolean> => {
+const checkFeedPrivacyPermission = async (targetUuid: string, viewerUuid: string | undefined, privacyId: 'privacy.follow' | 'privacy.fans'): Promise<boolean> => {
 	try {
 		// 如果是自己查看，总是允许
 		if (viewerUuid && viewerUuid === targetUuid) {
