@@ -339,7 +339,7 @@ export const getFollowerListController = async (ctx: koaCtx, next: koaNext) => {
 	const targetUid = parseInteger(ctx.query.targetUid)
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
-	const finalPageSize =limitPageSize(pageSize)
+	const finalPageSize = limitPageSize(pageSize)
 
 	const getFollowerListRequest: GetFollowListRequestDto = {
 		targetUid: targetUid ?? -1,
