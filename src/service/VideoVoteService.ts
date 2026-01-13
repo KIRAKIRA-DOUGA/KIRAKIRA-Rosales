@@ -20,12 +20,12 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 			return { success: false, message: '视频点赞失败，参数异常' }
 		}
 
-		if (!uuid || !token || !(await checkUserTokenByUuidService(uuid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '视频点赞失败，用户校验未通过')
 			return { success: false, message: '视频点赞失败，用户校验未通过' }
 		}
 
-		const videoId = emitVideoUpvoteRequest.videoId
+		const { videoId } = emitVideoUpvoteRequest
 
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
@@ -141,12 +141,12 @@ export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVo
 			return { success: false, message: '取消视频点赞失败，参数异常' }
 		}
 
-		if (!uuid || !token || !(await checkUserTokenByUuidService(uuid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '取消视频点赞失败，用户校验未通过')
 			return { success: false, message: '取消视频点赞失败，用户校验未通过' }
 		}
 
-		const videoId = cancelVideoUpvoteRequest.videoId
+		const { videoId } = cancelVideoUpvoteRequest
 
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
@@ -207,12 +207,12 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 			return { success: false, message: '视频点踩失败，参数异常' }
 		}
 
-		if (!uuid || !token || !(await checkUserTokenByUuidService(uuid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '视频点踩失败，用户校验未通过')
 			return { success: false, message: '视频点踩失败，用户校验未通过' }
 		}
 
-		const videoId = emitVideoDownvoteRequest.videoId
+		const { videoId } = emitVideoDownvoteRequest
 
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
@@ -328,12 +328,12 @@ export const cancelVideoDownvoteService = async (cancelVideoDownvoteRequest: Vid
 			return { success: false, message: '取消视频点踩失败，参数异常' }
 		}
 
-		if (!uuid || !token || !(await checkUserTokenByUuidService(uuid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '取消视频点踩失败，用户校验未通过')
 			return { success: false, message: '取消视频点踩失败，用户校验未通过' }
 		}
 
-		const videoId = cancelVideoDownvoteRequest.videoId
+		const { videoId } = cancelVideoDownvoteRequest
 
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
