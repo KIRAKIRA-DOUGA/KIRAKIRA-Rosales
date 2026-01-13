@@ -1,7 +1,7 @@
 import { isPassRbacCheck } from '../service/RbacService.js'
 import { emitVideoUpvoteService, emitVideoDownvoteService, cancelVideoUpvoteService, cancelVideoDownvoteService } from '../service/VideoVoteService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { VideoVoteRequestDto, VideoVoteResponseDto } from './VideoVoteControllerDto.js'
+import { VideoVoteRequestDto } from './VideoVoteControllerDto.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { getUserUid } from '../service/UserService.js'
 

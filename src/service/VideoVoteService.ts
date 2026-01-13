@@ -2,7 +2,7 @@ import mongoose, { InferSchemaType } from 'mongoose'
 import { logging } from './loggingService.js'
 import { checkUserTokenByUuidService, checkUserTokenService, getUserUid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { VideoVoteRequestDto, VideoVoteResponseDto } from '../controller/VideoVoteControllerDto.js'
+import { VideoVoteRequestDto, VideoUpvoteResponseDto, VideoDownvoteResponseDto } from '../controller/VideoVoteControllerDto.js'
 import { VideoUpvoteSchema, VideoDownvoteSchema } from '../dbPool/schema/VideoVoteSchema.js'
 import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 
@@ -13,7 +13,7 @@ import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '.
  * @param token 用户的 token
  * @returns 用户给视频点赞的请求响应
  */
-export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoVoteResponseDto> => {
+export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoUpvoteResponseDto> => {
     try {
         if (!checkVideoVoteRequest(emitVideoUpvoteRequest)) {
             logging('ERROR', '视频点赞失败，参数异常')
@@ -84,7 +84,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
             try {
                 const cancelVideoDownvoteResult = await cancelVideoDownvoteService(cancelVideoDownvoteRequest, uuid, token)
                 if (cancelVideoDownvoteResult.success) {
-                    return { success: true, message: '视频点赞成功' }
+                    return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
                 } else {
                     logging('ERROR', '视频点赞成功，但未能取消点踩', undefined, { emitVideoUpvoteRequest, uuid })
                     return { success: false, message: '视频点赞成功，但未能取消点踩' }
@@ -94,7 +94,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
                 return { success: false, message: '视频点赞成功，但取消点踩失败' }
             }
         } else {
-            return { success: true, message: '视频点赞成功' }
+            return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
         }
     } catch (error) {
         logging('ERROR', '视频点赞失败，未知错误：', error, { emitVideoUpvoteRequest, uuid })
@@ -109,7 +109,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
  * @param token 用户 token
  * @returns 用户取消视频点赞的结果
  */
-export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoVoteResponseDto> => {
+export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoUpvoteResponseDto> => {
 	try {
 		if (!checkVideoVoteRequest(cancelVideoUpvoteRequest)) {
 			logging('ERROR', '取消视频点赞失败，参数异常')
@@ -157,7 +157,7 @@ export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVo
                 return { success: false, message: '取消视频点赞失败：更新记录失败' }
             }
 
-            return { success: true, message: '取消视频点赞成功' }
+            return { success: true, message: '取消视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
         } catch (error) {
             logging('ERROR', '取消视频点赞失败，数据库操作出错：', error, { cancelVideoUpvoteRequest, uuid })
             return { success: false, message: '取消视频点赞失败，数据库操作出错' }
@@ -175,7 +175,7 @@ export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVo
  * @param token 用户 token
  * @returns 用户给视频点踩的结果
  */
-export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoVoteResponseDto> => {
+export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoDownvoteResponseDto> => {
     try {
         if (!checkVideoVoteRequest(emitVideoDownvoteRequest)) {
             logging('ERROR', '视频点踩失败，参数异常')
@@ -247,7 +247,7 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
             try {
                 const cancelVideoUpvoteResult = await cancelVideoUpvoteService(cancelVideoUpvoteRequest, uuid, token)
                 if (cancelVideoUpvoteResult.success) {
-                    return { success: true, message: '视频点踩成功' }
+                    return { success: true, message: '视频点踩成功', videoDownvoteCount: await getVideoDownvoteCount(videoId) }
                 } else {
                     logging('ERROR', '视频点踩成功，但未能取消点赞', undefined, { emitVideoDownvoteRequest, uuid })
                     return { success: false, message: '视频点踩成功，但未能取消点赞' }
@@ -257,7 +257,7 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
                 return { success: false, message: '视频点踩成功，但取消点赞失败' }
             }
         } else {
-            return { success: true, message: '视频点踩成功' }
+            return { success: true, message: '视频点踩成功', videoDownvoteCount: await getVideoDownvoteCount(videoId) }
         }
     } catch (error) {
         logging('ERROR', '视频点踩失败，未知错误：', error, { emitVideoDownvoteRequest, uuid })
@@ -272,7 +272,7 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
  * @param token 用户 token
  * @returns 用户取消视频点踩的结果
  */
-export const cancelVideoDownvoteService = async (cancelVideoDownvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoVoteResponseDto> => {
+export const cancelVideoDownvoteService = async (cancelVideoDownvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoDownvoteResponseDto> => {
 	try {
 		if (!checkVideoVoteRequest(cancelVideoDownvoteRequest)) {
 			logging('ERROR', '取消视频点踩失败，参数异常')
@@ -320,7 +320,7 @@ export const cancelVideoDownvoteService = async (cancelVideoDownvoteRequest: Vid
                 return { success: false, message: '取消视频点踩失败：更新记录失败' }
             }
 
-            return { success: true, message: '取消视频点踩成功' }
+            return { success: true, message: '取消视频点踩成功', videoDownvoteCount: await getVideoDownvoteCount(videoId) }
         } catch (error) {
             logging('ERROR', '取消视频点踩失败，数据库操作出错：', error, { cancelVideoDownvoteRequest, uuid })
             return { success: false, message: '取消视频点踩失败，数据库操作出错' }
