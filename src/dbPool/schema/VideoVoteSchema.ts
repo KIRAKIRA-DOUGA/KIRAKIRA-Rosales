@@ -8,13 +8,13 @@ class VideoUpvoteSchemaFactory {
 	schema = {
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true, index: true },
-		/** 点赞用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		/** 系统专用字段-点赞用户的 UUID，关联用户安全集合的 UUID - 非空 */
 		UUID: { type: String, required: true, index: true },
 		/** 点赞用户的 UID - 非空 */
 		uid: { type: Number, required: true },
-		/** 点赞时间 - 非空 */
+		/** 系统专用字段-点赞时间 - 非空 */
 		upvoteTime: { type: Number, required: true },
-		/** 点赞无效化标识（用户取消点赞） - 非空 */ /** 默认：false —— 点赞有效 */
+		/** 系统专用字段-点赞无效化标识（用户取消点赞） - 非空 */ /** 默认：false —— 点赞有效 */
 		invalidFlag: { type: Boolean, required: true, default: false },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
@@ -40,13 +40,13 @@ class VideoDownvoteSchemaFactory {
 	schema = {
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true, index: true },
-		/** 点踩用户的 UUID，关联用户安全集合的 UUID - 非空 */
+		/** 系统专用字段-点踩用户的 UUID，关联用户安全集合的 UUID - 非空 */
 		UUID: { type: String, required: true, index: true },
 		/** 点踩用户的 UID - 非空 */
 		uid: { type: Number, required: true },
-		/** 点踩时间 - 非空 */
+		/** 系统专用字段-点踩时间 - 非空 */
 		downvoteTime: { type: Number, required: true },
-		/** 点踩无效化标识（用户取消点踩） - 非空 */ /** 默认：false —— 点踩有效 */
+		/** 系统专用字段-点踩无效化标识（用户取消点踩） - 非空 */ /** 默认：false —— 点踩有效 */
 		invalidFlag: { type: Boolean, required: true, default: false },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
