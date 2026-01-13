@@ -14,117 +14,92 @@ import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '.
  * @returns 用户给视频点赞的请求响应
  */
 export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoVoteResponseDto> => {
-	try {
-		if (!checkVideoVoteRequest(emitVideoUpvoteRequest)) {
-			logging('ERROR', '视频点赞失败，参数异常')
-			return { success: false, message: '视频点赞失败，参数异常' }
-		}
+    try {
+        if (!checkVideoVoteRequest(emitVideoUpvoteRequest)) {
+            logging('ERROR', '视频点赞失败，参数异常')
+            return { success: false, message: '视频点赞失败，参数异常' }
+        }
 
-		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '视频点赞失败，用户校验未通过')
-			return { success: false, message: '视频点赞失败，用户校验未通过' }
-		}
+        if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+            logging('ERROR', '视频点赞失败，用户校验未通过')
+            return { success: false, message: '视频点赞失败，用户校验未通过' }
+        }
 
-		const { videoId } = emitVideoUpvoteRequest
+        const { videoId } = emitVideoUpvoteRequest
 
-		const uid = await getUserUid(uuid)
-		if (uid === undefined || uid === null || uid < 1) {
-			logging('ERROR', '视频点赞失败，获取用户 UID 失败', undefined, { emitVideoUpvoteRequest, uuid })
-			return { success: false, message: '视频点赞失败，获取用户 UID 失败' }
-		}
+        const uid = await getUserUid(uuid)
+        if (uid === undefined || uid === null || uid < 1) {
+            logging('ERROR', '视频点赞失败，获取用户 UID 失败', undefined, { emitVideoUpvoteRequest, uuid })
+            return { success: false, message: '视频点赞失败，获取用户 UID 失败' }
+        }
 
-		const { collectionName: videoUpvoteCollectionName, schemaInstance: correctVideoUpvoteSchema } = VideoUpvoteSchema
-		const { collectionName: videoDownvoteCollectionName, schemaInstance: correctVideoDownvoteSchema } = VideoDownvoteSchema
+        const { collectionName: videoUpvoteCollectionName, schemaInstance: correctVideoUpvoteSchema } = VideoUpvoteSchema
 
-		// 使用事务保证「点赞」与同时存在的「点踩」互斥且原子化
-		const session = await mongoose.startSession()
-		session.startTransaction()
-		try {
-			const nowDate = new Date().getTime()
-			type VideoUpvote = InferSchemaType<typeof correctVideoUpvoteSchema>
-			// 先查询是否存在该用户对该视频的点赞记录（无论 invalidFlag）
-			const existingVoteWhere: QueryType<VideoUpvote> = { videoId, uid }
-			const existingVote = await selectDataFromMongoDB(existingVoteWhere, {}, correctVideoUpvoteSchema, videoUpvoteCollectionName, { session })
+        type VideoUpvote = InferSchemaType<typeof correctVideoUpvoteSchema>
+        const UUID = uuid
+        const nowDate = new Date().getTime()
 
-			if (existingVote.success && existingVote.result && existingVote.result.length > 0) {
-				const existingVoteRecord = existingVote.result[0]
-				if (existingVoteRecord.invalidFlag) {
-					// 恢复为有效
-					const updateVoteWhere: QueryType<VideoUpvote> = { _id: existingVoteRecord._id }
-					const updateVoteUpdate: UpdateType<VideoUpvote> = { invalidFlag: false, editDateTime: nowDate }
-					const updateResult = await updateData4MongoDB(updateVoteWhere, updateVoteUpdate, correctVideoUpvoteSchema, videoUpvoteCollectionName, { session })
-					if (!(updateResult && updateResult.success)) throw new Error('恢复点赞记录失败')
-				} else {
-					// 已经是有效的点赞记录，无需更多操作
-					if (session.inTransaction()) await session.abortTransaction()
-					session.endSession()
-					logging('ERROR', '用户点赞时出错，用户已点赞', undefined, { emitVideoUpvoteRequest, uid })
-					return { success: false, message: '用户点赞时出错，用户已点赞' }
-				}
-			} else {
-				// 不存在记录，创建新记录
-				const videoUpvote: VideoUpvote = {
-					videoId,
-					UUID: uuid,
-					uid,
-					upvoteTime: nowDate,
-					invalidFlag: false,
-					editDateTime: nowDate,
-				}
+        // 检查是否已存在该用户对该视频的点赞记录（不管是否已被软删除）
+        const existingVoteWhere: QueryType<VideoUpvote> = { videoId, UUID }
+        const existingVoteResult = await selectDataFromMongoDB(existingVoteWhere, {}, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 
-				try {
-					const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName, { session })
-					if (!(insertResult && insertResult.success)) throw new Error('插入点赞记录失败')
-				} catch (err: any) {
-					// 并发冲突：重复键 -> 重新查询并尝试恢复
-					if (err && (err.code === 11000 || /E11000/.test(String(err)))) {
-						const recheck = await selectDataFromMongoDB(existingVoteWhere, {}, correctVideoUpvoteSchema, videoUpvoteCollectionName, { session })
-						if (recheck.success && recheck.result && recheck.result.length > 0) {
-							const rec = recheck.result[0]
-							if (rec.invalidFlag) {
-								const updateVoteWhere: QueryType<VideoUpvote> = { _id: rec._id }
-								const updateVoteUpdate: UpdateType<VideoUpvote> = { invalidFlag: false, editDateTime: nowDate }
-								const restoreResult = await updateData4MongoDB(updateVoteWhere, updateVoteUpdate, correctVideoUpvoteSchema, videoUpvoteCollectionName, { session })
-								if (!(restoreResult && restoreResult.success)) throw new Error('并发恢复点赞失败')
-							} else {
-								if (session.inTransaction()) await session.abortTransaction()
-								session.endSession()
-								return { success: false, message: '用户已点赞' }
-							}
-						} else {
-							throw new Error('并发插入后查询点赞记录失败')
-						}
-					} else {
-						throw err
-					}
-				}
-			}
+        if (existingVoteResult.success && existingVoteResult.result && existingVoteResult.result.length > 0) {
+            // 已存在记录，更新为有效状态
+            const existingRecord = existingVoteResult.result[0]
+            const updateWhere: QueryType<VideoUpvote> = { _id: existingRecord._id }
+            const updateData: UpdateType<VideoUpvote> = {
+                invalidFlag: false,
+                editDateTime: nowDate
+            }
 
-			// 点赞成功后，检查是否存在有效的点踩记录，如存在则使其失效（互斥）
-			type VideoDownvote = InferSchemaType<typeof correctVideoDownvoteSchema>
-			const existingDownvoteWhere: QueryType<VideoDownvote> = { videoId, uid, invalidFlag: false }
-			const existingDownvote = await selectDataFromMongoDB(existingDownvoteWhere, {}, correctVideoDownvoteSchema, videoDownvoteCollectionName, { session })
-			if (existingDownvote.success && existingDownvote.result && existingDownvote.result.length > 0) {
-				const downvoteUpdate: UpdateType<VideoDownvote> = { invalidFlag: true, editDateTime: nowDate }
-				const downvoteResult = await updateData4MongoDB(existingDownvoteWhere, downvoteUpdate, correctVideoDownvoteSchema, videoDownvoteCollectionName, { session })
-				if (!(downvoteResult && downvoteResult.success)) throw new Error('取消点踩失败')
-			}
+            const updateResult = await updateData4MongoDB(updateWhere, updateData, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 
-			await session.commitTransaction()
-			session.endSession()
-			return { success: true, message: '视频点赞成功' }
-		} catch (error) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			logging('ERROR', '视频点赞失败，数据库操作出错：', error, { emitVideoUpvoteRequest, uuid })
-			return { success: false, message: '视频点赞失败，数据库操作出错' }
-		}
-	} catch (error) {
-		logging('ERROR', '视频点赞失败，未知错误：', error, { emitVideoUpvoteRequest, uuid })
-		return { success: false, message: '视频点赞失败，未知错误：' }
-	}
+            if (!updateResult || !updateResult.success) {
+                logging('ERROR', '视频点赞失败，更新已有记录失败', undefined, { emitVideoUpvoteRequest, uuid })
+                return { success: false, message: '视频点赞失败，更新记录失败' }
+            }
+        } else {
+            // 不存在记录，创建新记录
+            const videoUpvote: VideoUpvote = {
+                videoId,
+                UUID,
+                uid,
+                upvoteTime: nowDate,
+                invalidFlag: false,
+                editDateTime: nowDate,
+            }
+
+            const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+            if (!insertResult || !insertResult.success) {
+                logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
+                return { success: false, message: '视频点赞失败，存储数据失败' }
+            }
+        }
+
+        // 如果用户之前有点踩，需要取消点踩
+        if (await checkUserHasDownvoted(videoId, uuid)) {
+            const cancelVideoDownvoteRequest: VideoVoteRequestDto = {
+                videoId,
+            }
+            try {
+                const cancelVideoDownvoteResult = await cancelVideoDownvoteService(cancelVideoDownvoteRequest, uuid, token)
+                if (cancelVideoDownvoteResult.success) {
+                    return { success: true, message: '视频点赞成功' }
+                } else {
+                    logging('ERROR', '视频点赞成功，但未能取消点踩', undefined, { emitVideoUpvoteRequest, uuid })
+                    return { success: false, message: '视频点赞成功，但未能取消点踩' }
+                }
+            } catch (error) {
+                logging('ERROR', '视频点赞成功，但取消点踩失败', error, { emitVideoUpvoteRequest, uuid })
+                return { success: false, message: '视频点赞成功，但取消点踩失败' }
+            }
+        } else {
+            return { success: true, message: '视频点赞成功' }
+        }
+    } catch (error) {
+        logging('ERROR', '视频点赞失败，未知错误：', error, { emitVideoUpvoteRequest, uuid })
+        return { success: false, message: '视频点赞失败，未知错误' }
+    }
 }
 
 /**
@@ -195,123 +170,99 @@ export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVo
 
 /**
  * 用户给视频点踩
- * @param videoId KVID 视频 ID
+ * @param emitVideoDownvoteRequest 用户给视频点踩的请求载荷
  * @param uuid 用户 UUID
  * @param token 用户 token
  * @returns 用户给视频点踩的结果
  */
 export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoVoteResponseDto> => {
-	try {
-		if (!checkVideoVoteRequest(emitVideoDownvoteRequest)) {
-			logging('ERROR', '视频点踩失败，参数异常')
-			return { success: false, message: '视频点踩失败，参数异常' }
-		}
-
-		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '视频点踩失败，用户校验未通过')
-			return { success: false, message: '视频点踩失败，用户校验未通过' }
-		}
-
-		const { videoId } = emitVideoDownvoteRequest
-
-		const uid = await getUserUid(uuid)
-		if (uid === undefined || uid === null || uid < 1) {
-			logging('ERROR', '视频点踩失败，获取用户 UID 失败', undefined, { emitVideoDownvoteRequest, uuid })
-			return { success: false, message: '视频点踩失败，获取用户 UID 失败' }
-		}
-
-		const { collectionName: videoUpvoteCollectionName, schemaInstance: correctVideoUpvoteSchema } = VideoUpvoteSchema
-		const { collectionName: videoDownvoteCollectionName, schemaInstance: correctVideoDownvoteSchema } = VideoDownvoteSchema
-
-        // 使用事务保证「点踩」与同时存在的「点赞」互斥且原子化
-        const session = await mongoose.startSession()
-        session.startTransaction()
-        try {
-            const nowDate = new Date().getTime()
-            type VideoDownvote = InferSchemaType<typeof correctVideoDownvoteSchema>
-            // 先查询是否存在该用户对该视频的点踩记录（无论 invalidFlag）
-            const existingVoteWhere: QueryType<VideoDownvote> = { videoId, uid }
-            const existingVote = await selectDataFromMongoDB(existingVoteWhere, {}, correctVideoDownvoteSchema, videoDownvoteCollectionName, { session })
-
-            if (existingVote.success && existingVote.result && existingVote.result.length > 0) {
-                const existingVoteRecord = existingVote.result[0]
-                if (existingVoteRecord.invalidFlag) {
-                    // 恢复为有效
-                    const updateVoteWhere: QueryType<VideoDownvote> = { _id: existingVoteRecord._id }
-                    const updateVoteUpdate: UpdateType<VideoDownvote> = { invalidFlag: false, editDateTime: nowDate }
-                    const updateResult = await updateData4MongoDB(updateVoteWhere, updateVoteUpdate, correctVideoDownvoteSchema, videoDownvoteCollectionName, { session })
-                    if (!(updateResult && updateResult.success)) throw new Error('恢复点踩记录失败')
-                } else {
-                    // 已经是有效的点踩记录，无需更多操作
-                    if (session.inTransaction()) await session.abortTransaction()
-                    session.endSession()
-                    logging('ERROR', '用户点踩时出错，用户已点踩', undefined, { emitVideoDownvoteRequest, uid })
-                    return { success: false, message: '用户点踩时出错，用户已点踩' }
-                }
-            } else {
-                // 不存在记录，创建新记录
-                const videoDownvote: VideoDownvote = {
-                    videoId,
-                    UUID: uuid,
-                    uid,
-                    downvoteTime: nowDate,
-                    invalidFlag: false,
-                    editDateTime: nowDate,
-                }
-
-                try {
-                    const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName, { session })
-                    if (!(insertResult && insertResult.success)) throw new Error('插入点踩记录失败')
-                } catch (err: any) {
-                    // 并发冲突：重复键 -> 重新查询并尝试恢复
-                    if (err && (err.code === 11000 || /E11000/.test(String(err)))) {
-                        const recheck = await selectDataFromMongoDB(existingVoteWhere, {}, correctVideoDownvoteSchema, videoDownvoteCollectionName, { session })
-                        if (recheck.success && recheck.result && recheck.result.length > 0) {
-                            const rec = recheck.result[0]
-                            if (rec.invalidFlag) {
-                                const updateVoteWhere: QueryType<VideoDownvote> = { _id: rec._id }
-                                const updateVoteUpdate: UpdateType<VideoDownvote> = { invalidFlag: false, editDateTime: nowDate }
-                                const restoreResult = await updateData4MongoDB(updateVoteWhere, updateVoteUpdate, correctVideoDownvoteSchema, videoDownvoteCollectionName, { session })
-                                if (!(restoreResult && restoreResult.success)) throw new Error('并发恢复点踩失败')
-                            } else {
-                                if (session.inTransaction()) await session.abortTransaction()
-                                session.endSession()
-                                return { success: false, message: '用户已点踩' }
-                            }
-                        } else {
-                            throw new Error('并发插入后查询点踩记录失败')
-                        }
-                    } else {
-                        throw err
-                    }
-                }
-            }
-
-            // 点踩成功后，检查是否存在有效的点赞记录，如存在则使其失效（互斥）
-            type VideoUpvote = InferSchemaType<typeof correctVideoUpvoteSchema>
-            const existingUpvoteWhere: QueryType<VideoUpvote> = { videoId, uid, invalidFlag: false }
-            const existingUpvote = await selectDataFromMongoDB(existingUpvoteWhere, {}, correctVideoUpvoteSchema, videoUpvoteCollectionName, { session })
-            if (existingUpvote.success && existingUpvote.result && existingUpvote.result.length > 0) {
-                const upvoteUpdate: UpdateType<VideoUpvote> = { invalidFlag: true, editDateTime: nowDate }
-                const upvoteResult = await updateData4MongoDB(existingUpvoteWhere, upvoteUpdate, correctVideoUpvoteSchema, videoUpvoteCollectionName, { session })
-                if (!(upvoteResult && upvoteResult.success)) throw new Error('取消点赞失败')
-            }
-
-            await session.commitTransaction()
-            session.endSession()
-            return { success: true, message: '视频点踩成功' }
-        } catch (error) {
-            if (session.inTransaction()) {
-                await session.abortTransaction()
-            }
-            session.endSession()
-            logging('ERROR', '视频点踩失败，数据库操作出错：', error, { emitVideoDownvoteRequest, uuid })
-            return { success: false, message: '视频点踩失败，数据库操作出错' }
+    try {
+        if (!checkVideoVoteRequest(emitVideoDownvoteRequest)) {
+            logging('ERROR', '视频点踩失败，参数异常')
+            return { success: false, message: '视频点踩失败，参数异常' }
         }
-	} catch (error) {
-		logging('ERROR', '视频点踩失败，未知错误：', error, { emitVideoDownvoteRequest, uuid })
-		return { success: false, message: '视频点踩失败，未知错误' }
-	}
+
+        if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+            logging('ERROR', '视频点踩失败，用户校验未通过')
+            return { success: false, message: '视频点踩失败，用户校验未通过' }
+        }
+
+        const { videoId } = emitVideoDownvoteRequest
+
+        const uid = await getUserUid(uuid)
+        if (uid === undefined || uid === null || uid < 1) {
+            logging('ERROR', '视频点踩失败，获取用户 UID 失败', undefined, { emitVideoDownvoteRequest, uuid })
+            return { success: false, message: '视频点踩失败，获取用户 UID 失败' }
+        }
+
+        const { collectionName: videoDownvoteCollectionName, schemaInstance: correctVideoDownvoteSchema } = VideoDownvoteSchema
+
+        type VideoDownvote = InferSchemaType<typeof correctVideoDownvoteSchema>
+        const UUID = uuid
+        const nowDate = new Date().getTime()
+
+        // 检查用户是否已对视频有点踩记录（无论是否有效）
+        const existingVoteWhere: QueryType<VideoDownvote> = { videoId, UUID }
+        const existingVoteResult = await selectDataFromMongoDB(existingVoteWhere, {}, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+
+        let result;
+        if (existingVoteResult.success && existingVoteResult.result && existingVoteResult.result.length > 0) {
+            // 用户已有记录，更新 invalidFlag 为 false（激活点踩）并更新时间
+            const existingRecord = existingVoteResult.result[0]
+            const updateWhere: QueryType<VideoDownvote> = { _id: existingRecord._id }
+            const updateData: UpdateType<VideoDownvote> = {
+                invalidFlag: false,
+                editDateTime: nowDate
+            }
+
+            const updateResult = await updateData4MongoDB(updateWhere, updateData, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+
+            if (!updateResult || !updateResult.success) {
+                logging('ERROR', '视频点踩失败，更新已有记录失败', undefined, { emitVideoDownvoteRequest, uuid })
+                return { success: false, message: '视频点踩失败，更新记录失败' }
+            }
+        } else {
+            // 用户没有记录，创建新记录
+            const videoDownvote: VideoDownvote = {
+                videoId,
+                UUID,
+                uid,
+                downvoteTime: nowDate,
+                invalidFlag: false,
+                editDateTime: nowDate,
+            }
+
+            const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+            if (!insertResult || !insertResult.success) {
+                logging('ERROR', '视频点踩失败，插入数据失败', undefined, { emitVideoDownvoteRequest, uuid })
+                return { success: false, message: '视频点踩失败，存储数据失败' }
+            }
+        }
+
+        // 如果用户之前有点赞，需要取消点赞
+        if (await checkUserHasUpvoted(videoId, uuid)) {
+            const cancelVideoUpvoteRequest: VideoVoteRequestDto = {
+                videoId,
+            }
+            try {
+                const cancelVideoUpvoteResult = await cancelVideoUpvoteService(cancelVideoUpvoteRequest, uuid, token)
+                if (cancelVideoUpvoteResult.success) {
+                    return { success: true, message: '视频点踩成功' }
+                } else {
+                    logging('ERROR', '视频点踩成功，但未能取消点赞', undefined, { emitVideoDownvoteRequest, uuid })
+                    return { success: false, message: '视频点踩成功，但未能取消点赞' }
+                }
+            } catch (error) {
+                logging('ERROR', '视频点踩成功，但取消点赞失败', error, { emitVideoDownvoteRequest, uuid })
+                return { success: false, message: '视频点踩成功，但取消点赞失败' }
+            }
+        } else {
+            return { success: true, message: '视频点踩成功' }
+        }
+    } catch (error) {
+        logging('ERROR', '视频点踩失败，未知错误：', error, { emitVideoDownvoteRequest, uuid })
+        return { success: false, message: '视频点踩失败，未知错误' }
+    }
 }
 
 /**
