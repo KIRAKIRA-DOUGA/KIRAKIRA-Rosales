@@ -500,8 +500,8 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				video.videoDownvoteCount = downvoteCount
 				video.userHasUpvoted = hasUpvoted
 				video.userHasDownvoted = hasDownvoted
-			} catch (err) {
-				logging('ERROR', '获取视频点赞/点踩信息失败：', err, { videoId })
+			} catch (error) {
+				logging('ERROR', '获取视频点赞/点踩信息失败：', error, { videoId })
 			}
 
 			return {
