@@ -1,7 +1,7 @@
 import { isPassRbacCheck } from '../service/RbacService.js'
-import { cancelVideoDownvoteService, cancelVideoUpvoteService, emitVideoDownvoteService, emitVideoUpvoteService } from '../service/VideoVoteService.js'
+import { emitVideoUpvoteService, emitVideoDownvoteService, cancelVideoUpvoteService, cancelVideoDownvoteService } from '../service/VideoVoteService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { CancelVideoDownvoteRequestDto, CancelVideoUpvoteRequestDto, EmitVideoDownvoteRequestDto, EmitVideoUpvoteRequestDto } from './VideoVoteControllerDto.js'
+import { VideoVoteRequestDto, VideoVoteResponseDto } from './VideoVoteControllerDto.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { getUserUid } from '../service/UserService.js'
 
@@ -9,9 +9,9 @@ import { getUserUid } from '../service/UserService.js'
  * 用户给视频点赞
  * @param ctx context
  * @param next context
+ * @return 用户给视频点赞的请求响应
  */
 export const emitVideoUpvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<EmitVideoUpvoteRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
@@ -20,49 +20,12 @@ export const emitVideoUpvoteController = async (ctx: koaCtx, next: koaNext) => {
 		return
 	}
 
-	const emitVideoUpvoteRequest: EmitVideoUpvoteRequestDto = {
-		/** KVID 视频 ID */
-		videoId: data.videoId,
+	const data = ctx.request.body as Partial<VideoVoteRequestDto>
+	const emitVideoUpvoteRequest: VideoVoteRequestDto = {
+		videoId: data.videoId ?? -1,
 	}
-	const emitVideoUpvoteResponse = await emitVideoUpvoteService(emitVideoUpvoteRequest.videoId, uuid, token)
+	const emitVideoUpvoteResponse = await emitVideoUpvoteService(emitVideoUpvoteRequest, uuid, token)
 	ctx.body = emitVideoUpvoteResponse
-	await next()
-}
-
-/**
- * 用户取消视频点赞
- * @param ctx context
- * @param next context
- */
-export const cancelVideoUpvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<CancelVideoUpvoteRequestDto>
-	const uuid = ctx.cookies.get('uuid')
-	const token = ctx.cookies.get('token')
-
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
-
-	if (!uuid) {
-		ctx.body = { success: false, message: '用户取消视频点赞失败，UUID 为空' }
-		await next()
-		return
-	}
-
-	const uid = await getUserUid(uuid)
-	if (uid === undefined || uid === null || uid < 1) {
-		ctx.body = { success: false, message: '用户取消视频点赞失败，获取用户 UID 失败' }
-		await next()
-		return
-	}
-
-	const cancelVideoUpvoteRequest: CancelVideoUpvoteRequestDto = {
-		/** KVID 视频 ID */
-		videoId: data.videoId,
-	}
-	const cancelVideoUpvoteResponse = await cancelVideoUpvoteService(cancelVideoUpvoteRequest.videoId, uid, token)
-	ctx.body = cancelVideoUpvoteResponse
 	await next()
 }
 
@@ -70,9 +33,9 @@ export const cancelVideoUpvoteController = async (ctx: koaCtx, next: koaNext) =>
  * 用户给视频点踩
  * @param ctx context
  * @param next context
+ * @return 用户给视频点踩的请求响应
  */
 export const emitVideoDownvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<EmitVideoDownvoteRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
@@ -81,22 +44,22 @@ export const emitVideoDownvoteController = async (ctx: koaCtx, next: koaNext) =>
 		return
 	}
 
-	const emitVideoDownvoteRequest: EmitVideoDownvoteRequestDto = {
-		/** KVID 视频 ID */
-		videoId: data.videoId,
+	const data = ctx.request.body as Partial<VideoVoteRequestDto>
+	const emitVideoDownvoteRequest: VideoVoteRequestDto = {
+		videoId: data.videoId ?? -1,
 	}
-	const emitVideoDownvoteResponse = await emitVideoDownvoteService(emitVideoDownvoteRequest.videoId, uuid, token)
+	const emitVideoDownvoteResponse = await emitVideoDownvoteService(emitVideoDownvoteRequest, uuid, token)
 	ctx.body = emitVideoDownvoteResponse
 	await next()
 }
 
 /**
- * 用户取消视频点踩
+ * 用户取消给视频点赞
  * @param ctx context
  * @param next context
+ * @return 用户取消给视频点赞的请求响应
  */
-export const cancelVideoDownvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<CancelVideoDownvoteRequestDto>
+export const cancelVideoUpvoteController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
@@ -105,25 +68,35 @@ export const cancelVideoDownvoteController = async (ctx: koaCtx, next: koaNext) 
 		return
 	}
 
-	if (!uuid) {
-		ctx.body = { success: false, message: '用户取消视频点踩失败，UUID 为空' }
-		await next()
-		return
+	const data = ctx.request.body as Partial<VideoVoteRequestDto>
+	const cancelVideoUpvoteRequest: VideoVoteRequestDto = {
+		videoId: data.videoId ?? -1,
 	}
-
-	const uid = await getUserUid(uuid)
-	if (uid === undefined || uid === null || uid < 1) {
-		ctx.body = { success: false, message: '用户取消视频点踩失败，获取用户 UID 失败' }
-		await next()
-		return
-	}
-
-	const cancelVideoDownvoteRequest: CancelVideoDownvoteRequestDto = {
-		/** KVID 视频 ID */
-		videoId: data.videoId,
-	}
-	const cancelVideoDownvoteResponse = await cancelVideoDownvoteService(cancelVideoDownvoteRequest.videoId, uid, token)
-	ctx.body = cancelVideoDownvoteResponse
+	const cancelVideoUpvoteResponse = await cancelVideoUpvoteService(cancelVideoUpvoteRequest, uuid, token)
+	ctx.body = cancelVideoUpvoteResponse
 	await next()
 }
 
+/**
+ * 用户取消给视频点踩
+ * @param ctx context
+ * @param next context
+ * @return 用户取消给视频点踩的请求响应
+ */
+export const cancelVideoDownvoteController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<VideoVoteRequestDto>
+	const cancelVideoDownvoteRequest: VideoVoteRequestDto = {
+		videoId: data.videoId ?? -1,
+	}
+	const cancelVideoDownvoteResponse = await cancelVideoDownvoteService(cancelVideoDownvoteRequest, uuid, token)
+	ctx.body = cancelVideoDownvoteResponse
+	await next()
+}

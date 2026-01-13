@@ -41,8 +41,8 @@ import {
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
-import { cancelVideoDownvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, emitVideoUpvoteController } from '../controller/VideoVoteController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
+import { emitVideoUpvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, cancelVideoDownvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
 import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
@@ -462,21 +462,19 @@ router.post('/video/downvote', emitVideoDownvoteController) // 用户为视频�
 // 	"videoId": 13
 // }
 
-router.delete('/video/upvote/cancel', cancelVideoUpvoteController) // 用户取消一个视频的点赞
+router.post('/video/upvote/cancel', cancelVideoUpvoteController) // 用户取消为视频点赞
 // https://localhost:9999/video/upvote/cancel
 // cookie: uuid, token
 // {
 // 	"videoId": 13
 // }
 
-router.delete('/video/downvote/cancel', cancelVideoDownvoteController) // 用户取消一个视频的点踩
+router.post('/video/downvote/cancel', cancelVideoDownvoteController) // 用户取消为视频点踩
 // https://localhost:9999/video/downvote/cancel
 // cookie: uuid, token
 // {
 // 	"videoId": 13
 // }
-
-
 
 
 

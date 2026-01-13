@@ -18,7 +18,7 @@ import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUser
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { logging } from './loggingService.js'
-import { getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
+import { getVideoUpvoteCount, getVideoDownvoteCount, checkUserHasUpvoted, checkUserHasDownvoted } from './VideoVoteService.js'
 
 /**
  * 上传视频
@@ -490,11 +490,19 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 			}
 
-			// 8. 计算视频的点赞数和点踩数
-			const upvoteCount = await getVideoUpvoteCount(video.videoId)
-			const downvoteCount = await getVideoDownvoteCount(video.videoId)
-			video.upvoteCount = upvoteCount
-			video.downvoteCount = downvoteCount
+			// 添加点赞/点踩计数与当前用户是否已操作的字段
+			try {
+				const upvoteCount = await getVideoUpvoteCount(video.videoId)
+				const downvoteCount = await getVideoDownvoteCount(video.videoId)
+				const hasUpvoted = selectorUuid ? await checkUserHasUpvoted(video.videoId, selectorUuid) : false
+				const hasDownvoted = selectorUuid ? await checkUserHasDownvoted(video.videoId, selectorUuid) : false
+				video.videoUpvoteCount = upvoteCount
+				video.videoDownvoteCount = downvoteCount
+				video.userHasUpvoted = hasUpvoted
+				video.userHasDownvoted = hasDownvoted
+			} catch (err) {
+				logging('ERROR', '获取视频点赞/点踩信息失败：', err, { videoId })
+			}
 
 			return {
 				success: true,
