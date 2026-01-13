@@ -4,7 +4,7 @@ import { checkUserTokenByUuidService, checkUserTokenService, getUserUid } from '
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { VideoVoteRequestDto, VideoUpvoteResponseDto, VideoDownvoteResponseDto } from '../controller/VideoVoteControllerDto.js'
 import { VideoUpvoteSchema, VideoDownvoteSchema } from '../dbPool/schema/VideoVoteSchema.js'
-import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
+import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 
 /**
  * 用户给视频点赞
@@ -344,20 +344,24 @@ export const getVideoUpvoteCount = async (videoId: number): Promise<number> => {
 		}
 
 		const { collectionName, schemaInstance } = VideoUpvoteSchema
-		type VideoUpvote = InferSchemaType<typeof schemaInstance>
-		const where: QueryType<VideoUpvote> = {
-			videoId,
-			invalidFlag: false,
-		}
 
-		const select: SelectType<VideoUpvote> = {
-			videoId: 1,
-		}
+		// 使用聚合管道来统计数量，提高性能
+		const countVideoUpvotePipeline: any[] = [
+			{
+				$match: {
+					videoId,
+					invalidFlag: false,
+				}
+			},
+			{
+				$count: 'totalCount'
+			}
+		]
 
 		try {
-			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
-			if (result.success && result.result) {
-				return result.result.length
+			const countVideoUpvoteResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, countVideoUpvotePipeline)
+			if (countVideoUpvoteResult.success && countVideoUpvoteResult.result && countVideoUpvoteResult.result.length > 0) {
+				return countVideoUpvoteResult.result?.[0]?.totalCount
 			} else {
 				return 0
 			}
@@ -384,20 +388,24 @@ export const getVideoDownvoteCount = async (videoId: number): Promise<number> =>
 		}
 
 		const { collectionName, schemaInstance } = VideoDownvoteSchema
-		type VideoDownvote = InferSchemaType<typeof schemaInstance>
-		const where: QueryType<VideoDownvote> = {
-			videoId,
-			invalidFlag: false,
-		}
 
-		const select: SelectType<VideoDownvote> = {
-			videoId: 1,
-		}
+		// 使用聚合管道来统计数量，提高性能
+		const countVideoDownvotePipeline: any[] = [
+			{
+				$match: {
+					videoId,
+					invalidFlag: false,
+				}
+			},
+			{
+				$count: 'totalCount'
+			}
+		]
 
 		try {
-			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
-			if (result.success && result.result) {
-				return result.result.length
+			const countVideoDownvoteResult = await selectDataByAggregateFromMongoDB(schemaInstance, collectionName, countVideoDownvotePipeline)
+			if (countVideoDownvoteResult.success && countVideoDownvoteResult.result && countVideoDownvoteResult.result.length > 0) {
+				return countVideoDownvoteResult.result?.[0]?.totalCount
 			} else {
 				return 0
 			}
