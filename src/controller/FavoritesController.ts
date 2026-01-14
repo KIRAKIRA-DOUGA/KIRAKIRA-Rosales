@@ -1,7 +1,7 @@
-import { addEditorToFavoritesService, addToFavoritesService, createFavoritesService, deleteFavoritesService, getFavoritesByUidService, getFavoritesCoverUploadSignedUrlService, getFavoritesDetailService, getFavoritesService, removeEditorFromFavoritesService, removeFromFavoritesService, reorderFavoritesDetailService, updateFavoritesService } from '../service/FavoritesService.js'
+import { createFavoritesService, getFavoritesService, getFavoritesByUidService, addToFavoritesService, removeFromFavoritesService, getFavoritesDetailService, updateFavoritesService, deleteFavoritesService, reorderFavoritesDetailService, addEditorToFavoritesService, removeEditorFromFavoritesService } from '../service/FavoritesService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { parseInteger } from '../common/ValidTool.js'
-import { AddEditorToFavoritesRequestDto, AddToFavoritesRequestDto, CreateFavoritesRequestDto, DeleteFavoritesRequestDto, GetFavoritesByUidRequestDto, GetFavoritesDetailRequestDto, RemoveEditorFromFavoritesRequestDto, RemoveFromFavoritesRequestDto, ReorderFavoritesDetailRequestDto, UpdateFavoritesRequestDto } from './FavoritesControllerDto.js'
+import { CreateFavoritesRequestDto, GetFavoritesByUidRequestDto, AddToFavoritesRequestDto, RemoveFromFavoritesRequestDto, GetFavoritesDetailRequestDto, UpdateFavoritesRequestDto, DeleteFavoritesRequestDto, ReorderFavoritesDetailRequestDto, AddEditorToFavoritesRequestDto, RemoveEditorFromFavoritesRequestDto } from './FavoritesControllerDto.js'
 
 /**
  * 创建收藏夹
@@ -10,36 +10,32 @@ import { AddEditorToFavoritesRequestDto, AddToFavoritesRequestDto, CreateFavorit
  */
 export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CreateFavoritesRequestDto>
-	const uuid = ctx.cookies.get('uuid')
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
-	if (!uuid || !token) {
-		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
-		return
-	}
 	const createFavoritesRequest: CreateFavoritesRequestDto = {
+		/** 收藏夹标题 - 非空 */
 		favoritesTitle: data?.favoritesTitle ?? '',
+		/** 收藏夹简介 */
 		favoritesBio: data.favoritesBio,
+		/** 收藏夹封面 */
 		favoritesCover: data.favoritesCover,
+		/** 收藏夹可见性，默认 -1（私有） */
 		favoritesVisibility: data.favoritesVisibility ?? -1,
 	}
-	const createFavoritesResponse = await createFavoritesService(createFavoritesRequest, uuid, token)
+	const createFavoritesResponse = await createFavoritesService(createFavoritesRequest, uid, token)
 	ctx.body = createFavoritesResponse
 	await next()
 }
 
 /**
- * 获取当前登录用户自己的收藏夹列表
+ * 获取当前登录用户的收藏夹列表
  * @param ctx context
  * @param next context
  */
 export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const uuid = ctx.cookies.get('uuid')
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
-	if (!uuid || !token) {
-		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
-		return
-	}
-	const getFavoritesResponse = await getFavoritesService(uuid, token)
+	const getFavoritesResponse = await getFavoritesService(uid, token)
 	ctx.body = getFavoritesResponse
 	await next()
 }
@@ -203,23 +199,6 @@ export const reorderFavoritesDetailController = async (ctx: koaCtx, next: koaNex
 	}
 	const reorderFavoritesDetailResponse = await reorderFavoritesDetailService(reorderFavoritesDetailRequest, uuid, token)
 	ctx.body = reorderFavoritesDetailResponse
-	await next()
-}
-
-/**
- * 获取用于上传收藏夹封面图的预签名 URL
- * @param ctx context
- * @param next context
- */
-export const getFavoritesCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uuid = ctx.cookies.get('uuid')
-	const token = ctx.cookies.get('token')
-	if (!uuid || !token) {
-		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
-		return
-	}
-	const getFavoritesCoverUploadSignedUrlResponse = await getFavoritesCoverUploadSignedUrlService(uuid, token)
-	ctx.body = getFavoritesCoverUploadSignedUrlResponse
 	await next()
 }
 

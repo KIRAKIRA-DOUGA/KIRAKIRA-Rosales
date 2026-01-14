@@ -1,7 +1,7 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
-import { addEditorToFavoritesController, addToFavoritesController, createFavoritesController, deleteFavoritesController, getFavoritesByUidController, getFavoritesController, getFavoritesCoverUploadSignedUrlController, getFavoritesDetailController, removeEditorFromFavoritesController, removeFromFavoritesController, reorderFavoritesDetailController, updateFavoritesController } from '../controller/FavoritesController.js'
+import { createFavoritesController, getFavoritesController, getFavoritesByUidController, addToFavoritesController, removeFromFavoritesController, getFavoritesDetailController, updateFavoritesController, deleteFavoritesController, reorderFavoritesDetailController, addEditorToFavoritesController, removeEditorFromFavoritesController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
 	adminClearUserInfoController,
@@ -611,7 +611,7 @@ router.get('/history/filter', getUserBrowsingHistoryWithFilterController) // 获
 
 router.post('/favorites/create', createFavoritesController) // 创建收藏夹
 // https://localhost:9999/favorites/create
-// cookie: uuid, token
+// cookie: uid, token
 // {
 // 	"favoritesTitle": "好康的视频",
 // 	"favoritesBio": "这里都是好康的视频捏",
@@ -619,17 +619,15 @@ router.post('/favorites/create', createFavoritesController) // 创建收藏夹
 // 	"favoritesVisibility": 1
 // }
 
-router.get('/favorites', getFavoritesController) // 获取当前登录用户自己的收藏夹列表
+router.get('/favorites', getFavoritesController) // 获取当前登录用户的收藏夹列表
 // https://localhost:9999/favorites
-// cookie: uuid, token
+// cookie: uid, token
 
 router.get('/favorites/byUid', getFavoritesByUidController) // 获取指定用户的收藏夹列表（需要验证用户整体可见性设置）
 // https://localhost:9999/favorites/byUid?uid=123
 // cookie: uuid, token
-
-router.get('/favorites/cover/preUpload', getFavoritesCoverUploadSignedUrlController) // 获取用于上传收藏夹封面图的预签名 URL
-// https://localhost:9999/favorites/cover/preUpload
-// cookie: uuid, token
+// query:
+// uid (必填)
 
 router.post('/favorites/add', addToFavoritesController) // 添加内容到收藏夹
 // https://localhost:9999/favorites/add
@@ -652,7 +650,9 @@ router.delete('/favorites/remove', removeFromFavoritesController) // 从收藏�
 router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表
 // https://localhost:9999/favorites/detail?favoritesListId=1&sortOrder=1
 // cookie: uuid, token
-// Query: favoritesListId (必填), sortOrder (可选，1 正序，-1 倒序，默认 1)
+// query:
+// favoritesListId (必填)
+// sortOrder (可选，1 正序，-1 倒序，默认 1)
 
 router.post('/favorites/update', updateFavoritesController) // 更新收藏夹信息
 // https://localhost:9999/favorites/update

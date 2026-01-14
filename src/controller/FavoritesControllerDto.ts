@@ -26,6 +26,28 @@ type Favorites = {
 }
 
 /**
+ * 收藏夹明细
+ */
+type FavoritesDetail = {
+	/** 收藏夹明细记录的唯一 ID */
+	_id?: string;
+	/** 收藏夹唯一 ID */
+	favoritesListId: number;
+	/** 谁将本条内容添加到收藏夹 */
+	operator: number;
+	/** 内容的类型 */
+	category: string;
+	/** 内容的唯一 ID */
+	id: string;
+	/** 添加到收藏的时间 */
+	addedDateTime: number;
+	/** 排序顺序 */
+	sortOrder: number;
+	/** 最后编辑时间 */
+	editDateTime: number;
+}
+
+/**
  * 创建收藏夹的请求载荷
  */
 export type CreateFavoritesRequestDto = {
@@ -52,7 +74,7 @@ export type CreateFavoritesResponseDto = {
 }
 
 /**
- * 获取当前登录用户自己的收藏夹列表
+ * 获取当前登录用户自己的收藏夹列表的请求响应
  */
 export type GetFavoritesResponseDto = {
 	/** 是否请求成功 */
@@ -81,28 +103,6 @@ export type GetFavoritesByUidResponseDto = {
 	message?: string;
 	/** 如果成功，返回可见的收藏夹列表 */
 	result?: Favorites[];
-}
-
-/**
- * 收藏夹明细项
- */
-type FavoritesDetailItem = {
-	/** 收藏夹明细记录的唯一 ID */
-	_id?: string;
-	/** 收藏夹唯一 ID */
-	favoritesListId: number;
-	/** 谁将本条内容添加到收藏夹 */
-	operator: number;
-	/** 内容的类型 */
-	category: string;
-	/** 内容的唯一 ID */
-	id: string;
-	/** 添加到收藏的时间 */
-	addedDateTime: number;
-	/** 排序顺序 */
-	sortOrder: number;
-	/** 最后编辑时间 */
-	editDateTime: number;
 }
 
 /**
@@ -168,7 +168,7 @@ export type GetFavoritesDetailResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 	/** 如果成功，返回收藏夹中的所有内容 */
-	result?: FavoritesDetailItem[];
+	result?: FavoritesDetail[];
 }
 
 /**
@@ -286,21 +286,4 @@ export type RemoveEditorFromFavoritesResponseDto = {
 	message?: string;
 	/** 如果成功，返回更新后的收藏夹数据 */
 	result?: Favorites;
-}
-
-/**
- * 获取用于上传收藏夹封面图的预签名 URL 的响应结果
- */
-export type GetFavoritesCoverUploadSignedUrlResponseDto = {
-	/** 请求是否成功，成功返回 true，否则返回 false */
-	success: boolean;
-	/** 附加的文本消息 */
-	message?: string;
-	/** 请求到的收藏夹封面图上传预签名 URL 数据 */
-	result?: {
-		/** 预签名 URL */
-		signedUrl: string;
-		/** 文件名 */
-		fileName: string;
-	};
 }
