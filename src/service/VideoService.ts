@@ -1168,7 +1168,16 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 			type Video = InferSchemaType<typeof videoSchemaInstance>
 
-			const updateVideoResult = await findOneAndPlusByMongodbId<Video, 'watchedCount'>(String(videoId), 'watchedCount', videoSchemaInstance, videoCollectionName, 1)
+			// 先通过 videoId 查找视频文档的 _id
+			const videoModel = mongoose.model<Video>(videoCollectionName, videoSchemaInstance)
+			const videoDoc = await videoModel.findOne({ videoId }).select('_id').lean()
+			if (!videoDoc) {
+				logging('ERROR', '记录视频播放失败：未找到对应视频', undefined, { videoId, uuid })
+				return false
+			}
+
+			// 使用找到的 _id 来增加播放量
+			const updateVideoResult = await findOneAndPlusByMongodbId<Video, 'watchedCount'>(videoDoc._id.toString(), 'watchedCount', videoSchemaInstance, videoCollectionName, 1)
 
 			if (!updateVideoResult.success || updateVideoResult.result === undefined) {
 				logging('ERROR', '记录视频播放失败：增加播放量失败', undefined, { videoId, uuid })
