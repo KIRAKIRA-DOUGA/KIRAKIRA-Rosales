@@ -1124,10 +1124,6 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 		const todayDateString = getTodayDateString()
 		const nowDate = new Date().getTime()
 
-		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
-
 		try {
 			// 1. 记录观看记录（幂等），仅在首次观看时插入
 			const { collectionName: watchRecordCollectionName, schemaInstance: watchRecordSchemaInstance } = VideoWatchRecordSchema
@@ -1156,46 +1152,32 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 			const upsertWatchRecordResult = await watchRecordModel.updateOne(
 				watchRecordWhere,
 				{ $setOnInsert: watchRecordData },
-				{ upsert: true, session },
+				{ upsert: true },
 			)
 
 			// 若已存在当日观看记录，不再递增播放量
 			if (!upsertWatchRecordResult.acknowledged) {
-				await session.abortTransaction()
-				session.endSession()
 				logging('ERROR', '记录视频播放失败：插入观看记录未被确认', undefined, { videoId, uuid })
 				return false
 			}
 			if ((upsertWatchRecordResult.upsertedCount ?? 0) === 0) {
-				await session.commitTransaction()
-				session.endSession()
-				return false
+				return false // 已经存在记录，不需要增加播放量
 			}
 
 			// 2. 增加视频播放量
 			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 			type Video = InferSchemaType<typeof videoSchemaInstance>
 
-			// 使用共通的自增函数
-			const updateVideoResult = await findOneAndPlusByMongodbId<Video, 'watchedCount'>(String(videoId), 'watchedCount', videoSchemaInstance, videoCollectionName, 1, { session })
+			const updateVideoResult = await findOneAndPlusByMongodbId<Video, 'watchedCount'>(String(videoId), 'watchedCount', videoSchemaInstance, videoCollectionName, 1)
 
 			if (!updateVideoResult.success || updateVideoResult.result === undefined) {
-				await session.abortTransaction()
-				session.endSession()
 				logging('ERROR', '记录视频播放失败：增加播放量失败', undefined, { videoId, uuid })
 				return false
 			}
 
-			// 提交事务
-			await session.commitTransaction()
-			session.endSession()
 			return true
 		} catch (error) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
-			logging('ERROR', '记录视频播放失败：事务执行失败', error, { videoId, uuid })
+			logging('ERROR', '记录视频播放失败：执行失败', error, { videoId, uuid })
 			return false
 		}
 	} catch (error) {
