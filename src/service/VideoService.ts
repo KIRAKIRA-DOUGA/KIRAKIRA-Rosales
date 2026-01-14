@@ -5,7 +5,7 @@ import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
 import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
-import { DbPoolOptions, deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { DbPoolOptions, deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndPlusByMongodbId } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
@@ -1176,20 +1176,10 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 			type Video = InferSchemaType<typeof videoSchemaInstance>
 
-			// 直接使用 MongoDB 模型来支持 $inc 操作符
-			let mongoModel: mongoose.Model<Video>
-			if (mongoose.models[videoCollectionName]) {
-				mongoModel = mongoose.models[videoCollectionName] as mongoose.Model<Video>
-			} else {
-				mongoModel = mongoose.model<Video>(videoCollectionName, videoSchemaInstance)
-			}
+			// 使用共通的自增函数
+			const updateVideoResult = await findOneAndPlusByMongodbId<Video, 'watchedCount'>(String(videoId), 'watchedCount', videoSchemaInstance, videoCollectionName, 1, { session })
 
-			const videoWhere: QueryType<Video> = {
-				videoId,
-			}
-
-			const updateVideoResult = await mongoModel.updateMany(videoWhere, { $inc: { watchedCount: 1 } }, { session })
-			if (!updateVideoResult.acknowledged || updateVideoResult.matchedCount === 0) {
+			if (!updateVideoResult.success || updateVideoResult.result === undefined) {
 				await session.abortTransaction()
 				session.endSession()
 				logging('ERROR', '记录视频播放失败：增加播放量失败', undefined, { videoId, uuid })
