@@ -18,7 +18,7 @@ import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUser
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { logging } from './loggingService.js'
-import { getVideoUpvoteCount, getVideoDownvoteCount, checkUserHasUpvoted, checkUserHasDownvoted } from './VideoVoteService.js'
+import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 
 /**
  * 上传视频
@@ -488,20 +488,12 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				if (video.uploaderUUID === selectorUuid) {
 					video.uploaderInfo.isSelf = true
 				}
-			}
 
-			// 添加点赞/点踩计数与当前用户是否已操作的字段
-			try {
-				const upvoteCount = await getVideoUpvoteCount(video.videoId)
-				const downvoteCount = await getVideoDownvoteCount(video.videoId)
-				const hasUpvoted = selectorUuid ? await checkUserHasUpvoted(video.videoId, selectorUuid) : false
-				const hasDownvoted = selectorUuid ? await checkUserHasDownvoted(video.videoId, selectorUuid) : false
-				video.videoUpvoteCount = upvoteCount
-				video.videoDownvoteCount = downvoteCount
-				video.userHasUpvoted = hasUpvoted
-				video.userHasDownvoted = hasDownvoted
-			} catch (error) {
-				logging('ERROR', '获取视频点赞/点踩信息失败：', error, { videoId })
+				// 8. 查询视频点赞信息
+				video.videoUpvoteCount = await getVideoUpvoteCount(videoId)
+				video.videoDownvoteCount = await getVideoDownvoteCount(videoId)
+				video.userHasUpvoted = await checkUserHasUpvoted(videoId, selectorUuid)
+				video.userHasDownvoted = await checkUserHasDownvoted(videoId, selectorUuid)
 			}
 
 			return {
@@ -916,7 +908,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 					const videoData = videoResult.video
 					if (videoResult.success && videoData) {
 						const removedVideoData: RemovedVideo = {
-							...videoData as Video, // TODO: Mongoose issue: #12420
+							...videoData as unknown as Video, // TODO: Mongoose issue: #12420
 							pendingReview: false, // 已删除的视频就不需要审核了...
 							_operatorUUID_: adminUUID,
 							_operatorUid_: adminUid,
