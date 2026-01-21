@@ -27,6 +27,7 @@ import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '
 import { ClientSession } from 'mongoose'
 import { checkIsBlockedByOtherUserService } from './BlockService.js'
 import { checkUserIsFollowing } from './FeedService.js'
+import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
 
@@ -214,11 +215,21 @@ export const getConversationListService = async (getConversationListRequest: Get
 			return { success: false, message: '获取会话列表失败：用户验证失败' }
 		}
 
-		const { pagination } = getConversationListRequest
+		const { pagination, isFollowing, isFollower } = getConversationListRequest
 		const { page, pageSize } = pagination
 		const skip = (page - 1) * pageSize
 
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
+		const { collectionName: followingCollectionName } = FollowingSchema
+
+		// 根据 query 生成关注筛选条件（未传则不过滤）
+		const followFilterConditions: Record<string, unknown>[] = []
+		if (isFollowing !== undefined) {
+			followFilterConditions.push({ iFollowOther: isFollowing })
+		}
+		if (isFollower !== undefined) {
+			followFilterConditions.push({ otherFollowsMe: isFollower })
+		}
 
 		// 构建查询管道
 		const pipeline: PipelineStage[] = [
@@ -229,15 +240,6 @@ export const getConversationListService = async (getConversationListRequest: Get
 						{ user2Uuid: uuid, user2Deleted: false },
 					],
 				},
-			},
-			{
-				$sort: { lastMessageTime: -1, editedDateTime: -1 },
-			},
-			{
-				$skip: skip,
-			},
-			{
-				$limit: pageSize,
 			},
 			{
 				$addFields: {
@@ -256,6 +258,69 @@ export const getConversationListService = async (getConversationListRequest: Get
 						},
 					},
 				},
+			},
+			// 关注关系：我是否关注对方（uuid -> otherUserUuid）
+			{
+				$lookup: {
+					from: followingCollectionName,
+					let: { otherUserUuid: '$otherUserUuid' },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$followerUuid', uuid] },
+										{ $eq: ['$followingUuid', '$$otherUserUuid'] },
+									],
+								},
+							},
+						},
+						{ $limit: 1 },
+					],
+					as: 'iFollowOtherData',
+				},
+			},
+			// 关注关系：对方是否关注我（otherUserUuid -> uuid）
+			{
+				$lookup: {
+					from: followingCollectionName,
+					let: { otherUserUuid: '$otherUserUuid' },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$followerUuid', '$$otherUserUuid'] },
+										{ $eq: ['$followingUuid', uuid] },
+									],
+								},
+							},
+						},
+						{ $limit: 1 },
+					],
+					as: 'otherFollowsMeData',
+				},
+			},
+			{
+				$addFields: {
+					iFollowOther: { $gt: [{ $size: '$iFollowOtherData' }, 0] },
+					otherFollowsMe: { $gt: [{ $size: '$otherFollowsMeData' }, 0] },
+				},
+			},
+			// 根据 isFollowing/isFollower 做筛选（发生在分页之前，保证 pageSize 尽量填满）
+			...(followFilterConditions.length > 0 ? [{
+				$match: {
+					$and: followFilterConditions,
+				},
+			} as PipelineStage.Match] : []),
+			{
+				$sort: { lastMessageTime: -1, editedDateTime: -1 },
+			},
+			{
+				$skip: skip,
+			},
+			{
+				$limit: pageSize,
 			},
 			{
 				$lookup: {
@@ -288,6 +353,8 @@ export const getConversationListService = async (getConversationListRequest: Get
 			{
 				$project: {
 					conversationId: 1,
+					iFollowOther: 1,
+					otherFollowsMe: 1,
 					otherUser: {
 						uid: '$otherUserInfo.uid',
 						username: '$otherUserInfo.username',
@@ -327,12 +394,76 @@ export const getConversationListService = async (getConversationListRequest: Get
 				},
 			},
 			{
+				$addFields: {
+					otherUserUuid: {
+						$cond: {
+							if: { $eq: ['$user1Uuid', uuid] },
+							then: '$user2Uuid',
+							else: '$user1Uuid',
+						},
+					},
+				},
+			},
+			{
+				$lookup: {
+					from: followingCollectionName,
+					let: { otherUserUuid: '$otherUserUuid' },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$followerUuid', uuid] },
+										{ $eq: ['$followingUuid', '$$otherUserUuid'] },
+									],
+								},
+							},
+						},
+						{ $limit: 1 },
+					],
+					as: 'iFollowOtherData',
+				},
+			},
+			{
+				$lookup: {
+					from: followingCollectionName,
+					let: { otherUserUuid: '$otherUserUuid' },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$followerUuid', '$$otherUserUuid'] },
+										{ $eq: ['$followingUuid', uuid] },
+									],
+								},
+							},
+						},
+						{ $limit: 1 },
+					],
+					as: 'otherFollowsMeData',
+				},
+			},
+			{
+				$addFields: {
+					iFollowOther: { $gt: [{ $size: '$iFollowOtherData' }, 0] },
+					otherFollowsMe: { $gt: [{ $size: '$otherFollowsMeData' }, 0] },
+				},
+			},
+			...(followFilterConditions.length > 0 ? [{
+				$match: {
+					$and: followFilterConditions,
+				},
+			} as PipelineStage.Match] : []),
+			{
 				$count: 'totalCount',
 			},
 		]
 
-		const conversationsResult = await selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, pipeline)
-		const countResult = await selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, countPipeline)
+		const [conversationsResult, countResult] = await Promise.all([
+			selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, pipeline),
+			selectDataByAggregateFromMongoDB(conversationSchemaInstance, conversationCollectionName, countPipeline),
+		])
 
 		if (!conversationsResult.success) {
 			logging('ERROR', '获取会话列表失败：查询失败')
@@ -539,12 +670,12 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 				}
 
 			return {
-				messageId,
-				senderUid: senderUid || 0,
-				receiverUid: receiverUid || 0,
+					messageId,
+					senderUid: senderUid || 0,
+					receiverUid: receiverUid || 0,
 				messageType: (itemData.messageType as IM_MESSAGE_TYPE) || IM_MESSAGE_TYPE.text,
 				content: ((itemData.isRecalled as boolean) ? '' : (itemData.content as string)) || '',
-				isRead,
+					isRead,
 				readTime: itemData.readTime as number | undefined,
 				isRecalled: (itemData.isRecalled as boolean) || false,
 				recalledTime: itemData.recalledTime as number | undefined,

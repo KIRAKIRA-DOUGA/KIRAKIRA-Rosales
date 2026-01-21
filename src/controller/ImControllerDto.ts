@@ -37,6 +37,10 @@ export type GetConversationListRequestDto = {
 		/** 一页显示多少条 */
 		pageSize: number
 	}
+	/** 是否只看“我关注的人”的会话（true=只看我关注的，false=只看我未关注的，不传=不过滤） */
+	isFollowing?: boolean
+	/** 是否只看“关注我的人”的会话（true=只看关注我的，false=只看未关注我的，不传=不过滤） */
+	isFollower?: boolean
 }
 
 /**

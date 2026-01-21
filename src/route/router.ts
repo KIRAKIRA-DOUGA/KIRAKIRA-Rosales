@@ -851,11 +851,13 @@ router.post('/im/sendMessage', sendMessageController) // 发送消息
 // }
 
 router.get('/im/conversationList', getConversationListController) // 获取会话列表
-// https://localhost:9999/im/conversationList?page=1&pageSize=20
+// https://localhost:9999/im/conversationList?page=1&pageSize=20&isFollowing=true&isFollower=false
 // cookie: uuid, token
 // Query:
 // page
 // pageSize
+// isFollowing // 可选：true=只看我关注的，false=只看我未关注的
+// isFollower  // 可选：true=只看关注我的，false=只看未关注我的
 
 router.get('/im/messageList', getMessageListController) // 获取消息列表
 // https://localhost:9999/im/messageList?conversationId=conv_xxx_yyy&page=1&pageSize=20&markAsRead=true

@@ -62,14 +62,20 @@ export const getConversationListController = async (ctx: koaCtx, next: koaNext) 
 
 	const page = ctx.query.page as string | undefined
 	const pageSize = ctx.query.pageSize as string | undefined
+	const isFollowingStr = ctx.query.isFollowing as string | undefined
+	const isFollowerStr = ctx.query.isFollower as string | undefined
 
 	const finalPageSize = limitPageSize(pageSize || '20')
+	const isFollowing = isFollowingStr === 'true' ? true : (isFollowingStr === 'false' ? false : undefined)
+	const isFollower = isFollowerStr === 'true' ? true : (isFollowerStr === 'false' ? false : undefined)
 
 	const getConversationListRequest: GetConversationListRequestDto = {
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,
 			pageSize: finalPageSize ?? 20,
 		},
+		isFollowing,
+		isFollower,
 	}
 
 	const getConversationListResult = await getConversationListService(getConversationListRequest, uuid, token)
