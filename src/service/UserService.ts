@@ -4120,6 +4120,7 @@ const ALLOWED_PRIVARY_ID = [
 	'privary.follow', // 关注
 	'privary.fans', // 粉丝
 	'privary.favorites', // 收藏
+	'privary.im', // 聊天
 ]
 
 /**

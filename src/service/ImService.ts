@@ -19,6 +19,7 @@ import {
 	MessageInfo,
 } from '../controller/ImControllerDto.js'
 import { ImConversationSchema, ImMessageSchema, IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
+import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
@@ -87,6 +88,13 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 				logging('ERROR', '发送消息失败：对方未回复你的消息，且对方未关注你（最多可发送3条消息）')
 				return { success: false, message: '发送消息失败：对方未回复你的消息，且对方未关注你（最多可发送3条消息）' }
 			}
+		}
+
+		// 检查接收者的私信隐私设置
+		const imPrivacyCheck = await checkReceiverImPrivacy(receiverUuid, senderUuid, isFollowing)
+		if (!imPrivacyCheck.allow) {
+			logging('ERROR', imPrivacyCheck.message || '发送消息失败：对方隐私设置不允许私信')
+			return { success: false, message: imPrivacyCheck.message || '发送消息失败：对方隐私设置不允许私信' }
 		}
 
 		// 验证消息内容
@@ -1273,5 +1281,52 @@ const checkRecallMessageRequest = (request: RecallMessageRequestDto): boolean =>
 		typeof request.messageId === 'string' &&
 		request.messageId.length > 0
 	)
+}
+
+/**
+ * 检查接收者的私信隐私设置
+ * @param receiverUuid 接收者 UUID
+ * @param senderUuid 发送者 UUID
+ * @param isSenderFollowed 接收者是否关注了发送者（如果已知，可避免重复查询）
+ * @returns 允许发送则 allow=true，否则返回错误消息
+ */
+const checkReceiverImPrivacy = async (receiverUuid: string, senderUuid: string, isSenderFollowed: boolean): Promise<{ allow: boolean; message?: string }> => {
+	try {
+		// 读取接收者的隐私设置
+		const { collectionName, schemaInstance } = UserSettingsSchema
+		type UserSettings = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<UserSettings> = { UUID: receiverUuid }
+		const select: SelectType<UserSettings> = { userPrivaryVisibilitiesSetting: 1 }
+		const settingsResult = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+
+		if (!settingsResult.success || !settingsResult.result || settingsResult.result.length === 0) {
+			// 未找到设置，视为无特殊限制
+			return { allow: true }
+		}
+
+		const settings = settingsResult.result[0]
+		const imSetting = settings.userPrivaryVisibilitiesSetting?.find((item: { privaryId?: string }) => item?.privaryId === 'privary.im')
+		if (!imSetting || !imSetting.visibilitiesType) {
+			// 未配置 privary.im 时默认放行
+			return { allow: true }
+		}
+
+		const visType = imSetting.visibilitiesType as string
+		if (visType === 'public') {
+			return { allow: true }
+		}
+		if (visType === 'following') {
+			if (isSenderFollowed) {
+				return { allow: true }
+			}
+			return { allow: false, message: '发送消息失败：仅允许关注的人发送私信' }
+		}
+		// 私密
+		return { allow: false, message: '发送消息失败：对方已关闭私信' }
+	} catch (error) {
+		logging('ERROR', '检查接收者私信隐私设置失败', error, { receiverUuid, senderUuid })
+		// 发生异常时，为避免误拒绝用户，选择放行
+		return { allow: true }
+	}
 }
 
