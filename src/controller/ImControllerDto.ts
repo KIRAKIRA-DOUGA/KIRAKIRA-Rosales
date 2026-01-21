@@ -116,10 +116,10 @@ export type GetMessageListRequestDto = {
 export type MessageInfo = {
 	/** 消息ID */
 	messageId: string
-	/** 发送者 UUID */
-	senderUuid: string
-	/** 接收者 UUID */
-	receiverUuid: string
+	/** 发送者 UID */
+	senderUid: number
+	/** 接收者 UID */
+	receiverUid: number
 	/** 消息类型 */
 	messageType: IM_MESSAGE_TYPE
 	/** 消息内容 */

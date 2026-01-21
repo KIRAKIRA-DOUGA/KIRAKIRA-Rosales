@@ -528,7 +528,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 				// 判断当前用户是否删除了这条消息
 				const isSender = lastMessageData.senderUuid === uuid
 				const isDeleted = isSender ? lastMessageData.senderDeleted : lastMessageData.receiverDeleted
-				
+
 				lastMessage = {
 					messageId: (lastMessageData.messageId as string) || '',
 					messageType: lastMessageData.messageType as IM_MESSAGE_TYPE,
@@ -539,7 +539,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 					createdDateTime: (lastMessageData.createdDateTime as number) || 0,
 				}
 			}
-			
+
 			const otherUserData = itemData.otherUser as Record<string, unknown> | undefined
 			return {
 				conversationId: (itemData.conversationId as string) || '',
@@ -678,31 +678,44 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		}
 
 		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
-		const messages = (messagesResult.result || []).map((item: unknown): MessageInfo => {
-			const itemData = item as Record<string, unknown>
-			return {
-				messageId: (itemData.messageId as string) || '',
-				senderUuid: (itemData.senderUuid as string) || '',
-				receiverUuid: (itemData.receiverUuid as string) || '',
-				messageType: (itemData.messageType as IM_MESSAGE_TYPE) || IM_MESSAGE_TYPE.text,
-				content: ((itemData.isRecalled as boolean) ? '' : (itemData.content as string)) || '',
-				isRead: (itemData.isRead as boolean) || false,
-				readTime: itemData.readTime as number | undefined,
-				isRecalled: (itemData.isRecalled as boolean) || false,
-				recalledTime: itemData.recalledTime as number | undefined,
-				createdDateTime: (itemData.createdDateTime as number) || 0,
-				createdBy: (itemData.createdBy as string) || '',
-				editedDateTime: (itemData.editedDateTime as number) || 0,
-				editedBy: (itemData.editedBy as string) || '',
-			}
-		})
+		const unreadMessageIds: string[] = []
+		const messages: MessageInfo[] = await Promise.all(
+			(messagesResult.result || []).map(async (item: unknown): Promise<MessageInfo> => {
+				const itemData = item as Record<string, unknown>
+				const senderUuid = (itemData.senderUuid as string) || ''
+				const receiverUuid = (itemData.receiverUuid as string) || ''
+				const messageId = (itemData.messageId as string) || ''
+				const isRead = (itemData.isRead as boolean) || false
 
-		// 如果需要标记为已读
-		if (markAsRead && messages.length > 0) {
-			const unreadMessageIds = messages.filter(m => !m.isRead && m.receiverUuid === uuid).map(m => m.messageId)
-			if (unreadMessageIds.length > 0) {
-				await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
-			}
+				const senderUid = senderUuid ? await getUserUid(senderUuid) : undefined
+				const receiverUid = receiverUuid ? await getUserUid(receiverUuid) : undefined
+
+				// 收集需要标记已读的消息（基于原始聚合结果里的 receiverUuid/isRead）
+				if (markAsRead && !isRead && receiverUuid === uuid && messageId) {
+					unreadMessageIds.push(messageId)
+				}
+
+				return {
+					messageId,
+					senderUid: senderUid || 0,
+					receiverUid: receiverUid || 0,
+					messageType: (itemData.messageType as IM_MESSAGE_TYPE) || IM_MESSAGE_TYPE.text,
+					content: ((itemData.isRecalled as boolean) ? '' : (itemData.content as string)) || '',
+					isRead,
+					readTime: itemData.readTime as number | undefined,
+					isRecalled: (itemData.isRecalled as boolean) || false,
+					recalledTime: itemData.recalledTime as number | undefined,
+					createdDateTime: (itemData.createdDateTime as number) || 0,
+					createdBy: (itemData.createdBy as string) || '',
+					editedDateTime: (itemData.editedDateTime as number) || 0,
+					editedBy: (itemData.editedBy as string) || '',
+				}
+			})
+		)
+
+		// 如果需要标记为已读（使用上面收集的未读 messageId 列表）
+		if (markAsRead && unreadMessageIds.length > 0) {
+			await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
 		}
 
 		return {
