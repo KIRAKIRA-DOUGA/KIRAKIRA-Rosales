@@ -593,13 +593,14 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-		const conversationWhere = {
+		const conversationOrConditions: QueryType<Conversation>[] = [
+			{ user1Uuid: uuid },
+			{ user2Uuid: uuid },
+		]
+		const conversationWhere: QueryType<Conversation> = {
 			conversationId,
-			$or: [
-				{ user1Uuid: uuid },
-				{ user2Uuid: uuid },
-			],
-		} as QueryType<Conversation>
+			$or: conversationOrConditions,
+		}
 		const conversationSelect: SelectType<Conversation> = {
 			conversationId: 1,
 		}
