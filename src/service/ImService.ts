@@ -30,189 +30,6 @@ import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
 
 /**
- * 生成会话ID（确保两个用户之间的会话ID唯一且一致）
- * @param user1Uid 用户1的UID
- * @param user2Uid 用户2的UID
- * @returns 格式化的会话ID字符串，格式为 conv_{uid1}_{uid2}，其中uid按数字大小排序
- */
-const generateConversationId = (user1Uid: number, user2Uid: number): string => {
-	// 按数字大小排序，确保两个用户之间的会话ID唯一
-	const [uid1, uid2] = [user1Uid, user2Uid].sort((a, b) => a - b)
-	return `conv_${uid1}_${uid2}`
-}
-
-/**
- * 检查是否已经发送过3条或更多消息但对方未回复
- * @param senderUuid 发送者的UUID
- * @param receiverUuid 接收者的UUID
- * @returns 如果发送者已发送3条或更多消息但接收者从未回复过，返回true（不允许继续发送）；如果接收者曾经回复过，返回false（允许继续无限发送）
- */
-const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string): Promise<boolean> => {
-	try {
-		const senderUid = await getUserUid(senderUuid)
-		const receiverUid = await getUserUid(receiverUuid)
-		if (!senderUid || !receiverUid) {
-			return false
-		}
-		const conversationId = generateConversationId(senderUid, receiverUid)
-		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
-		type Message = InferSchemaType<typeof messageSchemaInstance>
-
-		// 查找会话中是否有发送者发送的消息
-		const senderMessageWhere: QueryType<Message> = {
-			conversationId,
-			senderUuid,
-			receiverUuid,
-			senderDeleted: false,
-		}
-		const senderMessageSelect: SelectType<Message> = {
-			messageId: 1,
-			createdDateTime: 1,
-		}
-		const senderMessages = await selectDataFromMongoDB<Message>(senderMessageWhere, senderMessageSelect, messageSchemaInstance, messageCollectionName)
-
-		if (!senderMessages.success || !senderMessages.result || senderMessages.result.length === 0) {
-			return false
-		}
-
-		// 如果发送的消息少于3条，允许继续发送
-		if (senderMessages.result.length < 3) {
-			return false
-		}
-
-		// 查找是否有接收者回复的消息
-		const receiverMessageWhere: QueryType<Message> = {
-			conversationId,
-			senderUuid: receiverUuid,
-			receiverUuid: senderUuid,
-			senderDeleted: false,
-		}
-		const receiverMessageSelect: SelectType<Message> = {
-			messageId: 1,
-			createdDateTime: 1,
-		}
-		const receiverMessages = await selectDataFromMongoDB<Message>(receiverMessageWhere, receiverMessageSelect, messageSchemaInstance, messageCollectionName)
-
-		// 如果发送者有3条或更多消息，但接收者没有回复，则返回true
-		if (receiverMessages.success && receiverMessages.result && receiverMessages.result.length > 0) {
-			// 如果接收者曾经回复过（有任何回复消息），就允许发送者继续无限发送（返回false）
-			// 不需要检查最后一条消息的时间，只要曾经回复过即可
-			return false
-		}
-
-		// 如果接收者完全没有回复，且发送者已发送3条或更多消息，则返回true
-		return receiverMessages.success && (!receiverMessages.result || receiverMessages.result.length === 0)
-	} catch (error) {
-		logging('ERROR', '检查是否有未回复消息失败：', error)
-		return false
-	}
-}
-
-/**
- * 获取或创建会话
- * @param currentUserUuid 当前用户的UUID（发送者）
- * @param otherUserUid 对方的UID（接收者）
- * @param session 可选的 MongoDB 会话（用于事务）
- * @returns 包含成功状态和会话信息的对象。如果成功，返回 { success: true, conversation: ... }；如果失败，返回 { success: false }
- */
-const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: number, session?: ClientSession): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
-	try {
-		// 获取当前用户的UID
-		const currentUserUid = await getUserUid(currentUserUuid)
-		if (!currentUserUid) {
-			return { success: false }
-		}
-
-		// 获取对方的UUID（仅用于数据库存储，不暴露给用户）
-		const otherUserUuid = await getUserUuid(otherUserUid)
-		if (!otherUserUuid) {
-			return { success: false }
-		}
-
-		// 生成会话ID（使用UID）
-		const conversationId = generateConversationId(currentUserUid, otherUserUid)
-		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
-		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
-
-		// 尝试查找现有会话（即使被删除也可以恢复）
-		const where: QueryType<Conversation> = {
-			conversationId,
-		}
-		const select: SelectType<Conversation> = {}
-		const existing = await selectDataFromMongoDB<Conversation>(where, select, conversationSchemaInstance, conversationCollectionName, session ? { session } : undefined)
-
-		if (existing.success && existing.result && existing.result.length > 0) {
-			const conversation = existing.result[0]
-			const now = new Date().getTime()
-
-			// 确定当前用户在会话中是 user1 还是 user2（通过比较 UUID）
-			const isUser1 = currentUserUuid === conversation.user1Uuid
-			const deletedField = isUser1 ? 'user1Deleted' : 'user2Deleted'
-			const otherDeletedField = isUser1 ? 'user2Deleted' : 'user1Deleted'
-
-			// 如果会话被当前用户删除，恢复它（保留删除时间戳）
-			// 如果双方都删除了，同时恢复双方（这样对方也能看到新消息）
-			if (conversation[deletedField]) {
-				const updateWhere: QueryType<Conversation> = {
-					conversationId,
-				}
-				const updateData: UpdateType<Conversation> = {
-					[deletedField]: false,
-					editedDateTime: now,
-					editedBy: currentUserUuid, // 使用发起恢复的用户
-				}
-
-				// 如果对方也删除了，同时恢复对方
-				if (conversation[otherDeletedField]) {
-					updateData[otherDeletedField] = false
-				}
-
-				const updateResult = await findOneAndUpdateData4MongoDB<Conversation>(
-					updateWhere,
-					updateData,
-					conversationSchemaInstance,
-					conversationCollectionName,
-					session ? { session } : undefined
-				)
-				if (updateResult.success && updateResult.result) {
-					return { success: true, conversation: updateResult.result }
-				}
-			}
-			return { success: true, conversation }
-		}
-
-		// 创建新会话
-		const now = new Date().getTime()
-		// 按 UUID 字典序排序，确保存储一致性
-		const [uuid1, uuid2] = [currentUserUuid, otherUserUuid].sort()
-		const conversationData: Conversation = {
-			conversationId,
-			user1Uuid: uuid1,
-			user2Uuid: uuid2,
-			user1UnreadCount: 0,
-			user2UnreadCount: 0,
-			user1Deleted: false,
-			user2Deleted: false,
-			createdDateTime: now,
-			createdBy: currentUserUuid, // 使用发起创建的用户（发送者）
-			editedDateTime: now,
-			editedBy: currentUserUuid, // 使用发起创建的用户（发送者）
-		}
-
-		const insertResult = await insertData2MongoDB<Conversation>(conversationData, conversationSchemaInstance, conversationCollectionName, session ? { session } : undefined)
-
-		if (!insertResult.success) {
-			return { success: false }
-		}
-
-		return { success: true, conversation: conversationData }
-	} catch (error) {
-		logging('ERROR', '获取或创建会话失败：', error)
-		return { success: false }
-	}
-}
-
-/**
  * 发送消息
  * @param sendMessageRequest 发送消息的请求载荷
  * @param senderUuid 发送者的 UUID
@@ -363,12 +180,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			}
 
 			await commitAndEndSession(session)
-			return {
-				success: true,
-				message: '发送消息成功',
-				messageId,
-				conversationId,
-			}
+			return { success: true, message: '发送消息成功', messageId, conversationId }
 		} catch (error) {
 			await abortAndEndSession(session)
 			throw error
@@ -555,12 +367,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			}
 		})
 
-		return {
-			success: true,
-			message: '获取会话列表成功',
-			conversations,
-			totalCount,
-		}
+		return { success: true, message: '获取会话列表成功', conversations, totalCount }
 	} catch (error) {
 		logging('ERROR', '获取会话列表失败：未知错误', error)
 		return { success: false, message: '获取会话列表失败：未知错误' }
@@ -723,12 +530,12 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 				}
 
 			return {
-					messageId,
-					senderUid: senderUid || 0,
-					receiverUid: receiverUid || 0,
+				messageId,
+				senderUid: senderUid || 0,
+				receiverUid: receiverUid || 0,
 				messageType: (itemData.messageType as IM_MESSAGE_TYPE) || IM_MESSAGE_TYPE.text,
 				content: ((itemData.isRecalled as boolean) ? '' : (itemData.content as string)) || '',
-					isRead,
+				isRead,
 				readTime: itemData.readTime as number | undefined,
 				isRecalled: (itemData.isRecalled as boolean) || false,
 				recalledTime: itemData.recalledTime as number | undefined,
@@ -745,12 +552,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 				await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
 		}
 
-		return {
-			success: true,
-			message: '获取消息列表成功',
-			messages,
-			totalCount,
-		}
+		return { success: true, message: '获取消息列表成功', messages, totalCount }
 	} catch (error) {
 		logging('ERROR', '获取消息列表失败：未知错误', error)
 		return { success: false, message: '获取消息列表失败：未知错误' }
@@ -894,11 +696,7 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 			}
 
 			await commitAndEndSession(session)
-			return {
-				success: true,
-				message: '标记消息已读成功',
-				markedCount,
-			}
+			return { success: true, message: '标记消息已读成功', markedCount }
 		} catch (error) {
 			await abortAndEndSession(session)
 			throw error
@@ -1079,7 +877,6 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 		}
 
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
-		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
 
 		// 构建聚合管道
 		const pipeline: PipelineStage[] = [
@@ -1119,11 +916,7 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 
 		const totalUnreadCount = result.result && result.result.length > 0 ? result.result[0].totalUnreadCount : 0
 
-		return {
-			success: true,
-			message: '获取未读消息总数成功',
-			totalUnreadCount,
-		}
+		return { success: true, message: '获取未读消息总数成功', totalUnreadCount }
 	} catch (error) {
 		logging('ERROR', '获取未读消息总数失败：未知错误', error)
 		return { success: false, message: '获取未读消息总数失败：未知错误' }
@@ -1208,6 +1001,189 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 	} catch (error) {
 		logging('ERROR', '撤回消息失败：未知错误', error)
 		return { success: false, message: '撤回消息失败：未知错误' }
+	}
+}
+
+/**
+ * 生成会话ID（确保两个用户之间的会话ID唯一且一致）
+ * @param user1Uid 用户1的UID
+ * @param user2Uid 用户2的UID
+ * @returns 格式化的会话ID字符串，格式为 conv_{uid1}_{uid2}，其中uid按数字大小排序
+ */
+const generateConversationId = (user1Uid: number, user2Uid: number): string => {
+	// 按数字大小排序，确保两个用户之间的会话ID唯一
+	const [uid1, uid2] = [user1Uid, user2Uid].sort((a, b) => a - b)
+	return `conv_${uid1}_${uid2}`
+}
+
+/**
+ * 检查是否已经发送过3条或更多消息但对方未回复
+ * @param senderUuid 发送者的UUID
+ * @param receiverUuid 接收者的UUID
+ * @returns 如果发送者已发送3条或更多消息但接收者从未回复过，返回true（不允许继续发送）；如果接收者曾经回复过，返回false（允许继续无限发送）
+ */
+const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string): Promise<boolean> => {
+	try {
+		const senderUid = await getUserUid(senderUuid)
+		const receiverUid = await getUserUid(receiverUuid)
+		if (!senderUid || !receiverUid) {
+			return false
+		}
+		const conversationId = generateConversationId(senderUid, receiverUid)
+		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
+		type Message = InferSchemaType<typeof messageSchemaInstance>
+
+		// 查找会话中是否有发送者发送的消息
+		const senderMessageWhere: QueryType<Message> = {
+			conversationId,
+			senderUuid,
+			receiverUuid,
+			senderDeleted: false,
+		}
+		const senderMessageSelect: SelectType<Message> = {
+			messageId: 1,
+			createdDateTime: 1,
+		}
+		const senderMessages = await selectDataFromMongoDB<Message>(senderMessageWhere, senderMessageSelect, messageSchemaInstance, messageCollectionName)
+
+		if (!senderMessages.success || !senderMessages.result || senderMessages.result.length === 0) {
+			return false
+		}
+
+		// 如果发送的消息少于3条，允许继续发送
+		if (senderMessages.result.length < 3) {
+			return false
+		}
+
+		// 查找是否有接收者回复的消息
+		const receiverMessageWhere: QueryType<Message> = {
+			conversationId,
+			senderUuid: receiverUuid,
+			receiverUuid: senderUuid,
+			senderDeleted: false,
+		}
+		const receiverMessageSelect: SelectType<Message> = {
+			messageId: 1,
+			createdDateTime: 1,
+		}
+		const receiverMessages = await selectDataFromMongoDB<Message>(receiverMessageWhere, receiverMessageSelect, messageSchemaInstance, messageCollectionName)
+
+		// 如果发送者有3条或更多消息，但接收者没有回复，则返回true
+		if (receiverMessages.success && receiverMessages.result && receiverMessages.result.length > 0) {
+			// 如果接收者曾经回复过（有任何回复消息），就允许发送者继续无限发送（返回false）
+			// 不需要检查最后一条消息的时间，只要曾经回复过即可
+			return false
+		}
+
+		// 如果接收者完全没有回复，且发送者已发送3条或更多消息，则返回true
+		return receiverMessages.success && (!receiverMessages.result || receiverMessages.result.length === 0)
+	} catch (error) {
+		logging('ERROR', '检查是否有未回复消息失败：', error)
+		return false
+	}
+}
+
+/**
+ * 获取或创建会话
+ * @param currentUserUuid 当前用户的UUID（发送者）
+ * @param otherUserUid 对方的UID（接收者）
+ * @param session 可选的 MongoDB 会话（用于事务）
+ * @returns 包含成功状态和会话信息的对象。如果成功，返回 { success: true, conversation: ... }；如果失败，返回 { success: false }
+ */
+const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: number, session?: ClientSession): Promise<{ success: boolean; conversation?: InferSchemaType<typeof ImConversationSchema.schemaInstance> }> => {
+	try {
+		// 获取当前用户的UID
+		const currentUserUid = await getUserUid(currentUserUuid)
+		if (!currentUserUid) {
+			return { success: false }
+		}
+
+		// 获取对方的UUID（仅用于数据库存储，不暴露给用户）
+		const otherUserUuid = await getUserUuid(otherUserUid)
+		if (!otherUserUuid) {
+			return { success: false }
+		}
+
+		// 生成会话ID（使用UID）
+		const conversationId = generateConversationId(currentUserUid, otherUserUid)
+		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
+		type Conversation = InferSchemaType<typeof conversationSchemaInstance>
+
+		// 尝试查找现有会话（即使被删除也可以恢复）
+		const where: QueryType<Conversation> = {
+			conversationId,
+		}
+		const select: SelectType<Conversation> = {}
+		const existing = await selectDataFromMongoDB<Conversation>(where, select, conversationSchemaInstance, conversationCollectionName, session ? { session } : undefined)
+
+		if (existing.success && existing.result && existing.result.length > 0) {
+			const conversation = existing.result[0]
+			const now = new Date().getTime()
+
+			// 确定当前用户在会话中是 user1 还是 user2（通过比较 UUID）
+			const isUser1 = currentUserUuid === conversation.user1Uuid
+			const deletedField = isUser1 ? 'user1Deleted' : 'user2Deleted'
+			const otherDeletedField = isUser1 ? 'user2Deleted' : 'user1Deleted'
+
+			// 如果会话被当前用户删除，恢复它（保留删除时间戳）
+			// 如果双方都删除了，同时恢复双方（这样对方也能看到新消息）
+			if (conversation[deletedField]) {
+				const updateWhere: QueryType<Conversation> = {
+					conversationId,
+				}
+				const updateData: UpdateType<Conversation> = {
+					[deletedField]: false,
+					editedDateTime: now,
+					editedBy: currentUserUuid, // 使用发起恢复的用户
+				}
+
+				// 如果对方也删除了，同时恢复对方
+				if (conversation[otherDeletedField]) {
+					updateData[otherDeletedField] = false
+				}
+
+				const updateResult = await findOneAndUpdateData4MongoDB<Conversation>(
+					updateWhere,
+					updateData,
+					conversationSchemaInstance,
+					conversationCollectionName,
+					session ? { session } : undefined
+				)
+				if (updateResult.success && updateResult.result) {
+					return { success: true, conversation: updateResult.result }
+				}
+			}
+			return { success: true, conversation }
+		}
+
+		// 创建新会话
+		const now = new Date().getTime()
+		// 按 UUID 字典序排序，确保存储一致性
+		const [uuid1, uuid2] = [currentUserUuid, otherUserUuid].sort()
+		const conversationData: Conversation = {
+			conversationId,
+			user1Uuid: uuid1,
+			user2Uuid: uuid2,
+			user1UnreadCount: 0,
+			user2UnreadCount: 0,
+			user1Deleted: false,
+			user2Deleted: false,
+			createdDateTime: now,
+			createdBy: currentUserUuid, // 使用发起创建的用户（发送者）
+			editedDateTime: now,
+			editedBy: currentUserUuid, // 使用发起创建的用户（发送者）
+		}
+
+		const insertResult = await insertData2MongoDB<Conversation>(conversationData, conversationSchemaInstance, conversationCollectionName, session ? { session } : undefined)
+
+		if (!insertResult.success) {
+			return { success: false }
+		}
+
+		return { success: true, conversation: conversationData }
+	} catch (error) {
+		logging('ERROR', '获取或创建会话失败：', error)
+		return { success: false }
 	}
 }
 

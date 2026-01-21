@@ -853,10 +853,18 @@ router.post('/im/sendMessage', sendMessageController) // 发送消息
 router.get('/im/conversationList', getConversationListController) // 获取会话列表
 // https://localhost:9999/im/conversationList?page=1&pageSize=20
 // cookie: uuid, token
+// Query:
+// page
+// pageSize
 
 router.get('/im/messageList', getMessageListController) // 获取消息列表
-// https://localhost:9999/im/messageList?conversationId=conv_xxx_yyy&page=1&pageSize=50&markAsRead=true
+// https://localhost:9999/im/messageList?conversationId=conv_xxx_yyy&page=1&pageSize=20&markAsRead=true
 // cookie: uuid, token
+// Query:
+// conversationId
+// page
+// pageSize
+// markAsRead
 
 router.post('/im/markMessageRead', markMessageReadController) // 标记消息已读
 // https://localhost:9999/im/markMessageRead
