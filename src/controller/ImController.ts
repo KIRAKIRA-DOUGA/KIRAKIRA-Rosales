@@ -20,7 +20,7 @@ import {
 	RecallMessageRequestDto,
 } from './ImControllerDto.js'
 import { IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
-import { parseInteger } from '../common/ValidTool.js'
+import { limitPageSize, parseInteger } from '../common/ValidTool.js'
 
 /**
  * 用户发送消息
@@ -63,10 +63,12 @@ export const getConversationListController = async (ctx: koaCtx, next: koaNext) 
 	const page = ctx.query.page as string | undefined
 	const pageSize = ctx.query.pageSize as string | undefined
 
+	const finalPageSize = limitPageSize(pageSize || '20')
+
 	const getConversationListRequest: GetConversationListRequestDto = {
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,
-			pageSize: Number.isFinite(parseInteger(pageSize)) ? parseInteger(pageSize) : Number.MAX_SAFE_INTEGER,
+			pageSize: finalPageSize ?? 20,
 		},
 	}
 
@@ -88,11 +90,13 @@ export const getMessageListController = async (ctx: koaCtx, next: koaNext) => {
 	const page = ctx.query.page as string | undefined
 	const pageSize = ctx.query.pageSize as string | undefined
 
+	const finalPageSize = limitPageSize(pageSize || '20')
+
 	const getMessageListRequest: GetMessageListRequestDto = {
 		conversationId: ctx.query.conversationId as string,
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,
-			pageSize: Number.isFinite(parseInteger(pageSize)) ? parseInteger(pageSize) : Number.MAX_SAFE_INTEGER,
+			pageSize: finalPageSize ?? 20,
 		},
 		markAsRead: ctx.query.markAsRead === 'true',
 	}

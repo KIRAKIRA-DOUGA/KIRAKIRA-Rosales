@@ -528,7 +528,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 				// 判断当前用户是否删除了这条消息
 				const isSender = lastMessageData.senderUuid === uuid
 				const isDeleted = isSender ? lastMessageData.senderDeleted : lastMessageData.receiverDeleted
-				
+
 				lastMessage = {
 					messageId: (lastMessageData.messageId as string) || '',
 					messageType: lastMessageData.messageType as IM_MESSAGE_TYPE,
@@ -539,7 +539,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 					createdDateTime: (lastMessageData.createdDateTime as number) || 0,
 				}
 			}
-			
+
 			const otherUserData = itemData.otherUser as Record<string, unknown> | undefined
 			return {
 				conversationId: (itemData.conversationId as string) || '',
