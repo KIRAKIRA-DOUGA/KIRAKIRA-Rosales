@@ -862,6 +862,7 @@ router.get('/im/messageList', getMessageListController) // 获取消息列表
 // cookie: uuid, token
 // Query:
 // conversationId
+// cursorMessageId
 // page
 // pageSize
 // markAsRead

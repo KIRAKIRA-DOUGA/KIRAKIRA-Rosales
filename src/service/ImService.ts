@@ -319,7 +319,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 				},
 			},
 			{
-				$count: 'total',
+				$count: 'totalCount',
 			},
 		]
 
@@ -331,7 +331,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			return { success: false, message: '获取会话列表失败：查询失败' }
 		}
 
-		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
+		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].totalCount : 0
 		const conversations = (conversationsResult.result || []).map((item: unknown): ConversationInfo => {
 			const itemData = item as Record<string, unknown>
 			const lastMessageData = itemData.lastMessage as Record<string, unknown> | undefined
@@ -396,7 +396,8 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 
 		const { conversationId, cursorMessageId, pagination, markAsRead = false } = getMessageListRequest
 		const { page, pageSize } = pagination
-		const skip = (page - 1) * pageSize
+		// IM 场景：如果存在 cursorMessageId，则仅从该游标往前取 pageSize 条，不再使用 page 做偏移（建议前端固定传 page=1）
+		const skip = cursorMessageId ? 0 : (page - 1) * pageSize
 
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
@@ -499,7 +500,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 				},
 			},
 			{
-				$count: 'total',
+				$count: 'totalCount',
 			},
 		]
 
@@ -511,7 +512,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			return { success: false, message: '获取消息列表失败：查询失败' }
 		}
 
-		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].total : 0
+		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].totalCount : 0
 		const unreadMessageIds: string[] = []
 		const messages: MessageInfo[] = await Promise.all(
 			(messagesResult.result || []).map(async (item: unknown): Promise<MessageInfo> => {
