@@ -93,10 +93,32 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 					editDateTime: nowDate,
 				}
 
-				const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
-				if (!insertResult || !insertResult.success) {
-					logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
-					return { success: false, message: '视频点赞失败，存储数据失败' }
+				try {
+					const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+					if (!insertResult || !insertResult.success) {
+						logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
+						return { success: false, message: '视频点赞失败，存储数据失败' }
+					}
+				} catch (error: any) {
+					// 并发场景下可能触发唯一索引冲突，退回到更新已有记录
+					if (error && error.code === 11000) {
+						logging('WARN', '视频点赞插入触发唯一索引冲突，改为激活已有记录', error, { emitVideoUpvoteRequest, uuid })
+						const updateWhere: QueryType<VideoUpvote> = existingVoteWhere
+						const updateData: UpdateType<VideoUpvote> = {
+							invalidFlag: false,
+							editDateTime: nowDate,
+							upvoteTime: nowDate,
+							uid,
+						}
+						const updateResult = await updateData4MongoDB(updateWhere, updateData, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+						if (!updateResult || !updateResult.success) {
+							logging('ERROR', '视频点赞失败，处理并发插入的更新失败', undefined, { emitVideoUpvoteRequest, uuid })
+							return { success: false, message: '视频点赞失败，更新记录失败' }
+						}
+					} else {
+						logging('ERROR', '视频点赞失败，插入数据异常', error, { emitVideoUpvoteRequest, uuid })
+						return { success: false, message: '视频点赞失败，存储数据失败' }
+					}
 				}
 			}
 
@@ -273,10 +295,32 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 				editDateTime: nowDate,
 			}
 
-			const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName)
-			if (!insertResult || !insertResult.success) {
-				logging('ERROR', '视频点踩失败，插入数据失败', undefined, { emitVideoDownvoteRequest, uuid })
-				return { success: false, message: '视频点踩失败，存储数据失败' }
+			try {
+				const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+				if (!insertResult || !insertResult.success) {
+					logging('ERROR', '视频点踩失败，插入数据失败', undefined, { emitVideoDownvoteRequest, uuid })
+					return { success: false, message: '视频点踩失败，存储数据失败' }
+				}
+			} catch (error: any) {
+				// 并发场景下可能触发唯一索引冲突，退回到更新已有记录
+				if (error && error.code === 11000) {
+					logging('WARN', '视频点踩插入触发唯一索引冲突，改为激活已有记录', error, { emitVideoDownvoteRequest, uuid })
+					const updateWhere: QueryType<VideoDownvote> = existingVoteWhere
+					const updateData: UpdateType<VideoDownvote> = {
+						invalidFlag: false,
+						editDateTime: nowDate,
+						downvoteTime: nowDate,
+						uid,
+					}
+					const updateResult = await updateData4MongoDB(updateWhere, updateData, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+					if (!updateResult || !updateResult.success) {
+						logging('ERROR', '视频点踩失败，处理并发插入的更新失败', undefined, { emitVideoDownvoteRequest, uuid })
+						return { success: false, message: '视频点踩失败，更新记录失败' }
+					}
+				} else {
+					logging('ERROR', '视频点踩失败，插入数据异常', error, { emitVideoDownvoteRequest, uuid })
+					return { success: false, message: '视频点踩失败，存储数据失败' }
+				}
 			}
 		}
 
