@@ -46,6 +46,11 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 			if (existingVoteResult.success && existingVoteResult.result && existingVoteResult.result.length > 0) {
 				// 已存在记录，更新为有效状态
 				const existingRecord = existingVoteResult.result[0]
+				// 如果本身就是有效的点赞，直接提示已点赞
+				if (!existingRecord.invalidFlag) {
+					return { success: false, message: '视频点赞失败，用户已点赞' }
+				}
+
 				const updateWhere: QueryType<VideoUpvote> = { _id: existingRecord._id }
 				const updateData: UpdateType<VideoUpvote> = {
 					invalidFlag: false,
