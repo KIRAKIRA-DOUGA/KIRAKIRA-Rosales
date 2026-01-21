@@ -210,6 +210,11 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 		if (existingVoteResult.success && existingVoteResult.result && existingVoteResult.result.length > 0) {
 			// 用户已有记录，更新 invalidFlag 为 false（激活点踩）并更新时间
 			const existingRecord = existingVoteResult.result[0]
+			// 如果已是有效点踩，直接提示用户已点踩
+			if (!existingRecord.invalidFlag) {
+				return { success: false, message: '视频点踩失败，用户已点踩' }
+			}
+
 			const updateWhere: QueryType<VideoDownvote> = { _id: existingRecord._id }
 			const updateData: UpdateType<VideoDownvote> = {
 				invalidFlag: false,
