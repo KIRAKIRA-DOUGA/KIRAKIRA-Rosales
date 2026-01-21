@@ -588,7 +588,8 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		}
 
 		const { conversationId, cursorMessageId, pagination, markAsRead = false } = getMessageListRequest
-		const { pageSize } = pagination
+		const { page, pageSize } = pagination
+		const skip = (page - 1) * pageSize
 
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
@@ -653,6 +654,9 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			matchStage,
 			{
 				$sort: { createdDateTime: -1 },
+			},
+			{
+				$skip: skip,
 			},
 			{
 				$limit: pageSize,
