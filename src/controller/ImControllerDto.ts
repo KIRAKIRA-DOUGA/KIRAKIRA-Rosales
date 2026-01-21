@@ -99,9 +99,11 @@ export type GetConversationListResponseDto = {
 export type GetMessageListRequestDto = {
 	/** 会话ID */
 	conversationId: string
+	/** 从哪一条消息往上翻（基于消息ID的游标，第一次加载可以不传，后续上拉加载传当前列表中“最旧”的那条 messageId） */
+	cursorMessageId?: string
 	/** 分页信息 */
 	pagination: {
-		/** 当前在第几页 */
+		/** 当前在第几页（IM 场景中建议固定传 1，由 cursorMessageId 控制翻页） */
 		page: number
 		/** 一页显示多少条 */
 		pageSize: number

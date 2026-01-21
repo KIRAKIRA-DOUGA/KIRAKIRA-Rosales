@@ -528,7 +528,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 				// 判断当前用户是否删除了这条消息
 				const isSender = lastMessageData.senderUuid === uuid
 				const isDeleted = isSender ? lastMessageData.senderDeleted : lastMessageData.receiverDeleted
-
+				
 				lastMessage = {
 					messageId: (lastMessageData.messageId as string) || '',
 					messageType: lastMessageData.messageType as IM_MESSAGE_TYPE,
@@ -539,7 +539,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 					createdDateTime: (lastMessageData.createdDateTime as number) || 0,
 				}
 			}
-
+			
 			const otherUserData = itemData.otherUser as Record<string, unknown> | undefined
 			return {
 				conversationId: (itemData.conversationId as string) || '',
@@ -587,9 +587,8 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			return { success: false, message: '获取消息列表失败：参数不合法' }
 		}
 
-		const { conversationId, pagination, markAsRead = false } = getMessageListRequest
-		const { page, pageSize } = pagination
-		const skip = (page - 1) * pageSize
+		const { conversationId, cursorMessageId, pagination, markAsRead = false } = getMessageListRequest
+		const { pageSize } = pagination
 
 		// 验证会话是否存在且用户有权限访问
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
@@ -614,22 +613,45 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 		type Message = InferSchemaType<typeof messageSchemaInstance>
 
-		// 构建查询管道
+		// 构建查询管道（基于游标的“向上翻页”）
+		const matchBase: PipelineStage.Match['$match'] = {
+			conversationId,
+			$or: [
+				{ senderUuid: uuid, senderDeleted: false },
+				{ receiverUuid: uuid, receiverDeleted: false },
+			],
+		}
+
+		let cursorCreatedDateTime: number | undefined = undefined
+
+		// 如果传入了游标 messageId，则以该消息的 createdDateTime 为“锚点”，只查更早的消息
+		if (cursorMessageId) {
+			const cursorWhere: QueryType<Message> = {
+				conversationId,
+				messageId: cursorMessageId,
+			}
+			const cursorSelect: SelectType<Message> = {
+				createdDateTime: 1,
+			}
+			const cursorResult = await selectDataFromMongoDB<Message>(cursorWhere, cursorSelect, messageSchemaInstance, messageCollectionName)
+			if (cursorResult.success && cursorResult.result && cursorResult.result.length === 1) {
+				cursorCreatedDateTime = cursorResult.result[0].createdDateTime
+			}
+		}
+
+		const matchStage: PipelineStage.Match = {
+			$match: cursorCreatedDateTime
+				? {
+						...matchBase,
+						createdDateTime: { $lt: cursorCreatedDateTime },
+				  }
+				: matchBase,
+		}
+
 		const pipeline: PipelineStage[] = [
-			{
-				$match: {
-					conversationId,
-					$or: [
-						{ senderUuid: uuid, senderDeleted: false },
-						{ receiverUuid: uuid, receiverDeleted: false },
-					],
-				},
-			},
+			matchStage,
 			{
 				$sort: { createdDateTime: -1 },
-			},
-			{
-				$skip: skip,
 			},
 			{
 				$limit: pageSize,
@@ -681,7 +703,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		const unreadMessageIds: string[] = []
 		const messages: MessageInfo[] = await Promise.all(
 			(messagesResult.result || []).map(async (item: unknown): Promise<MessageInfo> => {
-				const itemData = item as Record<string, unknown>
+			const itemData = item as Record<string, unknown>
 				const senderUuid = (itemData.senderUuid as string) || ''
 				const receiverUuid = (itemData.receiverUuid as string) || ''
 				const messageId = (itemData.messageId as string) || ''
@@ -695,27 +717,27 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 					unreadMessageIds.push(messageId)
 				}
 
-				return {
+			return {
 					messageId,
 					senderUid: senderUid || 0,
 					receiverUid: receiverUid || 0,
-					messageType: (itemData.messageType as IM_MESSAGE_TYPE) || IM_MESSAGE_TYPE.text,
-					content: ((itemData.isRecalled as boolean) ? '' : (itemData.content as string)) || '',
+				messageType: (itemData.messageType as IM_MESSAGE_TYPE) || IM_MESSAGE_TYPE.text,
+				content: ((itemData.isRecalled as boolean) ? '' : (itemData.content as string)) || '',
 					isRead,
-					readTime: itemData.readTime as number | undefined,
-					isRecalled: (itemData.isRecalled as boolean) || false,
-					recalledTime: itemData.recalledTime as number | undefined,
-					createdDateTime: (itemData.createdDateTime as number) || 0,
-					createdBy: (itemData.createdBy as string) || '',
-					editedDateTime: (itemData.editedDateTime as number) || 0,
-					editedBy: (itemData.editedBy as string) || '',
-				}
-			})
+				readTime: itemData.readTime as number | undefined,
+				isRecalled: (itemData.isRecalled as boolean) || false,
+				recalledTime: itemData.recalledTime as number | undefined,
+				createdDateTime: (itemData.createdDateTime as number) || 0,
+				createdBy: (itemData.createdBy as string) || '',
+				editedDateTime: (itemData.editedDateTime as number) || 0,
+				editedBy: (itemData.editedBy as string) || '',
+			}
+		})
 		)
 
 		// 如果需要标记为已读（使用上面收集的未读 messageId 列表）
 		if (markAsRead && unreadMessageIds.length > 0) {
-			await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
+				await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
 		}
 
 		return {
