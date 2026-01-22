@@ -1,6 +1,7 @@
 import mongoose, { InferSchemaType, PipelineStage, ClientSession } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { reviewImageContent } from '../aliyun/index.js'
+import { getUserAvatarUrl } from '../common/UrlTool.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
@@ -542,7 +543,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 
 		// 头像审核：如果上传了新头像，需要进行内容安全审核
 		if (updateOrCreateUserInfoRequest.avatar && updateOrCreateUserInfoRequest.avatar.trim().length > 0) {
-			const avatarUrl = buildUserAvatarUrl(updateOrCreateUserInfoRequest.avatar)
+			const avatarUrl = getUserAvatarUrl(updateOrCreateUserInfoRequest.avatar)
 			if (!avatarUrl) {
 				logging('ERROR', '更新用户信息失败，无法构建头像 URL', undefined, { updateOrCreateUserInfoRequest, uuid })
 				return { success: false, message: '更新用户信息失败，无法构建头像 URL' }
@@ -4394,34 +4395,4 @@ const checkSendGeneralEmailVerificationCodeRequest = (sendGeneralEmailVerificati
 		&& !!sendGeneralEmailVerificationCodeRequest.email && !isInvalidEmail(sendGeneralEmailVerificationCodeRequest.email)
 		&& !!sendGeneralEmailVerificationCodeRequest.exclusiveBusinessName && sendGeneralEmailVerificationCodeRequest.exclusiveBusinessName !== 'unknown'
 	)
-}
-
-/**
- * 根据头像文件名构建完整的头像 URL
- * @param avatarFilename 头像文件名（如 "avatar-636-NGOP1UOaPoBGf0Vo5RJzoqq8tKgpwqQ5-1769085909258"）
- * @returns 完整的头像 URL，如果构建失败返回 undefined
- */
-const buildUserAvatarUrl = (avatarFilename: string): string | undefined => {
-	try {
-		if (!avatarFilename || avatarFilename.trim().length === 0) {
-			logging('ERROR', '构建头像 URL 失败，头像文件名为空', undefined, { avatarFilename })
-			return undefined
-		}
-
-		const cfImagesBaseUrl = process.env.CF_IMAGES_BASE_URL
-		const cfImagesAccountId = process.env.CF_IMAGES_ACCOUNT_ID
-
-		if (!cfImagesBaseUrl || !cfImagesAccountId) {
-			logging('ERROR', '构建头像 URL 失败，环境变量配置缺失', undefined, { avatarFilename, cfImagesBaseUrl: !!cfImagesBaseUrl, cfImagesAccountId: !!cfImagesAccountId })
-			return undefined
-		}
-
-		// 构建完整的头像 URL
-		// 格式：https://kirafile.com/cdn-cgi/imagedelivery/{ACCOUNT_ID}/{filename}/w=200,h=200,f=avif
-		const avatarUrl = `${cfImagesBaseUrl}/cdn-cgi/imagedelivery/${cfImagesAccountId}/${avatarFilename.trim()}/w=200,h=200,f=avif`
-		return avatarUrl
-	} catch (error) {
-		logging('ERROR', '构建头像 URL 失败，未知错误', error, { avatarFilename })
-		return undefined
-	}
 }
