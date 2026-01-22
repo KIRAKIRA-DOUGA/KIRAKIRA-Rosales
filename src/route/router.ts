@@ -1,7 +1,7 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
-import { createFavoritesController, getFavoritesController, getFavoritesByUidController, addToFavoritesController, removeFromFavoritesController, getFavoritesDetailController, updateFavoritesController, deleteFavoritesController, reorderFavoritesDetailController, addEditorToFavoritesController, removeEditorFromFavoritesController } from '../controller/FavoritesController.js'
+import { createFavoritesController, getFavoritesController, getFavoritesByUidController, addToFavoritesController, removeFromFavoritesController, getFavoritesDetailController, updateFavoritesController, deleteFavoritesController, reorderFavoritesDetailController, addEditorToFavoritesController, removeEditorFromFavoritesController, getFavoritesCoverUploadSignedUrlController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
 	adminClearUserInfoController,
@@ -701,6 +701,12 @@ router.delete('/favorites/removeEditor', removeEditorFromFavoritesController) //
 // 	"favoritesId": 1,
 // 	"editorUid": 123
 // }
+
+router.get('/favorites/cover/preUpload', getFavoritesCoverUploadSignedUrlController) // 获取用于上传收藏夹封面图的预签名 URL
+// https://localhost:9999/favorites/cover/preUpload?favoritesId=1
+// cookie: uid, token
+// query:
+// favoritesId (必填)
 
 
 

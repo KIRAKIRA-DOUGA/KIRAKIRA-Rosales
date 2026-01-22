@@ -1,5 +1,5 @@
 import mongoose, { InferSchemaType } from 'mongoose'
-import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, AddToFavoritesRequestDto, AddToFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, AddEditorToFavoritesRequestDto, AddEditorToFavoritesResponseDto, RemoveEditorFromFavoritesRequestDto, RemoveEditorFromFavoritesResponseDto } from '../controller/FavoritesControllerDto.js'
+import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, AddToFavoritesRequestDto, AddToFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, AddEditorToFavoritesRequestDto, AddEditorToFavoritesResponseDto, RemoveEditorFromFavoritesRequestDto, RemoveEditorFromFavoritesResponseDto, GetFavoritesCoverUploadSignedUrlRequestDto, GetFavoritesCoverUploadSignedUrlResponseDto } from '../controller/FavoritesControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB, deleteDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType, OrderByType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesSchema, FavoritesDetailSchema, RemovedFavoritesSchema, RemovedFavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
@@ -8,6 +8,8 @@ import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenService, checkUserTokenByUuidService, checkUserExistsByUIDService, getUserUid, getUserUuid } from './UserService.js'
 import { logging } from './loggingService.js'
+import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
+import { generateSecureRandomString } from '../common/RandomTool.js'
 
 /**
  * 创建收藏夹
@@ -1110,6 +1112,40 @@ export const removeEditorFromFavoritesService = async (removeEditorFromFavorites
 	} catch (error) {
 		logging('ERROR', '移除收藏夹维护者失败，未知原因：', error, { removeEditorFromFavoritesRequest, uuid })
 		return { success: false, message: '移除收藏夹维护者失败，未知原因' }
+	}
+}
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL
+ * @param getFavoritesCoverUploadSignedUrlRequest 获取用于上传收藏夹封面图的预签名 URL 的请求载荷
+ * @param uid 用户 ID
+ * @param token 用户的 token
+ * @returns GetFavoritesCoverUploadSignedUrlResponseDto 获取用于上传收藏夹封面图的预签名 URL 的请求响应
+ */
+export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverUploadSignedUrlRequest: GetFavoritesCoverUploadSignedUrlRequestDto, uid: number, token: string): Promise<GetFavoritesCoverUploadSignedUrlResponseDto> => {
+	// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新封面链接替换数据库中的旧封面链接，而且当前图片没有加入审核流程
+	try {
+		if ((await checkUserTokenService(uid, token)).success) {
+			// 检查用户是否有权限操作该收藏夹（只有创建者和维护者可以上传封面）
+			if (!(await checkFavoritesPermission(getFavoritesCoverUploadSignedUrlRequest.favoritesId, uid))) {
+				logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，没有权限操作该收藏夹', undefined, { getFavoritesCoverUploadSignedUrlRequest, uid })
+				return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，没有权限操作该收藏夹' }
+			}
+			const now = new Date().getTime()
+			const fileName = `favorites-cover-${uid}-${getFavoritesCoverUploadSignedUrlRequest.favoritesId}-${generateSecureRandomString(32)}-${now}`
+			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
+			if (signedUrl && fileName) {
+				return { success: true, message: '准备开始上传收藏夹封面', result: { fileName, signedUrl } }
+			} else {
+				// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新封面链接替换数据库中的旧封面链接，而且当前图片没有加入审核流程
+				return { success: false, message: '上传失败，无法生成图片上传 URL，请重新上传收藏夹封面' }
+			}
+		} else {
+			logging('ERROR', '获取上传收藏夹封面用的预签名 URL 失败，用户不合法', undefined, { uid })
+			return { success: false, message: '上传失败，无法获取上传权限' }
+		}
+	} catch (error) {
+		logging('ERROR', '获取上传收藏夹封面用的预签名 URL 失败，错误信息', error, { uid })
 	}
 }
 

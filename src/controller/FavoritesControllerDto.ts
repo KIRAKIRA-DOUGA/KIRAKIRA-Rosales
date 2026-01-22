@@ -287,3 +287,28 @@ export type RemoveEditorFromFavoritesResponseDto = {
 	/** 如果成功，返回更新后的收藏夹数据 */
 	result?: Favorites;
 }
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL 的请求载荷
+ */
+export type GetFavoritesCoverUploadSignedUrlRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+}
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL 的请求响应
+ */
+export type GetFavoritesCoverUploadSignedUrlResponseDto = {
+	/** 请求是否成功，成功返回 true，否则返回 false */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 请求到的收藏夹封面图上传预签名 URL 数据 */
+	result?: {
+		/** 预签名 URL */
+		signedUrl: string;
+		/** 文件名 */
+		fileName: string;
+	};
+}

@@ -1,7 +1,7 @@
-import { createFavoritesService, getFavoritesService, getFavoritesByUidService, addToFavoritesService, removeFromFavoritesService, getFavoritesDetailService, updateFavoritesService, deleteFavoritesService, reorderFavoritesDetailService, addEditorToFavoritesService, removeEditorFromFavoritesService } from '../service/FavoritesService.js'
+import { createFavoritesService, getFavoritesService, getFavoritesByUidService, addToFavoritesService, removeFromFavoritesService, getFavoritesDetailService, updateFavoritesService, deleteFavoritesService, reorderFavoritesDetailService, addEditorToFavoritesService, removeEditorFromFavoritesService, getFavoritesCoverUploadSignedUrlService } from '../service/FavoritesService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { parseInteger } from '../common/ValidTool.js'
-import { CreateFavoritesRequestDto, GetFavoritesByUidRequestDto, AddToFavoritesRequestDto, RemoveFromFavoritesRequestDto, GetFavoritesDetailRequestDto, UpdateFavoritesRequestDto, DeleteFavoritesRequestDto, ReorderFavoritesDetailRequestDto, AddEditorToFavoritesRequestDto, RemoveEditorFromFavoritesRequestDto } from './FavoritesControllerDto.js'
+import { CreateFavoritesRequestDto, GetFavoritesByUidRequestDto, AddToFavoritesRequestDto, RemoveFromFavoritesRequestDto, GetFavoritesDetailRequestDto, UpdateFavoritesRequestDto, DeleteFavoritesRequestDto, ReorderFavoritesDetailRequestDto, AddEditorToFavoritesRequestDto, RemoveEditorFromFavoritesRequestDto, GetFavoritesCoverUploadSignedUrlRequestDto } from './FavoritesControllerDto.js'
 
 /**
  * 创建收藏夹
@@ -243,5 +243,22 @@ export const removeEditorFromFavoritesController = async (ctx: koaCtx, next: koa
 	}
 	const removeEditorFromFavoritesResponse = await removeEditorFromFavoritesService(removeEditorFromFavoritesRequest, uuid, token)
 	ctx.body = removeEditorFromFavoritesResponse
+	await next()
+}
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL
+ * @param ctx context
+ * @param next context
+ * @returns 用于上传收藏夹封面图的预签名 URL 请求响应
+ */
+export const getFavoritesCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInteger(ctx.cookies.get('uid'))
+	const token = ctx.cookies.get('token')
+	const favoritesId = parseInteger(ctx.query.favoritesId as string)
+	const getFavoritesCoverUploadSignedUrlRequest: GetFavoritesCoverUploadSignedUrlRequestDto = {
+		favoritesId: favoritesId ?? -1,
+	}
+	ctx.body = await getFavoritesCoverUploadSignedUrlService(getFavoritesCoverUploadSignedUrlRequest, uid, token)
 	await next()
 }
