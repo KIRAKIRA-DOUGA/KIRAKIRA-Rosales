@@ -151,7 +151,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 /**
  * 用户取消视频点赞
  * @param videoId KVID 视频 ID
- * @param uid 用户 UID
+ * @param uuid 用户 UUID
  * @param token 用户 token
  * @returns 用户取消视频点赞的结果
  */
@@ -353,7 +353,7 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 /**
  * 用户取消视频点踩
  * @param videoId KVID 视频 ID
- * @param uid 用户 UID
+ * @param uuid 用户 UUID
  * @param token 用户 token
  * @returns 用户取消视频点踩的结果
  */
