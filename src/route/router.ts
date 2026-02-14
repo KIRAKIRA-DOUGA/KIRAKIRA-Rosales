@@ -462,14 +462,14 @@ router.post('/video/downvote', emitVideoDownvoteController) // 用户为视频�
 // 	"videoId": 13
 // }
 
-router.post('/video/upvote/cancel', cancelVideoUpvoteController) // 用户取消为视频点赞
+router.delete('/video/upvote/cancel', cancelVideoUpvoteController) // 用户取消为视频点赞
 // https://localhost:9999/video/upvote/cancel
 // cookie: uuid, token
 // {
 // 	"videoId": 13
 // }
 
-router.post('/video/downvote/cancel', cancelVideoDownvoteController) // 用户取消为视频点踩
+router.delete('/video/downvote/cancel', cancelVideoDownvoteController) // 用户取消为视频点踩
 // https://localhost:9999/video/downvote/cancel
 // cookie: uuid, token
 // {
