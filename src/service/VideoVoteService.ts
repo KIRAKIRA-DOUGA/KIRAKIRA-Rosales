@@ -5,8 +5,6 @@ import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.
 import { VideoVoteRequestDto, VideoUpvoteResponseDto, VideoDownvoteResponseDto } from '../controller/VideoVoteControllerDto.js'
 import { VideoUpvoteSchema, VideoDownvoteSchema } from '../dbPool/schema/VideoVoteSchema.js'
 import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
-import { start } from 'repl'
-import { createAndStartSession } from '../common/MongoDBSessionTool.js'
 
 /**
  * 用户给视频点赞
