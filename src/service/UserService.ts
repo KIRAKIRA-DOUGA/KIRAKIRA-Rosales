@@ -108,11 +108,11 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 		const usernameStandardized = username.trim().normalize();
 		const now = new Date().getTime()
 
-		// if (!invitationCode || !(await checkInvitationCodeService({ invitationCode })).isAvailableInvitationCode) { // DELETEME 仅在 beta 测试中使用
-		// 	const errorMessage = '用户注册失败：未提供邀请码或邀请码无效'
-		// 	logging('ERROR', errorMessage)
-		// 	return { success: false, message: errorMessage }
-		// }
+		if (!invitationCode || !(await checkInvitationCodeService({ invitationCode })).isAvailableInvitationCode) { // DELETEME 仅在 beta 测试中使用
+			const errorMessage = '用户注册失败：未提供邀请码或邀请码无效'
+			logging('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
+		}
 
 		const session = await createAndStartSession() // 启动事务
 
@@ -205,21 +205,21 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 				return { success: false, message: errorMessage }
 			}
 
-			// if (invitationCode) {
-			// 	const useInvitationCodeDto: UseInvitationCodeDto = {
-			// 		invitationCode,
-			// 		registrantUid: uid,
-			// 		registrantUUID: uuid,
-			// 	}
-			// 	try {
-			// 		const useInvitationCodeResult = await useInvitationCode(useInvitationCodeDto)
-			// 		if (!useInvitationCodeResult.success) {
-			// 			logging('ERROR', '用户使用邀请码时出错：更新邀请码使用者失败')
-			// 		}
-			// 	} catch (error) {
-			// 		logging('ERROR', '用户使用邀请码时出错：更新邀请码使用者时出错：', error)
-			// 	}
-			// }
+			if (invitationCode) {
+				const useInvitationCodeDto: UseInvitationCodeDto = {
+					invitationCode,
+					registrantUid: uid,
+					registrantUUID: uuid,
+				}
+				try {
+					const useInvitationCodeResult = await useInvitationCode(useInvitationCodeDto)
+					if (!useInvitationCodeResult.success) {
+						logging('ERROR', '用户使用邀请码时出错：更新邀请码使用者失败')
+					}
+				} catch (error) {
+					logging('ERROR', '用户使用邀请码时出错：更新邀请码使用者时出错：', error)
+				}
+			}
 
 			await commitAndEndSession(session)
 			return { success: true, uid, token, UUID: uuid, message: '用户注册成功' }
