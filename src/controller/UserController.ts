@@ -1,4 +1,6 @@
+import { standardizeClientLanguageFlag } from '../common/i18n.js'
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
+import { limitPageSize, parseInteger } from '../common/ValidTool.js'
 import { isPassRbacCheck } from '../service/RbacService.js'
 import {
 	adminClearUserInfoService,
@@ -11,13 +13,9 @@ import {
 	createInvitationCodeService,
 	getBlockedUserService,
 	getMyInvitationCodeService,
-	getSelfUserInfoService,
 	getUserAvatarUploadSignedUrlService,
 	getUserInfoByUidService,
 	getUserSettingsService,
-	requestSendChangeEmailVerificationCodeService,
-	requestSendChangePasswordVerificationCodeService,
-	requestSendVerificationCodeService,
 	updateOrCreateUserInfoService,
 	updateOrCreateUserSettingsService,
 	updateUserEmailService,
@@ -30,15 +28,15 @@ import {
 	checkUserHave2FAByEmailService,
 	checkUserHave2FAByUUIDService,
 	createUserEmailAuthenticatorService,
-	sendUserEmailAuthenticatorService,
 	deleteUserEmailAuthenticatorService,
-	sendDeleteUserEmailAuthenticatorService,
 	checkUserExistsByUIDService,
 	userEmailExistsCheckService,
 	adminEditUserInfoService,
 	adminGetUserByInvitationCodeService,
 	forgotPasswordService,
-	requestSendForgotPasswordVerificationCodeService,
+	sendGeneral2FAEmailVerificationCodeService,
+	sendGeneralEmailVerificationCodeService,
+	getSelfUserInfoByUuidService,
 } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import {
@@ -54,15 +52,11 @@ import {
 	DeleteUserEmailAuthenticatorRequestDto,
 	ForgotPasswordRequestDto,
 	GetBlockedUserRequestDto,
-	GetSelfUserInfoRequestDto,
+	GetSelfUserInfoByUuidRequestDto,
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
-	RequestSendChangeEmailVerificationCodeRequestDto,
-	RequestSendChangePasswordVerificationCodeRequestDto,
-	RequestSendForgotPasswordVerificationCodeRequestDto,
-	RequestSendVerificationCodeRequestDto,
-	SendDeleteUserEmailAuthenticatorVerificationCodeRequestDto,
-	SendUserEmailAuthenticatorVerificationCodeRequestDto,
+	SendGeneral2FAEmailVerificationCodeRequestDto,
+	SendGeneralEmailVerificationCodeRequestDto,
 	UpdateOrCreateUserInfoRequestDto,
 	UpdateOrCreateUserSettingsRequestDto,
 	UpdateUserEmailRequestDto,
@@ -73,6 +67,23 @@ import {
 	UserLogoutResponseDto,
 	UserRegistrationRequestDto
 } from './UserControllerDto.js'
+
+const cookieOption = {
+	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+	secure: true,
+	sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+	maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
+	domain: getCorrectCookieDomain(),
+}
+
+const logoutCookieOption = {
+	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+	secure: true,
+	sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+	maxAge: 0, // 立即过期
+	expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
+	domain: getCorrectCookieDomain(),
+}
 
 /**
  * 用户注册
@@ -93,13 +104,6 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		domain: getCorrectCookieDomain(),
-	}
 	ctx.cookies.set('token', userRegistrationResult.token, cookieOption)
 	ctx.cookies.set('email', data?.email, cookieOption)
 	ctx.cookies.set('uid', `${userRegistrationResult.uid}`, cookieOption)
@@ -124,13 +128,6 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const userLoginResult = await userLoginService(userLoginRequest)
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		domain: getCorrectCookieDomain(),
-	}
 	ctx.cookies.set('token', userLoginResult.token, cookieOption)
 	ctx.cookies.set('email', userLoginResult.email, cookieOption)
 	ctx.cookies.set('uid', `${userLoginResult.uid}`, cookieOption)
@@ -205,42 +202,6 @@ export const createUserEmailAuthenticatorController = async (ctx: koaCtx, next: 
 }
 
 /**
- * 请求发送验证码，用于登录时验证身份验证器
- * @param ctx context
- * @param next context
- */
-export const sendUserEmailAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<SendUserEmailAuthenticatorVerificationCodeRequestDto>
-
-	const sendUserEmailAuthenticatorVerificationCodeRequest: SendUserEmailAuthenticatorVerificationCodeRequestDto = {
-		email: data?.email || '',
-		passwordHash: data?.passwordHash || '',
-		clientLanguage: data?.clientLanguage,
-	}
-
-	ctx.body = await sendUserEmailAuthenticatorService(sendUserEmailAuthenticatorVerificationCodeRequest)
-	await next()
-}
-
-/**
- * 请求发送验证码，用于删除 Email 2FA
- * @param ctx context
- * @param next context
- */
-export const sendDeleteUserEmailAuthenticatorController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<SendUserEmailAuthenticatorVerificationCodeRequestDto>
-
-	const sendDeleteUserEmailAuthenticatorVerificationCodeRequest: SendDeleteUserEmailAuthenticatorVerificationCodeRequestDto = {
-		clientLanguage: data?.clientLanguage,
-	}
-
-	const uuid = ctx.cookies.get('uuid')
-	const token = ctx.cookies.get('token')
-	ctx.body = await sendDeleteUserEmailAuthenticatorService(sendDeleteUserEmailAuthenticatorVerificationCodeRequest, uuid, token)
-	await next()
-}
-
-/**
  * 用户删除 Email 2FA
  * @param ctx context
  * @param next context
@@ -311,24 +272,17 @@ export const userEmailExistsCheckController = async (ctx: koaCtx, next: koaNext)
 export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateUserEmailRequestDto>
 	const updateUserEmailRequest: UpdateUserEmailRequestDto = {
-		uid: data?.uid,
 		oldEmail: data?.oldEmail,
 		newEmail: data?.newEmail,
 		passwordHash: data?.passwordHash,
-		verificationCode: data?.verificationCode,
+		changeEmailVerificationCode: data?.changeEmailVerificationCode,
+		changeEmailNewEmailVerificationCode: data?.changeEmailNewEmailVerificationCode,
 	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	const updateUserEmailResponse = await updateUserEmailService(updateUserEmailRequest, uid, token)
+	const updateUserEmailResponse = await updateUserEmailService(updateUserEmailRequest, uuid, token)
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-		domain: getCorrectCookieDomain(),
-	}
 	if (updateUserEmailResponse.success) {
 		ctx.cookies.set('email', data?.newEmail ?? '', cookieOption)
 	}
@@ -376,30 +330,21 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
  * @return GetSelfUserInfoResponseDto 当前登录的用户信息，如果获取成功则 success: true，不成功则 success: false
  */
 export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<GetSelfUserInfoRequestDto>
+	const data = ctx.request.body as Partial<GetSelfUserInfoByUuidRequestDto>
 
-	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const uuid = ctx.cookies.get('uuid') || data?.uuid
 	const token = ctx.cookies.get('token') || data?.token
 
-	const getSelfUserInfoRequest: GetSelfUserInfoRequestDto = {
-		uid,
+	const getSelfUserInfoByUuidRequest: GetSelfUserInfoByUuidRequestDto = {
+		uuid,
 		token,
 	}
-	const selfUserInfo = await getSelfUserInfoService(getSelfUserInfoRequest)
+	const selfUserInfo = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
 	if (!selfUserInfo.success) {
-		const cookieOption = {
-			httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-			secure: true,
-			sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-			maxAge: 0, // 立即过期
-			expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
-			domain: getCorrectCookieDomain(),
-		}
-
-		ctx.cookies.set('token', '', cookieOption)
-		ctx.cookies.set('email', '', cookieOption)
-		ctx.cookies.set('uid', '', cookieOption)
-		ctx.cookies.set('uuid', '', cookieOption)
+		ctx.cookies.set('token', '', logoutCookieOption)
+		ctx.cookies.set('email', '', logoutCookieOption)
+		ctx.cookies.set('uid', '', logoutCookieOption)
+		ctx.cookies.set('uuid', '', logoutCookieOption)
 	}
 	ctx.body = selfUserInfo
 	await next()
@@ -416,7 +361,7 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = ctx.query.uid as string
 	const getUserInfoByUidRequest: GetUserInfoByUidRequestDto = {
-		uid: uid ? parseInt(uid, 10) : -1, // WARN -1 代表这个 UID 是永远无法查找到结果
+		uid: uid ? parseInteger(uid) : -1, // WARN -1 代表这个 UID 是永远无法查找到结果
 	}
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
@@ -434,7 +379,7 @@ export const getUserInfoByUidController = async (ctx: koaCtx, next: koaNext) => 
 export const userExistsCheckByUIDController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = ctx.query.uid as string
 	const userExistsCheckRequest: UserExistsCheckByUIDRequestDto = {
-		uid: uid ? parseInt(uid, 10) : -1,
+		uid: uid ? parseInteger(uid) : -1,
 	}
 	ctx.body = await checkUserExistsByUIDService(userExistsCheckRequest)
 	await next()
@@ -449,7 +394,7 @@ export const userExistsCheckByUIDController = async (ctx: koaCtx, next: koaNext)
  */
 export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 	const uidString = ctx.cookies.get('uid')
-	const uid = parseInt(uidString, 10)
+	const uid = parseInteger(uidString)
 	const token = ctx.cookies.get('token')
 
 	const checkUserTokenResponse = await checkUserTokenService(uid, token)
@@ -458,13 +403,6 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 	if (checkUserTokenResponse.success && checkUserTokenResponse.userTokenOk) {
 		const uuid = await getUserUuid(uid)
 		if (uuid) {
-			const cookieOption = {
-				httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-				secure: true,
-				sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-				maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
-				domain: getCorrectCookieDomain(),
-			}
 			ctx.cookies.set('uuid', uuid, cookieOption)
 			ctx.cookies.set('uid', uidString, cookieOption)
 			ctx.cookies.set('token', token, cookieOption)
@@ -483,19 +421,11 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	// TODO 理论上这里还可以做一些操作，比如说记录用户登出事件...
 
-	const cookieOption = {
-		httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
-		secure: true,
-		sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
-		maxAge: 0, // 立即过期
-		expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
-		domain: getCorrectCookieDomain(),
-	}
 
-	ctx.cookies.set('token', '', cookieOption)
-	ctx.cookies.set('email', '', cookieOption)
-	ctx.cookies.set('uid', '', cookieOption)
-	ctx.cookies.set('uuid', '', cookieOption)
+	ctx.cookies.set('token', '', logoutCookieOption)
+	ctx.cookies.set('email', '', logoutCookieOption)
+	ctx.cookies.set('uid', '', logoutCookieOption)
+	ctx.cookies.set('uuid', '', logoutCookieOption)
 
 	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
 
@@ -508,7 +438,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
 	await next()
@@ -522,7 +452,7 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
 export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<GetUserSettingsRequestDto>
 
-	const uid = parseInt(ctx.cookies.get('uid'), 10) || data?.uid
+	const uid = ctx.cookies.get('uuid') || data?.uuid
 	const token = ctx.cookies.get('token') || data?.token
 
 	ctx.body = await getUserSettingsService(uid, token)
@@ -538,7 +468,7 @@ export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateOrCreateUserSettingsRequestDto>
 
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	const updateOrCreateUserSettingsRequest: UpdateOrCreateUserSettingsRequestDto = {
@@ -550,19 +480,43 @@ export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: ko
 }
 
 /**
- * 请求发送验证码，用于注册时验证用户邮箱
+ * 发送通用 2FA 邮箱验证码
  * @param ctx context
  * @param next context
  */
-export const requestSendVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendVerificationCodeRequestDto>
+export const sendGeneral2FAEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<SendGeneral2FAEmailVerificationCodeRequestDto>
 
-	const requestSendVerificationCodeRequest: RequestSendVerificationCodeRequestDto = {
-		email: data.email || '',
-		clientLanguage: data.clientLanguage,
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = {
+		clientLanguage: standardizeClientLanguageFlag(data.clientLanguage),
+		mailTemplate: data.mailTemplate ?? 'SendGeneral2FAEmailVerificationCode',
+		exclusiveBusinessName: data.exclusiveBusinessName,
 	}
 
-	ctx.body = await requestSendVerificationCodeService(requestSendVerificationCodeRequest)
+	ctx.body = await sendGeneral2FAEmailVerificationCodeService(sendGeneral2FAEmailVerificationCodeRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 发送通用邮箱验证码
+ * @param ctx context
+ * @param next context
+ */
+export const sendGeneralEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<SendGeneralEmailVerificationCodeRequestDto>
+
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = {
+		email: data.email ?? '',
+		clientLanguage: standardizeClientLanguageFlag(data.clientLanguage),
+		mailTemplate: data.mailTemplate ?? 'SendGeneralEmailVerificationCode',
+		exclusiveBusinessName: data.exclusiveBusinessName,
+	}
+
+	ctx.body = await sendGeneralEmailVerificationCodeService(sendGeneralEmailVerificationCodeRequest, uuid, token)
 	await next()
 }
 
@@ -572,7 +526,7 @@ export const requestSendVerificationCodeController = async (ctx: koaCtx, next: k
  * @param next context
  */
 export const createInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await createInvitationCodeService(uid, token)
@@ -585,7 +539,7 @@ export const createInvitationCodeController = async (ctx: koaCtx, next: koaNext)
  * @param next context
  */
 export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
 	ctx.body = await getMyInvitationCodeService(uid, token)
@@ -627,43 +581,6 @@ export const adminGetUserByInvitationCodeController = async (ctx: koaCtx, next: 
 }
 
 /**
- * 请求发送验证码，用于修改邮箱
- * @param ctx context
- * @param next context
- */
-export const requestSendChangeEmailVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendChangeEmailVerificationCodeRequestDto>
-
-	const requestSendChangeEmailVerificationCodeRequest: RequestSendChangeEmailVerificationCodeRequestDto = {
-		newEmail: data.newEmail,
-		clientLanguage: data.clientLanguage,
-	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
-	const token = ctx.cookies.get('token')
-
-	ctx.body = await requestSendChangeEmailVerificationCodeService(requestSendChangeEmailVerificationCodeRequest, uid, token)
-	await next()
-}
-
-/**
- * 请求发送验证码，用于修改密码
- * @param ctx context
- * @param next context
- */
-export const requestSendChangePasswordVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendChangePasswordVerificationCodeRequestDto>
-
-	const requestSendChangePasswordVerificationCodeRequest: RequestSendChangePasswordVerificationCodeRequestDto = {
-		clientLanguage: data.clientLanguage,
-	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
-	const token = ctx.cookies.get('token')
-
-	ctx.body = await requestSendChangePasswordVerificationCodeService(requestSendChangePasswordVerificationCodeRequest, uid, token)
-	await next()
-}
-
-/**
  * 更新用户密码
  * @param ctx context
  * @param next context
@@ -676,28 +593,11 @@ export const updateUserPasswordController = async (ctx: koaCtx, next: koaNext) =
 		newPasswordHash: data?.newPasswordHash ?? '',
 		verificationCode: data?.verificationCode ?? '',
 	}
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uid, token)
+	const updateUserEmailResponse = await changePasswordService(updateUserPasswordRequest, uuid, token)
 	ctx.body = updateUserEmailResponse
-	await next()
-}
-
-/**
- * 请求发送忘记密码的邮箱验证码
- * @param ctx context
- * @param next context
- */
-export const requestSendForgotPasswordVerificationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RequestSendForgotPasswordVerificationCodeRequestDto>
-
-	const requestSendForgotPasswordVerificationCodeRequest: RequestSendForgotPasswordVerificationCodeRequestDto = {
-		email: data.email ?? '',
-		clientLanguage: data.clientLanguage,
-	}
-
-	ctx.body = await requestSendForgotPasswordVerificationCodeService(requestSendForgotPasswordVerificationCodeRequest)
 	await next()
 }
 
@@ -754,7 +654,7 @@ export const getBlockedUserController = async (ctx: koaCtx, next: koaNext) => {
 
 	const sortBy = ctx.query.sortBy as string
 	const sortOrder = ctx.query.sortOrder as string
-	const uid = parseInt(ctx.query.uid as string, 10)
+	const uid = parseInteger(ctx.query.uid as string)
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
 
@@ -763,8 +663,8 @@ export const getBlockedUserController = async (ctx: koaCtx, next: koaNext) => {
 		sortOrder: sortOrder ?? 'ascend',
 		uid: uid ?? -1,
 		pagination: {
-			page: parseInt(page || '1', 10) ?? 1,
-			pageSize: Number.isFinite(parseInt(pageSize, 10)) ? parseInt(pageSize, 10) : Number.MAX_SAFE_INTEGER,
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: Number.isFinite(parseInteger(pageSize)) ? parseInteger(pageSize) : Number.MAX_SAFE_INTEGER,
 		},
 	}
 
@@ -791,9 +691,10 @@ export const adminGetUserInfoController = async (ctx: koaCtx, next: koaNext) => 
 	const isOnlyShowUserInfoUpdatedAfterReviewString = ctx.query.isOnlyShowUserInfoUpdatedAfterReview as string
 	const sortBy = ctx.query.sortBy as string
 	const sortOrder = ctx.query.sortOrder as string
-	const uid = parseInt(ctx.query.uid as string || '-1', 10)
+	const uid = parseInteger(ctx.query.uid as string || '-1')
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
+	const finalPageSize = limitPageSize(pageSize)
 
 	const adminGetUserInfoRequest: AdminGetUserInfoRequestDto = {
 		isOnlyShowUserInfoUpdatedAfterReview: typeof isOnlyShowUserInfoUpdatedAfterReviewString === 'string' && isOnlyShowUserInfoUpdatedAfterReviewString === 'true',
@@ -801,8 +702,8 @@ export const adminGetUserInfoController = async (ctx: koaCtx, next: koaNext) => 
 		sortOrder: sortOrder ?? 'ascend',
 		uid: uid ?? -1,
 		pagination: {
-			page: parseInt(page || '1', 10) ?? 1,
-			pageSize: parseInt(pageSize, 10) ?? Number.MAX_SAFE_INTEGER,
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: finalPageSize ?? 50,
 		},
 	}
 

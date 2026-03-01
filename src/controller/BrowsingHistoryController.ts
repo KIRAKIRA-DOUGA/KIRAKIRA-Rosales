@@ -1,5 +1,6 @@
 import { createOrUpdateBrowsingHistoryService, getUserBrowsingHistoryWithFilterService } from '../service/BrowsingHistoryService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { parseInteger } from '../common/ValidTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto, GetUserBrowsingHistoryWithFilterRequestDto } from './BrowsingHistoryControllerDto.js'
 
 /**
@@ -33,7 +34,7 @@ export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, n
  */
 export const getUserBrowsingHistoryWithFilterController = async (ctx: koaCtx, next: koaNext) => {
 	const videoTitle = ctx.query.videoTitle as string
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const getUserBrowsingHistoryWithFilterRequest: GetUserBrowsingHistoryWithFilterRequestDto = {
 		/** 过滤条件 - 视频标题 */

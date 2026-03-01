@@ -48,7 +48,7 @@ git clone https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales.git
 ### 2. 设置环境变量
 > [!IMPORTANT]
 > 下方的示例代码中并不包含全部环境变量，在实际使用时必须为每一个环境变量赋值。
-> 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)。
+> 全部环境变量及其作用请参阅：[.env.template](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.template)。
 ``` powershell
 # 对于不同操作系统，设置环境变量的方式也不同。以下为 Windows PowerShell 的示例
 $env:SERVER_PORT="9999"
@@ -60,7 +60,7 @@ $env:SERVER_ROOT_URL="kirakira.moe"
 
 ### 3. 启动后端开发服务器
 > [!IMPORTANT]
-> 以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。
+> 默认情况下，以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。
 ```sh
 # 安装依赖
 npm install
@@ -68,12 +68,11 @@ npm install
 # 启动开发服务器
 npm run dev
 
-# 或者,您可以以热重载方式启动开发服务器
+# 或者，您可以启动开发服务器，并启用自动重载
 npm run dev-hot
 ```
-如果您需要修改开发服务器的默认打包位置，需要修改 package.json 文件里 `scripts.start` 的值。
-`scripts.start` 的值是一句启动命令，您需要将该命令中所有 `.kirakira` 替换为您的自定义目录。
-例如 `tsc --noEmitOnError --sourceMap --outDir .foo && node ./.foo/app.js` 将会导致开发服务器的打包目录改为 `.foo`
+如果您需要修改开发服务器的默认打包位置，需要修改 package.json 文件里的 `scripts.start` 和 `scripts.copy-assets-dev` 配置。您需要将这些命令中所有 `.kirakira` 替换为您的自定义目录。
+
 
 ### 4. 检查
 成功执行以上命令后，您应该会获得一个监听 9999（或您在环境变量中自定义的）端口的 KIRAKIRA-Rosales 开发服务器。🎉
@@ -91,34 +90,37 @@ npm run dev-hot
 │  └ workflows - 存放 Github 工作流
 ├ .vscode - VSCode 相关配置
 ├ docs - 存放说明文档（本文档就存放于该目录下）
-├ old - 存放不舍得删除的旧代码
 ├ src - 存放源代码
-│  ├ cloudflare - 存放了 Cloudflare 相关的共通代码
-│  ├ common - 存放了共通函数
-│  ├ controller - controller 层，用于处理接受的请求载荷数据和丰富请求响应数据
+│  ├ assets - 存放静态资源，打包时该文件夹下的文件会原封不动复制到打包目标文件夹下
+│  ├ cloudflare - 存放了 Cloudflare 相关代码
+│  ├ common - 存放了通用函数
+│  ├ controller - controller 层，处理请求载荷/响应，鉴权。也存放了接口数据类型定义文件
 │  ├ dbPool - 存放了 MongoDB 相关的共通代码
+│     └ schema - 存放了 MongoDB Schema
 │  ├ elasticsearchPool - 存放了 Elasticsearch 相关的共通代码
+│  ├ locales - 存放了国际化文本
 │  ├ middleware - 存放了服务器中间件相关代码
 │  ├ route - 存放了路由代码
 │  ├ service - service 层，用于处理业务逻辑
 │  ├ ssl - SSL 相关配置
-│  ├ store - 存放了“状态管理”或“运行时全局变量”相关代码
 │  ├ type - 存放了共通的类型定义代码
 │  └ app.ts - 该文件为程序入口
 ├ .dockerignore - 该文件用于配置执行 docker build 命令时忽略的文件
 ├ .editorconfig - 该文件定义了编码风格
-├ .env.powershell.temp - 该文件是环境变量模板及说明文档
-├ .eslintignore - 该文件定义了 Eslint 忽略的内容
-├ .eslintrc.cjs - 该文件定义了 ESLint 配置
+├ .env.template - 该文件是完整环境变量模板及说明文档
 ├ .gitattributes - 该文件定义了 Git 相关配置
 ├ .gitignore - 该文件定义了 Git 忽略的文件
+├ ℩ɘvoↄ.svg - 该文件为封面图（图片内容是前端 cover.svg 文件的镜像，因此文件名反写。只是为了好玩。）
+├ crowdin.yml - 该文件定义了在线国际化翻译工具 Crowdin 的相关配置
 ├ Dockerfile - 该文件描述了构建 Docker 容器镜像的过程
+├ eslint.config.js - 该文件定义了 ESLint 配置
 ├ LICENSE - 许可证
-├ README.md - 该文件为自述文件
 ├ package-lock.json - 该文件固定了 npm install 是安装的依赖包的版本
 ├ package.json - 该文件定义了元数据、脚本和依赖包列表
-├ tsconfig.json - 该文件为 TypeScript 配置文件
-└ ℩ɘvoↄ.svg - 该文件为封面图
+├ pr_body.txt - 该文件定义了 Crowdin 相关 GitHub PR 模板
+├ README.md - 该文件为自述文件
+└ tsconfig.json - 该文件为 TypeScript 配置文件
+
 ```
 ### 从 Hello World 开始
 第一个程序总是从 Hello World 开始，KIRAKIRA-Rosales 也不例外。
@@ -327,7 +329,7 @@ const user: User = { // 构建用户数据
 try {
 	await insertData2MongoDB<User>(user, schemaInstance, collectionName) // 插入数据
 } catch(error) {
-	console.error('ERROR', "插入数据出错：", error)
+	logging('ERROR', "插入数据出错：", error)
 }
 
 
@@ -335,9 +337,9 @@ const userWhere: QueryType<User> = { uid: 1 } // 查询 UID 为 1 的用户数�
 const userSelect: SelectType<User> = { username: 1 } // 只查询 username 字段
 try {
 	const userResult = await selectDataFromMongoDB<User>(userWhere, userSelect, schemaInstance, collectionName) // 查询数据
-	console.oog('RESULT', useResult)
+	console.log('Result is: ', useResult)
 } catch (error) {
-	console.error('ERROR', "查询数据出错：", error)
+	logging('ERROR', "查询数据出错：", error)
 }
 ```
 > [!IMPORTANT]
@@ -379,7 +381,7 @@ try {
 	const refreshFlag = true // 是否立即刷新索引（刷新后该数据方能搜索，如果刷新过于频繁，可能会影响性能）
 	await insertData2ElasticsearchCluster(esClient, esIndexName, videoEsSchema, videoEsData, refreshFlag) // 插入数据
 } catch (error) {
-	console.error("ERROR", "索引数据出错："，error)
+	logging("ERROR", "索引数据出错："，error)
 }
 
 const esQuery = { // 构造搜索条件
@@ -390,9 +392,9 @@ const esQuery = { // 构造搜索条件
 
 try {
 	const esSearchResult = await searchDataFromElasticsearchCluster(esClient, esIndexName, videoEsSchema, esQuery) // 开始搜索数据
-	console.log('RESULT', esSearchResult)
+	console.log('Result is: ', esSearchResult)
 } catch (error) {
-	console.error("ERROR", "搜索数据出错："，error)
+	logging("ERROR", "搜索数据出错："，error)
 }
 ```
 
@@ -410,8 +412,9 @@ try {
 
 2.构建并预览
 > [!IMPORTANT]
-> 默认会将代码打包至项目根目录的 `dist` 目录内
-> 如有必要，您可以在 tsconfig.json 中修改打包路径。相应地，也要修改下方第三步启动服务器命令中的路径。
+> 默认会将代码打包至 `./dist` 路径，你可以在 tsconfig.json 中修改打包目标路径。  
+> 请注意，其他依赖于默认打包路径的业务也要更改配置，因此并不建议修改打包路径。
+
 ```sh
 # 1. 安装依赖
 npm install

@@ -17,9 +17,6 @@ import {
 	getUserAvatarUploadSignedUrlController,
 	getUserInfoByUidController,
 	getUserSettingsController,
-	requestSendChangeEmailVerificationCodeController,
-	requestSendChangePasswordVerificationCodeController,
-	requestSendVerificationCodeController,
 	updateOrCreateUserInfoController,
 	updateOrCreateUserSettingsController,
 	updateUserEmailController,
@@ -34,21 +31,20 @@ import {
 	confirmUserTotpAuthenticatorController,
 	checkUserHave2FAByUUIDController,
 	createUserEmailAuthenticatorController,
-	sendUserEmailAuthenticatorController,
 	deleteUserEmailAuthenticatorController,
-	sendDeleteUserEmailAuthenticatorController,
 	userExistsCheckByUIDController,
 	adminEditUserInfoController,
 	adminGetUserByInvitationCodeController,
 	forgotPasswordController,
-	requestSendForgotPasswordVerificationCodeController,
+	sendGeneral2FAEmailVerificationCodeController,
+	sendGeneralEmailVerificationCodeController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
-import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
+import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowerListController, getFollowingListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
 
 const router = new Router()
@@ -78,8 +74,8 @@ router.post('/user/login', userLoginController) // 用户登录
 // {
 // 	"email": "aaa@aaa.aaa",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-// 	"clientOtp": "XXXXXX" //非必须
-//  "verificationCode": "XXXXXX" //非必须
+// 	"clientOtp": "XXXXXX" // 非必须
+//  "verificationCode": "XXXXXX" // 非必须
 // }
 
 router.post('/user/createTotpAuthenticator', createUserTotpAuthenticatorController) // 用户创建 TOTP 身份验证器
@@ -104,21 +100,6 @@ router.post('/user/createEmailAuthenticator', createUserEmailAuthenticatorContro
 // https://localhost:9999/user/createEmailAuthenticator
 // cookie: uuid, token
 
-router.post('/user/sendUserEmailAuthenticator', sendUserEmailAuthenticatorController) // 用户发送 Email 身份验证器验证码
-// https://localhost:9999/user/sendUserEmailAuthenticator
-// {
-// 	 "email": "aaa@aaa.aaa",
-// 	 "passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-//   "clientLanguage": "zh-Hans-CN",
-// }
-
-router.post('/user/sendDeleteUserEmailAuthenticator', sendDeleteUserEmailAuthenticatorController) // 用户发送删除 Email 身份验证器验证码
-// https://localhost:9999/user/sendDeleteUserEmailAuthenticator
-// cookie: uuid, token
-// {
-//   "clientLanguage": "zh-Hans-CN",
-// }
-
 router.delete('/user/deleteUserEmailAuthenticator', deleteUserEmailAuthenticatorController) // 用户删除 Email 2FA
 // https://localhost:9999/user/deleteUserEmailAuthenticator
 // cookie: uuid, token
@@ -141,11 +122,11 @@ router.post('/user/update/email', updateUserEmailController) // 更新用户邮�
 // https://localhost:9999/user/update/email
 // cookie: uid, token
 // {
-// 	"uid": "XXXXXXXXX",
 // 	"oldEmail": "aaa@aaa.aaa",
 // 	"newEmail": "bbb@bbb.bbb",
 // 	"passwordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-// 	"verificationCode": "XXXXXX"
+// 	"changeEmailVerificationCode": "XXXXXX",
+// 	"changeEmailNewEmailVerificationCode": "XXXXXX"
 // }
 
 router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或创建用户信息
@@ -184,10 +165,10 @@ router.post('/user/update/info', updateOrCreateUserInfoController) // 更新或�
 
 router.post('/user/self', getSelfUserInfoController) // 获取当前登录的用户信息，可以通过 cookie 传递，也可以通过请求体
 // https://localhost:9999/user/self
-// cookie: uid, token
+// cookie: uuid, token
 // or
 // {
-// 	"uid": "XXXXXXXXX",
+// 	"uuid": "XXXXXXXXX",
 // 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 // }
 
@@ -211,7 +192,7 @@ router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 
 
 router.post('/user/settings', getUserSettingsController) // 在服务端或客户端获取用户设置信息用以正确渲染页面
 // https://localhost:9999/user/settings
-// cookie: uid, token
+// cookie: uuid, token
 // or
 // {
 // 	"uid": "XXXXXXXXX",
@@ -225,11 +206,23 @@ router.post('/user/settings/update', updateOrCreateUserSettingsController) // �
 // 	"coloredSideBar": "true"
 // }
 
-router.post('/user/requestSendVerificationCode', requestSendVerificationCodeController) // 请求发送验证码，用于注册时验证用户邮箱
-// https://localhost:9999/user/requestSendVerificationCode
+router.post('/user/sendGeneral2FAEmailVerificationCode', sendGeneral2FAEmailVerificationCodeController) // 发送通用 2FA 邮箱验证码
+// https://localhost:9999/user/sendGeneral2FAEmailVerificationCode
+// cookie: uuid, token
 // {
-// 	"email": "aaa@bbb.com",
-// 	"clientLanguage": "zh-Hans-CN"
+// 	"clientLanguage": "zh-Hans-CN",
+// 	"mailTemplate": "XXXXXXXX",
+// 	"exclusiveBusinessName": "xxxxxx"
+// }
+
+router.post('/user/sendGeneralEmailVerificationCode', sendGeneralEmailVerificationCodeController) // 发送通用邮箱验证码
+// https://localhost:9999/user/sendGeneralEmailVerificationCode
+// cookie: uuid, token
+// {
+// 	"email": "your-email@website.com",
+// 	"clientLanguage": "zh-Hans-CN",
+// 	"mailTemplate": "XXXXXXXX",
+// 	"exclusiveBusinessName": "xxxxxx"
 // }
 
 router.post('/user/createInvitationCode', createInvitationCodeController) // 生成邀请码
@@ -250,20 +243,6 @@ router.get('/user/getUserByInvitationCode', adminGetUserByInvitationCodeControll
 // https://localhost:9999/user/getUserByInvitationCode?invitationCode=KIRA-XXXX-XXXX
 // cookie: uuid, token
 
-router.post('/user/requestSendChangeEmailVerificationCode', requestSendChangeEmailVerificationCodeController) // 请求发送验证码，用于修改邮箱
-// https://localhost:9999/user/requestSendChangeEmailVerificationCode
-// cookie: uid, token
-// {
-// 	"clientLanguage": "zh-Hans-CN"
-// }
-
-router.post('/user/requestSendChangePasswordVerificationCode', requestSendChangePasswordVerificationCodeController) // 请求发送验证码，用于修改密码
-// https://localhost:9999/user/requestSendChangePasswordVerificationCode
-// cookie: uid, token
-// {
-// 	"clientLanguage": "zh-Hans-CN"
-// }
-
 router.post('/user/update/password', updateUserPasswordController) // 更新用户密码
 // https://localhost:9999/user/update/password
 // cookie: uid, token
@@ -271,13 +250,6 @@ router.post('/user/update/password', updateUserPasswordController) // 更新用�
 // 	"oldPasswordHash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 // 	"newPasswordHash": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
 // 	"verificationCode": "XXXXXX"
-// }
-
-router.post('/user/requestSendForgotPasswordVerificationCode', requestSendForgotPasswordVerificationCodeController) // 请求发送忘记密码的邮箱验证码
-// https://localhost:9999/user/requestSendForgotPasswordVerificationCode
-// {
-// 	"clientLanguage": "zh-Hans-CN",
-// 	"email": "your-email@website.com"
 // }
 
 router.post('/user/forgot/password', forgotPasswordController) // 找回密码（更新密码）
@@ -746,6 +718,30 @@ router.get('/feed/getFeedContent', getFeedContentController) // 获取动态分�
 // 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx"
 // }
 
+router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和粉丝数
+// https://localhost:9999/feed/stats?targetUid=999
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+
+router.get('/feed/following/list', getFollowingListController) // 获取用户关注列表
+// https://localhost:9999/feed/following/list?targetUid=999&page=1&pageSize=30
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+// page
+// pageSize
+
+router.get('/feed/follower/list', getFollowerListController) // 获取用户粉丝列表
+// https://localhost:9999/feed/follower/list?targetUid=999&page=1&pageSize=30
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+// page
+// pageSize
 
 
 
@@ -865,54 +861,6 @@ router.get('/rbac/adminGetUserRolesByUid', adminGetUserRolesByUidController) // 
 router.get('/secret/getStgEnvBackEndSecret', getStgEnvBackEndSecretController) // 获取预生产环境后端环境变量机密
 // https://localhost:9999/secret/getStgEnvBackEndSecret
 // cookie: uuid, token
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// router.post('/02/koa/user/settings/userSettings/save', saveUserSettingsByUUID)
-// // http://localhost:9999/02/koa/user/settings/userSettings/save
-// //
-// // {
-// // 	"uuid": "u00001",
-// // 	"systemStyle": "s1",
-// // 	"systemColor": "#66CCFF",
-// // 	"backgroundAnimation": "true",
-// // 	"settingPageLastEnter": "PornHub"
-// // }
-
-// router.put('/02/koa/user/settings/userSettings/update', updateUserSettingsByUUID)
-// // http://localhost:9999/02/koa/user/settings/userSettings/update
-// //
-// // {
-// // 	"uuid": "u00001",
-// // 	"systemStyle": "s1",
-// // 	"systemColor": "#66CCFF",
-// // 	"backgroundAnimation": "true",
-// // 	"settingPageLastEnter": "PornHub"
-// // }
-
-// router.get('/02/koa/user/settings/userSettings/get', getUserSettingsByUUID)
-// // http://localhost:9999/02/koa/user/settings/userSettings/get?uuid=u00001
-
-
 
 
 // router-end

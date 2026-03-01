@@ -7,27 +7,28 @@
 	"author": "KIRAKIRA Project Team",
 	"private": true,
 	"scripts": {
-		"start": "tsc --noEmitOnError --sourceMap --outDir .kirakira && npm run copy-assets-dev && node ./.kirakira/app.js",
+		"start": "rimraf .kirakira && tsc --noEmitOnError --sourceMap --outDir .kirakira && npm run copy-assets-dev && node ./.kirakira/app.js",
 		"dev": "npm start",
 		"serve": "npm start",
 		"dev-hot": "nodemon --watch src --delay 2 -e ts --exec \"npm start\"",
-		"build": "tsc --removeComments --declaration && npm run copy-assets-build",
-		"copy-assets-dev": "copyfiles -u 1 src/assets/**/* .kirakira/",
-		"copy-assets-build": "copyfiles -u 1 src/assets/**/* dist/"
+		"build": "rimraf .kirakira && tsc --removeComments --declaration --outDir dist && npm run copy-assets-build",
+		"copy-assets-dev": "cpy \"src/assets/**/*\" .kirakira/assets/",
+		"copy-assets-build": "cpy \"src/assets/**/*\" dist/assets/"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.31.0",
+		"@types/bcrypt": "^5.0.2",
 		"@types/koa": "^2.13.5",
 		"@types/koa__router": "^12.0.4",
-		"@types/safe-regex": "^1.1.6",
-		"@types/bcrypt": "^5.0.2",
 		"@types/koa-bodyparser": "^4.3.10",
+		"@types/safe-regex": "^1.1.6",
 		"@typescript-eslint/eslint-plugin": "^8.38.0",
 		"@typescript-eslint/parser": "^8.38.0",
-		"copyfiles": "^2.4.1",
+		"cpy-cli": "^6.0.0",
 		"esbuild-register": "^3.4.1",
 		"eslint": "^9.9.0",
 		"nodemon": "^3.1.4",
+		"rimraf": "^6.1.2",
 		"typescript": "^5.5.4"
 	},
 	"dependencies": {
@@ -38,6 +39,7 @@
 		"@koa/cors": "^5.0.0",
 		"@koa/router": "^14.0.0",
 		"bcrypt": "^6.0.0",
+		"dotenv": "^17.2.1",
 		"emailjs": "^4.0.3",
 		"js-base64": "^3.7.5",
 		"koa": "^3.0.1",

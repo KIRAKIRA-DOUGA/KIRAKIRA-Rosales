@@ -2,7 +2,7 @@
 
 
 export default {
-	SendVerificationCode: {
+	SendRegistrationVerificationCode: {
 		mailTitle: "KIRAKIRA - Enregistrer le code de vérification",
 		mailHeading: "Votre code de vérification d'inscription est",
 		mailText: "Bienvenue sur KIRAKIRA. Vous pouvez utiliser ce code de vérification pour enregistrer votre compte.\nLe code de vérification est valide pendant 30 minutes. Veuillez vous assurer de ne pas divulguer votre code de vérification à d'autres.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
@@ -31,5 +31,13 @@ export default {
 		mailTitle: "KIRAKIRA - Désactiver le code de vérification 2FA par e-mail",
 		mailHeading: "Votre code de vérification est",
 		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - Code de vérification",
+		mailHeading: "Votre code de vérification est",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailTitle: "KIRAKIRA - Code de vérification",
+		mailHeading: "Votre code de vérification est",
 	},
 }

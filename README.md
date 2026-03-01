@@ -31,7 +31,7 @@ npm install
 > [!IMPORTANT]
 > 下方的示例代码中并没有包含全部环境变量。
 > 对于不同操作系统，设置环境变量的方式也不同。
-> 全部环境变量及其作用请参阅：[.env.powershell.temp](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.powershell.temp)，该文件中列出的大多数环境变量都是必需的。
+> 全部环境变量及其作用请参阅：[.env.template](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.template)，该文件中列出的大多数环境变量都是必需的。
 
 如果你使用的是 ```Windows``` 操作系统
 ```powershell
@@ -56,7 +56,7 @@ export SERVER_ROOT_URL="kirakira.moe"
 
 ### 启动后端服务
 > [!IMPORTANT]
-> 以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 目录内。  
+> 以开发模式启动服务会将代码打包至项目根目录的 `.kirakira` 路径。  
 > 如有必要，你可以在 package.json 中修改打包路径。请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 
 #### 启动本地后端开发服务器
@@ -68,17 +68,14 @@ npm run dev
 
 也可以按下键盘按键 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，然后选择 `npm: dev`。
 
-
-
-
-#### 启动本地后端开发热重载服务器
+#### 启动本地后端开发服务器，并启用自动重载
 你可以在程序根目录中执行以下命令来启动
 
 ```bash
 npm run dev-hot
 ```
 
-也可以按下键盘按键 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，然后选择 `npm: dev`。
+也可以按下键盘按键 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，然后选择 `npm: dev-hot`。
 
 成功执行以上命令后，你应该会获得一个监听 9999 端口的 KIRAKIRA-Rosales 开发服务器。🎉  
 在此基础上，你可以审阅、编写或贡献代码，参与 KIRAKIRA 项目开发。
@@ -98,13 +95,13 @@ npm run dev-hot
 
 #### 构建应用程序
 > [!IMPORTANT]
-> 执行此操作默认你已经安装所有依赖。
-> 默认会将代码打包至项目根目录的 `dist` 目录内。  
-> 如有必要，你可以在 tsconfig.json 中修改打包路径。相应地，也要修改下方第三步启动服务器命令中的路径。
+> 默认会将代码打包至 `./dist` 路径，你可以在 tsconfig.json 中修改打包目标路径。  
+> 请注意，其他依赖于默认打包路径的业务也要更改配置，因此并不建议修改打包路径。
 
 按下键盘按键 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，然后选择 `npm: build`。
 
 ```bash
+npm install
 npm run build
 ```
 

@@ -2,10 +2,10 @@
 
 
 export default {
-	SendVerificationCode: {
-		mailTitle: "crwdns3620:0crwdne3620:0",
-		mailHeading: "crwdns3157:0crwdne3157:0",
-		mailText: "crwdns3159:0crwdne3159:0",
+	SendRegistrationVerificationCode: {
+		mailTitle: "crwdns3786:0crwdne3786:0",
+		mailHeading: "crwdns3788:0crwdne3788:0",
+		mailText: "crwdns3790:0crwdne3790:0",
 	},
 	SendChangeEmailVerificationCode: {
 		mailTitle: "crwdns3161:0crwdne3161:0",
@@ -31,5 +31,15 @@ export default {
 		mailTitle: "crwdns3628:0crwdne3628:0",
 		mailHeading: "crwdns3630:0crwdne3630:0",
 		mailText: "crwdns3632:0crwdne3632:0",
+	},
+	SendGeneral2FAEmailVerificationCode: {
+		mailTitle: "crwdns3816:0crwdne3816:0",
+		mailHeading: "crwdns3818:0crwdne3818:0",
+		mailText: "crwdns3820:0crwdne3820:0",
+	},
+	SendGeneralEmailVerificationCode: {
+		mailTitle: "crwdns3822:0crwdne3822:0",
+		mailHeading: "crwdns3824:0crwdne3824:0",
+		mailText: "crwdns3826:0crwdne3826:0",
 	},
 }

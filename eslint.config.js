@@ -163,6 +163,7 @@ export default [
 			'dist/**/*.js',
 			'dist/**/*.ts',
 			'node_modules/**',
+			'docs/***',
 		],
 	},
 ]

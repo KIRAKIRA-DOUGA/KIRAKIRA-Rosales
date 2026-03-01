@@ -1,5 +1,6 @@
 import { createFavoritesService, getFavoritesService } from '../service/FavoritesService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { parseInteger } from '../common/ValidTool.js'
 import { CreateFavoritesRequestDto } from './FavoritesControllerDto.js'
 
 /**
@@ -9,7 +10,7 @@ import { CreateFavoritesRequestDto } from './FavoritesControllerDto.js'
  */
 export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CreateFavoritesRequestDto>
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const createFavoritesRequest: CreateFavoritesRequestDto = {
 		/** 收藏夹标题 - 非空 */
@@ -32,7 +33,7 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInt(ctx.cookies.get('uid'), 10)
+	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const getFavoritesResponse = await getFavoritesService(uid, token)
 	ctx.body = getFavoritesResponse

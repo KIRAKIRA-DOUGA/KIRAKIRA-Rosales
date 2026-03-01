@@ -2,10 +2,12 @@
 
 
 export default {
-	SendVerificationCode: {},
+	SendRegistrationVerificationCode: {},
 	SendChangeEmailVerificationCode: {},
 	SendChangePasswordVerificationCode: {},
 	SendResetPasswordVerificationCode: {},
 	SendLoginVerificationCode: {},
 	SendDisableUserEmail2FAVerificationCode: {},
+	SendGeneral2FAEmailVerificationCode: {},
+	SendGeneralEmailVerificationCode: {},
 }

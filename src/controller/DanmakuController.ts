@@ -1,4 +1,5 @@
 import { emitDanmakuService, getDanmakuListByKvidService } from '../service/DanmakuService.js'
+import { parseInteger } from '../common/ValidTool.js'
 import { isPassRbacCheck } from '../service/RbacService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { EmitDanmakuRequestDto, GetDanmakuByKvidRequestDto } from './DanmakuControllerDto.js'
@@ -44,7 +45,7 @@ export const emitDanmakuController = async (ctx: koaCtx, next: koaNext) => {
 export const getDanmakuListByKvidController = async (ctx: koaCtx, next: koaNext) => {
 	const videoId = ctx.query.videoId as string
 	const getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto = {
-		videoId: videoId ? parseInt(videoId, 10) : -1, // WARN -1 means you can't find any video
+		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
 	}
 	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest)
 	ctx.body = danmakuListResponse

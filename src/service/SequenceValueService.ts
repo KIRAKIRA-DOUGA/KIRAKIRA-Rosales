@@ -1,5 +1,6 @@
 import { ClientSession } from 'mongoose'
 import { getNextSequenceValuePool } from '../dbPool/DbClusterPool.js'
+import { logging } from './loggingService.js';
 
 // NOTE 自增序列默认会跳过的值
 const __DEFAULT_SEQUENCE_EJECT__: number[] = [9, 42, 233, 404, 2233, 10388, 10492, 114514]
@@ -35,19 +36,19 @@ export const getNextSequenceValueService = async (sequenceId: string, sequenceDe
 				if (getNextSequenceValue.success && sequenceValue !== null && sequenceValue !== undefined) {
 					return { success: true, sequenceId, sequenceValue, message: '获取自增 ID 成功' }
 				} else {
-					console.error('ERROR', '程序错误，获取到的自增 ID 为空', { error: getNextSequenceValue.error, message: getNextSequenceValue.message })
+					logging('ERROR', '程序错误，获取到的自增 ID 为空', getNextSequenceValue.error as Error, { message: getNextSequenceValue.message }, { recordingLogs: false })
 					return { success: false, sequenceId, message: '程序错误，获取到的自增 ID 异常' }
 				}
 			} catch (error) {
-				console.error('ERROR', '自增 ID 获取失败，向 MongoDB 查询自增 ID 数据时出现异常：', error)
+				logging('ERROR', '自增 ID 获取失败，向 MongoDB 查询自增 ID 数据时出现异常：', error)
 				return { success: false, sequenceId, message: '程序错误，存取自增 ID 时出现异常' }
 			}
 		} else {
-			console.error('ERROR', '自增 ID 获取失败，必要的参数 sequenceId 为空')
+			logging('ERROR', '自增 ID 获取失败，必要的参数 sequenceId 为空')
 			return { success: false, message: '程序错误，获取自增 ID 时出现异常，缺少必要的参数' }
 		}
 	} catch (error) {
-		console.error('ERROR', '自增 ID 获取失败, getAndAddOneBySequenceId 异常退出：', error)
+		logging('ERROR', '自增 ID 获取失败, getAndAddOneBySequenceId 异常退出：', error)
 		return { success: false, message: '程序错误，获取自增 ID 的程序执行时出现异常' }
 	}
 }
@@ -71,13 +72,13 @@ export const getNextSequenceValueEjectService = async (sequenceId: string, eject
 
 			// 如果获取失败或者返回的值为空，则直接跳出循环
 			if (!getNextSequenceValueServiceResult.success || nextSequenceValue === null || nextSequenceValue === undefined) {
-				console.error('ERROR', '循环获取自增 ID 时出现异常，数据异常')
+				logging('ERROR', '循环获取自增 ID 时出现异常，数据异常')
 				return { success: false, sequenceId, message: '循环获取自增 ID 时出现异常，返回的结果可能为空或不成功' }
 			}
 		} while (eject && eject.includes(nextSequenceValue))
 		return { success: true, sequenceId, sequenceValue: nextSequenceValue, message: '获取自增序列成功' }
 	} catch (error) {
-		console.error('ERROR', '循环获取自增 ID 时出现异常')
+		logging('ERROR', '循环获取自增 ID 时出现异常')
 		return { success: false, sequenceId, message: '循环获取自增 ID 的程序执行时出现异常' }
 	}
 }
