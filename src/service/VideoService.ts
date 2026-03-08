@@ -490,10 +490,17 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 
 				// 8. 查询视频点赞信息
-				video.videoUpvoteCount = await getVideoUpvoteCount(videoId)
-				video.videoDownvoteCount = await getVideoDownvoteCount(videoId)
-				video.userHasUpvoted = await checkUserHasUpvoted(videoId, selectorUuid)
-				video.userHasDownvoted = await checkUserHasDownvoted(videoId, selectorUuid)
+				const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
+				const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
+				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
+				const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
+
+				const [videoUpvoteCount, videoDownvoteCount, userHasUpvoted, userHasDownvoted] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise, userHasUpvotedPromise, userHasDownvotedPromise])
+
+				video.videoUpvoteCount = videoUpvoteCount
+				video.videoDownvoteCount = videoDownvoteCount
+				video.userHasUpvoted = userHasUpvoted
+				video.userHasDownvoted = userHasDownvoted
 			}
 
 			return {
