@@ -18,16 +18,16 @@ const app = new Koa()
 // 配置程序 // WARN 注意：顺序很重要
 app
 	.use(elasticsearchMiddleware) // 为 ctx 附加 elasticsearchClient（elasticsearch 集群连接客户端）属性
-	.use(bodyParser())
+	.use(bodyParser()) // 解析请求体
 	.use(router.routes()) // 使用 koa-router
-	.use(router.allowedMethods()) // 所有路由中间件调用完成，ctx.status 仍为空或 404，程序自动丰富请求的响应头，方便 debug 或 handle
+	.use(router.allowedMethods()) // 自动处理 405 / 501，返回可以接受的 HTTP 方法
 	.use(cors({
 		credentials: true, // 允许跨域，并且允许保存跨域的 Cookie
 	}))
 
 // 连接 MongoDB
 await connectMongoDBCluster().catch(error => {
-	logging('ERROR', '无法连接到 MongoDB', error, {}, { recordingLogs: false })
+	logging('ERROR', '无法连接到 MongoDB', error, undefined, { recordingLogs: false })
 	process.exit()
 })
 

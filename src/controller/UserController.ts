@@ -1,3 +1,4 @@
+import { standardizeClientLanguageFlag } from '../common/i18n.js'
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
 import { limitPageSize, parseInteger } from '../common/ValidTool.js'
 import { isPassRbacCheck } from '../service/RbacService.js'
@@ -489,7 +490,7 @@ export const sendGeneral2FAEmailVerificationCodeController = async (ctx: koaCtx,
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const sendGeneral2FAEmailVerificationCodeRequest: SendGeneral2FAEmailVerificationCodeRequestDto = {
-		clientLanguage: data.clientLanguage ?? 'zh-Hans-CN',
+		clientLanguage: standardizeClientLanguageFlag(data.clientLanguage),
 		mailTemplate: data.mailTemplate ?? 'SendGeneral2FAEmailVerificationCode',
 		exclusiveBusinessName: data.exclusiveBusinessName,
 	}
@@ -510,7 +511,7 @@ export const sendGeneralEmailVerificationCodeController = async (ctx: koaCtx, ne
 	const token = ctx.cookies.get('token')
 	const sendGeneralEmailVerificationCodeRequest: SendGeneralEmailVerificationCodeRequestDto = {
 		email: data.email ?? '',
-		clientLanguage: data.clientLanguage ?? 'zh-Hans-CN',
+		clientLanguage: standardizeClientLanguageFlag(data.clientLanguage),
 		mailTemplate: data.mailTemplate ?? 'SendGeneralEmailVerificationCode',
 		exclusiveBusinessName: data.exclusiveBusinessName,
 	}
