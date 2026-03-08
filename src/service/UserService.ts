@@ -413,8 +413,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		}
 
 		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
+		const session = await createAndStartSession()
 
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
@@ -515,7 +514,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 
 		const { collectionName, schemaInstance } = UserInfoSchema
 		type UserInfo = InferSchemaType<typeof schemaInstance>
-		const { username, userNickname } = updateOrCreateUserInfoRequest
+		const { username, userNickname, signature } = updateOrCreateUserInfoRequest
 
 		const usernameStandardized = username.trim().normalize();
 
@@ -530,6 +529,14 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 		if (userNickname && !validateNameField(userNickname)) {
 			logging('ERROR', '更新用户信息失败，用户昵称不合法，用户 UUID:', undefined, { uuid })
 			return { success: false, message: '更新用户信息失败，用户昵称不合法' }
+		}
+
+		if (!!signature) {
+			const maxSignatureLength = 200
+			if (signature.length > maxSignatureLength) {
+				logging('ERROR', '更新用户信息失败，用户签名过长，用户 UUID:', undefined, { uuid, signatureLength: signature.length, maxSignatureLength })
+				return { success: false, message: `更新用户信息失败，用户签名过长，最大长度为 ${maxSignatureLength} 个字符` }
+			}
 		}
 
 		const updateUserInfoWhere: QueryType<UserInfo> = {
@@ -3182,7 +3189,7 @@ export const adminClearUserInfoService = async (adminClearUserInfoRequest: Admin
 	}
 }
 
-/**
+/**  TODO:1231
  * 管理员编辑用户信息
  * @param AdminEditUserInfoRequestDto 管理员编辑用户信息的请求载荷
  * @param adminUUID 管理员的 UUID

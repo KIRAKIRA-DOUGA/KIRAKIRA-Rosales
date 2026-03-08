@@ -1,8 +1,8 @@
 import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowerListService, getFollowingListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
-import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
+import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
 
 /**
  * 用户关注一个创作者
@@ -276,5 +276,79 @@ export const getFeedContentController = async (ctx: koaCtx, next: koaNext) => {
 	}
 
 	ctx.body = await getFeedContentService(getFeedContentRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 获取用户关注数和粉丝数
+ * @param ctx context
+ * @param next context
+ * @return 获取用户关注数和粉丝数的请求响应
+ */
+export const getFollowStatsController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	const targetUid = parseInteger(ctx.query.targetUid)
+
+	const getFollowStatsRequest: GetFollowStatsRequestDto = {
+		targetUid: targetUid ?? -1,
+	}
+
+	ctx.body = await getFollowStatsService(getFollowStatsRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 获取用户关注列表
+ * @param ctx context
+ * @param next context
+ * @return 获取用户关注列表的请求响应
+ */
+export const getFollowingListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	const targetUid = parseInteger(ctx.query.targetUid)
+	const page = ctx.query.page as string
+	const pageSize = ctx.query.pageSize as string
+	const finalPageSize = limitPageSize(pageSize)
+
+	const getFollowingListRequest: GetFollowListRequestDto = {
+		targetUid: targetUid ?? -1,
+		pagination: {
+			page: parseInteger(page) ?? 1,
+			pageSize: finalPageSize ?? 50,
+		},
+	}
+
+	ctx.body = await getFollowingListService(getFollowingListRequest, uuid, token)
+	await next()
+}
+
+/**
+ * 获取用户粉丝列表
+ * @param ctx context
+ * @param next context
+ * @return 获取用户粉丝列表的请求响应
+ */
+export const getFollowerListController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	const targetUid = parseInteger(ctx.query.targetUid)
+	const page = ctx.query.page as string
+	const pageSize = ctx.query.pageSize as string
+	const finalPageSize = limitPageSize(pageSize)
+
+	const getFollowerListRequest: GetFollowListRequestDto = {
+		targetUid: targetUid ?? -1,
+		pagination: {
+			page: parseInteger(page) ?? 1,
+			pageSize: finalPageSize ?? 50,
+		},
+	}
+
+	ctx.body = await getFollowerListService(getFollowerListRequest, uuid, token)
 	await next()
 }

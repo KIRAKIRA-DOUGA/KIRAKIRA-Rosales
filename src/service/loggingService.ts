@@ -37,12 +37,11 @@ export function logging(logLevel: LogLevel, message: string, error?: Error, meta
 		let errorStackString = ''
 
 		if (!ALLOWED_LOG_LEVEL.includes(logLevelLowerCase)) {
-			console.error('ERROR', `${nowISOString}Unknown log level`, message)
+			console.error('ERROR', `${nowISOString} Unknown log level. Origin message is: `, message)
 			return
 		}
 		if (!ALLOWED_LOG_LEVEL.includes(envLogLevel)) {
-			console.error('ERROR', `${nowISOString}Unknown log level in env`, message)
-			console.warn('WARN', `${nowISOString}Please check your env setting!`)
+			console.error('ERROR', `${nowISOString} Please check your 'LOG_LEVEL' env setting! Allowed log levels: ${ALLOWED_LOG_LEVEL.join(', ')}. Origin message is: `, message)
 			return
 		}
 
