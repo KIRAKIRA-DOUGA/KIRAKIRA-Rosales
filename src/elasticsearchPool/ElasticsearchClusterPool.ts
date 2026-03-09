@@ -80,7 +80,7 @@ export const deleteDataFromElasticsearchCluster = async (client: Client, indexNa
 	try {
 		// 构建 bool 查询条件
 		const mustConditions = Object.keys(conditions).map(field => ({
-			match: { [field]: conditions[field] },
+			term: { [field]: conditions[field] },
 		}))
 
 		// 搜索满足条件的文档

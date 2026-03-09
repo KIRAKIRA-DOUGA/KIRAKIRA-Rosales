@@ -17,8 +17,8 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.31.0",
-		"@types/bcrypt": "^5.0.2",
-		"@types/koa": "^2.13.5",
+		"@types/bcrypt": "^6.0.0",
+		"@types/koa": "^3.0.1",
 		"@types/koa__router": "^12.0.4",
 		"@types/koa-bodyparser": "^4.3.10",
 		"@types/safe-regex": "^1.1.6",
@@ -32,21 +32,21 @@
 		"typescript": "^5.5.4"
 	},
 	"dependencies": {
-		"@aws-sdk/client-s3": "^3.456.0",
-		"@aws-sdk/client-secrets-manager": "^3.758.0",
-		"@aws-sdk/s3-request-presigner": "^3.456.0",
-		"@elastic/elasticsearch": "^8.11.0",
+		"@aws-sdk/client-s3": "^3.966.0",
+		"@aws-sdk/client-secrets-manager": "^3.966.0",
+		"@aws-sdk/s3-request-presigner": "^3.966.0",
+		"@elastic/elasticsearch": "^8.19.1",
 		"@koa/cors": "^5.0.0",
-		"@koa/router": "^14.0.0",
+		"@koa/router": "^15.2.0",
 		"bcrypt": "^6.0.0",
 		"dotenv": "^17.2.1",
-		"emailjs": "^4.0.3",
+		"emailjs": "^5.0.0",
 		"js-base64": "^3.7.5",
 		"koa": "^3.0.1",
 		"koa-bodyparser": "^4.4.0",
-		"mongoose": "^8.9.5",
+		"mongoose": "^9.1.2",
 		"otplib": "^12.0.1",
 		"safe-regex": "^2.1.1",
-		"uuid": "^11.0.5"
+		"uuid": "^13.0.0"
 	}
 }
