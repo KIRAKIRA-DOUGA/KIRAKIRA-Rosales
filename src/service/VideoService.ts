@@ -19,6 +19,7 @@ import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
+import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 
 /**
  * 上传视频
@@ -494,6 +495,19 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				if (video.uploaderUUID === selectorUuid) {
 					video.uploaderInfo.isSelf = true
 				}
+
+				// 8. 查询视频点赞/点踩信息
+				const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
+				const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
+				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
+				const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
+
+				const [videoUpvoteCount, videoDownvoteCount, userHasUpvoted, userHasDownvoted] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise, userHasUpvotedPromise, userHasDownvotedPromise])
+
+				video.videoUpvoteCount = videoUpvoteCount
+				video.videoDownvoteCount = videoDownvoteCount
+				video.userHasUpvoted = userHasUpvoted
+				video.userHasDownvoted = userHasDownvoted
 			}
 
 			return {
@@ -908,7 +922,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 					const videoData = videoResult.video
 					if (videoResult.success && videoData) {
 						const removedVideoData: RemovedVideo = {
-							...videoData as Video, // TODO: Mongoose issue: #12420
+							...videoData as unknown as Video, // TODO: Mongoose issue: #12420
 							pendingReview: false, // 已删除的视频就不需要审核了...
 							_operatorUUID_: adminUUID,
 							_operatorUid_: adminUid,
