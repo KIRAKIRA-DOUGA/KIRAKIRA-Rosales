@@ -496,7 +496,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					video.uploaderInfo.isSelf = true
 				}
 
-				// 8. 查询视频点赞/点踩信息
+				// 9. 查询视频点赞/点踩信息
 				const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
 				const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
 				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
