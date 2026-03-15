@@ -558,9 +558,9 @@ export const isQueryResultsEmpty = (result: DbPoolResultsType<unknown>): boolean
  */
 export const isQueryResultEmpty = (result: DbPoolResultType<unknown>): boolean => {
 	try {
-		return !result || !result.success || !result.result || !(typeof result.result === 'object');
+		return !result || !result.success || !result.result || !(typeof result.result === 'object') || Object.keys(result.result).length === 0;
 	} catch (error) {
-		logging('ERROR', '检查查询结果是否为空数组时发生错误', error, {  }, );
+		logging('ERROR', '检查查询结果是否为空对象时发生错误', error, {  }, );
 		return true;
 	}
 }
