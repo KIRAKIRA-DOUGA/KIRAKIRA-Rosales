@@ -12,10 +12,16 @@ export class VideoWatchRecordSchemaFactory {
 		uid: { type: Number, required: true, index: true },
 		/** 视频 ID (KVID) - 非空 */
 		videoId: { type: Number, required: true, index: true },
-		/** 观看日期（格式：YYYY-MM-DD，例如 "2024-01-01"）- 非空 */
-		watchDate: { type: String, required: true, index: true },
+		/** 观看日期 - 非空 */
+		watchDateTime: { type: Number, required: true, index: true },
+		/** 系统专用字段-创建时间 - 非空 */
+		createDateTime: { type: Number, required: true },
+		/** 系统专用字段-创建者 - 非空 */
+		createBy: { type: String, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */
 		editDateTime: { type: Number, required: true },
+		/** 系统专用字段-最后编辑者 - 非空 */
+		editBy: { type: String, required: true },
 	}
 	/** MongoDB 集合名 */
 	collectionName = 'video-watch-record'

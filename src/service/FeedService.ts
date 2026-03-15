@@ -4,7 +4,7 @@ import { FeedGroupSchema, FollowingSchema, UnfollowingSchema } from "../dbPool/s
 import { UserSettingsSchema } from "../dbPool/schema/UserSchema.js";
 import { checkUserExistsByUuidService, checkUserTokenByUuidService, getUserUuid } from "./UserService.js";
 import { QueryType, SelectType, UpdateType } from "../dbPool/DbClusterPoolTypes.js";
-import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from "../dbPool/DbClusterPool.js";
+import { deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from "../dbPool/DbClusterPool.js";
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
 import { CheckUserExistsByUuidRequestDto } from "../controller/UserControllerDto.js";
 import { v4 as uuidV4 } from 'uuid'
@@ -178,7 +178,7 @@ export const unfollowingUploaderService = async (unfollowingUploaderRequest: Unf
 			return { success: false, message: '取消关注用户失败，记录处理失败。' }
 		}
 
-		const deleteFollowingDataResult = await deleteDataFromMongoDB<Following>(followingWhere, followingSchemaInstance, followingCollectionName, { session })
+		const deleteFollowingDataResult = await deleteOneDataFromMongoDB<Following>(followingWhere, followingSchemaInstance, followingCollectionName, { session })
 
 		if (!deleteFollowingDataResult.success) {
 			await abortAndEndSession(session)
@@ -499,7 +499,7 @@ export const deleteFeedGroupService = async (deleteFeedGroupRequest: DeleteFeedG
 			feedGroupCreatorUuid: uuid, // 确保删除的是自己创建的动态分组
 		}
 
-		const deleteFeedGroupResult = await deleteDataFromMongoDB<FeedGroup>(deleteFeedGroupWhere, feedGroupSchemaInstance, feedGroupCollectionName)
+		const deleteFeedGroupResult = await deleteOneDataFromMongoDB<FeedGroup>(deleteFeedGroupWhere, feedGroupSchemaInstance, feedGroupCollectionName)
 
 		if (!deleteFeedGroupResult.success) {
 			logging('ERROR', '删除动态分组失败，删除失败')
@@ -670,7 +670,7 @@ export const administratorDeleteFeedGroupService = async (administratorDeleteFee
 			feedGroupUuid,
 		}
 
-		const administratorDeleteFeedGroupResult = await deleteDataFromMongoDB<FeedGroup>(deleteFeedGroupWhere, feedGroupSchemaInstance, feedGroupCollectionName)
+		const administratorDeleteFeedGroupResult = await deleteOneDataFromMongoDB<FeedGroup>(deleteFeedGroupWhere, feedGroupSchemaInstance, feedGroupCollectionName)
 
 		if (!administratorDeleteFeedGroupResult.success) {
 			logging('ERROR', '管理员删除动态分组失败，更新失败')
@@ -940,7 +940,7 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 				},
 			},
 		]
-		
+
 		const countStep = {
 			$count: 'totalCount', // 统计总文档数
 		}
