@@ -30,6 +30,12 @@ export type UserRegistrationResponseDto = {
 	uid?: number;
 	/** 如果注册成功，则返回一个 token，如果注册失败，则 token 是一个假值（undefined、null 或 ""） */
 	token?: string;
+	/**
+	 * 用户数据初始化提示标识。
+	 * 会被设为 lax 级别的 cookie 存储，用于在获取一些不涉及隐私的数据时的用户凭证，而无需 token 。
+	 * （例如 SSR 时获取主题配色，验证该用户是否曾经在改设别登录，获取首屏视频/搜索推荐等） - 非空
+	 */
+	userDataBootstrapHint?: string;
 	/** 附加的文本消息 */
 	message?: string;
 }
@@ -62,6 +68,12 @@ export type UserLoginResponseDto = {
 	uid?: number;
 	/** 如果登录成功，则返回一个 token，如果登录失败，则 token 是一个假值（undefined、null 或 ""） */
 	token?: string;
+	/**
+	 * 用户数据初始化提示标识。
+	 * 会被设为 lax 级别的 cookie 存储，用于在获取一些不涉及隐私的数据时的用户凭证，而无需 token 。
+	 * （例如 SSR 时获取主题配色，验证该用户是否曾经在改设别登录，获取首屏视频/搜索推荐等） - 非空
+	 */
+	userDataBootstrapHint?: string;
 	/** 密码提示 */
 	passwordHint?: string;
 	/** 附加的文本消息 */
@@ -255,6 +267,8 @@ export type GetSelfUserInfoByUuidResponseDto = {
 			authenticatorType?: string;
 			/** 使用的邀请码 */
 			invitationCode?: string;
+			/** 用户数据初始化提示标识。 */
+			userDataBootstrapHint?: string;
 		}
 		& UpdateOrCreateUserInfoResponseDto["result"]
 	);

@@ -1,7 +1,7 @@
 import mongoose, { InferSchemaType, PipelineStage, ClientSession } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
-import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
+import { compareStringSync, hashStringSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { parseInteger, validateNameField } from '../common/ValidTool.js'
 import { generateRandomString, generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
@@ -148,8 +148,9 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			return { success: false, message: errorMessage }
 		}
 
-		const passwordHashHash = hashPasswordSync(passwordHash)
+		const passwordHashHash = hashStringSync(passwordHash)
 		const token = generateSecureRandomString(64)
+		const userDataBootstrapHint = generateSecureRandomString(64)
 		const uid = (await getNextSequenceValueService('user', 1, 1, session)).sequenceValue
 		const uuid = generateRandomString(24)
 
@@ -160,6 +161,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			emailLowerCase,
 			passwordHashHash,
 			token,
+			userDataBootstrapHint,
 			passwordUpdateDateTime: now,
 			passwordHint,
 			roles: ['user'], // newbie will always has a 'user' roles.
@@ -261,6 +263,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			UUID: 1,
 			uid: 1,
 			token: 1,
+			userDataBootstrapHint: 1,
 			passwordHint: 1,
 			passwordHashHash: 1,
 			authenticatorType: 1,
@@ -275,21 +278,22 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		}
 
 		const userAuthData = userAuthResult.result[0]
-		const { token, uid, UUID: uuid, authenticatorType } = userAuthData
-		if (!token || uid === null || uid === undefined || !uuid) {
+		const { userDataBootstrapHint, token, uid, UUID: uuid, authenticatorType } = userAuthData
+		if (!token || !userDataBootstrapHint || uid === null || uid === undefined || !uuid) {
 			const errorMessage = '登录失败，未能获取用户安全信息'
 			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
 		// 3. 检查用户密码是否正确
-		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData.passwordHashHash)
+		const isCorrectPassword = compareStringSync(passwordHash, userAuthData.passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '登录失败'
 			logging('warn', errorMessage, undefined, { uuid })
 			return { success: false, email, passwordHint: userAuthData.passwordHint, message: errorMessage }
 		}
 
+		let currentAuthenticatorType: 'email' | 'totp' | 'none' = 'none';
 		// 4. 判断用户是否启用了 2FA
 		if (authenticatorType === 'totp') { // 4.1 TOTP 2FA
 			if (!clientOtp) {
@@ -306,7 +310,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
-			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
+			currentAuthenticatorType = 'totp'
 		} else if (authenticatorType === 'email') { // 4.2 Email 2FA
 			if (!verificationCode) {
 				const errorMessage = '登录失败，启用了邮箱验证但用户未提供验证码'
@@ -328,10 +332,12 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
-			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
+			currentAuthenticatorType = 'email'
 		} else { // 4.3 未启用 2FA
-			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType: 'none' }
+			currentAuthenticatorType = 'none'
 		}
+
+		return { success: true, email, uid, token, userDataBootstrapHint, UUID: uuid, message: '用户登录成功', authenticatorType: currentAuthenticatorType }
 	} catch (error) {
 		const errormMessage = '登录失败，用户登录时程序异常'
 		logging('ERROR', errormMessage, error)
@@ -437,7 +443,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		}
 
 		const { passwordHashHash } = userAuthData[0]
-		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash) // 确保更新邮箱时输入的密码正确
+		const isCorrectPassword = compareStringSync(passwordHash, passwordHashHash) // 确保更新邮箱时输入的密码正确
 		if (!isCorrectPassword) {
 			const errorMessage = '更新用户邮箱失败，用户密码不正确'
 			logging('ERROR', errorMessage, undefined, { cookieUuid, oldEmail })
@@ -665,6 +671,7 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 					passwordUpdateDateTime: 1, // 密码最后更新时间
 					roles: 1, // 用户的角色
 					authenticatorType: 1, // 2FA 的类型
+					userDataBootstrapHint: 1, // 用户数据初始化提示标识。
 					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
 					username: '$user_info_data.username', // 用户名
 					userNickname: '$user_info_data.userNickname', // 用户昵称
@@ -1932,7 +1939,7 @@ export class General2FATotpVerifier {
 					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 				}
 
-				const isCorrectRecoveryCode = comparePasswordSync(this.#clientOtp, recoveryCodeHash)
+				const isCorrectRecoveryCode = compareStringSync(this.#clientOtp, recoveryCodeHash)
 				if (!isCorrectRecoveryCode) {
 					const errorMessage = '验证 TOTP 2FA 失败，恢复码错误'
 					logging('ERROR', errorMessage)
@@ -1962,7 +1969,7 @@ export class General2FATotpVerifier {
 					let useCorrectBackupCode = false // 用户是否使用了一个正确的备用码。
 					const newBackupCodeHash = []
 					listOfBackupCodeHash.forEach( backupCodeHash => {
-						const isCorrectBackupCode = comparePasswordSync(this.#clientOtp, backupCodeHash)
+						const isCorrectBackupCode = compareStringSync(this.#clientOtp, backupCodeHash)
 						if (isCorrectBackupCode) {
 							useCorrectBackupCode = true
 						} else {
@@ -2587,7 +2594,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		}
 
 		const { passwordHashHash } = userAuthResult.result[0]
-		const isCorrectPassword = comparePasswordSync(oldPasswordHash, passwordHashHash)
+		const isCorrectPassword = compareStringSync(oldPasswordHash, passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '修改密码失败，旧密码不正确'
 			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
@@ -2595,7 +2602,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 			return { success: false, message: errorMessage }
 		}
 
-		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
+		const newPasswordHashHash = hashStringSync(newPasswordHash)
 		if (!newPasswordHashHash) {
 			const errorMessage = '修改密码失败，未能散列新密码'
 			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
@@ -2660,7 +2667,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 		const session = await mongoose.startSession()
 		session.startTransaction()
 
-		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
+		const newPasswordHashHash = hashStringSync(newPasswordHash)
 		if (!newPasswordHashHash) {
 			await abortAndEndSession(session)
 			const message = '找回密码失败，未能散列新密码'
@@ -3504,7 +3511,7 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 			return { success: false, message: errorMessage }
 		}
 
-		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash)
+		const isCorrectPassword = compareStringSync(passwordHash, passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确'
 			logging('ERROR', errorMessage)
@@ -3723,9 +3730,9 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		const now = new Date().getTime()
 		const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 		const recoveryCode = generateSecureVerificationStringCode(24, charset)
-		const recoveryCodeHash = hashPasswordSync(recoveryCode)
+		const recoveryCodeHash = hashStringSync(recoveryCode)
 		const backupCode = Array.from({ length: 5 }, () => generateSecureVerificationStringCode(6, charset))
-		const backupCodeHash = backupCode.map(hashPasswordSync)
+		const backupCodeHash = backupCode.map(hashStringSync)
 
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
@@ -3900,7 +3907,7 @@ export const deleteUserEmailAuthenticatorService = async (deleteUserEmailAuthent
 			return { success: false, message: '用户删除 Email 2FA 时失败，用户未开启 2FA 或者 2FA 方式不是 Email。' }
 		}
 
-		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData.passwordHashHash)
+		const isCorrectPassword = compareStringSync(passwordHash, userAuthData.passwordHashHash)
 		if (!isCorrectPassword) {
 			await abortAndEndSession(session)
 			logging('ERROR', '用户删除 Email 2FA 时失败，密码错误')
