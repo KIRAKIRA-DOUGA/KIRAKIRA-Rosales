@@ -29,3 +29,16 @@ export function getTodayBeginTimestampAndEndTimestamp(): { todayBeginTimestamp: 
 		todayEndTimestamp: tomorrowStart.getTime()
 	};
 }
+
+/**
+ * 获取今天的日期字符串（格式：YYYY-MM-DD）
+ * @returns 今天的日期字符串
+ */
+export const getTodayDateString = (): string => {
+	const now = new Date()
+	const year = now.getFullYear()
+	const month = String(now.getMonth() + 1).padStart(2, '0')
+	const day = String(now.getDate()).padStart(2, '0')
+	return `${year}-${month}-${day}`
+}
+

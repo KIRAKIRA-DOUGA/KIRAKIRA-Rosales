@@ -1213,18 +1213,6 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 }
 
 /**
- * 获取今天的日期字符串（格式：YYYY-MM-DD）
- * @returns 今天的日期字符串
- */
-const getTodayDateString = (): string => {
-	const now = new Date()
-	const year = now.getFullYear()
-	const month = String(now.getMonth() + 1).padStart(2, '0')
-	const day = String(now.getDate()).padStart(2, '0')
-	return `${year}-${month}-${day}`
-}
-
-/**
  * 检查上传的视频中的参数是否正确且无疏漏
  * @param uploadVideoRequest 上传视频请求携带的请求载荷
  * @returns 检查结果，合法返回 true，不合法返回 false
