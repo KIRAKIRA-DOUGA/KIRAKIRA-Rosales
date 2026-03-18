@@ -23,7 +23,7 @@ class UserAuthSchemaFactory {
 		 * 会被设为 lax 级别的 cookie 存储，用于在获取一些不涉及隐私的数据时的用户凭证，而无需 token 。
 		 * （例如 SSR 时获取主题配色，验证该用户是否曾经在改设别登录，获取首屏视频/搜索推荐等） - 非空
 		 */
-		userDataBootstrapHint: { type: String, required: true }, // DELETE ME: 能换个名字吗？
+		userDataBootstrapHint: { type: String, required: true },
 		/** 密码最后更新的时间戳 - 非空 */
 		passwordUpdateDateTime: { type: Number, required: true },
 		/** 密码提示 */
