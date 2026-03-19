@@ -324,7 +324,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
-			const EmailVerifier = new General2FAEmailVerifier(uuid, verificationCode)
+			const EmailVerifier = new GeneralEmailVerifier(emailLowerCase, verificationCode)
 			const verificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'login' })
 			if (!verificationResult.success) {
 				const errorMessage = `登录失败，邮箱验证码验证失败：${verificationResult.message}`
