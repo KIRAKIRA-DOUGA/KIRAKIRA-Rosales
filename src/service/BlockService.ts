@@ -4,7 +4,7 @@ import { AddRegexRequestDto, AddRegexResponseDto, BlockKeywordRequestDto, BlockK
 import { checkUserExistsByUIDService, checkUserTokenByUuidService, getUserUid, getUserUuid } from "./UserService.js";
 import { QueryType, SelectType } from "../dbPool/DbClusterPoolTypes.js";
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
-import { selectDataFromMongoDB, insertData2MongoDB, deleteDataFromMongoDB, selectDataByAggregateFromMongoDB } from "../dbPool/DbClusterPool.js";
+import { selectDataFromMongoDB, insertData2MongoDB, deleteOneDataFromMongoDB, selectDataByAggregateFromMongoDB } from "../dbPool/DbClusterPool.js";
 import { BlockListSchema, UnblockListSchema } from "../dbPool/schema/BlockSchema.js";
 import { parseInteger } from '../common/ValidTool.js'
 import { logging } from "./loggingService.js";
@@ -464,7 +464,7 @@ export const unBlockUserService = async (unblockUserByUidRequest: UnblockUserByU
 			return { success: false, message: '取消屏蔽用户失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '取消屏蔽用户失败，查询数据失败')
@@ -559,7 +559,7 @@ export const showUserService = async (showUserByUidRequest: ShowUserByUidRequest
 			return { success: false, message: '显示用户失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '显示用户失败，查询数据失败')
@@ -645,7 +645,7 @@ export const unBlockTagService = async (unblockTagRequest: UnblockTagRequestDto,
 			return { success: false, message: '取消屏蔽标签失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '取消屏蔽标签失败，查询数据失败')
@@ -731,7 +731,7 @@ export const unBlockKeywordService = async (unblockKeywordRequest: UnblockKeywor
 			return { success: false, message: '取消屏蔽关键词失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '取消屏蔽关键词失败，查询数据失败')
@@ -817,7 +817,7 @@ export const removeRegexService = async (removeRegexRequest: RemoveRegexRequestD
 			return { success: false, message: '删除正则表达式失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '删除正则表达式失败，查询数据失败')

@@ -138,7 +138,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
  * @param options 设置项
  * @returns 插入数据的状态和结果
  */
-export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T, schema: Schema, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultsType<T & {_id: string}> > => {
+export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultsType<T & { _id: string }> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -155,7 +155,7 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 		mongoModel.createIndexes()
 		const model = new mongoModel(data)
 		try {
-			const result = await model.save(options) as unknown as T & {_id: string}
+			const result = await model.save(options) as unknown as T & { _id: string }
 			return { success: true, message: '数据插入成功', result: [result] }
 		} catch (error) {
 			logging('ERROR', '数据插入失败：', error, undefined, { recordingLogs: false })
@@ -168,14 +168,61 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 }
 
 /**
- * 在 MongoDB 数据库中删除数据
+ * 条件查询插入：根据条件查询，如果无法查询到数据，则插入一条数据，如果能查询到数据，则什么也不做。（注意：查询条件与插入的数据是两个独立的变量，允许不一致）
+ * @param where - 查询条件
+ * @param insertData - 要插入的数据
+ * @param schema - MongoDB Schema 对象
+ * @param collectionName - 数据即将插入的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param options - 设置项（注意：设置项将会传递给 mongoose 的 updateMany 函数，并且无法设置 upsert 无效，该参数将永远为 true）
+ * @returns
+ */
+export const insertIfNotExist = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, insertData: T, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise<UpdateResultType> => {
+	try {
+		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
+		if (options?.session) {
+			options.readPreference = 'primary'
+		}
+
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+		try {
+			const insertIfNotExistResult = await mongoModel.updateOne(where, { $setOnInsert: insertData }, { ...options, upsert: true })
+			const acknowledged = insertIfNotExistResult.acknowledged
+			const matchedCount = insertIfNotExistResult.matchedCount
+			const modifiedCount = insertIfNotExistResult.modifiedCount
+			if (acknowledged && matchedCount === 1 && modifiedCount === 1) {
+				return { success: true, message: '记录不存在则插入 - 数据插入成功', result: { acknowledged, matchedCount, modifiedCount } }
+			} else {
+				const warningMessage = '记录不存在则插入 - 尝试插入数据，但未匹配到数据，可能是因为数据已存在'
+				logging('WARN', warningMessage, undefined, { where, insertData }, { recordingLogs: false })
+				return { success: false, message: warningMessage, result: { acknowledged, matchedCount, modifiedCount } }
+			}
+		} catch (error) {
+			const errorMessage = '记录不存在则插入 - 数据插入失败'
+			logging('ERROR', errorMessage, error, { where, insertData }, { recordingLogs: false })
+			throw { success: false, message: errorMessage, error }
+		}
+	} catch (error) {
+		const errorMessage = '记录不存在则插入 - 数据插入失败，未知错误'
+		logging('ERROR', errorMessage, error, undefined, { recordingLogs: false })
+		throw { success: false, message: errorMessage, error }
+	}
+}
+
+/**
+ * 在 MongoDB 数据库中删除一条数据
  * @param where 查询条件
  * @param schema MongoDB Schema 对象
  * @param collectionName 删除数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @param options 设置项
  * @returns 删除状态和结果
  */
-export const deleteDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultType<mongoose.mongo.DeleteResult> > => {
+export const deleteOneDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultType<mongoose.mongo.DeleteResult> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -485,5 +532,35 @@ export const findOneAndPlusByMongodbId = async <T extends Record<string, unknown
 	} catch (error) {
 		logging('ERROR', 'findOneAndPlusByMongodbId 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '自增时发生错误', error }
+	}
+}
+
+/**
+ * 对查询结果进行基本判断，如果查询成功且结果为非空数组，则返回 false，否则返回 true
+ * @param result 被测试的查询结果
+ * @param schema 查询时使用的 MongoDB Schema 对象
+ * @returns
+ */
+export const isQueryResultsEmpty = (result: DbPoolResultsType<unknown>): boolean => {
+	try {
+		return !result || !result.success || !result.result || !Array.isArray(result.result) || result.result.length < 0;
+	} catch (error) {
+		logging('ERROR', '检查查询结果是否为空数组时发生错误', error, {  }, );
+		return true;
+	}
+}
+
+/**
+ * 对查询结果进行基本判断，如果查询成功且结果为非空数组，则返回 false，否则返回 true
+ * @param result 被测试的查询结果
+ * @param schema 查询时使用的 MongoDB Schema 对象
+ * @returns
+ */
+export const isQueryResultEmpty = (result: DbPoolResultType<unknown>): boolean => {
+	try {
+		return !result || !result.success || !result.result || !(typeof result.result === 'object') || Object.keys(result.result).length === 0;
+	} catch (error) {
+		logging('ERROR', '检查查询结果是否为空对象时发生错误', error, {  }, );
+		return true;
 	}
 }

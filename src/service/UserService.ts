@@ -67,7 +67,7 @@ import {
 	SendGeneralEmailVerificationCodeRequestDto,
 	SendGeneralEmailVerificationCodeResponseDto,
 } from '../controller/UserControllerDto.js'
-import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteOneDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import {
 	UserAuthSchema,
@@ -364,7 +364,7 @@ export const userEmailExistsCheckService = async (userEmailExistsCheckRequest: U
 
 			let result: DbPoolResultsType<UserAuth>
 			try {
-				result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+				result = await selectDataFromMongoDB<UserAuth>(where, select, schemaInstance, collectionName)
 			} catch (error) {
 				logging('ERROR', '验证用户邮箱是否存在（查询用户）时出现异常：', error)
 				return { success: false, exists: false, message: '验证用户邮箱是否存在时出现异常' }
@@ -786,7 +786,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 		try {
 			const session = await createAndStartSession()
 			const userAuthPromise = selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, userAuthSchemaInstance, userAuthCollectionName)
-			const userInfoPromise = selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, userInfoSchemaInstance, userInfoCollectionName)
+			const userInfoPromise = selectDataFromMongoDB<UserInfo>(getUserInfoWhere, getUserInfoSelect, userInfoSchemaInstance, userInfoCollectionName)
 			const [userAuthResult, userInfoResult] = await Promise.all([userAuthPromise, userInfoPromise])
 			if (!userAuthResult || !userAuthResult.success || !userInfoResult || !userInfoResult.success) {
 				await abortAndEndSession(session)
@@ -924,7 +924,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 			editDateTime: 1,
 		}
 
-		const userSettingsResult = await selectDataFromMongoDB(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
+		const userSettingsResult = await selectDataFromMongoDB<UserSettings>(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
 
 		if (!userSettingsResult.success || !userSettingsResult.result || userSettingsResult.result.length !== 1) {
 			const errorMessage = '获取用户个性设置失败，查询未成功'
@@ -933,7 +933,18 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 		}
 
 		const userSettings = userSettingsResult.result[0]
-		return { success: true, message: '获取用户设置成功！', userSettings }
+		return {
+			success: true,
+			message: '获取用户设置成功！',
+			userSettings: {
+				...userSettings,
+				themeType: userSettings.themeType as 'light' | 'dark' | 'system',
+				dataSaverMode: userSettings.dataSaverMode as 'limit' | 'standard' | 'preview',
+				userWebsitePrivacySetting: userSettings.userWebsitePrivacySetting as 'public' | 'private' | 'following',
+				userPrivaryVisibilitiesSetting: userSettings.userPrivaryVisibilitiesSetting as GetUserSettingsResponseDto['userSettings']['userPrivaryVisibilitiesSetting'],
+				userLinkedAccountsVisibilitiesSetting: userSettings.userLinkedAccountsVisibilitiesSetting as GetUserSettingsResponseDto['userSettings']['userLinkedAccountsVisibilitiesSetting'],
+			}
+		}
 	} catch (error) {
 		const errorMessage = '获取用户个性设置失败，未知异常！'
 		logging('ERROR', errorMessage, error)
@@ -2739,7 +2750,7 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 				uid: 1,
 			}
 			try {
-				const checkUsername = await selectDataFromMongoDB(checkUsernameWhere, checkUsernameSelete, schemaInstance, collectionName)
+				const checkUsername = await selectDataFromMongoDB<UserInfo>(checkUsernameWhere, checkUsernameSelete, schemaInstance, collectionName)
 				if (checkUsername.success) {
 					if (checkUsername.result?.length === 0) {
 						return { success: true, message: '用户名可用', isAvailableUsername: true }
@@ -2788,7 +2799,7 @@ export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest:
 
 		let result: DbPoolResultsType<UserAuth>
 		try {
-			result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+			result = await selectDataFromMongoDB<UserAuth>(where, select, schemaInstance, collectionName)
 		} catch (error) {
 			logging('ERROR', '根据 UUID 校验用户是否已经存在时出错：查询出错', error)
 			return { success: false, exists: false, message: '根据 UUID 校验用户是否已经存在时出错：查询出错' }
@@ -3280,7 +3291,7 @@ export const getUserUuid = async (uid: number): Promise<string | void> => {
 			UUID: 1,
 		}
 
-		const getUuidResult = await selectDataFromMongoDB(getUuidWhere, getUuidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
+		const getUuidResult = await selectDataFromMongoDB<UserAuth>(getUuidWhere, getUuidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
 		if (getUuidResult.success && getUuidResult.result?.length === 1) {
 			return getUuidResult.result[0].UUID
 		} else {
@@ -3314,7 +3325,7 @@ export const getUserUid = async (uuid: string): Promise<number | undefined> => {
 			uid: 1,
 		}
 
-		const getUidResult = await selectDataFromMongoDB(getUidWhere, getUidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
+		const getUidResult = await selectDataFromMongoDB<UserAuth>(getUidWhere, getUidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
 		if (getUidResult.success && getUidResult.result?.length === 1) {
 			return getUidResult.result[0].uid
 		} else {
@@ -3346,7 +3357,7 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 				uid: 1,
 			}
 			try {
-				const userInfo = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
 				if (userInfo && userInfo.success) {
 					if (userInfo.result?.length === 1) {
 						return true
@@ -3391,7 +3402,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 				uid: 1,
 			}
 			try {
-				const userInfo = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
 				if (userInfo && userInfo.success) {
 					if (userInfo.result?.length === 1) {
 						return true
@@ -3447,7 +3458,7 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
 		const userTotpAuthenticatorWhere: QueryType<UserTotpAuthenticator> = { UUID: uuid, recoveryCodeHash }
-		const deleteResult = await deleteDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		const deleteResult = await deleteOneDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
 		if (!deleteResult.success) {
 			const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，删除失败'
@@ -3537,7 +3548,7 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		const session = await createAndStartSession()
 
 		// 调用删除函数
-		const deleteResult = await deleteDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		const deleteResult = await deleteOneDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 		const resetResult = await resetUser2FATypeByUUID(uuid, session)
 
 		if (!deleteResult.success || deleteResult.result.deletedCount !== 1 || !resetResult) {
@@ -3638,8 +3649,8 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
 		const checkUserAuthenticatorWhere: QueryType<UserAuthenticator> = { UUID: uuid, enabled: true }
-		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { enabled: 1, createDateTime: 1 }
-		const checkUserAuthenticatorResult = await selectDataFromMongoDB(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { enabled: 1, createDateTime: 1 } satisfies SelectType<UserAuthenticator>
+		const checkUserAuthenticatorResult = await selectDataFromMongoDB<UserAuthenticator>(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
 		if (!checkUserAuthenticatorResult.success || !checkUserAuthenticatorResult.result) {
 			if (session.inTransaction()) {

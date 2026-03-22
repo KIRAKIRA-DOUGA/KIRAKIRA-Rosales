@@ -1,7 +1,7 @@
 import { InferSchemaType, PipelineStage, Query } from "mongoose";
 import { AdminGetUserRolesByUidRequestDto, AdminGetUserRolesByUidResponseDto, AdminUpdateUserRoleRequestDto, AdminUpdateUserRoleResponseDto, CheckUserRbacParams, CheckUserRbacResult, CreateRbacApiPathRequestDto, CreateRbacApiPathResponseDto, CreateRbacRoleRequestDto, CreateRbacRoleResponseDto, DeleteRbacApiPathRequestDto, DeleteRbacApiPathResponseDto, DeleteRbacRoleRequestDto, DeleteRbacRoleResponseDto, GetRbacApiPathRequestDto, GetRbacApiPathResponseDto, GetRbacRoleRequestDto, GetRbacRoleResponseDto, UpdateApiPathPermissionsForRoleRequestDto, UpdateApiPathPermissionsForRoleResponseDto } from "../controller/RbacControllerDto.js";
 import { checkUserTokenByUuidService, getUserUuid } from "./UserService.js";
-import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from "../dbPool/DbClusterPool.js";
+import { deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from "../dbPool/DbClusterPool.js";
 import { UserAuthSchema, UserInfoSchema } from "../dbPool/schema/UserSchema.js";
 import { RbacApiSchema, RbacRoleSchema } from "../dbPool/schema/RbacSchema.js";
 import { v4 as uuidV4 } from 'uuid'
@@ -218,7 +218,7 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 			apiPath,
 		}
 
-		const deleteRbacApiResult = await deleteDataFromMongoDB(deleteRbacApiWhere, rbacApiSchemaInstance, rbacApiCollectionName, { session })
+		const deleteRbacApiResult = await deleteOneDataFromMongoDB(deleteRbacApiWhere, rbacApiSchemaInstance, rbacApiCollectionName, { session })
 
 		if (!deleteRbacApiResult.success) {
 			await abortAndEndSession(session)
@@ -417,7 +417,7 @@ export const deleteRbacRoleService = async (deleteRbacRoleRequest: DeleteRbacRol
 			roleName,
 		}
 
-		const deleteResult = await deleteDataFromMongoDB(deleteRbacRoleWhere, rbacRoleSchemaInstance, rbacRoleCollectionName)
+		const deleteResult = await deleteOneDataFromMongoDB(deleteRbacRoleWhere, rbacRoleSchemaInstance, rbacRoleCollectionName)
 
 		if (!deleteResult.success) {
 			logging('ERROR', '删除 RBAC 角色失败，数据插入失败')
