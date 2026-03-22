@@ -1,4 +1,4 @@
-import mongoose, { InferSchemaType, PipelineStage, ClientSession } from 'mongoose'
+import mongoose, { InferSchemaType, PipelineStage, ClientSession, Model } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { compareStringSync, hashStringSync } from '../common/HashTool.js'
@@ -66,6 +66,10 @@ import {
 	SendGeneral2FAEmailVerificationCodeResponseDto,
 	SendGeneralEmailVerificationCodeRequestDto,
 	SendGeneralEmailVerificationCodeResponseDto,
+	AdminRotationAllUserTokenResponseDto,
+	AdminRotationAllUserDataBootstrapHintResponseDto,
+	GetUserBootstrapDataByHintResponseDto,
+	GetUserBootstrapDataByHintRequestDto,
 } from '../controller/UserControllerDto.js'
 import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteOneDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
@@ -721,6 +725,132 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 }
 
 /**
+ * 根据 uid 和标识获取用户初始化数据
+ * @param getSelfUserInfoRequest 根据 uid 和标识获取用户初始化数据的请求参数
+ * @returns 根据 uid 和标识获取用户初始化数据的请求响应
+ */
+export const getUserBootstrapDataByHintService = async (getUserBootstrapDataByHintRequest: GetUserBootstrapDataByHintRequestDto): Promise<GetUserBootstrapDataByHintResponseDto> => {
+	try {
+		const { uid, userDataBootstrapHint } = getUserBootstrapDataByHintRequest
+		if (!userDataBootstrapHint) {
+			const errorMessage = '根据 uid 和标识获取用户初始化数据失败，uuid 或 userDataBootstrapHint 为空'
+			logging('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
+		}
+
+		if (!await checkUserBootstrapHintByUid(uid, userDataBootstrapHint)) {
+			const errorMessage = '根据 uid 和标识获取用户初始化数据失败，用户的 userDataBootstrapHint 校验未通过，非法用户！'
+			logging('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+
+		const selfUserInfoPipeline: PipelineStage[] = [
+			{
+				$match: {
+					uid
+				},
+			},
+			{
+				$lookup: {
+					from: 'user-infos',
+					localField: 'UUID',
+					foreignField: 'UUID',
+					as: 'user_info_data'
+				}
+			},
+			{
+				$unwind: {
+					path: '$user_info_data',
+					preserveNullAndEmptyArrays: true // 保留没有用户信息的用户
+				},
+			},
+			{
+				$lookup: {
+					from: 'user-settings',
+					localField: 'UUID',
+					foreignField: 'UUID',
+					as: 'user_settings_data'
+				},
+			},
+			{
+				$unwind: {
+					path: '$user_settings_data',
+					preserveNullAndEmptyArrays: true // 保留没有用户设置信息的用户
+				},
+			},
+			{
+				$project: {
+					uid: 1, // 用户 UID
+					uuid: '$UUID', // 用户 UUID
+					userCreateDateTime: 1, // 用户创建日期
+					passwordUpdateDateTime: 1, // 密码最后更新时间
+					roles: 1, // 用户的角色
+					authenticatorType: 1, // 2FA 的类型
+					userDataBootstrapHint: 1, // 用户数据初始化提示标识。
+					username: '$user_info_data.username', // 用户名
+					userNickname: '$user_info_data.userNickname', // 用户昵称
+					avatar: '$user_info_data.avatar', // 用户头像
+					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
+					signature: '$user_info_data.signature', // 用户的个性签名
+
+					enableCookie: '$user_settings_data.enableCookie', // 是否允许 cookie
+					themeType: '$user_settings_data.themeType', // 主题类型
+					themeColor: '$user_settings_data.themeColor', // 主题颜色
+					themeColorCustom: '$user_settings_data.themeColorCustom', // 用户自定义主题颜色
+					wallpaper: '$user_settings_data.wallpaper', // TODO: 背景图 URL
+					coloredSideBar: '$user_settings_data.coloredSideBar', // 是否启用彩色导航栏
+					dataSaverMode: '$user_settings_data.dataSaverMode', // 节流模式
+					noSearchRecommendations: '$user_settings_data.noSearchRecommendations', // 是否禁用搜索推荐
+					noRelatedVideos: '$user_settings_data.noRelatedVideos', // 禁用相关视频推荐
+					noRecentSearch: '$user_settings_data.noRecentSearch', // 禁用搜索历史
+					noViewHistory: '$user_settings_data.noViewHistory', // 禁用观看历史
+					openInNewWindow: '$user_settings_data.openInNewWindow', // 在新窗口中打开链接
+					currentLocale: '$user_settings_data.currentLocale', // 当前语言环境
+					timezone: '$user_settings_data.timezone', // 时区
+					unitSystemType: '$user_settings_data.unitSystemType', // 单位系统类型
+					devMode: '$user_settings_data.devMode', // 是否进入开发者模式
+					sharpAppearanceMode: '$user_settings_data.sharpAppearanceMode', // 实验性：启用直角模式
+					flatAppearanceMode: '$user_settings_data.flatAppearanceMode', // 实验性：启用扁平模式
+				}
+			}
+		]
+
+		try {
+			const userBootstrapDataResult = await selectDataByAggregateFromMongoDB<UserAuth>(userAuthSchemaInstance, userAuthCollectionName, selfUserInfoPipeline)
+			if (
+				false
+				|| !userBootstrapDataResult
+				|| !userBootstrapDataResult.success
+				|| !userBootstrapDataResult.result
+				|| userBootstrapDataResult.result.length !== 1
+			) {
+				const errorMessage = '通过 UID 获取用户信息时失败，查询数据时出错'
+				logging('ERROR', errorMessage)
+				return { success: false, message: errorMessage }
+			}
+
+			const userBootstrapData = userBootstrapDataResult.result[0]
+			return {
+				success: true,
+				message: '获取用户信息成功',
+				result: userBootstrapData,
+			}
+		} catch (error) {
+			const errorMessage = '通过 UUID 获取用户信息时出错，查询数据时出错。'
+			logging('ERROR', errorMessage, error)
+			return { success: false, message: errorMessage }
+		}
+	} catch (error) {
+		const errorMessage = '通过 UUID 获取用户信息时出错，未知错误。'
+		logging('ERROR', errorMessage, error)
+		return { success: false, message: errorMessage }
+	}
+}
+
+/**
  * 通过 uid 获取（其他）用户信息
  * @param getUserInfoByUidRequest 通过 UID 获取用户信息的请求载荷
  * @param selectorUuid 发起请求者的 UUID
@@ -903,7 +1033,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 			themeType: 1,
 			themeColor: 1,
 			themeColorCustom: 1,
-			wallpaper: 1,
+			wallpaper: 1, // TODO
 			coloredSideBar: 1,
 			dataSaverMode: 1,
 			noSearchRecommendations: 1,
@@ -3428,6 +3558,51 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 	}
 }
 
+/**
+ * 检查用户数据初始化提示标识和用户 uid 是否吻合。
+ * @param uid 用户 UID
+ * @param userDataBootstrapHint 用户数据初始化提示标识
+ * @returns boolean 如果验证通过则为 true，不通过为 false
+ */
+const checkUserBootstrapHintByUid = async (uid: number, userDataBootstrapHint: string): Promise<boolean> => {
+	try {
+		if (uid === null || Number.isNaN(uid) || uid === undefined || !userDataBootstrapHint) {
+			logging('ERROR', `用户数据初始化提示标识时出错，必要的参数 uid 或 userDataBootstrapHint 为空: uid: ${uid}`, undefined, { uid })
+			return false
+		}
+
+		const { collectionName, schemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof schemaInstance>
+		const userAuthWhere: QueryType<UserAuth> = {
+			uid,
+			userDataBootstrapHint,
+		}
+		const userAuthSelect: SelectType<UserAuth> = {
+			uid: 1,
+		}
+		try {
+			const userAuthInfo = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
+			if (!userAuthInfo || !userAuthInfo.success) {
+				logging('ERROR', `用户数据初始化提示标识时未查询到用户信息，用户 uid: ${uid}，错误描述：${userAuthInfo?.message}，错误信息：${userAuthInfo?.error}`, undefined, { uid })
+				return false
+			}
+
+			if (userAuthInfo.result?.length !== 1) {
+				logging('ERROR', `用户数据初始化提示标识时，用户信息长度不为 1，用户 uid: ${uid}`, undefined, { uid })
+				return false
+			}
+
+			return true
+		} catch (error) {
+			logging('ERROR', `用户数据初始化提示标识时出错，用户 uid: ${uid}，错误信息：`, error, { uid })
+			return false
+		}
+	} catch (error) {
+		logging('ERROR', '用户数据初始化提示标识时出错，未知错误：', error, { uid })
+		return false
+	}
+}
+
 /** 通过恢复码删除用户 TOTP 2FA 的参数 */
 type DeleteTotpAuthenticatorByRecoveryCodeParametersDto = {
 	/** 用户 UUID */
@@ -4054,6 +4229,87 @@ export const checkUserHave2FAByUUIDService = async (uuid: string, token: string)
 		return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
 	}
 }
+
+/**
+ * 管理员重置所有用户的 token // DANGER: 请勿调用，除非你知道你自己在做什么！所有用户将会被强制登出！
+ * @param adminUUID
+ * @param adminToken
+ * @returns 管理员重置所有用户的 token 的请求响应
+ */
+export const adminRotationAllUserTokenService = async (adminUUID: string, adminToken: string): Promise<AdminRotationAllUserTokenResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
+			logging('ERROR', '管理员重置所有用户的 token 时失败，非法用户', undefined, { adminUUID })
+			return { success: false, message: '管理员重置所有用户的 token 时失败，非法用户' }
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+		let UserAuthModel: Model<UserAuth>
+		if (mongoose.models[userAuthCollectionName]) {
+			UserAuthModel = mongoose.models[userAuthCollectionName]
+		} else {
+			UserAuthModel = mongoose.model<UserAuth>(userAuthCollectionName, userAuthSchemaInstance)
+		}
+
+		const cursor = UserAuthModel.find().cursor();
+
+		let count = 0;
+
+		for await (const doc of cursor) {
+			doc.token = generateSecureRandomString(64);
+			doc.editDateTime = Date.now();
+			await doc.save();
+			count++;
+		}
+
+		return { success: true, message: `token 轮换完成，一共轮换了 ${count} 条用户数据` }
+	} catch (error) {
+		logging('ERROR', '管理员重置所有用户的 token 时出错，未知错误', error, { adminUUID })
+		return { success: false, message: '管理员重置所有用户的 token 时出错，未知错误' }
+	}
+}
+
+/**
+ * 管理员重置所有用户的 userDataBootstrapHint // DANGER: 请勿调用，除非你知道你自己在做什么！
+ * @param adminUUID
+ * @param adminToken
+ * @returns 管理员重置所有用户的 token 的请求响应
+ */
+export const adminRotationAllUserDataBootstrapHintService = async (adminUUID: string, adminToken: string): Promise<AdminRotationAllUserDataBootstrapHintResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
+			logging('ERROR', '管理员重置所有用户的 userDataBootstrapHint 时失败，非法用户', undefined, { adminUUID })
+			return { success: false, message: '管理员重置所有用户的 userDataBootstrapHint 时失败，非法用户' }
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+		let UserAuthModel: Model<UserAuth>
+		if (mongoose.models[userAuthCollectionName]) {
+			UserAuthModel = mongoose.models[userAuthCollectionName]
+		} else {
+			UserAuthModel = mongoose.model<UserAuth>(userAuthCollectionName, userAuthSchemaInstance)
+		}
+
+		const cursor = UserAuthModel.find().cursor();
+
+		let count = 0;
+
+		for await (const doc of cursor) {
+			doc.userDataBootstrapHint = generateSecureRandomString(64);
+			doc.editDateTime = Date.now();
+			await doc.save();
+			count++;
+		}
+
+		return { success: true, message: `userDataBootstrapHint 轮换完成，一共轮换了 ${count} 条用户数据` }
+	} catch (error) {
+		logging('ERROR', '管理员重置所有用户的 userDataBootstrapHint 时出错，未知错误', error, { adminUUID })
+		return { success: false, message: '管理员重置所有用户的 userDataBootstrapHint 时出错，未知错误' }
+	}
+}
+
 
 /**
  * 校验用户注册信息

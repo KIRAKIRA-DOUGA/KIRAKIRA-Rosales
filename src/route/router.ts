@@ -38,6 +38,8 @@ import {
 	forgotPasswordController,
 	sendGeneral2FAEmailVerificationCodeController,
 	sendGeneralEmailVerificationCodeController,
+	adminRotationAllUserDataBootstrapHintController,
+	getUserBootstrapDataByHintController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
@@ -170,7 +172,16 @@ router.post('/user/self', getSelfUserInfoController) // 获取当前登录的用
 // or
 // {
 // 	"uuid": "XXXXXXXXX",
-// 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+// }
+
+router.post('/user/getUserBootstrapDataByHintController', getUserBootstrapDataByHintController) // 根据 uid 和标识获取用户初始化数据，参数可以通过 cookie 传递，也可以通过请求体
+// https://localhost:9999/user/getUserBootstrapDataByHintController
+// cookie: uid, user-data-bootstrap-hint
+// or
+// {
+// 	"uid": 12345,
+// 	"userDataBootstrapHint": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 // }
 
 router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户信息
@@ -297,6 +308,11 @@ router.post('/user/adminClearUserInfo', adminClearUserInfoController) // 管理�
 // {
 // 	"uid": XXXX
 // }
+
+// DANGER: 请勿调用，除非你知道你自己在做什么！
+router.post('/user/adminRotationAllUserDataBootstrapHintController', adminRotationAllUserDataBootstrapHintController) // 管理员重置所有用户的 userDataBootstrapHint // WARN: 仅限管理员 // DANGER: 请勿调用，除非你知道你自己在做什么！
+// https://localhost:9999/user/adminRotationAllUserUserDataBootstrapHintController
+// cookie: UUID, token
 
 
 

@@ -17,13 +17,13 @@ class UserAuthSchemaFactory {
 		/** 被两次 Bcrypt Hash 的密码 - 非空 */
 		passwordHashHash: { type: String, required: true },
 		/** 用户的身分令牌 - 非空 */
-		token: { type: String, required: true },
+		token: { type: String, required: true, unique: true },
 		/**
 		 * 用户数据初始化提示标识。
 		 * 会被设为 lax 级别的 cookie 存储，用于在获取一些不涉及隐私的数据时的用户凭证，而无需 token 。
 		 * （例如 SSR 时获取主题配色，验证该用户是否曾经在改设别登录，获取首屏视频/搜索推荐等） - 非空
 		 */
-		userDataBootstrapHint: { type: String, required: true },
+		userDataBootstrapHint: { type: String },
 		/** 密码最后更新的时间戳 - 非空 */
 		passwordUpdateDateTime: { type: Number, required: true },
 		/** 密码提示 */
@@ -186,7 +186,7 @@ class UserSettingsSchemaFactory {
 		unitSystemType: { type: String },
 		/** 是否进入了开发者模式 - 布尔 */
 		devMode: { type: Boolean },
-		/** 实验性：启用动态背景 - 布尔 */
+		/** 实验性：启用动态背景 - 布尔 */ // DELETE ME: 已废弃
 		showCssDoodle: { type: Boolean },
 		/** 实验性：启用直角模式 - 布尔 */
 		sharpAppearanceMode: { type: Boolean },

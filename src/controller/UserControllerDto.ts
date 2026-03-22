@@ -275,6 +275,57 @@ export type GetSelfUserInfoByUuidResponseDto = {
 }
 
 /**
+ * 根据 uid 和标识获取用户初始化数据的请求载荷
+ */
+export type GetUserBootstrapDataByHintRequestDto = {
+	/** 用户 UID */
+	uid: number,
+	/** 用户数据初始化提示标识 */
+	userDataBootstrapHint: string;
+}
+
+/**
+ * 根据 uid 和标识获取用户初始化数据的请求响应
+ */
+export type GetUserBootstrapDataByHintResponseDto = {
+		/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	result?: {
+		uid?: number, // 用户 UID
+		uuid?: string, // 用户 UUID
+		userCreateDateTime?: number, // 用户创建日期
+		roles?: string[], // 用户的角色
+		userDataBootstrapHint?: string, // 用户数据初始化提示标识。
+		username?: string, // 用户名
+		userNickname?: string, // 用户昵称
+		avatar?: string, // 用户头像
+		userBannerImage?: string, // 用户的背景图
+		signature?: string, // 用户的个性签名
+
+		enableCookie?: boolean, // 是否允许 cookie
+		themeType?: 'light' | 'dark' | 'system',
+		themeColor?: string, // 用户的主题颜色，颜色字符串
+		themeColorCustom?: string, // 用户自定义主题颜色 - HAX 颜色字符串，不包含井号
+		wallpaper?: string, // TODO: 背景图 URL
+		coloredSideBar?: boolean, // 是否启用彩色导航栏
+		dataSaverMode?: string, // 节流模式
+		noSearchRecommendations?: boolean, // 是否禁用搜索推荐
+		noRelatedVideos?: boolean, // 禁用相关视频推荐
+		noRecentSearch?: boolean, // 禁用搜索历史
+		noViewHistory?: boolean, // 禁用观看历史
+		openInNewWindow?: boolean, // 在新窗口中打开链接
+		currentLocale?: string, // 当前语言环境
+		timezone?: string, // 时区
+		unitSystemType?: string, // 单位系统类型
+		devMode?: boolean, // 是否进入开发者模式
+		sharpAppearanceMode?: boolean, // 实验性：启用直角模式
+		flatAppearanceMode?: boolean, // 实验性：启用扁平模式
+	},
+}
+
+/**
  * 通过 UID 获取用户信息的请求载荷
  */
 export type GetUserInfoByUidRequestDto = {
@@ -994,6 +1045,26 @@ export type CheckUserExistsByUuidResponseDto = {
 	success: boolean;
 	/** 用户是否已存在 */
 	exists: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 管理员批量重置用户 Token 的请求响应
+ */
+export type AdminRotationAllUserTokenResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 管理员批量重置用户 Token 的请求响应
+ */
+export type AdminRotationAllUserDataBootstrapHintResponseDto = {
+	/** 执行结果 */
+	success: boolean;
 	/** 附加的文本消息 */
 	message?: string;
 }

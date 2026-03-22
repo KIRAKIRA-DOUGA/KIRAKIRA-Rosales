@@ -60,7 +60,7 @@ export const generateRandomString = (length: number): string => {
 }
 
 /**
- * 返回一个区间中的随机整数（包括区间两端的数）
+ * 返回一个闭区间（包括区间两端）中的随机整数
  * @param num1 第一个数
  * @param num2 第二个数
  * @returns 两个数区间的一个随机整数
