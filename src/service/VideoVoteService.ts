@@ -48,7 +48,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 				UUID: 1,
 				invalidFlag: 1,
 			}
-			const existingVoteResult = await selectDataFromMongoDB(existingVoteWhere, existingVoteSelect, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+			const existingVoteResult = await selectDataFromMongoDB<VideoUpvote>(existingVoteWhere, existingVoteSelect, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 
 			if (!existingVoteResult?.result || existingVoteResult.result?.length !== 1) {
 				// 没有记录，先对是否点踩进行查询
@@ -82,7 +82,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 			}
 
 			if (existingVoteResult.result[0].invalidFlag) {
-				const updateWhere: QueryType<VideoUpvote> = { _id: existingVoteResult.result[0]._id }
+				const updateWhere: QueryType<VideoUpvote> = { _id: existingVoteResult.result[0]['_id'] }
 				const updateData: UpdateType<VideoUpvote> = { invalidFlag: false, editDateTime: nowDate, upvoteTime: nowDate, uid }
 				const updateResult = await updateData4MongoDB(updateWhere, updateData, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 				if (!updateResult || !updateResult.success) {
@@ -133,7 +133,7 @@ export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVo
 			type VideoUpvote = InferSchemaType<typeof correctVideoUpvoteSchema>
 			// 查找是否存在有效的点赞记录
 			const existingWhere: QueryType<VideoUpvote> = { videoId, uid, invalidFlag: false }
-			const existing = await selectDataFromMongoDB(existingWhere, {}, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+			const existing = await selectDataFromMongoDB<VideoUpvote>(existingWhere, {}, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 			if (!existing.success) {
 				logging('ERROR', '取消视频点赞失败：查询点赞记录失败', undefined, { cancelVideoUpvoteRequest, uuid })
 				return { success: false, message: '取消视频点赞失败：查询点赞记录失败' }
@@ -206,7 +206,7 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 			UUID: 1,
 			invalidFlag: 1,
 		}
-		const existingVoteResult = await selectDataFromMongoDB(existingVoteWhere, existingVoteSelect, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+		const existingVoteResult = await selectDataFromMongoDB<VideoDownvote>(existingVoteWhere, existingVoteSelect, correctVideoDownvoteSchema, videoDownvoteCollectionName)
 
 		if (!existingVoteResult?.result || existingVoteResult.result?.length !== 1) {
 			// 没有记录，先对是否点赞进行查询
@@ -290,7 +290,7 @@ export const cancelVideoDownvoteService = async (cancelVideoDownvoteRequest: Vid
 			type VideoDownvote = InferSchemaType<typeof correctVideoDownvoteSchema>
 			// 查找是否存在有效的点踩记录
 			const existingWhere: QueryType<VideoDownvote> = { videoId, uid, invalidFlag: false }
-			const existing = await selectDataFromMongoDB(existingWhere, {}, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+			const existing = await selectDataFromMongoDB<VideoDownvote>(existingWhere, {}, correctVideoDownvoteSchema, videoDownvoteCollectionName)
 			if (!existing.success) {
 				logging('ERROR', '取消视频点踩失败：查询点踩记录失败', undefined, { cancelVideoDownvoteRequest, uuid })
 				return { success: false, message: '取消视频点踩失败：查询点踩记录失败' }
@@ -442,7 +442,7 @@ export const checkUserHasUpvoted = async (videoId: number, uuid: string): Promis
 		}
 
 		try {
-			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+			const result = await selectDataFromMongoDB<VideoUpvote>(where, select, schemaInstance, collectionName)
 			if (result.success) {
 				if (result.result && result.result.length > 0) {
 					return true // 查询到结果了，证明用户已点赞过了，所以返回 true
@@ -495,7 +495,7 @@ export const checkUserHasDownvoted = async (videoId: number, uuid: string): Prom
 		}
 
 		try {
-			const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+			const result = await selectDataFromMongoDB<VideoDownvote>(where, select, schemaInstance, collectionName)
 			if (result.success) {
 				if (result.result && result.result.length > 0) {
 					return true // 查询到结果了，证明用户已点踩过了，所以返回 true
