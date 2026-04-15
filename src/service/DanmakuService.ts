@@ -81,7 +81,7 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
  * @param getDanmakuByKvidRequest 请求弹幕列表的查询参数
  * @returns 视频的弹幕列表
  */
-export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto, uuid?: string, token?: string): Promise<GetDanmakuByKvidResponseDto> => {
+export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto, uid?: number, uuid?: string, userDataBootstrapHint?: string): Promise<GetDanmakuByKvidResponseDto> => {
 	try {
 		if (!checkGetDanmakuByKvidRequest(getDanmakuByKvidRequest)) {
 			logging('ERROR', '获取弹幕列表失败，数据校验失败', undefined, getDanmakuByKvidRequest)
@@ -112,8 +112,7 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 						category: 'regex',
 					},
 				],
-				uuid,
-				token
+				{ uid, uuid, userDataBootstrapHint }
 			)
 
 			const getDanmakuPipeline: PipelineStage[] = [

@@ -147,7 +147,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
  * 获取主页视频 // TODO 应该使用推荐算法，而不是获取最后上传的 100 个视频
  * @returns 获取主页视频的请求响应
  */
-export const getThumbVideoService = async (uuid?: string, token?: string): Promise<ThumbVideoResponseDto> => {
+export const getThumbVideoService = async (uid?: number, uuid?: string, userDataBootstrapHint?: string): Promise<ThumbVideoResponseDto> => {
 	try {
 		const blockListFilter = await buildBlockListMongooseFilter(
 			[
@@ -172,8 +172,7 @@ export const getThumbVideoService = async (uuid?: string, token?: string): Promi
 					category: 'regex',
 				},
 			],
-			uuid,
-			token
+			{ uid, uuid, userDataBootstrapHint }
 		)
 
 		const getThumbVideoPipeline: PipelineStage[] = [

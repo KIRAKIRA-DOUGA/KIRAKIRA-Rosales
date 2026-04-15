@@ -1,7 +1,7 @@
 import { InferSchemaType, PipelineStage } from "mongoose";
 import safeRegex from 'safe-regex';
 import { AddRegexRequestDto, AddRegexResponseDto, BlockKeywordRequestDto, BlockKeywordResponseDto, BlockTagRequestDto, BlockTagResponseDto, BlockUserByUidRequestDto, BlockUserByUidResponseDto, CheckContentIsBlockedRequestDto, CheckIsBlockedByOtherUserRequestDto, CheckIsBlockedByOtherUserResponseDto, CheckIsBlockedResponseDto, CheckTagIsBlockedRequestDto, CheckUserIsBlockedRequestDto, CheckUserIsBlockedResponseDto, GetBlockListRequestDto, GetBlockListResponseDto, HideUserByUidRequestDto, HideUserByUidResponseDto, RemoveRegexRequestDto, RemoveRegexResponseDto, ShowUserByUidRequestDto, ShowUserByUidResponseDto, UnblockKeywordRequestDto, UnblockKeywordResponseDto, UnblockTagRequestDto, UnblockTagResponseDto, UnblockUserByUidRequestDto, UnblockUserByUidResponseDto } from "../controller/BlockControllerDto.js";
-import { checkUserExistsByUIDService, checkUserTokenByUuidService, getUserUid, getUserUuid } from "./UserService.js";
+import { checkUserBootstrapHintByUid, checkUserExistsByUIDService, checkUserTokenByUuidService, getUserUid, getUserUuid } from "./UserService.js";
 import { QueryType, SelectType } from "../dbPool/DbClusterPoolTypes.js";
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
 import { selectDataFromMongoDB, insertData2MongoDB, deleteOneDataFromMongoDB, selectDataByAggregateFromMongoDB } from "../dbPool/DbClusterPool.js";
@@ -995,6 +995,7 @@ export const getBlockListService = async (getBlockListRequest: GetBlockListReque
 type BlockListFilterCategory = 'block-uuid' | 'hide-uuid' | 'keyword' | 'tag-id' | 'regex'
 /** 设置哪些属性需要使用哪种类型的黑名单过滤，其中 attr 参数**必须**为开发者硬编码的安全字段，**禁止**由用户传入 */
 type BlockListAttrs = { attr: string, category: BlockListFilterCategory }[]
+type BlockListFilterBuilderAuthenticator = { uid?: number, uuid?: string, token?: string } | { uid?: number, uuid?: string, userDataBootstrapHint?: string }
 /** 黑名单功能的附加字段 Project */
 type AdditionalFieldsProject = {
 	/** 是否被其他用户屏蔽 */
@@ -1002,6 +1003,7 @@ type AdditionalFieldsProject = {
 }
 /** 返回值，一个构建好的 Monogoose Pipeline 查询 */
 type BlockListFilterResult = { success: boolean, filter: PipelineStage.Match[], additionalFields: AdditionalFieldsProject }
+
 /**
  * 构建 Mongoose Pipeline 黑名单过滤器
  * @param attrs 哪些属性需要过滤，以及使用的过滤方式
@@ -1009,16 +1011,27 @@ type BlockListFilterResult = { success: boolean, filter: PipelineStage.Match[], 
  * @param token 用户 Token
  * @returns Mongoose Pipeline 黑名单过滤器
  */
-export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?: string, token?: string): Promise<BlockListFilterResult> => {
+export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, authenticator: BlockListFilterBuilderAuthenticator): Promise<BlockListFilterResult> => {
 	// MEME: Is that a dog...?
 	try {
-		if (!uuid || !token) {
+		const { uid, uuid } = authenticator
+		if (uid === null || uid === undefined || uid < 1 || uuid === undefined) {
+			logging('ERROR', '构建黑名单过滤器失败，用户身份信息不合法')
 			return { success: false, filter: [], additionalFields: { } }
 		}
 
-		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '构建黑名单过滤器失败，用户 Token 不合法')
-			return { success: false, filter: [], additionalFields: { } }
+		if ('token' in authenticator) {
+			if (!(await checkUserTokenByUuidService(uuid, authenticator.token)).success) {
+				logging('ERROR', '构建黑名单过滤器失败，用户 Token 不合法')
+				return { success: false, filter: [], additionalFields: { } }
+			}
+		}
+
+		if ('userDataBootstrapHint' in authenticator) {
+			if (!await checkUserBootstrapHintByUid(uid, authenticator.userDataBootstrapHint)) {
+				logging('ERROR', '构建黑名单过滤器失败，用户 userDataBootstrapHint 不合法')
+				return { success: false, filter: [], additionalFields: { } }
+			}
 		}
 
 		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema

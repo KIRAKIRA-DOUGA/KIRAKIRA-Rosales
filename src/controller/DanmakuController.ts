@@ -47,7 +47,10 @@ export const getDanmakuListByKvidController = async (ctx: koaCtx, next: koaNext)
 	const getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto = {
 		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
 	}
-	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest)
+	const uid = parseInteger(ctx.cookies.get('uid'), -1)
+	const uuid = ctx.cookies.get('uuid')
+	const userDataBootstrapHint = ctx.cookies.get('user-data-bootstrap-hint')
+	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest, uid, uuid, userDataBootstrapHint)
 	ctx.body = danmakuListResponse
 	await next()
 }

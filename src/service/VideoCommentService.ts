@@ -160,7 +160,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
  * @param getVideoCommentByKvidRequest 请求视频评论列表的查询参数
  * @returns 视频的视频评论列表
  */
-export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequest: GetVideoCommentByKvidRequestDto, uuid: string, token: string): Promise<GetVideoCommentByKvidResponseDto> => {
+export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequest: GetVideoCommentByKvidRequestDto, uid: number, uuid: string, token: string): Promise<GetVideoCommentByKvidResponseDto> => {
 	// WARN // TODO 应当添加更多安全验证，防刷！
 	try {
 		if (!checkGetVideoCommentByKvidRequest(getVideoCommentByKvidRequest)) {
@@ -202,8 +202,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 					category: 'regex',
 				},
 			],
-			uuid,
-			token
+			{ uid, uuid, token }
 		)
 
 		// 获取视频的评论总数的 pipeline

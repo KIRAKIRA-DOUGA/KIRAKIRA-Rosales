@@ -3564,7 +3564,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  * @param userDataBootstrapHint 用户数据初始化提示标识
  * @returns boolean 如果验证通过则为 true，不通过为 false
  */
-const checkUserBootstrapHintByUid = async (uid: number, userDataBootstrapHint: string): Promise<boolean> => {
+export const checkUserBootstrapHintByUid = async (uid: number, userDataBootstrapHint: string): Promise<boolean> => {
 	try {
 		if (uid === null || Number.isNaN(uid) || uid === undefined || !userDataBootstrapHint) {
 			logging('ERROR', `用户数据初始化提示标识时出错，必要的参数 uid 或 userDataBootstrapHint 为空: uid: ${uid}`, undefined, { uid })
