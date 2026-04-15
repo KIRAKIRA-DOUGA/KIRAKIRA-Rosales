@@ -20,7 +20,7 @@ class UserAuthSchemaFactory {
 		token: { type: String, required: true, unique: true },
 		/**
 		 * 用户数据初始化提示标识。
-		 * 会被设为 lax 级别的 cookie 存储，用于在获取一些不涉及隐私的数据时的用户凭证，而无需 token 。
+		 * 会被设为 lax 级别的 cookie 存储，用于在获取一些不涉及隐私的数据时的用户凭证。
 		 * （例如 SSR 时获取主题配色，验证该用户是否曾经在改设别登录，获取首屏视频/搜索推荐等） - 非空
 		 */
 		userDataBootstrapHint: { type: String },
