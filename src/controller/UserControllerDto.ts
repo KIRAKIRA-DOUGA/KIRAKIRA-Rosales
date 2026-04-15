@@ -1089,7 +1089,7 @@ export type AdminRotationAllUserTokenResponseDto = {
 }
 
 /**
- * 管理员批量重置用户 Token 的请求响应
+ * 管理员批量重置用户 BootstrapHint 的请求响应
  */
 export type AdminRotationAllUserDataBootstrapHintResponseDto = {
 	/** 执行结果 */
