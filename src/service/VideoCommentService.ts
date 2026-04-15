@@ -462,7 +462,7 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 	try {
 		if (checkEmitVideoCommentUpvoteRequestData(emitVideoCommentUpvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点赞
-				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 				if (!UUID) {
 					logging('ERROR', '评论点赞失败，UUID 不存在', undefined, { uid })
 					return { success: false, message: '评论点赞失败，UUID 不存在' }
@@ -671,7 +671,7 @@ export const emitVideoCommentDownvoteService = async (emitVideoCommentDownvoteRe
 	try {
 		if (checkEmitVideoCommentDownvoteRequestData(emitVideoCommentDownvoteRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) { // 校验用户，校验通过才能点踩
-				const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 				if (!UUID) {
 					logging('ERROR', '评论点踩失败，UUID 不存在', undefined, { uid })
 					return { success: false, message: '评论点踩失败，UUID 不存在' }
@@ -886,7 +886,7 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 			return { success: false, message: '删除视频评论失败，用户校验未通过' }
 		}
 
-		const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+		const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 		if (!UUID) {
 			logging('ERROR', '删除一条自己发布的视频评论失败，UUID 不存在', undefined, { uid })
 			return { success: false, message: '删除一条自己发布的视频评论失败，UUID 不存在' }
@@ -1008,7 +1008,7 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 			return { success: false, message: '管理员删除视频评论失败，用户校验未通过' }
 		}
 
-		const adminUUID = await getUserUuid(adminUid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+		const adminUUID = await getUserUuid(adminUid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 		if (!adminUUID) {
 			logging('ERROR', '管理员删除一条视频评论失败，adminUUID 不存在', undefined, { adminUid })
 			return { success: false, message: '管理员删除一条视频评论失败，adminUUID 不存在' }

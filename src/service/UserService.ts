@@ -1093,7 +1093,7 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 	try {
 		const now = new Date().getTime();
 		if (await checkUserToken(uid, token)) {
-			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			const UUID = await getUserUuid(uid)
 			if (!UUID) {
 				logging('ERROR', '更新或创建用户设置失败，UUID 不存在', undefined, { updateOrCreateUserSettingsRequest, uid })
 				return { success: false, message: '更新或创建用户设置失败，UUID 不存在' }
@@ -2364,7 +2364,7 @@ export class General2FAVerifier {
 
 /**
  * 生成邀请码
- * // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+ * // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
  * @param uid 申请生成邀请码的用户
  * @param token 申请生成邀请码的用户 token
  * @returns 生成的邀请码
@@ -2372,7 +2372,7 @@ export class General2FAVerifier {
 export const createInvitationCodeService = async (uid: number, token: string): Promise<CreateInvitationCodeResponseDto> => {
 	try {
 		if (await checkUserToken(uid, token)) {
-			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 			if (!UUID) {
 				logging('ERROR', '生成邀请码失败，UUID 不存在', undefined, { uid })
 				return { success: false, isCoolingDown: false, message: '生成邀请码失败，UUID 不存在' }
@@ -2487,14 +2487,14 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 
 /**
  * 获取自己的邀请码列表
- * // DELETE ME: 应该使用 UUID
+ * // FIXME: 应该使用 UUID
  * @param uid 用户 UID
  * @param token 用户 token
  * @returns 获取自己的邀请码列表的请求结果
  */
 export const getMyInvitationCodeService = async (uid: number, token: string): Promise<GetMyInvitationCodeResponseDto> => {
 	try {
-		if (await checkUserToken(uid, token)) { // DELETE ME: 应该使用 UUID
+		if (await checkUserToken(uid, token)) { // FIXME: 应该使用 UUID
 			const { collectionName, schemaInstance } = UserInvitationCodeSchema
 			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
 			const myInvitationCodeWhere: QueryType<UserInvitationCode> = {

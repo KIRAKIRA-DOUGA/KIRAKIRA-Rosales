@@ -995,7 +995,7 @@ export const getBlockListService = async (getBlockListRequest: GetBlockListReque
 type BlockListFilterCategory = 'block-uuid' | 'hide-uuid' | 'keyword' | 'tag-id' | 'regex'
 /** 设置哪些属性需要使用哪种类型的黑名单过滤，其中 attr 参数**必须**为开发者硬编码的安全字段，**禁止**由用户传入 */
 type BlockListAttrs = { attr: string, category: BlockListFilterCategory }[]
-type BlockListFilterBuilderAuthenticator = { uid?: number, uuid?: string, token?: string } | { uid?: number, uuid?: string, userDataBootstrapHint?: string }
+type BlockListFilterBuilderAuthenticator = { uuid?: string, token?: string } | { uid?: number, userDataBootstrapHint?: string }
 /** 黑名单功能的附加字段 Project */
 type AdditionalFieldsProject = {
 	/** 是否被其他用户屏蔽 */
@@ -1014,24 +1014,27 @@ type BlockListFilterResult = { success: boolean, filter: PipelineStage.Match[], 
 export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, authenticator: BlockListFilterBuilderAuthenticator): Promise<BlockListFilterResult> => {
 	// MEME: Is that a dog...?
 	try {
-		const { uid, uuid } = authenticator
-		if (uid === null || uid === undefined || uid < 1 || uuid === undefined) {
-			logging('ERROR', '构建黑名单过滤器失败，用户身份信息不合法')
-			return { success: false, filter: [], additionalFields: { } }
-		}
+		let uuid: string | undefined = undefined
 
-		if ('token' in authenticator) {
-			if (!(await checkUserTokenByUuidService(uuid, authenticator.token)).success) {
+		if ('uuid' in authenticator && 'token' in authenticator) {
+			if (!(await checkUserTokenByUuidService(authenticator.uuid, authenticator.token)).success) {
 				logging('ERROR', '构建黑名单过滤器失败，用户 Token 不合法')
 				return { success: false, filter: [], additionalFields: { } }
 			}
+			uuid = authenticator.uuid
 		}
 
-		if ('userDataBootstrapHint' in authenticator) {
-			if (!await checkUserBootstrapHintByUid(uid, authenticator.userDataBootstrapHint)) {
+		if ('uid' in authenticator && 'userDataBootstrapHint' in authenticator) {
+			if (!await checkUserBootstrapHintByUid(authenticator.uid, authenticator.userDataBootstrapHint)) {
 				logging('ERROR', '构建黑名单过滤器失败，用户 userDataBootstrapHint 不合法')
 				return { success: false, filter: [], additionalFields: { } }
 			}
+			const uuidResult = await getUserUuid(authenticator.uid)
+			if (!uuidResult) {
+				logging('ERROR', '构建黑名单过滤器失败，使用 uid 获取 uuid 失败')
+				return { success: false, filter: [], additionalFields: { } }
+			}
+			uuid = uuidResult
 		}
 
 		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
