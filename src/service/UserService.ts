@@ -733,7 +733,7 @@ export const getUserBootstrapDataByHintService = async (getUserBootstrapDataByHi
 	try {
 		const { uid, userDataBootstrapHint } = getUserBootstrapDataByHintRequest
 		if (!userDataBootstrapHint) {
-			const errorMessage = '根据 uid 和标识获取用户初始化数据失败，uuid 或 userDataBootstrapHint 为空'
+			const errorMessage = '根据 uid 和标识获取用户初始化数据失败，uid 或 userDataBootstrapHint 为空'
 			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}

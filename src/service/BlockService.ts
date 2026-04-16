@@ -1037,6 +1037,10 @@ export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, authen
 			uuid = uuidResult
 		}
 
+		if (!uuid) {
+			logging('ERROR', '构建黑名单过滤器失败，未提供合法的用户凭证')
+			return { success: false, filter: [], additionalFields: { } }
+		}
 		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
 		type BlockListSchemaType = InferSchemaType<typeof blockListSchemaInstance>
 

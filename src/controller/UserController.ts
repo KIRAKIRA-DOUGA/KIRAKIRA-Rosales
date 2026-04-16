@@ -124,11 +124,13 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 
-	ctx.cookies.set('token', userRegistrationResult.token, strictCookieOption)
-	ctx.cookies.set('email', data?.email, strictCookieOption)
-	ctx.cookies.set('uid', `${userRegistrationResult.uid}`, laxCookieOption)
-	ctx.cookies.set('uuid', `${userRegistrationResult.UUID}`, strictCookieOption)
-	ctx.cookies.set('user-data-bootstrap-hint', `${userRegistrationResult.userDataBootstrapHint}`, laxCookieOption)
+	if (userRegistrationResult.success) {
+		ctx.cookies.set('token', userRegistrationResult.token, strictCookieOption)
+		ctx.cookies.set('email', data?.email, strictCookieOption)
+		ctx.cookies.set('uid', `${userRegistrationResult.uid}`, laxCookieOption)
+		ctx.cookies.set('uuid', `${userRegistrationResult.UUID}`, strictCookieOption)
+		ctx.cookies.set('user-data-bootstrap-hint', `${userRegistrationResult.userDataBootstrapHint}`, laxCookieOption)
+	}
 	ctx.body = userRegistrationResult
 	await next()
 }
@@ -149,11 +151,13 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const userLoginResult = await userLoginService(userLoginRequest)
 
-	ctx.cookies.set('token', userLoginResult.token, strictCookieOption)
-	ctx.cookies.set('email', userLoginResult.email, strictCookieOption)
-	ctx.cookies.set('uid', `${userLoginResult.uid}`, laxCookieOption)
-	ctx.cookies.set('uuid', `${userLoginResult.UUID}`, strictCookieOption)
-	ctx.cookies.set('user-data-bootstrap-hint', `${userLoginResult.userDataBootstrapHint}`, laxCookieOption)
+	if (userLoginResult.success === true) {
+		ctx.cookies.set('token', userLoginResult.token, strictCookieOption)
+		ctx.cookies.set('email', userLoginResult.email, strictCookieOption)
+		ctx.cookies.set('uid', `${userLoginResult.uid}`, laxCookieOption)
+		ctx.cookies.set('uuid', `${userLoginResult.UUID}`, strictCookieOption)
+		ctx.cookies.set('user-data-bootstrap-hint', `${userLoginResult.userDataBootstrapHint}`, laxCookieOption)
+	}
 	ctx.body = userLoginResult
 	await next()
 }
@@ -366,7 +370,6 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 		ctx.cookies.set('token', '', logoutStrictCookieOption)
 		ctx.cookies.set('email', '', logoutStrictCookieOption)
 		ctx.cookies.set('uid', '', logoutLaxCookieOption)
-		ctx.cookies.set('uid', '', logoutStrictCookieOption)
 		ctx.cookies.set('uuid', '', logoutStrictCookieOption)
 		ctx.cookies.set('user-data-bootstrap-hint', '', logoutLaxCookieOption)
 	} else if ('userDataBootstrapHint' in selfUserInfo.result && selfUserInfo.result.userDataBootstrapHint) {
