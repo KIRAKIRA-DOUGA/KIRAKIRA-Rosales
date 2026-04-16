@@ -311,7 +311,7 @@ router.post('/user/adminClearUserInfo', adminClearUserInfoController) // 管理�
 
 // DANGER: 请勿调用，除非你知道你自己在做什么！
 router.post('/user/adminRotationAllUserDataBootstrapHintController', adminRotationAllUserDataBootstrapHintController) // 管理员重置所有用户的 userDataBootstrapHint // WARN: 仅限管理员 // DANGER: 请勿调用，除非你知道你自己在做什么！
-// https://localhost:9999/user/adminRotationAllUserUserDataBootstrapHintController
+// https://localhost:9999/user/adminRotationAllUserDataBootstrapHintController
 // cookie: UUID, token
 
 
