@@ -41,7 +41,13 @@ export const emitDanmakuController = async (ctx: koaCtx, next: koaNext) => {
 	await next()
 }
 
-
+/**
+ * 根据 KVID 获取弹幕列表
+ * 该接口会根据用户的登录状态返回不同的数据
+ * @param ctx context
+ * @param next context
+ * @returns 根据 KVID 获取弹幕列表的请求响应
+ */
 export const getDanmakuListByKvidController = async (ctx: koaCtx, next: koaNext) => {
 	const videoId = ctx.query.videoId as string
 	const getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto = {
