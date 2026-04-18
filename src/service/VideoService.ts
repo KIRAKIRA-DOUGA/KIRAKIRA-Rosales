@@ -41,7 +41,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '上传视频失败, 账户未对齐' }
 			}
 
-			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 			if (!UUID) {
 				logging('ERROR', '上传视频失败，UUID 不存在', undefined, { uid })
 				return { success: false, message: '上传视频失败，UUID 不存在' }
@@ -147,7 +147,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
  * 获取主页视频 // TODO 应该使用推荐算法，而不是获取最后上传的 100 个视频
  * @returns 获取主页视频的请求响应
  */
-export const getThumbVideoService = async (uuid?: string, token?: string): Promise<ThumbVideoResponseDto> => {
+export const getThumbVideoService = async (uid?: number, uuid?: string, userDataBootstrapHint?: string): Promise<ThumbVideoResponseDto> => {
 	try {
 		const blockListFilter = await buildBlockListMongooseFilter(
 			[
@@ -172,8 +172,7 @@ export const getThumbVideoService = async (uuid?: string, token?: string): Promi
 					category: 'regex',
 				},
 			],
-			uuid,
-			token
+			{ uid, uuid, userDataBootstrapHint }
 		)
 
 		const getThumbVideoPipeline: PipelineStage[] = [
@@ -889,7 +888,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 	try {
 		if (checkDeleteVideoRequest(deleteVideoRequest) && esClient && !isEmptyObject(esClient)) {
 			if ((await checkUserTokenService(adminUid, adminToken)).success) {
-				const adminUUID = await getUserUuid(adminUid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+				const adminUUID = await getUserUuid(adminUid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 				if (!adminUUID) {
 					logging('ERROR', '删除一个视频失败，adminUUID 不存在', undefined, { adminUid })
 					return { success: false, message: '删除一个视频失败，adminUUID 不存在' }

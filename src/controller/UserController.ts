@@ -37,6 +37,8 @@ import {
 	sendGeneral2FAEmailVerificationCodeService,
 	sendGeneralEmailVerificationCodeService,
 	getSelfUserInfoByUuidService,
+	adminRotationAllUserDataBootstrapHintService,
+	getUserBootstrapDataByHintService,
 } from '../service/UserService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import {
@@ -53,6 +55,7 @@ import {
 	ForgotPasswordRequestDto,
 	GetBlockedUserRequestDto,
 	GetSelfUserInfoByUuidRequestDto,
+	GetUserBootstrapDataByHintRequestDto,
 	GetUserInfoByUidRequestDto,
 	GetUserSettingsRequestDto,
 	SendGeneral2FAEmailVerificationCodeRequestDto,
@@ -68,7 +71,7 @@ import {
 	UserRegistrationRequestDto
 } from './UserControllerDto.js'
 
-const cookieOption = {
+const strictCookieOption = {
 	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
 	secure: true,
 	sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
@@ -76,10 +79,27 @@ const cookieOption = {
 	domain: getCorrectCookieDomain(),
 }
 
-const logoutCookieOption = {
+const laxCookieOption = {
+	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+	secure: true,
+	sameSite: 'lax' as boolean | 'none' | 'strict' | 'lax',
+	maxAge: 1000 * 60 * 60 * 24 * 365, // 设置有效期为 1 年
+	domain: getCorrectCookieDomain(),
+}
+
+const logoutStrictCookieOption = {
 	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
 	secure: true,
 	sameSite: 'strict' as boolean | 'none' | 'strict' | 'lax',
+	maxAge: 0, // 立即过期
+	expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
+	domain: getCorrectCookieDomain(),
+}
+
+const logoutLaxCookieOption = {
+	httpOnly: true, // 仅 HTTP 访问，浏览器中的 js 无法访问。
+	secure: true,
+	sameSite: 'lax' as boolean | 'none' | 'strict' | 'lax',
 	maxAge: 0, // 立即过期
 	expires: new Date(0), // 设置一个以前的日期让浏览器删除 cookie
 	domain: getCorrectCookieDomain(),
@@ -104,10 +124,13 @@ export const userRegistrationController = async (ctx: koaCtx, next: koaNext) => 
 	}
 	const userRegistrationResult = await userRegistrationService(userRegistrationData)
 
-	ctx.cookies.set('token', userRegistrationResult.token, cookieOption)
-	ctx.cookies.set('email', data?.email, cookieOption)
-	ctx.cookies.set('uid', `${userRegistrationResult.uid}`, cookieOption)
-	ctx.cookies.set('uuid', `${userRegistrationResult.UUID}`, cookieOption)
+	if (userRegistrationResult.success) {
+		ctx.cookies.set('token', userRegistrationResult.token, strictCookieOption)
+		ctx.cookies.set('email', data?.email, strictCookieOption)
+		ctx.cookies.set('uid', `${userRegistrationResult.uid}`, laxCookieOption)
+		ctx.cookies.set('uuid', `${userRegistrationResult.UUID}`, strictCookieOption)
+		ctx.cookies.set('user-data-bootstrap-hint', `${userRegistrationResult.userDataBootstrapHint}`, laxCookieOption)
+	}
 	ctx.body = userRegistrationResult
 	await next()
 }
@@ -128,10 +151,13 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const userLoginResult = await userLoginService(userLoginRequest)
 
-	ctx.cookies.set('token', userLoginResult.token, cookieOption)
-	ctx.cookies.set('email', userLoginResult.email, cookieOption)
-	ctx.cookies.set('uid', `${userLoginResult.uid}`, cookieOption)
-	ctx.cookies.set('uuid', `${userLoginResult.UUID}`, cookieOption)
+	if (userLoginResult.success === true) {
+		ctx.cookies.set('token', userLoginResult.token, strictCookieOption)
+		ctx.cookies.set('email', userLoginResult.email, strictCookieOption)
+		ctx.cookies.set('uid', `${userLoginResult.uid}`, laxCookieOption)
+		ctx.cookies.set('uuid', `${userLoginResult.UUID}`, strictCookieOption)
+		ctx.cookies.set('user-data-bootstrap-hint', `${userLoginResult.userDataBootstrapHint}`, laxCookieOption)
+	}
 	ctx.body = userLoginResult
 	await next()
 }
@@ -284,7 +310,7 @@ export const updateUserEmailController = async (ctx: koaCtx, next: koaNext) => {
 	const updateUserEmailResponse = await updateUserEmailService(updateUserEmailRequest, uuid, token)
 
 	if (updateUserEmailResponse.success) {
-		ctx.cookies.set('email', data?.newEmail ?? '', cookieOption)
+		ctx.cookies.set('email', data?.newEmail ?? '', strictCookieOption)
 	}
 	ctx.body = updateUserEmailResponse
 	await next()
@@ -340,12 +366,39 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 		token,
 	}
 	const selfUserInfo = await getSelfUserInfoByUuidService(getSelfUserInfoByUuidRequest)
-	if (!selfUserInfo.success) {
-		ctx.cookies.set('token', '', logoutCookieOption)
-		ctx.cookies.set('email', '', logoutCookieOption)
-		ctx.cookies.set('uid', '', logoutCookieOption)
-		ctx.cookies.set('uuid', '', logoutCookieOption)
+	if (!selfUserInfo.success || !selfUserInfo.result) {
+		ctx.cookies.set('token', '', logoutStrictCookieOption)
+		ctx.cookies.set('email', '', logoutStrictCookieOption)
+		ctx.cookies.set('uid', '', logoutLaxCookieOption)
+		ctx.cookies.set('uuid', '', logoutStrictCookieOption)
+		ctx.cookies.set('user-data-bootstrap-hint', '', logoutLaxCookieOption)
+	} else if ('userDataBootstrapHint' in selfUserInfo.result && selfUserInfo.result.userDataBootstrapHint) {
+		ctx.cookies.set('uid', `${selfUserInfo.result.uid}`, laxCookieOption)
+		ctx.cookies.set('user-data-bootstrap-hint', `${selfUserInfo.result.userDataBootstrapHint}`, laxCookieOption)
 	}
+	ctx.body = selfUserInfo
+	await next()
+}
+
+
+
+/**
+ * 根据 uid 和标识获取用户初始化数据
+ * @param ctx context
+ * @param next context
+ * @return GetSelfUserInfoResponseDto 用户初始化数据，如果获取成功则 success: true，不成功则 success: false
+ */
+export const getUserBootstrapDataByHintController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<GetUserBootstrapDataByHintRequestDto>
+
+	const uid = parseInteger(ctx.cookies.get('uid') || (data?.uid || '-1'))
+	const userDataBootstrapHint = ctx.cookies.get('user-data-bootstrap-hint') || data?.userDataBootstrapHint
+
+	const getUserBootstrapDataByHintRequest: GetUserBootstrapDataByHintRequestDto = {
+		uid,
+		userDataBootstrapHint,
+	}
+	const selfUserInfo = await getUserBootstrapDataByHintService(getUserBootstrapDataByHintRequest)
 	ctx.body = selfUserInfo
 	await next()
 }
@@ -387,7 +440,6 @@ export const userExistsCheckByUIDController = async (ctx: koaCtx, next: koaNext)
 
 /**
  * 校验用户 token
- * // DELETE: 顺便给用户加上UUID
  * @param ctx context
  * @param next context
  * @return CheckUserTokenResponseDto 通过 token 中的 uid 和 token 校验用户，如果校验成功则 success 和 userTokenOk 的值都为 true，不成功则 success 或 userTokenOk 的值为 false
@@ -398,16 +450,6 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 	const token = ctx.cookies.get('token')
 
 	const checkUserTokenResponse = await checkUserTokenService(uid, token)
-
-	// DELETE ME: 对于 Cookie 中没有 UUID 的早期注册用户，强制向 Cookie 中推送 UUID。该逻辑不应当一直存在，一段时间之后差不多都推送完了，就应该删掉了。
-	if (checkUserTokenResponse.success && checkUserTokenResponse.userTokenOk) {
-		const uuid = await getUserUuid(uid)
-		if (uuid) {
-			ctx.cookies.set('uuid', uuid, cookieOption)
-			ctx.cookies.set('uid', uidString, cookieOption)
-			ctx.cookies.set('token', token, cookieOption)
-		}
-	}
 
 	ctx.body = checkUserTokenResponse
 	await next()
@@ -421,11 +463,12 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
 export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	// TODO 理论上这里还可以做一些操作，比如说记录用户登出事件...
 
-
-	ctx.cookies.set('token', '', logoutCookieOption)
-	ctx.cookies.set('email', '', logoutCookieOption)
-	ctx.cookies.set('uid', '', logoutCookieOption)
-	ctx.cookies.set('uuid', '', logoutCookieOption)
+	ctx.cookies.set('token', '', logoutStrictCookieOption)
+	ctx.cookies.set('email', '', logoutStrictCookieOption)
+	ctx.cookies.set('uid', '', logoutLaxCookieOption)
+	ctx.cookies.set('uid', '', logoutStrictCookieOption)
+	ctx.cookies.set('uuid', '', logoutStrictCookieOption)
+	ctx.cookies.set('user-data-bootstrap-hint', '', logoutLaxCookieOption)
 
 	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
 
@@ -795,5 +838,24 @@ export const adminEditUserInfoController = async (ctx: koaCtx, next: koaNext) =>
 		}
 	}
 	ctx.body = await adminEditUserInfoService(editUserInfoRequest, adminUUID, adminToken)
+	await next()
+}
+
+/**
+ * 管理员重置所有用户的 userDataBootstrapHint // DANGER: 请勿调用，除非你知道你自己在做什么！
+ * @param ctx context
+ * @param next context
+ * @return 管理员重置所有用户的 userDataBootstrapHint 的请求响应
+ */
+export const adminRotationAllUserDataBootstrapHintController = async (ctx: koaCtx, next: koaNext) => {
+	const adminUUID = ctx.cookies.get('uuid')
+	const adminToken = ctx.cookies.get('token')
+
+	// RBAC 权限验证
+	if (!await isPassRbacCheck({ uuid: adminUUID, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	ctx.body = await adminRotationAllUserDataBootstrapHintService(adminUUID, adminToken)
 	await next()
 }

@@ -41,13 +41,22 @@ export const emitDanmakuController = async (ctx: koaCtx, next: koaNext) => {
 	await next()
 }
 
-
+/**
+ * 根据 KVID 获取弹幕列表
+ * 该接口会根据用户的登录状态返回不同的数据
+ * @param ctx context
+ * @param next context
+ * @returns 根据 KVID 获取弹幕列表的请求响应
+ */
 export const getDanmakuListByKvidController = async (ctx: koaCtx, next: koaNext) => {
 	const videoId = ctx.query.videoId as string
 	const getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto = {
 		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
 	}
-	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest)
+	const uid = parseInteger(ctx.cookies.get('uid'), -1)
+	const uuid = ctx.cookies.get('uuid')
+	const userDataBootstrapHint = ctx.cookies.get('user-data-bootstrap-hint')
+	const danmakuListResponse = await getDanmakuListByKvidService(getDanmakuByKvidRequest, uid, uuid, userDataBootstrapHint)
 	ctx.body = danmakuListResponse
 	await next()
 }
