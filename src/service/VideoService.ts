@@ -493,19 +493,31 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 			// 8. 计算视频收藏数（被同一个人收藏进多个收藏夹也只算一个）
 			try {
 				const { collectionName: favoritesDetailCollectionName, schemaInstance: favoritesDetailSchemaInstance } = FavoritesDetailSchema
-				type FavoritesDetailType = InferSchemaType<typeof favoritesDetailSchemaInstance>
-				const favoritesWhere: QueryType<FavoritesDetailType> = {
-					category: 'video',
-					id: String(video.videoId),
-				}
-				const favoritesSelect: SelectType<FavoritesDetailType> = {
-					operator: 1,
-				}
-				const favoritesResult = await selectDataFromMongoDB<FavoritesDetailType>(favoritesWhere, favoritesSelect, favoritesDetailSchemaInstance, favoritesDetailCollectionName)
-				if (favoritesResult.success && favoritesResult.result) {
-					// 使用 Set 去重，确保每个用户只计算一次
-					const uniqueOperators = new Set(favoritesResult.result.map(item => item.operator))
-					video.favoritesCount = uniqueOperators.size
+				type FavoritesDetailCountResult = { favoritesCount: number }
+				const favoritesCountPipeline: PipelineStage[] = [
+					{
+						$match: {
+							category: 'video',
+							id: String(video.videoId),
+						},
+					},
+					{
+						$group: {
+							_id: '$operator',
+						},
+					},
+					{
+						$count: 'favoritesCount',
+					},
+				]
+				const favoritesCountResult = await selectDataByAggregateFromMongoDB(
+					favoritesDetailSchemaInstance,
+					favoritesDetailCollectionName,
+					favoritesCountPipeline,
+				)
+				if (favoritesCountResult.success) {
+					const aggregateResult = favoritesCountResult.result?.[0] as FavoritesDetailCountResult | undefined
+					video.favoritesCount = aggregateResult?.favoritesCount ?? 0
 				} else {
 					video.favoritesCount = 0
 				}

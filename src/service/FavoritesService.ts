@@ -1,6 +1,6 @@
 import mongoose, { InferSchemaType } from 'mongoose'
 import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, AddToFavoritesRequestDto, AddToFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, AddEditorToFavoritesRequestDto, AddEditorToFavoritesResponseDto, RemoveEditorFromFavoritesRequestDto, RemoveEditorFromFavoritesResponseDto, GetFavoritesCoverUploadSignedUrlRequestDto, GetFavoritesCoverUploadSignedUrlResponseDto } from '../controller/FavoritesControllerDto.js'
-import { insertData2MongoDB, selectDataFromMongoDB, deleteDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
+import { insertData2MongoDB, selectDataFromMongoDB, deleteDataFromMongoDB, updateData4MongoDB, deleteManyDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType, OrderByType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesSchema, FavoritesDetailSchema, RemovedFavoritesSchema, RemovedFavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
@@ -10,6 +10,7 @@ import { checkUserTokenService, checkUserTokenByUuidService, checkUserExistsByUI
 import { logging } from './loggingService.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
+import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js'
 
 /**
  * 创建收藏夹
@@ -29,8 +30,7 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 				type FavoritesType = InferSchemaType<typeof schemaInstance>
 
 				// 启动事务
-				const session = await mongoose.startSession()
-				session.startTransaction()
+				const session = await createAndStartSession()
 
 				const favoritesId = (await getNextSequenceValueService('favorites', 1, 1, session))?.sequenceValue
 
@@ -50,22 +50,15 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 				try {
 					const createFavoritesResult = await insertData2MongoDB<FavoritesType>(createFavoritesData, schemaInstance, collectionName)
 					if (createFavoritesResult.success && createFavoritesResult.result?.length === 1 && createFavoritesResult.result?.[0]) {
-						await session.commitTransaction()
-						session.endSession()
+						await commitAndEndSession(session)
 						return { success: true, message: '创建收藏夹成功', result: createFavoritesResult.result[0] }
 					} else {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
+						await abortAndEndSession(session)
 						logging('ERROR', '创建收藏夹失败，数据存储失败')
 						return { success: false, message: '创建收藏夹失败，数据存储失败' }
 					}
 				} catch (error) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
+					await abortAndEndSession(session)
 					logging('ERROR', '创建收藏夹失败，数据存储时出错：', error)
 					return { success: false, message: '创建收藏夹失败，数据存储时出错' }
 				}
@@ -148,6 +141,15 @@ export const getFavoritesService = async (uid: number, token: string): Promise<G
 export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavoritesByUidRequestDto, uuid: string, token: string): Promise<GetFavoritesByUidResponseDto> => {
 	try {
 		const targetUid = getFavoritesByUidRequest.uid
+		if (!targetUid || !uuid || !token) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，参数缺失', undefined, { getFavoritesByUidRequest, uuid })
+			return { success: false, message: '获取指定用户收藏夹列表失败，参数缺失' }
+		}
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '获取指定用户收藏夹列表失败，用户校验失败', undefined, { getFavoritesByUidRequest, uuid })
+			return { success: false, message: '获取指定用户收藏夹列表失败，用户校验失败' }
+		}
+
 		const targetUuid = await getUserUuid(targetUid)
 		if (!targetUuid) {
 			logging('ERROR', '获取指定用户收藏夹列表失败，目标用户不存在', undefined, { getFavoritesByUidRequest, uuid })
@@ -261,7 +263,6 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 					}
 				}
 			}
-
 			return { success: true, message: '获取指定用户收藏夹列表成功', result: visibleFavorites }
 		} catch (error) {
 			logging('ERROR', '获取指定用户收藏夹列表失败，查询收藏夹数据时出错', error, { getFavoritesByUidRequest, uuid, viewerUid, targetUid })
@@ -316,28 +317,30 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 		}
 
 		// 检查收藏夹内的内容数量是否达到上限（5000个）
-		const countWhere: QueryType<FavoritesDetailType> = {
+		const favoritesDetailCollection = mongoose.connection.collection(collectionName)
+		const favoritesDetailsCount = await favoritesDetailCollection.countDocuments({
 			favoritesListId: addToFavoritesRequest.favoritesListId,
-		}
-		const countSelect: any = {
-			_id: 1,
-		}
-		const countResult = await selectDataFromMongoDB<FavoritesDetailType>(countWhere, countSelect, schemaInstance, collectionName)
-		if (countResult.success && countResult.result && countResult.result.length >= 5000) {
+		})
+		if (favoritesDetailsCount >= 5000) {
 			logging('ERROR', '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）', undefined, { addToFavoritesRequest, uuid, uid })
 			return { success: false, message: '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）' }
 		}
 
 		// 获取当前收藏夹中的最大 sortOrder
-		const maxSortOrderWhere: QueryType<FavoritesDetailType> = {
-			favoritesListId: addToFavoritesRequest.favoritesListId,
-		}
-		const maxSortOrderResult = await selectDataFromMongoDB<FavoritesDetailType>(maxSortOrderWhere, { sortOrder: 1 } as any, schemaInstance, collectionName)
-		let newSortOrder = 0
-		if (maxSortOrderResult.success && maxSortOrderResult.result && maxSortOrderResult.result.length > 0) {
-			const maxSortOrder = Math.max(...maxSortOrderResult.result.map(item => item.sortOrder || 0))
-			newSortOrder = maxSortOrder + 1
-		}
+		const maxSortOrderDocument = await favoritesDetailCollection.findOne(
+			{
+				favoritesListId: addToFavoritesRequest.favoritesListId,
+			},
+			{
+				projection: {
+					sortOrder: 1,
+				},
+				sort: {
+					sortOrder: -1,
+				},
+			}
+		)
+		const newSortOrder = (maxSortOrderDocument?.sortOrder || 0) + (maxSortOrderDocument ? 1 : 0)
 
 		const favoritesDetailData: FavoritesDetailType = {
 			favoritesListId: addToFavoritesRequest.favoritesListId,
@@ -404,8 +407,7 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 		}
 
 		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
+		const session = await createAndStartSession()
 
 		try {
 			const option = { session }
@@ -422,10 +424,7 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 			}
 			const queryResult = await selectDataFromMongoDB<FavoritesDetailType>(where, select, schemaInstance, collectionName, option)
 			if (!queryResult.success || !queryResult.result || queryResult.result.length === 0) {
-				if (session.inTransaction()) {
-					await session.abortTransaction()
-				}
-				session.endSession()
+				await abortAndEndSession(session)
 				logging('ERROR', '从收藏夹移除内容失败，未找到要删除的内容', undefined, { removeFromFavoritesRequest, uuid, uid })
 				return { success: false, message: '从收藏夹移除内容失败，未找到要删除的内容' }
 			}
@@ -449,10 +448,7 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 				option
 			)
 			if (!saveRemovedResult.success) {
-				if (session.inTransaction()) {
-					await session.abortTransaction()
-				}
-				session.endSession()
+				await abortAndEndSession(session)
 				logging('ERROR', '从收藏夹移除内容失败，保存废弃记录失败', undefined, { removeFromFavoritesRequest, uuid, uid })
 				return { success: false, message: '从收藏夹移除内容失败，保存废弃记录失败' }
 			}
@@ -460,22 +456,15 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 			// 3. 从原集合删除记录
 			const deleteResult = await deleteDataFromMongoDB<FavoritesDetailType>(where, schemaInstance, collectionName, option)
 			if (!deleteResult.success || !deleteResult.result || deleteResult.result.deletedCount === 0) {
-				if (session.inTransaction()) {
-					await session.abortTransaction()
-				}
-				session.endSession()
+				await abortAndEndSession(session)
 				logging('ERROR', '从收藏夹移除内容失败，删除数据失败', undefined, { removeFromFavoritesRequest, uuid, uid })
 				return { success: false, message: '从收藏夹移除内容失败，删除数据失败' }
 			}
 
-			await session.commitTransaction()
-			session.endSession()
+			await commitAndEndSession(session)
 			return { success: true, message: '从收藏夹移除内容成功' }
 		} catch (error) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
+			await abortAndEndSession(session)
 			logging('ERROR', '从收藏夹移除内容失败，删除数据时出错：', error, { removeFromFavoritesRequest, uuid, uid })
 			return { success: false, message: '从收藏夹移除内容失败，删除数据时出错' }
 		}
@@ -696,8 +685,7 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 		const now = new Date().getTime()
 
 		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
+		const session = await createAndStartSession()
 
 		try {
 			const option = { session }
@@ -745,28 +733,29 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 			}
 			const saveRemovedFavoritesResult = await insertData2MongoDB<RemovedFavoritesType>(removedFavoritesData, removedFavoritesSchemaInstance, removedFavoritesCollectionName, option)
 			if (!saveRemovedFavoritesResult.success) {
-				if (session.inTransaction()) {
-					await session.abortTransaction()
-				}
-				session.endSession()
+				await abortAndEndSession(session)
 				logging('ERROR', '删除收藏夹失败，保存废弃记录失败', undefined, { deleteFavoritesRequest, uuid, uid, favoritesId: deleteFavoritesRequest.favoritesId })
 				return { success: false, message: '删除收藏夹失败，保存废弃记录失败' }
 			}
 
 			// 4. 从原集合删除收藏夹明细
-			await deleteDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSchemaInstance, detailCollectionName, option)
+			const deleteDetailResult = await deleteManyDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSchemaInstance, detailCollectionName, option)
+			if (!deleteDetailResult.success) {
+				await abortAndEndSession(session)
+				return { success: false, message: '删除收藏夹失败，删除明细数据时出错' }
+			}
 
 			// 5. 从原集合删除收藏夹
-			await deleteDataFromMongoDB<FavoritesType>(checkWhere, favoritesSchemaInstance, favoritesCollectionName, option)
+			const deleteFavoritesResult = await deleteManyDataFromMongoDB<FavoritesType>(checkWhere, favoritesSchemaInstance, favoritesCollectionName, option)
+			if (!deleteFavoritesResult.success) {
+				await abortAndEndSession(session)
+				return { success: false, message: '删除收藏夹失败，删除收藏夹数据时出错' }
+			}
 
-			await session.commitTransaction()
-			session.endSession()
+			await commitAndEndSession(session)
 			return { success: true, message: '删除收藏夹成功' }
 		} catch (error) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
+			await abortAndEndSession(session)
 			logging('ERROR', '删除收藏夹失败，删除数据时出错：', error, { deleteFavoritesRequest, uuid, uid })
 			return { success: false, message: '删除收藏夹失败，删除数据时出错' }
 		}
@@ -808,8 +797,7 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 		const now = new Date().getTime()
 
 		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
+		const session = await createAndStartSession()
 
 		try {
 			// 1) 取出当前收藏夹内所有内容的原始排序
@@ -824,16 +812,14 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 			}
 			const existingResult = await selectDataFromMongoDB<FavoritesDetailType>(whereAll, selectAll, schemaInstance, collectionName, { session })
 			if (!existingResult.success) {
-				await session.abortTransaction()
-				session.endSession()
+				await abortAndEndSession(session)
 				logging('ERROR', '调整收藏夹内部排序失败，读取现有数据失败', undefined, { reorderFavoritesDetailRequest, uuid, uid })
 				return { success: false, message: '调整收藏夹内部排序失败，读取现有数据失败' }
 			}
 
 			const existing = existingResult.result ?? []
 			if (existing.length === 0) {
-				await session.commitTransaction()
-				session.endSession()
+				await commitAndEndSession(session)
 				return { success: true, message: '调整收藏夹内部排序成功（列表为空）' }
 			}
 
@@ -866,8 +852,7 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 				const key = keyOf(item.category, item.id)
 				const target = workingMap.get(key)
 				if (!target) {
-					await session.abortTransaction()
-					session.endSession()
+					await abortAndEndSession(session)
 					logging('ERROR', '调整收藏夹内部排序失败，存在不存在的收藏项', undefined, { reorderFavoritesDetailRequest, uuid, uid, item })
 					return { success: false, message: '调整收藏夹内部排序失败，存在不存在的收藏项' }
 				}
@@ -907,17 +892,18 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 					sortOrder: finalOrder,
 					editDateTime: now,
 				}
-				await updateData4MongoDB<FavoritesDetailType>(where, update, schemaInstance, collectionName, { session })
+				const updateResult = await updateData4MongoDB<FavoritesDetailType>(where, update, schemaInstance, collectionName, { session })
+				if (!updateResult.success) {
+					await abortAndEndSession(session)
+					logging('ERROR', '调整收藏夹内部排序失败，更新数据失败', undefined, { reorderFavoritesDetailRequest, uuid, uid, item })
+					return { success: false, message: '调整收藏夹内部排序失败，更新数据失败' }
+				}
 			}
 
-			await session.commitTransaction()
-			session.endSession()
+			await commitAndEndSession(session)
 			return { success: true, message: '调整收藏夹内部排序成功' }
 		} catch (error) {
-			if (session.inTransaction()) {
-				await session.abortTransaction()
-			}
-			session.endSession()
+			await abortAndEndSession(session)
 			logging('ERROR', '调整收藏夹内部排序失败，更新数据时出错：', error, { reorderFavoritesDetailRequest, uuid, uid })
 			return { success: false, message: '调整收藏夹内部排序失败，更新数据时出错' }
 		}
@@ -1146,6 +1132,7 @@ export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverU
 		}
 	} catch (error) {
 		logging('ERROR', '获取上传收藏夹封面用的预签名 URL 失败，错误信息', error, { uid })
+		return { success: false, message: '上传失败，无法获取上传权限' }
 	}
 }
 
@@ -1164,7 +1151,7 @@ const checkCreateFavoritesRequest = (createFavoritesRequest: CreateFavoritesRequ
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkAddToFavoritesRequest = (addToFavoritesRequest: AddToFavoritesRequestDto): boolean => {
-	return (!!addToFavoritesRequest.favoritesListId && !!addToFavoritesRequest.category && !!addToFavoritesRequest.id)
+	return (!!addToFavoritesRequest.favoritesListId && addToFavoritesRequest.favoritesListId > 0 && !!addToFavoritesRequest.category && !!addToFavoritesRequest.id)
 }
 
 /**

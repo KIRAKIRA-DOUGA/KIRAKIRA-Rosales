@@ -192,14 +192,48 @@ export const deleteDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 
 		try {
 			const result = await mongoModel.deleteOne(where, options)
-			return { success: true, message: '数据查询成功', result }
+			return { success: true, message: '数据删除成功', result }
 		} catch (error) {
-			logging('ERROR', '数据查询失败：', error, undefined, { recordingLogs: false })
-			throw { success: false, message: '数据查询失败', error }
+			logging('ERROR', '数据删除失败：', error, undefined, { recordingLogs: false })
+			throw { success: false, message: '数据删除失败', error }
 		}
 	} catch (error) {
-		logging('ERROR', 'selectDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
-		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
+		logging('ERROR', 'deleteDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
+		throw { success: false, message: '数据删除失败，deleteDataFromMongoDB 中发生错误：', error }
+	}
+}
+
+/**
+ * 在 MongoDB 数据库中删除多条数据
+ * @param where 查询条件
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 删除数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param options 设置项
+ * @return 删除状态和结果
+ */
+export const deleteManyDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultType<mongoose.mongo.DeleteResult> > => {
+	try {
+		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
+		if (options?.session) {
+			options.readPreference = 'primary'
+		}
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+		try {
+			const result = await mongoModel.deleteMany(where, options)
+			return { success: true, message: '数据删除成功', result }
+		} catch (error) {
+			logging('ERROR', '数据删除失败：', error, undefined, { recordingLogs: false })
+			throw { success: false, message: '数据删除失败', error }
+		}
+	} catch (error) {
+		logging('ERROR', 'deleteManyDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
+		throw { success: false, message: '数据删除失败，deleteManyDataFromMongoDB 中发生错误：', error }
 	}
 }
 
