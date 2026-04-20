@@ -174,6 +174,14 @@ export type GetVideoByKvidResponseDto = {
 		videoTagList: VideoTag[];
 		/** 视频收藏数（被同一个人收藏进多个收藏夹也只算一个） */
 		favoritesCount?: number;
+		/** 视频点赞数 */
+		videoUpvoteCount: number;
+		/** 视频点踩数 */
+		videoDownvoteCount: number;
+		/** 当前用户是否点赞 */
+		userHasUpvoted: boolean;
+		/** 当前用户是否点踩 */
+		userHasDownvoted: boolean;
 	};
 } & BlockState
 

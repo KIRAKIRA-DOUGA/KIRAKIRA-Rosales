@@ -3,10 +3,13 @@
 		"target": "ESNext",
 		"esModuleInterop": true,
 		"moduleResolution": "NodeNext",
+		"rootDir": "./src",
 		"outDir": "./dist",
 		"declaration": true,
 		"allowSyntheticDefaultImports": true,
 		"module": "NodeNext",
+
+		"strict": false,
 		// "strict": true, // 好吧，严格模式
 		// ... rest
 	},

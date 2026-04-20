@@ -1,6 +1,5 @@
 import { SMTPClient } from 'emailjs'
 import { parseInteger } from './ValidTool.js'
-import { resolve } from 'path'
 import { logging } from '../service/loggingService.js';
 
 /**
@@ -23,7 +22,7 @@ export const sendMail = async (to: string, title: string, body: EmailBodyType) =
 	const smtpPort = process.env.SMTP_PORT
 	const smtpUsername = process.env.SMTP_USER_NAME
 	const smtpPassword = process.env.SMTP_PASSWORD
-	const KIRAKIRA_EMAIL_SENDER_ADDRESS = 'KIRAKIRA <no-reply@kirakira.moe>'
+	const KIRAKIRA_EMAIL_SENDER_ADDRESS = process.env.KIRAKIRA_EMAIL_SENDER_ADDRESS
 
 	if (!smtpHost) {
 		logging('ERROR', '发送邮件失败，环境变量中的 smtpHost 为空')
@@ -38,6 +37,11 @@ export const sendMail = async (to: string, title: string, body: EmailBodyType) =
 	if (!smtpUsername) {
 		logging('ERROR', '发送邮件失败，环境变量中的 smtpUsername 为空')
 		throw new Error('Unable send email because the smtpUsername is null')
+	}
+
+	if (!KIRAKIRA_EMAIL_SENDER_ADDRESS) {
+		logging('ERROR', '发送邮件失败，环境变量中的 KIRAKIRA_EMAIL_SENDER_ADDRESS 为空')
+		throw new Error('Unable send email because the KIRAKIRA_EMAIL_SENDER_ADDRESS is null')
 	}
 
 	if (!smtpPassword) {
@@ -90,19 +94,6 @@ export const sendMail = async (to: string, title: string, body: EmailBodyType) =
 				data: body.html,
 				alternative: true,
 			},
-			// #region 内嵌附件图片
-			/* {
-				path: resolve(import.meta.dirname, "../assets/images", "background.png"),
-				type: "image/png",
-				headers: { "Content-ID": "<background>" },
-			}, */
-			// 糟糕，许多邮箱不支持 CSS background-image 的内嵌图片显示！
-			{
-				path: resolve(import.meta.dirname, "../assets/images", "banner.png"),
-				type: "image/png",
-				headers: { "Content-ID": "<banner>" },
-			},
-			// #endregion
 		],
 	}
 

@@ -38,13 +38,16 @@ import {
 	forgotPasswordController,
 	sendGeneral2FAEmailVerificationCodeController,
 	sendGeneralEmailVerificationCodeController,
+	adminRotationAllUserDataBootstrapHintController,
+	getUserBootstrapDataByHintController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
 import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
+import { emitVideoUpvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, cancelVideoDownvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
-import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
+import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowerListController, getFollowingListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
 
 const router = new Router()
@@ -169,7 +172,16 @@ router.post('/user/self', getSelfUserInfoController) // 获取当前登录的用
 // or
 // {
 // 	"uuid": "XXXXXXXXX",
-// 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+// 	"token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+// }
+
+router.post('/user/getUserBootstrapDataByHintController', getUserBootstrapDataByHintController) // 根据 uid 和标识获取用户初始化数据，参数可以通过 cookie 传递，也可以通过请求体
+// https://localhost:9999/user/getUserBootstrapDataByHintController
+// cookie: uid, user-data-bootstrap-hint
+// or
+// {
+// 	"uid": 12345,
+// 	"userDataBootstrapHint": "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 // }
 
 router.get('/user/info', getUserInfoByUidController) // 根据 uid 获取用户信息
@@ -296,6 +308,11 @@ router.post('/user/adminClearUserInfo', adminClearUserInfoController) // 管理�
 // {
 // 	"uid": XXXX
 // }
+
+// DANGER: 请勿调用，除非你知道你自己在做什么！
+router.post('/user/adminRotationAllUserDataBootstrapHintController', adminRotationAllUserDataBootstrapHintController) // 管理员重置所有用户的 userDataBootstrapHint // WARN: 仅限管理员 // DANGER: 请勿调用，除非你知道你自己在做什么！
+// https://localhost:9999/user/adminRotationAllUserDataBootstrapHintController
+// cookie: UUID, token
 
 
 
@@ -447,7 +464,33 @@ router.post('/video/pending/approved', approvePendingReviewVideoController) // �
 // https://localhost:9999/video/pending/approved
 // cookie: uid, token
 
+router.post('/video/upvote', emitVideoUpvoteController) // 用户为视频点赞
+// https://localhost:9999/video/upvote
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
 
+router.post('/video/downvote', emitVideoDownvoteController) // 用户为视频点踩
+// https://localhost:9999/video/downvote
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
+
+router.delete('/video/upvote/cancel', cancelVideoUpvoteController) // 用户取消为视频点赞
+// https://localhost:9999/video/upvote/cancel
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
+
+router.delete('/video/downvote/cancel', cancelVideoDownvoteController) // 用户取消为视频点踩
+// https://localhost:9999/video/downvote/cancel
+// cookie: uuid, token
+// {
+// 	"videoId": 13
+// }
 
 
 
@@ -803,6 +846,30 @@ router.get('/feed/getFeedContent', getFeedContentController) // 获取动态分�
 // 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx"
 // }
 
+router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和粉丝数
+// https://localhost:9999/feed/stats?targetUid=999
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+
+router.get('/feed/following/list', getFollowingListController) // 获取用户关注列表
+// https://localhost:9999/feed/following/list?targetUid=999&page=1&pageSize=30
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+// page
+// pageSize
+
+router.get('/feed/follower/list', getFollowerListController) // 获取用户粉丝列表
+// https://localhost:9999/feed/follower/list?targetUid=999&page=1&pageSize=30
+// cookie: uuid, token
+//
+// Query:
+// targetUid
+// page
+// pageSize
 
 
 

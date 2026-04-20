@@ -8,7 +8,7 @@
 	},
 
 	// TODO TREE
-	"todo-tree.general.tags": ["-", "!", "?", ">", "TODO", "MEME", "IDEA", "WARN", "FIXME", "DELETE"],
+	"todo-tree.general.tags": ["-", "!", "?", ">", "TODO", "MEME", "IDEA", "WARN", "FIXME", "DANGER", "DELETE"],
 	"todo-tree.highlights.customHighlight": {
 		"-": {
 			"background": "#222",
@@ -76,6 +76,12 @@
 			"iconColour": "#ff0000",
 			"type": "text-and-comment"
 		},
+		"DANGER": {
+			"background": "#ff0000",
+			"foreground": "#FFF",
+			"iconColour": "#ff0000",
+			"type": "text-and-comment"
+		},
 		"DELETE": {
 			"background": "#d9444a",
 			"foreground": "#000",
@@ -86,4 +92,5 @@
 	"cSpell.words": [
 		"KIRAKIRA"
 	],
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
 }

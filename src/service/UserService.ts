@@ -1,7 +1,7 @@
-import mongoose, { InferSchemaType, PipelineStage, ClientSession } from 'mongoose'
+import mongoose, { InferSchemaType, PipelineStage, ClientSession, Model } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
-import { comparePasswordSync, hashPasswordSync } from '../common/HashTool.js'
+import { compareStringSync, hashStringSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { parseInteger, validateNameField } from '../common/ValidTool.js'
 import { generateRandomString, generateSecureRandomString, generateSecureVerificationNumberCode, generateSecureVerificationStringCode } from '../common/RandomTool.js'
@@ -66,8 +66,12 @@ import {
 	SendGeneral2FAEmailVerificationCodeResponseDto,
 	SendGeneralEmailVerificationCodeRequestDto,
 	SendGeneralEmailVerificationCodeResponseDto,
+	AdminRotationAllUserTokenResponseDto,
+	AdminRotationAllUserDataBootstrapHintResponseDto,
+	GetUserBootstrapDataByHintResponseDto,
+	GetUserBootstrapDataByHintRequestDto,
 } from '../controller/UserControllerDto.js'
-import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB, deleteOneDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DbPoolResultsType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import {
 	UserAuthSchema,
@@ -148,8 +152,9 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			return { success: false, message: errorMessage }
 		}
 
-		const passwordHashHash = hashPasswordSync(passwordHash)
+		const passwordHashHash = hashStringSync(passwordHash)
 		const token = generateSecureRandomString(64)
+		const userDataBootstrapHint = generateSecureRandomString(64)
 		const uid = (await getNextSequenceValueService('user', 1, 1, session)).sequenceValue
 		const uuid = generateRandomString(24)
 
@@ -160,6 +165,7 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 			emailLowerCase,
 			passwordHashHash,
 			token,
+			userDataBootstrapHint,
 			passwordUpdateDateTime: now,
 			passwordHint,
 			roles: ['user'], // newbie will always has a 'user' roles.
@@ -261,6 +267,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 			UUID: 1,
 			uid: 1,
 			token: 1,
+			userDataBootstrapHint: 1,
 			passwordHint: 1,
 			passwordHashHash: 1,
 			authenticatorType: 1,
@@ -275,21 +282,22 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		}
 
 		const userAuthData = userAuthResult.result[0]
-		const { token, uid, UUID: uuid, authenticatorType } = userAuthData
-		if (!token || uid === null || uid === undefined || !uuid) {
+		const { userDataBootstrapHint, token, uid, UUID: uuid, authenticatorType } = userAuthData
+		if (!token || !userDataBootstrapHint || uid === null || uid === undefined || !uuid) {
 			const errorMessage = '登录失败，未能获取用户安全信息'
 			logging('ERROR', errorMessage)
 			return { success: false, message: errorMessage }
 		}
 
 		// 3. 检查用户密码是否正确
-		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData.passwordHashHash)
+		const isCorrectPassword = compareStringSync(passwordHash, userAuthData.passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '登录失败'
 			logging('warn', errorMessage, undefined, { uuid })
 			return { success: false, email, passwordHint: userAuthData.passwordHint, message: errorMessage }
 		}
 
+		let currentAuthenticatorType: 'email' | 'totp' | 'none' = 'none';
 		// 4. 判断用户是否启用了 2FA
 		if (authenticatorType === 'totp') { // 4.1 TOTP 2FA
 			if (!clientOtp) {
@@ -306,7 +314,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
-			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
+			currentAuthenticatorType = 'totp'
 		} else if (authenticatorType === 'email') { // 4.2 Email 2FA
 			if (!verificationCode) {
 				const errorMessage = '登录失败，启用了邮箱验证但用户未提供验证码'
@@ -320,7 +328,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
-			const EmailVerifier = new General2FAEmailVerifier(uuid, verificationCode)
+			const EmailVerifier = new GeneralEmailVerifier(emailLowerCase, verificationCode)
 			const verificationResult = await EmailVerifier.verify({ isResetAttemptsImmediately: true, exclusiveBusinessName: 'login' })
 			if (!verificationResult.success) {
 				const errorMessage = `登录失败，邮箱验证码验证失败：${verificationResult.message}`
@@ -328,10 +336,12 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 				return { success: false, message: errorMessage, authenticatorType }
 			}
 
-			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType }
+			currentAuthenticatorType = 'email'
 		} else { // 4.3 未启用 2FA
-			return { success: true, email, uid, token, UUID: uuid, message: '用户登录成功', authenticatorType: 'none' }
+			currentAuthenticatorType = 'none'
 		}
+
+		return { success: true, email, uid, token, userDataBootstrapHint, UUID: uuid, message: '用户登录成功', authenticatorType: currentAuthenticatorType }
 	} catch (error) {
 		const errormMessage = '登录失败，用户登录时程序异常'
 		logging('ERROR', errormMessage, error)
@@ -358,7 +368,7 @@ export const userEmailExistsCheckService = async (userEmailExistsCheckRequest: U
 
 			let result: DbPoolResultsType<UserAuth>
 			try {
-				result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+				result = await selectDataFromMongoDB<UserAuth>(where, select, schemaInstance, collectionName)
 			} catch (error) {
 				logging('ERROR', '验证用户邮箱是否存在（查询用户）时出现异常：', error)
 				return { success: false, exists: false, message: '验证用户邮箱是否存在时出现异常' }
@@ -413,8 +423,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		}
 
 		// 启动事务
-		const session = await mongoose.startSession()
-		session.startTransaction()
+		const session = await createAndStartSession()
 
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
@@ -438,7 +447,7 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 		}
 
 		const { passwordHashHash } = userAuthData[0]
-		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash) // 确保更新邮箱时输入的密码正确
+		const isCorrectPassword = compareStringSync(passwordHash, passwordHashHash) // 确保更新邮箱时输入的密码正确
 		if (!isCorrectPassword) {
 			const errorMessage = '更新用户邮箱失败，用户密码不正确'
 			logging('ERROR', errorMessage, undefined, { cookieUuid, oldEmail })
@@ -515,7 +524,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 
 		const { collectionName, schemaInstance } = UserInfoSchema
 		type UserInfo = InferSchemaType<typeof schemaInstance>
-		const { username, userNickname } = updateOrCreateUserInfoRequest
+		const { username, userNickname, signature } = updateOrCreateUserInfoRequest
 
 		const usernameStandardized = username.trim().normalize();
 
@@ -530,6 +539,14 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 		if (userNickname && !validateNameField(userNickname)) {
 			logging('ERROR', '更新用户信息失败，用户昵称不合法，用户 UUID:', undefined, { uuid })
 			return { success: false, message: '更新用户信息失败，用户昵称不合法' }
+		}
+
+		if (!!signature) {
+			const maxSignatureLength = 200
+			if (signature.length > maxSignatureLength) {
+				logging('ERROR', '更新用户信息失败，用户签名过长，用户 UUID:', undefined, { uuid, signatureLength: signature.length, maxSignatureLength })
+				return { success: false, message: `更新用户信息失败，用户签名过长，最大长度为 ${maxSignatureLength} 个字符` }
+			}
 		}
 
 		const updateUserInfoWhere: QueryType<UserInfo> = {
@@ -658,6 +675,7 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 					passwordUpdateDateTime: 1, // 密码最后更新时间
 					roles: 1, // 用户的角色
 					authenticatorType: 1, // 2FA 的类型
+					userDataBootstrapHint: 1, // 用户数据初始化提示标识。
 					invitationCode: '$invitation_codes_data.invitationCode', // 用户的邀请码
 					username: '$user_info_data.username', // 用户名
 					userNickname: '$user_info_data.userNickname', // 用户昵称
@@ -693,6 +711,132 @@ export const getSelfUserInfoByUuidService = async (getSelfUserInfoByUuidRequest:
 				success: true,
 				message: '获取用户信息成功',
 				result: userInfo,
+			}
+		} catch (error) {
+			const errorMessage = '通过 UUID 获取用户信息时出错，查询数据时出错。'
+			logging('ERROR', errorMessage, error)
+			return { success: false, message: errorMessage }
+		}
+	} catch (error) {
+		const errorMessage = '通过 UUID 获取用户信息时出错，未知错误。'
+		logging('ERROR', errorMessage, error)
+		return { success: false, message: errorMessage }
+	}
+}
+
+/**
+ * 根据 uid 和标识获取用户初始化数据
+ * @param getSelfUserInfoRequest 根据 uid 和标识获取用户初始化数据的请求参数
+ * @returns 根据 uid 和标识获取用户初始化数据的请求响应
+ */
+export const getUserBootstrapDataByHintService = async (getUserBootstrapDataByHintRequest: GetUserBootstrapDataByHintRequestDto): Promise<GetUserBootstrapDataByHintResponseDto> => {
+	try {
+		const { uid, userDataBootstrapHint } = getUserBootstrapDataByHintRequest
+		if (!userDataBootstrapHint) {
+			const errorMessage = '根据 uid 和标识获取用户初始化数据失败，uid 或 userDataBootstrapHint 为空'
+			logging('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
+		}
+
+		if (!await checkUserBootstrapHintByUid(uid, userDataBootstrapHint)) {
+			const errorMessage = '根据 uid 和标识获取用户初始化数据失败，用户的 userDataBootstrapHint 校验未通过，非法用户！'
+			logging('ERROR', errorMessage)
+			return { success: false, message: errorMessage }
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+
+		const selfUserInfoPipeline: PipelineStage[] = [
+			{
+				$match: {
+					uid
+				},
+			},
+			{
+				$lookup: {
+					from: 'user-infos',
+					localField: 'UUID',
+					foreignField: 'UUID',
+					as: 'user_info_data'
+				}
+			},
+			{
+				$unwind: {
+					path: '$user_info_data',
+					preserveNullAndEmptyArrays: true // 保留没有用户信息的用户
+				},
+			},
+			{
+				$lookup: {
+					from: 'user-settings',
+					localField: 'UUID',
+					foreignField: 'UUID',
+					as: 'user_settings_data'
+				},
+			},
+			{
+				$unwind: {
+					path: '$user_settings_data',
+					preserveNullAndEmptyArrays: true // 保留没有用户设置信息的用户
+				},
+			},
+			{
+				$project: {
+					uid: 1, // 用户 UID
+					uuid: '$UUID', // 用户 UUID
+					userCreateDateTime: 1, // 用户创建日期
+					passwordUpdateDateTime: 1, // 密码最后更新时间
+					roles: 1, // 用户的角色
+					authenticatorType: 1, // 2FA 的类型
+					userDataBootstrapHint: 1, // 用户数据初始化提示标识。
+					username: '$user_info_data.username', // 用户名
+					userNickname: '$user_info_data.userNickname', // 用户昵称
+					avatar: '$user_info_data.avatar', // 用户头像
+					userBannerImage: '$user_info_data.userBannerImage', // 用户的背景图
+					signature: '$user_info_data.signature', // 用户的个性签名
+
+					enableCookie: '$user_settings_data.enableCookie', // 是否允许 cookie
+					themeType: '$user_settings_data.themeType', // 主题类型
+					themeColor: '$user_settings_data.themeColor', // 主题颜色
+					themeColorCustom: '$user_settings_data.themeColorCustom', // 用户自定义主题颜色
+					wallpaper: '$user_settings_data.wallpaper', // TODO: 背景图 URL
+					coloredSideBar: '$user_settings_data.coloredSideBar', // 是否启用彩色导航栏
+					dataSaverMode: '$user_settings_data.dataSaverMode', // 节流模式
+					noSearchRecommendations: '$user_settings_data.noSearchRecommendations', // 是否禁用搜索推荐
+					noRelatedVideos: '$user_settings_data.noRelatedVideos', // 禁用相关视频推荐
+					noRecentSearch: '$user_settings_data.noRecentSearch', // 禁用搜索历史
+					noViewHistory: '$user_settings_data.noViewHistory', // 禁用观看历史
+					openInNewWindow: '$user_settings_data.openInNewWindow', // 在新窗口中打开链接
+					currentLocale: '$user_settings_data.currentLocale', // 当前语言环境
+					timezone: '$user_settings_data.timezone', // 时区
+					unitSystemType: '$user_settings_data.unitSystemType', // 单位系统类型
+					devMode: '$user_settings_data.devMode', // 是否进入开发者模式
+					sharpAppearanceMode: '$user_settings_data.sharpAppearanceMode', // 实验性：启用直角模式
+					flatAppearanceMode: '$user_settings_data.flatAppearanceMode', // 实验性：启用扁平模式
+				}
+			}
+		]
+
+		try {
+			const userBootstrapDataResult = await selectDataByAggregateFromMongoDB<UserAuth>(userAuthSchemaInstance, userAuthCollectionName, selfUserInfoPipeline)
+			if (
+				false
+				|| !userBootstrapDataResult
+				|| !userBootstrapDataResult.success
+				|| !userBootstrapDataResult.result
+				|| userBootstrapDataResult.result.length !== 1
+			) {
+				const errorMessage = '通过 UID 获取用户信息时失败，查询数据时出错'
+				logging('ERROR', errorMessage)
+				return { success: false, message: errorMessage }
+			}
+
+			const userBootstrapData = userBootstrapDataResult.result[0]
+			return {
+				success: true,
+				message: '获取用户信息成功',
+				result: userBootstrapData,
 			}
 		} catch (error) {
 			const errorMessage = '通过 UUID 获取用户信息时出错，查询数据时出错。'
@@ -772,7 +916,7 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 		try {
 			const session = await createAndStartSession()
 			const userAuthPromise = selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, userAuthSchemaInstance, userAuthCollectionName)
-			const userInfoPromise = selectDataFromMongoDB(getUserInfoWhere, getUserInfoSelect, userInfoSchemaInstance, userInfoCollectionName)
+			const userInfoPromise = selectDataFromMongoDB<UserInfo>(getUserInfoWhere, getUserInfoSelect, userInfoSchemaInstance, userInfoCollectionName)
 			const [userAuthResult, userInfoResult] = await Promise.all([userAuthPromise, userInfoPromise])
 			if (!userAuthResult || !userAuthResult.success || !userInfoResult || !userInfoResult.success) {
 				await abortAndEndSession(session)
@@ -889,7 +1033,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 			themeType: 1,
 			themeColor: 1,
 			themeColorCustom: 1,
-			wallpaper: 1,
+			wallpaper: 1, // TODO
 			coloredSideBar: 1,
 			dataSaverMode: 1,
 			noSearchRecommendations: 1,
@@ -910,7 +1054,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 			editDateTime: 1,
 		}
 
-		const userSettingsResult = await selectDataFromMongoDB(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
+		const userSettingsResult = await selectDataFromMongoDB<UserSettings>(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
 
 		if (!userSettingsResult.success || !userSettingsResult.result || userSettingsResult.result.length !== 1) {
 			const errorMessage = '获取用户个性设置失败，查询未成功'
@@ -919,7 +1063,18 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 		}
 
 		const userSettings = userSettingsResult.result[0]
-		return { success: true, message: '获取用户设置成功！', userSettings }
+		return {
+			success: true,
+			message: '获取用户设置成功！',
+			userSettings: {
+				...userSettings,
+				themeType: userSettings.themeType as 'light' | 'dark' | 'system',
+				dataSaverMode: userSettings.dataSaverMode as 'limit' | 'standard' | 'preview',
+				userWebsitePrivacySetting: userSettings.userWebsitePrivacySetting as 'public' | 'private' | 'following',
+				userPrivaryVisibilitiesSetting: userSettings.userPrivaryVisibilitiesSetting as GetUserSettingsResponseDto['userSettings']['userPrivaryVisibilitiesSetting'],
+				userLinkedAccountsVisibilitiesSetting: userSettings.userLinkedAccountsVisibilitiesSetting as GetUserSettingsResponseDto['userSettings']['userLinkedAccountsVisibilitiesSetting'],
+			}
+		}
 	} catch (error) {
 		const errorMessage = '获取用户个性设置失败，未知异常！'
 		logging('ERROR', errorMessage, error)
@@ -938,7 +1093,7 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 	try {
 		const now = new Date().getTime();
 		if (await checkUserToken(uid, token)) {
-			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			const UUID = await getUserUuid(uid)
 			if (!UUID) {
 				logging('ERROR', '更新或创建用户设置失败，UUID 不存在', undefined, { updateOrCreateUserSettingsRequest, uid })
 				return { success: false, message: '更新或创建用户设置失败，UUID 不存在' }
@@ -1925,7 +2080,7 @@ export class General2FATotpVerifier {
 					return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 				}
 
-				const isCorrectRecoveryCode = comparePasswordSync(this.#clientOtp, recoveryCodeHash)
+				const isCorrectRecoveryCode = compareStringSync(this.#clientOtp, recoveryCodeHash)
 				if (!isCorrectRecoveryCode) {
 					const errorMessage = '验证 TOTP 2FA 失败，恢复码错误'
 					logging('ERROR', errorMessage)
@@ -1955,7 +2110,7 @@ export class General2FATotpVerifier {
 					let useCorrectBackupCode = false // 用户是否使用了一个正确的备用码。
 					const newBackupCodeHash = []
 					listOfBackupCodeHash.forEach( backupCodeHash => {
-						const isCorrectBackupCode = comparePasswordSync(this.#clientOtp, backupCodeHash)
+						const isCorrectBackupCode = compareStringSync(this.#clientOtp, backupCodeHash)
 						if (isCorrectBackupCode) {
 							useCorrectBackupCode = true
 						} else {
@@ -2209,7 +2364,7 @@ export class General2FAVerifier {
 
 /**
  * 生成邀请码
- * // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+ * // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
  * @param uid 申请生成邀请码的用户
  * @param token 申请生成邀请码的用户 token
  * @returns 生成的邀请码
@@ -2217,7 +2372,7 @@ export class General2FAVerifier {
 export const createInvitationCodeService = async (uid: number, token: string): Promise<CreateInvitationCodeResponseDto> => {
 	try {
 		if (await checkUserToken(uid, token)) {
-			const UUID = await getUserUuid(uid) // DELETE ME 这是一个临时解决方法，Cookie 中应当存储 UUID
+			const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
 			if (!UUID) {
 				logging('ERROR', '生成邀请码失败，UUID 不存在', undefined, { uid })
 				return { success: false, isCoolingDown: false, message: '生成邀请码失败，UUID 不存在' }
@@ -2332,14 +2487,14 @@ export const createInvitationCodeService = async (uid: number, token: string): P
 
 /**
  * 获取自己的邀请码列表
- * // DELETE ME: 应该使用 UUID
+ * // FIXME: 应该使用 UUID
  * @param uid 用户 UID
  * @param token 用户 token
  * @returns 获取自己的邀请码列表的请求结果
  */
 export const getMyInvitationCodeService = async (uid: number, token: string): Promise<GetMyInvitationCodeResponseDto> => {
 	try {
-		if (await checkUserToken(uid, token)) { // DELETE ME: 应该使用 UUID
+		if (await checkUserToken(uid, token)) { // FIXME: 应该使用 UUID
 			const { collectionName, schemaInstance } = UserInvitationCodeSchema
 			type UserInvitationCode = InferSchemaType<typeof schemaInstance>
 			const myInvitationCodeWhere: QueryType<UserInvitationCode> = {
@@ -2580,7 +2735,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		}
 
 		const { passwordHashHash } = userAuthResult.result[0]
-		const isCorrectPassword = comparePasswordSync(oldPasswordHash, passwordHashHash)
+		const isCorrectPassword = compareStringSync(oldPasswordHash, passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '修改密码失败，旧密码不正确'
 			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
@@ -2588,7 +2743,7 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 			return { success: false, message: errorMessage }
 		}
 
-		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
+		const newPasswordHashHash = hashStringSync(newPasswordHash)
 		if (!newPasswordHashHash) {
 			const errorMessage = '修改密码失败，未能散列新密码'
 			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
@@ -2653,7 +2808,7 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 		const session = await mongoose.startSession()
 		session.startTransaction()
 
-		const newPasswordHashHash = hashPasswordSync(newPasswordHash)
+		const newPasswordHashHash = hashStringSync(newPasswordHash)
 		if (!newPasswordHashHash) {
 			await abortAndEndSession(session)
 			const message = '找回密码失败，未能散列新密码'
@@ -2725,7 +2880,7 @@ export const checkUsernameService = async (checkUsernameRequest: CheckUsernameRe
 				uid: 1,
 			}
 			try {
-				const checkUsername = await selectDataFromMongoDB(checkUsernameWhere, checkUsernameSelete, schemaInstance, collectionName)
+				const checkUsername = await selectDataFromMongoDB<UserInfo>(checkUsernameWhere, checkUsernameSelete, schemaInstance, collectionName)
 				if (checkUsername.success) {
 					if (checkUsername.result?.length === 0) {
 						return { success: true, message: '用户名可用', isAvailableUsername: true }
@@ -2774,7 +2929,7 @@ export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest:
 
 		let result: DbPoolResultsType<UserAuth>
 		try {
-			result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+			result = await selectDataFromMongoDB<UserAuth>(where, select, schemaInstance, collectionName)
 		} catch (error) {
 			logging('ERROR', '根据 UUID 校验用户是否已经存在时出错：查询出错', error)
 			return { success: false, exists: false, message: '根据 UUID 校验用户是否已经存在时出错：查询出错' }
@@ -3182,7 +3337,7 @@ export const adminClearUserInfoService = async (adminClearUserInfoRequest: Admin
 	}
 }
 
-/**
+/**  TODO:1231
  * 管理员编辑用户信息
  * @param AdminEditUserInfoRequestDto 管理员编辑用户信息的请求载荷
  * @param adminUUID 管理员的 UUID
@@ -3266,7 +3421,7 @@ export const getUserUuid = async (uid: number): Promise<string | void> => {
 			UUID: 1,
 		}
 
-		const getUuidResult = await selectDataFromMongoDB(getUuidWhere, getUuidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
+		const getUuidResult = await selectDataFromMongoDB<UserAuth>(getUuidWhere, getUuidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
 		if (getUuidResult.success && getUuidResult.result?.length === 1) {
 			return getUuidResult.result[0].UUID
 		} else {
@@ -3300,7 +3455,7 @@ export const getUserUid = async (uuid: string): Promise<number | undefined> => {
 			uid: 1,
 		}
 
-		const getUidResult = await selectDataFromMongoDB(getUidWhere, getUidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
+		const getUidResult = await selectDataFromMongoDB<UserAuth>(getUidWhere, getUidSelect, userAuthSchemaSchemaInstance, userAuthCollectionName)
 		if (getUidResult.success && getUidResult.result?.length === 1) {
 			return getUidResult.result[0].uid
 		} else {
@@ -3332,7 +3487,7 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 				uid: 1,
 			}
 			try {
-				const userInfo = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
 				if (userInfo && userInfo.success) {
 					if (userInfo.result?.length === 1) {
 						return true
@@ -3377,7 +3532,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 				uid: 1,
 			}
 			try {
-				const userInfo = await selectDataFromMongoDB(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
 				if (userInfo && userInfo.success) {
 					if (userInfo.result?.length === 1) {
 						return true
@@ -3399,6 +3554,51 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 		}
 	} catch (error) {
 		logging('ERROR', '查询用户 Token 时出错，未知错误：', error)
+		return false
+	}
+}
+
+/**
+ * 检查用户数据初始化提示标识和用户 uid 是否吻合。
+ * @param uid 用户 UID
+ * @param userDataBootstrapHint 用户数据初始化提示标识
+ * @returns boolean 如果验证通过则为 true，不通过为 false
+ */
+export const checkUserBootstrapHintByUid = async (uid: number, userDataBootstrapHint: string): Promise<boolean> => {
+	try {
+		if (uid === null || Number.isNaN(uid) || uid === undefined || !userDataBootstrapHint) {
+			logging('ERROR', `用户数据初始化提示标识时出错，必要的参数 uid 或 userDataBootstrapHint 为空: uid: ${uid}`, undefined, { uid })
+			return false
+		}
+
+		const { collectionName, schemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof schemaInstance>
+		const userAuthWhere: QueryType<UserAuth> = {
+			uid,
+			userDataBootstrapHint,
+		}
+		const userAuthSelect: SelectType<UserAuth> = {
+			uid: 1,
+		}
+		try {
+			const userAuthInfo = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
+			if (!userAuthInfo || !userAuthInfo.success) {
+				logging('ERROR', `用户数据初始化提示标识时未查询到用户信息，用户 uid: ${uid}，错误描述：${userAuthInfo?.message}，错误信息：${userAuthInfo?.error}`, undefined, { uid })
+				return false
+			}
+
+			if (userAuthInfo.result?.length !== 1) {
+				logging('ERROR', `用户数据初始化提示标识时，用户信息长度不为 1，用户 uid: ${uid}`, undefined, { uid })
+				return false
+			}
+
+			return true
+		} catch (error) {
+			logging('ERROR', `用户数据初始化提示标识时出错，用户 uid: ${uid}，错误信息：`, error, { uid })
+			return false
+		}
+	} catch (error) {
+		logging('ERROR', '用户数据初始化提示标识时出错，未知错误：', error, { uid })
 		return false
 	}
 }
@@ -3433,7 +3633,7 @@ const deleteTotpAuthenticatorByRecoveryCode = async (deleteTotpAuthenticatorByRe
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserTotpAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
 		const userTotpAuthenticatorWhere: QueryType<UserTotpAuthenticator> = { UUID: uuid, recoveryCodeHash }
-		const deleteResult = await deleteDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		const deleteResult = await deleteOneDataFromMongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
 		if (!deleteResult.success) {
 			const errorMessage = '通过恢复码删除用户 TOTP 2FA 失败，删除失败'
@@ -3497,7 +3697,7 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 			return { success: false, message: errorMessage }
 		}
 
-		const isCorrectPassword = comparePasswordSync(passwordHash, passwordHashHash)
+		const isCorrectPassword = compareStringSync(passwordHash, passwordHashHash)
 		if (!isCorrectPassword) {
 			const errorMessage = '已登录用户通过密码和 TOTP 验证码删除身份验证器失败，用户密码不正确'
 			logging('ERROR', errorMessage)
@@ -3523,7 +3723,7 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		const session = await createAndStartSession()
 
 		// 调用删除函数
-		const deleteResult = await deleteDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		const deleteResult = await deleteOneDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 		const resetResult = await resetUser2FATypeByUUID(uuid, session)
 
 		if (!deleteResult.success || deleteResult.result.deletedCount !== 1 || !resetResult) {
@@ -3624,8 +3824,8 @@ export const createUserTotpAuthenticatorService = async (uuid: string, token: st
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
 		const checkUserAuthenticatorWhere: QueryType<UserAuthenticator> = { UUID: uuid, enabled: true }
-		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { enabled: 1, createDateTime: 1 }
-		const checkUserAuthenticatorResult = await selectDataFromMongoDB(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
+		const checkUserAuthenticatorSelect: SelectType<UserAuthenticator> = { enabled: 1, createDateTime: 1 } satisfies SelectType<UserAuthenticator>
+		const checkUserAuthenticatorResult = await selectDataFromMongoDB<UserAuthenticator>(checkUserAuthenticatorWhere, checkUserAuthenticatorSelect, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
 
 		if (!checkUserAuthenticatorResult.success || !checkUserAuthenticatorResult.result) {
 			if (session.inTransaction()) {
@@ -3716,9 +3916,9 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		const now = new Date().getTime()
 		const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 		const recoveryCode = generateSecureVerificationStringCode(24, charset)
-		const recoveryCodeHash = hashPasswordSync(recoveryCode)
+		const recoveryCodeHash = hashStringSync(recoveryCode)
 		const backupCode = Array.from({ length: 5 }, () => generateSecureVerificationStringCode(6, charset))
-		const backupCodeHash = backupCode.map(hashPasswordSync)
+		const backupCodeHash = backupCode.map(hashStringSync)
 
 		const { collectionName: userTotpAuthenticatorCollectionName, schemaInstance: userTotpAuthenticatorSchemaInstance } = UserTotpAuthenticatorSchema
 		type UserAuthenticator = InferSchemaType<typeof userTotpAuthenticatorSchemaInstance>
@@ -3893,7 +4093,7 @@ export const deleteUserEmailAuthenticatorService = async (deleteUserEmailAuthent
 			return { success: false, message: '用户删除 Email 2FA 时失败，用户未开启 2FA 或者 2FA 方式不是 Email。' }
 		}
 
-		const isCorrectPassword = comparePasswordSync(passwordHash, userAuthData.passwordHashHash)
+		const isCorrectPassword = compareStringSync(passwordHash, userAuthData.passwordHashHash)
 		if (!isCorrectPassword) {
 			await abortAndEndSession(session)
 			logging('ERROR', '用户删除 Email 2FA 时失败，密码错误')
@@ -4029,6 +4229,87 @@ export const checkUserHave2FAByUUIDService = async (uuid: string, token: string)
 		return { success: false, have2FA: false, message: '通过 UUID 检查用户是否已开启 2FA 身份验证器时出错，未知错误' }
 	}
 }
+
+/**
+ * 管理员重置所有用户的 token // DANGER: 请勿调用，除非你知道你自己在做什么！所有用户将会被强制登出！
+ * @param adminUUID
+ * @param adminToken
+ * @returns 管理员重置所有用户的 token 的请求响应
+ */
+export const adminRotationAllUserTokenService = async (adminUUID: string, adminToken: string): Promise<AdminRotationAllUserTokenResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
+			logging('ERROR', '管理员重置所有用户的 token 时失败，非法用户', undefined, { adminUUID })
+			return { success: false, message: '管理员重置所有用户的 token 时失败，非法用户' }
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+		let UserAuthModel: Model<UserAuth>
+		if (mongoose.models[userAuthCollectionName]) {
+			UserAuthModel = mongoose.models[userAuthCollectionName]
+		} else {
+			UserAuthModel = mongoose.model<UserAuth>(userAuthCollectionName, userAuthSchemaInstance)
+		}
+
+		const cursor = UserAuthModel.find().cursor();
+
+		let count = 0;
+
+		for await (const doc of cursor) {
+			doc.token = generateSecureRandomString(64);
+			doc.editDateTime = Date.now();
+			await doc.save();
+			count++;
+		}
+
+		return { success: true, message: `token 轮换完成，一共轮换了 ${count} 条用户数据` }
+	} catch (error) {
+		logging('ERROR', '管理员重置所有用户的 token 时出错，未知错误', error, { adminUUID })
+		return { success: false, message: '管理员重置所有用户的 token 时出错，未知错误' }
+	}
+}
+
+/**
+ * 管理员重置所有用户的 userDataBootstrapHint // DANGER: 请勿调用，除非你知道你自己在做什么！
+ * @param adminUUID
+ * @param adminToken
+ * @returns 管理员重置所有用户的 token 的请求响应
+ */
+export const adminRotationAllUserDataBootstrapHintService = async (adminUUID: string, adminToken: string): Promise<AdminRotationAllUserDataBootstrapHintResponseDto> => {
+	try {
+		if (!await checkUserTokenByUUID(adminUUID, adminToken)) {
+			logging('ERROR', '管理员重置所有用户的 userDataBootstrapHint 时失败，非法用户', undefined, { adminUUID })
+			return { success: false, message: '管理员重置所有用户的 userDataBootstrapHint 时失败，非法用户' }
+		}
+
+		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
+		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
+		let UserAuthModel: Model<UserAuth>
+		if (mongoose.models[userAuthCollectionName]) {
+			UserAuthModel = mongoose.models[userAuthCollectionName]
+		} else {
+			UserAuthModel = mongoose.model<UserAuth>(userAuthCollectionName, userAuthSchemaInstance)
+		}
+
+		const cursor = UserAuthModel.find().cursor();
+
+		let count = 0;
+
+		for await (const doc of cursor) {
+			doc.userDataBootstrapHint = generateSecureRandomString(64);
+			doc.editDateTime = Date.now();
+			await doc.save();
+			count++;
+		}
+
+		return { success: true, message: `userDataBootstrapHint 轮换完成，一共轮换了 ${count} 条用户数据` }
+	} catch (error) {
+		logging('ERROR', '管理员重置所有用户的 userDataBootstrapHint 时出错，未知错误', error, { adminUUID })
+		return { success: false, message: '管理员重置所有用户的 userDataBootstrapHint 时出错，未知错误' }
+	}
+}
+
 
 /**
  * 校验用户注册信息

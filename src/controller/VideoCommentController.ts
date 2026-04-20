@@ -46,9 +46,10 @@ export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koa
 			pageSize: parseInteger(pageSize) ?? Number.MAX_SAFE_INTEGER,
 		},
 	}
-	const UUID = ctx.cookies.get('uuid')
+	const uid = parseInteger(ctx.cookies.get('uid'), -1)
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	const videoCommentListResponse = await getVideoCommentListByKvidService(getVideoCommentByKvidRequest, UUID, token)
+	const videoCommentListResponse = await getVideoCommentListByKvidService(getVideoCommentByKvidRequest, uid, uuid, token)
 	ctx.body = videoCommentListResponse
 	await next()
 }
