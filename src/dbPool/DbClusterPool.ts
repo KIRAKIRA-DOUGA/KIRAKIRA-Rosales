@@ -168,6 +168,41 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 }
 
 /**
+ * 在 MongoDB 数据库中插入多条数据
+ * @param dataList 被插入的数据列表
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 数据即将插入的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param options 设置项
+ * @return 插入数据的状态和结果
+ */
+export const insertManyData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(dataList: T[], schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultsType<T & { _id: string }> > => {
+	try {
+		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
+		if (options?.session) {
+			options.readPreference = 'primary'
+		}
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+		mongoModel.createIndexes()
+		try {
+			const result = await mongoModel.insertMany(dataList, options) as unknown as (T & { _id: string })[]
+			return { success: true, message: '数据插入成功', result }
+		} catch (error) {
+			logging('ERROR', '数据插入失败：', error, undefined, { recordingLogs: false })
+			throw { success: false, message: '数据插入失败', error }
+		}
+	} catch (error) {
+		logging('ERROR', 'insertManyData2MongoDB 发生错误', error, undefined, { recordingLogs: false })
+		throw { success: false, message: '数据插入失败，insertManyData2MongoDB 中发生错误：', error }
+	}
+}
+
+/**
  * 条件查询插入：根据条件查询，如果无法查询到数据，则插入一条数据，如果能查询到数据，则什么也不做。（注意：查询条件与插入的数据是两个独立的变量，允许不一致）
  * @param where - 查询条件
  * @param insertData - 要插入的数据
@@ -245,8 +280,8 @@ export const deleteOneDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(w
 			throw { success: false, message: '数据删除失败', error }
 		}
 	} catch (error) {
-		logging('ERROR', 'deleteDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
-		throw { success: false, message: '数据删除失败，deleteDataFromMongoDB 中发生错误：', error }
+		logging('ERROR', 'deleteOneDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
+		throw { success: false, message: '数据删除失败，deleteOneDataFromMongoDB 中发生错误：', error }
 	}
 }
 
@@ -422,6 +457,75 @@ export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: 
 	} catch (error) {
 		logging('ERROR', '数据更新失败，未知错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据更新失败，updateData4MongoDB 中发生错误：', error }
+	}
+}
+
+/**
+ * 在 MongoDB 数据库中批量更新多条数据
+ * @param operations 批量更新操作列表
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param options 设置项
+ * @returns 批量更新数据的结果
+ */
+export const bulkUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(operations: { where: QueryType<T>; update: UpdateType<T> }[], schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise<UpdateResultType> => {
+	try {
+		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
+		if (options?.session) {
+			options.readPreference = 'primary'
+		}
+
+		if (!operations.length) {
+			return {
+				success: true,
+				message: '无需更新数据',
+				result: {
+					acknowledged: true,
+					matchedCount: 0,
+					modifiedCount: 0,
+				},
+			}
+		}
+
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+
+		const bulkOperations = operations.map(operation => ({
+			updateOne: {
+				filter: operation.where,
+				update: { $set: operation.update },
+			},
+		}))
+
+		try {
+			const updateResult = await mongoModel.bulkWrite(bulkOperations, options)
+			const acknowledged = (updateResult as { acknowledged?: boolean }).acknowledged ?? true
+			const matchedCount = updateResult.matchedCount
+			const modifiedCount = updateResult.modifiedCount
+
+			if (acknowledged && matchedCount > 0) {
+				if (modifiedCount > 0) {
+					return { success: true, message: '数据批量更新成功', result: { acknowledged, matchedCount, modifiedCount } }
+				} else {
+					logging('WARN', '已匹配到数据并尝试批量更新数据，但数据未（无需）更新，可能是因为数据更新前后的值相同', undefined, { operationsCount: operations.length }, { recordingLogs: false })
+					return { success: true, message: '尝试批量更新数据，但数据无需更新', result: { acknowledged, matchedCount, modifiedCount } }
+				}
+			} else {
+				logging('WARN', '尝试批量更新数据，但更新失败，因为未匹配到数据', undefined, { operationsCount: operations.length }, { recordingLogs: false })
+				return { success: false, message: '尝试批量更新数据，但更新失败，可能是未匹配到数据', result: { acknowledged, matchedCount, modifiedCount } }
+			}
+		} catch (error) {
+			logging('ERROR', '数据批量更新失败：', error, { operationsCount: operations.length }, { recordingLogs: false })
+			throw { success: false, message: '数据批量更新失败', error }
+		}
+	} catch (error) {
+		logging('ERROR', '数据批量更新失败，未知错误', error, undefined, { recordingLogs: false })
+		throw { success: false, message: '数据批量更新失败，bulkUpdateData4MongoDB 中发生错误：', error }
 	}
 }
 

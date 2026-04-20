@@ -63,7 +63,9 @@ class FavoritesDetailSchemaFactory {
 	// 构造器
 	constructor() {
 		// 添加收藏夹ID和内容ID的组合唯一索引，防止重复添加
-		this.schemaInstance.index({ favoritesListId: 1, category: 1, id: 1 }, { unique: true });
+		this.schemaInstance.index({ favoritesListId: 1, category: 1, id: 1 }, { unique: true })
+		// 为按(category, id)过滤并按operator去重计数的聚合查询添加复合索引，避免全表扫描
+		this.schemaInstance.index({ category: 1, id: 1, operator: 1 })
 	}
 }
 export const FavoritesDetailSchema = new FavoritesDetailSchemaFactory()

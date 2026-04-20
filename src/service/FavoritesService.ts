@@ -1,12 +1,12 @@
 import mongoose, { InferSchemaType } from 'mongoose'
 import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, AddToFavoritesRequestDto, AddToFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, AddEditorToFavoritesRequestDto, AddEditorToFavoritesResponseDto, RemoveEditorFromFavoritesRequestDto, RemoveEditorFromFavoritesResponseDto, GetFavoritesCoverUploadSignedUrlRequestDto, GetFavoritesCoverUploadSignedUrlResponseDto } from '../controller/FavoritesControllerDto.js'
-import { insertData2MongoDB, selectDataFromMongoDB, deleteDataFromMongoDB, updateData4MongoDB, deleteManyDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { insertData2MongoDB, insertManyData2MongoDB, selectDataFromMongoDB, deleteOneDataFromMongoDB, updateData4MongoDB, bulkUpdateData4MongoDB, deleteManyDataFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType, OrderByType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesSchema, FavoritesDetailSchema, RemovedFavoritesSchema, RemovedFavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-import { checkUserTokenService, checkUserTokenByUuidService, checkUserExistsByUIDService, getUserUid, getUserUuid } from './UserService.js'
+import { checkUserTokenService, checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
 import { logging } from './loggingService.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
@@ -294,6 +294,10 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 		}
 
 		const uid = await getUserUid(uuid)
+		if (!uid) {
+			logging('ERROR', '添加内容到收藏夹失败，用户ID不存在', undefined, { addToFavoritesRequest, uuid })
+			return { success: false, message: '添加内容到收藏夹失败，用户 uid 不存在' }
+		}
 
 		// 检查用户是否有权限操作该收藏夹
 		if (!(await checkFavoritesPermission(addToFavoritesRequest.favoritesListId, uid))) {
@@ -340,7 +344,7 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 				},
 			}
 		)
-		const newSortOrder = (maxSortOrderDocument?.sortOrder || 0) + (maxSortOrderDocument ? 1 : 0)
+		const newSortOrder = maxSortOrderDocument ? maxSortOrderDocument.sortOrder + 1 : 1
 
 		const favoritesDetailData: FavoritesDetailType = {
 			favoritesListId: addToFavoritesRequest.favoritesListId,
@@ -454,7 +458,7 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 			}
 
 			// 3. 从原集合删除记录
-			const deleteResult = await deleteDataFromMongoDB<FavoritesDetailType>(where, schemaInstance, collectionName, option)
+			const deleteResult = await deleteOneDataFromMongoDB<FavoritesDetailType>(where, schemaInstance, collectionName, option)
 			if (!deleteResult.success || !deleteResult.result || deleteResult.result.deletedCount === 0) {
 				await abortAndEndSession(session)
 				logging('ERROR', '从收藏夹移除内容失败，删除数据失败', undefined, { removeFromFavoritesRequest, uuid, uid })
@@ -711,14 +715,22 @@ export const deleteFavoritesService = async (deleteFavoritesRequest: DeleteFavor
 			if (detailResult.success && detailResult.result && detailResult.result.length > 0) {
 				const { collectionName: removedDetailCollectionName, schemaInstance: removedDetailSchemaInstance } = RemovedFavoritesDetailSchema
 				type RemovedFavoritesDetailType = InferSchemaType<typeof removedDetailSchemaInstance>
-				for (const detail of detailResult.result) {
-					const removedDetailData: RemovedFavoritesDetailType = {
-						...detail as FavoritesDetailType,
-						_operatorUUID_: uuid,
-						_operatorUid_: uid,
-						editDateTime: now,
-					}
-					await insertData2MongoDB<RemovedFavoritesDetailType>(removedDetailData, removedDetailSchemaInstance, removedDetailCollectionName, option)
+				const removedDetailDataList: RemovedFavoritesDetailType[] = detailResult.result.map(detail => ({
+					...detail as FavoritesDetailType,
+					_operatorUUID_: uuid,
+					_operatorUid_: uid,
+					editDateTime: now,
+				}))
+				const saveRemovedDetailResult = await insertManyData2MongoDB<RemovedFavoritesDetailType>(
+					removedDetailDataList,
+					removedDetailSchemaInstance,
+					removedDetailCollectionName,
+					option
+				)
+				if (!saveRemovedDetailResult.success || !saveRemovedDetailResult.result || saveRemovedDetailResult.result.length !== removedDetailDataList.length) {
+					await abortAndEndSession(session)
+					logging('ERROR', '删除收藏夹失败，批量保存废弃明细记录失败', undefined, { deleteFavoritesRequest, uuid, uid, favoritesId: deleteFavoritesRequest.favoritesId, expectedCount: removedDetailDataList.length, insertedCount: saveRemovedDetailResult.result?.length })
+					return { success: false, message: '删除收藏夹失败，批量保存废弃明细记录失败' }
 				}
 			}
 
@@ -878,25 +890,31 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 			}
 
 			// 4) 统一落库（严格 1..N），避免并发累加导致溢出
+			const pendingUpdates: { where: QueryType<FavoritesDetailType>; update: UpdateType<FavoritesDetailType> }[] = []
 			for (const item of workingList) {
 				const finalOrder = finalOrders.get(keyOf(item.category, item.id))!
 				if (finalOrder === item.currentOrder) {
 					continue // 无需更新
 				}
-				const where: QueryType<FavoritesDetailType> = {
-					favoritesListId: reorderFavoritesDetailRequest.favoritesListId,
-					category: item.category,
-					id: item.id,
-				}
-				const update: UpdateType<FavoritesDetailType> = {
-					sortOrder: finalOrder,
-					editDateTime: now,
-				}
-				const updateResult = await updateData4MongoDB<FavoritesDetailType>(where, update, schemaInstance, collectionName, { session })
-				if (!updateResult.success) {
+				pendingUpdates.push({
+					where: {
+						favoritesListId: reorderFavoritesDetailRequest.favoritesListId,
+						category: item.category,
+						id: item.id,
+					},
+					update: {
+						sortOrder: finalOrder,
+						editDateTime: now,
+					},
+				})
+			}
+
+			if (pendingUpdates.length > 0) {
+				const updateResult = await bulkUpdateData4MongoDB<FavoritesDetailType>(pendingUpdates, schemaInstance, collectionName, { session })
+				if (!updateResult.success || !updateResult.result || updateResult.result.matchedCount !== pendingUpdates.length) {
 					await abortAndEndSession(session)
-					logging('ERROR', '调整收藏夹内部排序失败，更新数据失败', undefined, { reorderFavoritesDetailRequest, uuid, uid, item })
-					return { success: false, message: '调整收藏夹内部排序失败，更新数据失败' }
+					logging('ERROR', '调整收藏夹内部排序失败，批量更新数据失败', undefined, { reorderFavoritesDetailRequest, uuid, uid, expectedCount: pendingUpdates.length, matchedCount: updateResult.result?.matchedCount, modifiedCount: updateResult.result?.modifiedCount })
+					return { success: false, message: '调整收藏夹内部排序失败，批量更新数据失败' }
 				}
 			}
 
