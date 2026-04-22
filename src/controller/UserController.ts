@@ -151,7 +151,7 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 	}
 	const userLoginResult = await userLoginService(userLoginRequest)
 
-	if (userLoginResult.success === true) {
+	if (userLoginResult.success) {
 		ctx.cookies.set('token', userLoginResult.token, strictCookieOption)
 		ctx.cookies.set('email', userLoginResult.email, strictCookieOption)
 		ctx.cookies.set('uid', `${userLoginResult.uid}`, laxCookieOption)
@@ -370,6 +370,7 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 		ctx.cookies.set('token', '', logoutStrictCookieOption)
 		ctx.cookies.set('email', '', logoutStrictCookieOption)
 		ctx.cookies.set('uid', '', logoutLaxCookieOption)
+		ctx.cookies.set('uid', '', logoutStrictCookieOption) // NOTE: 这里 uid 同时设置了 lax 和 strict 两种 cookie，登出时两者都需要清除
 		ctx.cookies.set('uuid', '', logoutStrictCookieOption)
 		ctx.cookies.set('user-data-bootstrap-hint', '', logoutLaxCookieOption)
 	} else if ('userDataBootstrapHint' in selfUserInfo.result && selfUserInfo.result.userDataBootstrapHint) {
@@ -466,7 +467,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.cookies.set('token', '', logoutStrictCookieOption)
 	ctx.cookies.set('email', '', logoutStrictCookieOption)
 	ctx.cookies.set('uid', '', logoutLaxCookieOption)
-	ctx.cookies.set('uid', '', logoutStrictCookieOption)
+	ctx.cookies.set('uid', '', logoutStrictCookieOption) // NOTE: 这里 uid 同时设置了 lax 和 strict 两种 cookie，登出时两者都需要清除
 	ctx.cookies.set('uuid', '', logoutStrictCookieOption)
 	ctx.cookies.set('user-data-bootstrap-hint', '', logoutLaxCookieOption)
 
