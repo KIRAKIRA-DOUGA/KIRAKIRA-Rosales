@@ -417,6 +417,9 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 						avatar: '$uploader_info.avatar',
 						userBannerImage: '$uploader_info.userBannerImage',
 						signature: '$uploader_info.signature',
+						isSelf: {
+							$eq: ["$uploaderUUID", selectorUuid]
+						}
 					}
 				}
 			}
@@ -425,7 +428,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 		try {
 			// 使用 Pipeline 查询视频及上传者数据
 			const result = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, getThumbVideoPipeline)
-			const video = result.result?.[0] as GetVideoByKvidResponseDto['video']
+			const video = result.result?.[0] as (GetVideoByKvidResponseDto['video'] & { uploaderUUID: string })
 			if (!result.success || !video) {
 				logging('ERROR', '视频页 - 获取到的视频结果或视频数组为空')
 				return { success: false, message: '视频页 - 未获取到视频', isBlocked: false, isBlockedByOther, isHidden }
@@ -495,6 +498,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				if (video.uploaderUUID === selectorUuid) {
 					video.uploaderInfo.isSelf = true
 				}
+				video.uploaderUUID = undefined // WARN: 请勿移除本行：不应该返回上传者的 UUID，在使用完毕后将其清空。// TODO: 想办法优化到 pipeline 里，而不是返回 UUID 查询数据
 
 				// 9. 查询视频点赞/点踩信息
 				const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
