@@ -137,41 +137,41 @@ type BlockState = { isBlockedByOther: boolean, isBlocked: boolean; isHidden: boo
  */
 type VideoInfo = {
 	/** 视频 ID (KVID) */
-		videoId: number;
-		/** 视频分 P 数据 */
-		videoPart: VideoPartDto[];
-		/** 视频标题 */
-		title: string;
-		/** 封面图链接 */
-		image?: string;
-		/** 视频上传的日期，时间戳格式 */
-		uploadDate?: number;
-		/** 视频播放量 */
-		watchedCount?: number;
-		/** 视频作者 ID */
-		uploader?: string;
-		/** 创作者 UID */
-		uploaderId?: number;
-		/** 视频作者信息 */
-		uploaderInfo?: UploaderInfoDto;
-		/** 视频时长，单位 ms */
-		duration?: number;
-		/** 视频描述 */
-		description?: string;
-		/** 视频分区 */
-		videoCategory: string;
-		/** 视频版权 */
-		copyright: string;
-		/** 视频 TAG */
-		videoTagList: VideoTag[];
-		/** 视频点赞数 */
-		videoUpvoteCount: number;
-		/** 视频点踩数 */
-		videoDownvoteCount: number;
-		/** 当前用户是否点赞 */
-		userHasUpvoted: boolean;
-		/** 当前用户是否点踩 */
-		userHasDownvoted: boolean;
+	videoId: number;
+	/** 视频分 P 数据 */
+	videoPart: VideoPartDto[];
+	/** 视频标题 */
+	title: string;
+	/** 封面图链接 */
+	image?: string;
+	/** 视频上传的日期，时间戳格式 */
+	uploadDate?: number;
+	/** 视频播放量 */
+	watchedCount?: number;
+	/** 视频作者 ID */
+	uploader?: string;
+	/** 创作者 UID */
+	uploaderId?: number;
+	/** 视频作者信息 */
+	uploaderInfo?: UploaderInfoDto;
+	/** 视频时长，单位 ms */
+	duration?: number;
+	/** 视频描述 */
+	description?: string;
+	/** 视频分区 */
+	videoCategory: string;
+	/** 视频版权 */
+	copyright: string;
+	/** 视频 TAG */
+	videoTagList: VideoTag[];
+	/** 视频点赞数 */
+	videoUpvoteCount: number;
+	/** 视频点踩数 */
+	videoDownvoteCount: number;
+	/** 当前用户是否点赞 */
+	userHasUpvoted: boolean;
+	/** 当前用户是否点踩 */
+	userHasDownvoted: boolean;
 }
 
 /**

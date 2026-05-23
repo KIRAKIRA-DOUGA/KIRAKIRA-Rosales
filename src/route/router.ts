@@ -429,8 +429,8 @@ router.get('/video', getVideoByKvidController) // 根据视频 ID (KVID) 获取�
 // https://localhost:30000/video?videoId=1
 // cookie: uid, token (optional, if have it will try to record the video browsing history)
 
-router.get('/uploaderGetVideoByKvid', uploaderGetVideoByKvidController) // 视频发布者根据 kvid 获取视频详细信息
-// https://localhost:30000/uploaderGetVideoByKvid?videoId=1
+router.get('/video/uploaderGetVideoByKvid', uploaderGetVideoByKvidController) // 视频发布者根据 kvid 获取视频详细信息
+// https://localhost:30000/video/uploaderGetVideoByKvid?videoId=1
 // cookie: uid, token
 
 router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户上传的视频

@@ -565,7 +565,7 @@ export const uploaderGetVideoByKvidService = async (uploaderGetVideoByKvidReques
 		}
 
 
-		if ((await checkUserTokenByUuidService(uploaderUuid, uploaderToken)).success) {
+		if (!(await checkUserTokenByUuidService(uploaderUuid, uploaderToken)).success) {
 			const errorMessage = '视频发布者根据 kvid 获取视频详细信息失败，用户校验未通过'
 			logging('ERROR', errorMessage, undefined, { uploaderGetVideoByKvidRequest, uploaderUuid })
 			return { success: false, message: errorMessage }
@@ -619,8 +619,8 @@ export const uploaderGetVideoByKvidService = async (uploaderGetVideoByKvidReques
 						avatar: '$uploader_info.avatar',
 						userBannerImage: '$uploader_info.userBannerImage',
 						signature: '$uploader_info.signature',
-						isSelf: true,
-						isFollowing: false,
+						isSelf: { $literal: true },
+						isFollowing: { $literal: false },
 					}
 				}
 			}
