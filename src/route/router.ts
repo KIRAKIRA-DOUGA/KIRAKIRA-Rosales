@@ -42,7 +42,7 @@ import {
 	getUserBootstrapDataByHintController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController } from '../controller/VideoController.js'
+import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController, uploaderGetVideoByKvidController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { emitVideoUpvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, cancelVideoDownvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
@@ -428,6 +428,10 @@ router.get('/video/exists', checkVideoExistController) // 根据视频 ID (KVID)
 router.get('/video', getVideoByKvidController) // 根据视频 ID (KVID) 获取视频的数据
 // https://localhost:30000/video?videoId=1
 // cookie: uid, token (optional, if have it will try to record the video browsing history)
+
+router.get('/uploaderGetVideoByKvid', uploaderGetVideoByKvidController) // 视频发布者根据 kvid 获取视频详细信息
+// https://localhost:30000/uploaderGetVideoByKvid?videoId=1
+// cookie: uid, token
 
 router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户上传的视频
 // https://localhost:30000/video/user?uid=2

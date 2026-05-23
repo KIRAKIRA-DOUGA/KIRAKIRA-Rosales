@@ -1,8 +1,8 @@
 import { isPassRbacCheck } from '../service/RbacService.js'
-import { approvePendingReviewVideoService, checkVideoExistByKvidService, deleteVideoByKvidService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService } from '../service/VideoService.js'
+import { approvePendingReviewVideoService, checkVideoExistByKvidService, deleteVideoByKvidService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService, uploaderGetVideoByKvidService } from '../service/VideoService.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
+import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploaderGetVideoByKvidRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
 /**
  * 上传视频
@@ -83,11 +83,29 @@ export const getVideoByKvidController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const videoId = ctx.query.videoId as string
-	const uploadVideoRequest: GetVideoByKvidRequestDto = {
+	const getVideoByKvidRequest: GetVideoByKvidRequestDto = {
 		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
 	}
-	const getVideoByKvidResponse = await getVideoByKvidService(uploadVideoRequest, uuid, token)
+	const getVideoByKvidResponse = await getVideoByKvidService(getVideoByKvidRequest, uuid, token)
 	ctx.body = getVideoByKvidResponse
+	await next()
+}
+
+/**
+ * 视频发布者根据 kvid 获取视频详细信息
+ * @param ctx context
+ * @param next context
+ * @returns 视频信息
+ */
+export const uploaderGetVideoByKvidController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const videoId = ctx.query.videoId as string
+	const uploaderGetVideoByKvidRequest: UploaderGetVideoByKvidRequestDto = {
+		videoId: videoId ? parseInteger(videoId) : -1, // WARN -1 means you can't find any video
+	}
+	const uploaderGetVideoByKvidResponse = await uploaderGetVideoByKvidService(uploaderGetVideoByKvidRequest, uuid, token)
+	ctx.body = uploaderGetVideoByKvidResponse
 	await next()
 }
 

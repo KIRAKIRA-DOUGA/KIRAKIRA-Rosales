@@ -4,7 +4,7 @@ import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
-import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploaderGetVideoByKvidRequestDto, UploaderGetVideoByKvidResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndPlusByMongodbId, insertIfNotExist, isQueryResultsEmpty } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
@@ -304,26 +304,30 @@ export const checkVideoBlockedByKvidService = async (videoId: number, selectorUu
 		}
 		const videoResult = await selectDataFromMongoDB<Video>(where, select, schemaInstance, collectionName)
 		if (!videoResult.success || !videoResult.result || videoResult.result.length === 0) {
-			logging('ERROR', '检查视频是否被屏蔽失败，未找到对应的视频')
-			return { success: false, message: '检查视频是否被屏蔽失败，未找到对应的视频'}
+			const errorMessage = '检查视频是否被屏蔽失败，未找到对应的视频'
+			logging('ERROR', errorMessage, undefined, { videoId, selectorUuid })
+			return { success: false, message: errorMessage }
 		}
 		const video = videoResult.result?.[0]
 		const uploaderUUID = video.uploaderUUID
 		if (!uploaderUUID) {
-			logging('ERROR', '检查视频是否被屏蔽失败，视频上传者 UID 为空')
-			return { success: false, message: '检查视频是否被屏蔽失败，视频上传者 UID 为空' }
+			const errorMessage = '检查视频是否被屏蔽失败，视频上传者 UID 为空'
+			logging('ERROR', errorMessage, undefined, { videoId, selectorUuid })
+			return { success: false, message: errorMessage }
 		}
 		const targetUid = await getUserUid(uploaderUUID)
 		if (!targetUid) {
-			logging('ERROR', '检查视频是否被屏蔽失败，视频上传者 UID 不存在')
-			return { success: false, message: '检查视频是否被屏蔽失败，视频上传者 UID 不存在' }
+			const errorMessage = '检查视频是否被屏蔽失败，视频上传者 UID 不存在'
+			logging('ERROR', errorMessage, undefined, { videoId, selectorUuid })
+			return { success: false, message: errorMessage }
 		}
 
 		const checkBlockUserResult = await checkBlockUserService({ uid: targetUid }, selectorUuid, selectorToken)
 		const checkIsBlockedByOtherUserResult = await checkIsBlockedByOtherUserService({ targetUid }, selectorUuid, selectorToken)
 		if (!checkBlockUserResult.success && !checkIsBlockedByOtherUserResult.success) {
-			logging('ERROR', '检查视频是否被屏蔽失败，无法检查用户是否被屏蔽')
-			return { success: false, message: '检查视频是否被屏蔽失败，无法检查用户是否被屏蔽' }
+			const errorMessage = '检查视频是否被屏蔽失败，无法检查用户是否被屏蔽'
+			logging('ERROR', errorMessage, undefined, { videoId, selectorUuid })
+			return { success: false, message: errorMessage }
 		}
 
 		// 1. 检查上传者是否已经被当前用户隐藏
@@ -347,8 +351,9 @@ export const checkVideoBlockedByKvidService = async (videoId: number, selectorUu
 		}
 		return { success: true, message: '未屏蔽', isBlocked, isBlockedByOther, isHidden }
 	} catch (error) {
-		logging('ERROR', '检查视频是否被屏蔽失败：', error)
-		return { success: false, message: '检查视频是否被屏蔽失败，未知错误'}
+		const errorMessage = '检查视频是否被屏蔽失败，未知错误'
+		logging('ERROR', errorMessage, error, { videoId, selectorUuid })
+		return { success: false, message: errorMessage }
 	}
 }
 
@@ -367,8 +372,9 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 
 		// 判断请求参数是否合法
 		if (!checkGetVideoByKvidRequest(getVideoByKvidRequest)) {
-			logging('ERROR', '视频页 - KVID 为空')
-			return { success: false, message: '视频页 - 必要的请求参数为空', isBlocked: false, isBlockedByOther, isHidden }
+			const errorMessage = '视频页 - 必要的请求参数为空'
+			logging('ERROR', errorMessage, undefined, { getVideoByKvidRequest, selectorUuid })
+			return { success: false, message: errorMessage, isBlocked: false, isBlockedByOther, isHidden }
 		}
 
 		// 构建视频查询 Pipeline
@@ -390,6 +396,34 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				},
 			},
 			{
+				$lookup: {
+					from: 'followings',
+					let: {
+						uploaderUUID: '$uploaderUUID',
+					},
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{
+											$eq: ['$followingUuid', '$$uploaderUUID'],
+										},
+										{
+											$eq: ['$followerUuid', selectorUuid],
+										},
+									],
+								},
+							},
+						},
+						{
+							$limit: 1,
+						},
+					],
+					as: 'following_info',
+				},
+			},
+			{
 				$unwind: '$uploader_info', // 平铺上传者信息
 			},
 			{
@@ -400,7 +434,6 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					image: 1,
 					uploadDate: 1,
 					watchedCount: 1,
-					uploaderUUID: 1,
 					uploaderId: 1,
 					duration: 1,
 					description: 1,
@@ -419,23 +452,24 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 						signature: '$uploader_info.signature',
 						isSelf: {
 							$eq: ["$uploaderUUID", selectorUuid]
-						}
-					}
-				}
-			}
+						},
+						isFollowing: {
+							$gt: [{ $size: '$following_info' }, 0],
+						},
+					},
+				},
+			},
 		]
 
 		try {
 			// 使用 Pipeline 查询视频及上传者数据
 			const result = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, getThumbVideoPipeline)
-			const video = result.result?.[0] as (GetVideoByKvidResponseDto['video'] & { uploaderUUID: string })
+			const video = result.result?.[0] as (GetVideoByKvidResponseDto['video'])
 			if (!result.success || !video) {
-				logging('ERROR', '视频页 - 获取到的视频结果或视频数组为空')
-				return { success: false, message: '视频页 - 未获取到视频', isBlocked: false, isBlockedByOther, isHidden }
+				const errorMessage = '视频页 - 获取到的视频结果或视频数组为空'
+				logging('ERROR', errorMessage, undefined, { getVideoByKvidRequest, selectorUuid })
+				return { success: false, message: errorMessage, isBlocked: false, isBlockedByOther, isHidden }
 			}
-
-			video.uploaderInfo.isFollowing = false // 默认没有关注上传者
-			video.uploaderInfo.isSelf = false // 默认上传者不是自己
 
 			if ((await checkUserTokenByUuidService(selectorUuid, selectorToken)).success) { // 如果用户已登录
 				const checkBlockUserResult = await checkBlockUserService({ uid: video.uploaderInfo.uid }, selectorUuid, selectorToken)
@@ -476,31 +510,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 				await createOrUpdateBrowsingHistoryService(createOrUpdateBrowsingHistoryRequest, selectorUuid, selectorToken)
 
-				// 7. 查询上传者是否被当前登录用户关注
-				const { collectionName: followingSchemaCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-				type Following = InferSchemaType<typeof followingSchemaInstance>
-				const followingWhere: QueryType<Following> = {
-					followerUuid: selectorUuid,
-					followingUuid: video.uploaderUUID,
-				}
-				const followingSelect: SelectType<Following> = {
-					followerUuid: 1,
-					followingUuid: 1,
-					followingType: 1,
-				}
-				const selectFollowingDataResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingSchemaCollectionName)
-				const followingResult = selectFollowingDataResult?.result
-				if (selectFollowingDataResult.success && followingResult.length === 1) { // 如果能查询到结果，则代表正在关注
-					video.uploaderInfo.isFollowing = true
-				}
-
-				// 8. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
-				if (video.uploaderUUID === selectorUuid) {
-					video.uploaderInfo.isSelf = true
-				}
-				video.uploaderUUID = undefined // WARN: 请勿移除本行：不应该返回上传者的 UUID，在使用完毕后将其清空。// TODO: 想办法优化到 pipeline 里，而不是返回 UUID 查询数据
-
-				// 9. 查询视频点赞/点踩信息
+				// 7. 查询视频点赞/点踩信息
 				const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
 				const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
 				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
@@ -523,12 +533,135 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				isHidden,
 			}
 		} catch (error) {
-			logging('ERROR', '视频页 - 视频查询失败：', error)
-			return { success: false, message: '视频页 - 视频查询失败', isBlocked: false, isBlockedByOther, isHidden }
+			const errorMessage = '视频页 - 视频查询时出错'
+			logging('ERROR', errorMessage, error, { getVideoByKvidRequest, selectorUuid })
+			return { success: false, message: errorMessage, isBlocked: false, isBlockedByOther, isHidden }
 		}
 	} catch (error) {
-		logging('ERROR', '获取视频失败：', error)
-		return { success: false, message: '获取视频失败：', isBlocked: false, isBlockedByOther: false, isHidden: false }
+		const errorMessage = '视频页 - 获取视频时出错，未知错误'
+		logging('ERROR', errorMessage, error, { getVideoByKvidRequest, selectorUuid })
+		return { success: false, message: errorMessage, isBlocked: false, isBlockedByOther: false, isHidden: false }
+	}
+}
+
+/**
+ * 视频发布者根据 kvid 获取视频详细信息
+ * @param uploadVideoRequest 视频发布者根据 kvid 获取视频详细信息的请求载荷
+ * @returns 视频数据
+ */
+export const uploaderGetVideoByKvidService = async (uploaderGetVideoByKvidRequest: UploaderGetVideoByKvidRequestDto, uploaderUuid: string, uploaderToken: string): Promise<UploaderGetVideoByKvidResponseDto> => {
+	try {
+		const { videoId } = uploaderGetVideoByKvidRequest
+		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+
+		let isHidden = false
+		let isBlockedByOther = false
+
+		// 判断请求参数是否合法
+		if (!checkUploaderGetVideoByKvidRequest(uploaderGetVideoByKvidRequest)) {
+			const errorMessage = '视频发布者根据 kvid 获取视频详细信息失败，参数不合法'
+			logging('ERROR', errorMessage, undefined, { uploaderGetVideoByKvidRequest })
+			return { success: false, message: errorMessage }
+		}
+
+
+		if ((await checkUserTokenByUuidService(uploaderUuid, uploaderToken)).success) {
+			const errorMessage = '视频发布者根据 kvid 获取视频详细信息失败，用户校验未通过'
+			logging('ERROR', errorMessage, undefined, { uploaderGetVideoByKvidRequest, uploaderUuid })
+			return { success: false, message: errorMessage }
+		}
+
+		// 构建视频查询 Pipeline
+		const getThumbVideoPipeline: PipelineStage[] = [
+			{
+				$match: { // 通过 videoId 和 uploaderUUID 过滤视频，只会获得创作者的视频
+					videoId,
+					uploaderUUID: uploaderUuid
+				},
+			},
+			{
+				$limit: 1, // 如果意外获取多条视频，只获取第一条
+			},
+			{
+				$lookup: { // 关联用户信息表，获取上传者信息
+					from: 'user-infos',
+					localField: 'uploaderUUID',
+					foreignField: 'UUID',
+					as: 'uploader_info',
+				},
+			},
+			{
+				$unwind: '$uploader_info', // 平铺上传者信息
+			},
+			{
+				$project: {
+					videoId: 1,
+					videoPart: 1,
+					title: 1,
+					image: 1,
+					uploadDate: 1,
+					watchedCount: 1,
+					uploaderId: 1,
+					duration: 1,
+					description: 1,
+					editDateTime: 1,
+					videoCategory: 1,
+					copyright: 1,
+					videoTagList: 1,
+					originalAuthor: 1,
+					originalLink: 1,
+					pushToFeed: 1,
+					ensureOriginal: 1,
+					uploaderInfo: {
+						uid: '$uploader_info.uid',
+						username: '$uploader_info.username',
+						userNickname: '$uploader_info.userNickname',
+						avatar: '$uploader_info.avatar',
+						userBannerImage: '$uploader_info.userBannerImage',
+						signature: '$uploader_info.signature',
+						isSelf: true,
+						isFollowing: false,
+					}
+				}
+			}
+		]
+
+		try {
+			// 使用 Pipeline 查询视频及上传者数据
+			const result = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, getThumbVideoPipeline)
+			const video = result.result?.[0] as (UploaderGetVideoByKvidResponseDto['video'])
+			if (!result.success || !video) {
+				logging('ERROR', '视频页 - 获取到的视频结果或视频数组为空')
+				return { success: false, message: '视频页 - 未获取到视频' }
+			}
+
+			// 查询视频点赞/点踩信息
+			const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
+			const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
+			const userHasUpvotedPromise = checkUserHasUpvoted(videoId, uploaderUuid)
+			const userHasDownvotedPromise = checkUserHasDownvoted(videoId, uploaderUuid)
+
+			const [videoUpvoteCount, videoDownvoteCount, userHasUpvoted, userHasDownvoted] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise, userHasUpvotedPromise, userHasDownvotedPromise])
+
+			video.videoUpvoteCount = videoUpvoteCount
+			video.videoDownvoteCount = videoDownvoteCount
+			video.userHasUpvoted = userHasUpvoted
+			video.userHasDownvoted = userHasDownvoted
+
+			return {
+				success: true,
+				message: '视频页 - 获取视频成功',
+				video,
+			}
+		} catch (error) {
+			const errorMessage = '视频发布者根据 kvid 获取视频详细信息时出错，查询视频时出错'
+			logging('ERROR', errorMessage, error, { uploaderGetVideoByKvidRequest, uploaderUuid })
+			return { success: false, message: errorMessage }
+		}
+	} catch (error) {
+		const errorMessage = '视频发布者根据 kvid 获取视频详细信息失败，未知错误'
+		logging('ERROR', errorMessage, error, { uploaderGetVideoByKvidRequest, uploaderUuid })
+		return { success: false, message: errorMessage }
 	}
 }
 
@@ -1257,6 +1390,15 @@ const checkVideoPartData = (videoPartDate: VideoPartDto) => {
  */
 const checkGetVideoByKvidRequest = (getVideoByKvidRequest: GetVideoByKvidRequestDto) => {
 	return (getVideoByKvidRequest.videoId !== null && getVideoByKvidRequest.videoId !== undefined)
+}
+
+/**
+ * 检查视频发布者根据 kvid 获取视频详细信息的请求载荷
+ * @param uploaderGetVideoByKvidRequest 视频发布者根据 kvid 获取视频详细信息的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkUploaderGetVideoByKvidRequest = (uploaderGetVideoByKvidRequest: UploaderGetVideoByKvidRequestDto) => {
+	return (uploaderGetVideoByKvidRequest.videoId !== null && uploaderGetVideoByKvidRequest.videoId !== undefined)
 }
 
 /**

@@ -133,16 +133,10 @@ type UploaderInfoDto = {
 type BlockState = { isBlockedByOther: boolean, isBlocked: boolean; isHidden: boolean }
 
 /**
- * 视频页面需要的响应
+ * 视频信息
  */
-export type GetVideoByKvidResponseDto = {
-	/** 是否请求成功 */
-	success: boolean;
-	/** 附加的文本消息 */
-	message?: string;
-	/** 请求到的视频的数据 */
-	video?: {
-		/** 视频 ID (KVID) */
+type VideoInfo = {
+	/** 视频 ID (KVID) */
 		videoId: number;
 		/** 视频分 P 数据 */
 		videoPart: VideoPartDto[];
@@ -178,8 +172,48 @@ export type GetVideoByKvidResponseDto = {
 		userHasUpvoted: boolean;
 		/** 当前用户是否点踩 */
 		userHasDownvoted: boolean;
-	};
+}
+
+/**
+ * 视频页面需要的响应
+ */
+export type GetVideoByKvidResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 请求到的视频的数据 */
+	video?: VideoInfo;
 } & BlockState
+
+/**
+ * 视频发布者根据 kvid 获取视频详细信息的请求载荷
+ */
+export type UploaderGetVideoByKvidRequestDto = {
+	/** 视频 ID (KVID) */
+	videoId: number;
+}
+
+/**
+ * 视频发布者根据 kvid 获取视频详细信息的请求响应
+ */
+export type UploaderGetVideoByKvidResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 请求到的视频的数据 */
+	video?: VideoInfo & {
+		/** 原作者 */
+		originalAuthor?: string;
+		/** 原视频链接 */
+		originalLink?: string;
+		/** 是否发布到动态 */
+		pushToFeed: boolean;
+		/** 声明为原创 */
+		ensureOriginal: boolean;
+	};
+}
 
 /**
  * 根据视频 ID (KVID) 检查视频是否存在的请求载荷
