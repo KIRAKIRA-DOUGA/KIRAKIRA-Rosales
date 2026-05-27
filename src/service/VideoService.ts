@@ -4,12 +4,12 @@ import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
-import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploaderGetVideoByKvidRequestDto, UploaderGetVideoByKvidResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
+import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, EditVideoRequestDto, EditVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploaderGetVideoByKvidRequestDto, UploaderGetVideoByKvidResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndPlusByMongodbId, insertIfNotExist, isQueryResultsEmpty } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
-import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
+import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster, updateData4ElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
@@ -21,6 +21,7 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
+import { abortAndEndSession } from '../common/MongoDBSessionTool.js';
 
 /**
  * 上传视频
@@ -28,7 +29,7 @@ import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
  * @param esClient Elasticsearch 客户端连接
  * @returns 上传视频的结果
  */
-export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uid: number, token: string, esClient?: Client): Promise<UploadVideoResponseDto> => {
+export const uploadVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uid: number, token: string, esClient?: Client): Promise<UploadVideoResponseDto> => {
 	try {
 		if (checkUploadVideoRequest(uploadVideoRequest) && esClient && !isEmptyObject(esClient)) {
 			if (!(await checkUserTokenService(uid, token)).success) {
@@ -140,6 +141,79 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 	} catch (error) {
 		logging('ERROR', '视频上传失败：', error)
 		return { success: false, message: '视频上传失败' }
+	}
+}
+
+/**
+ * 编辑视频信息。// TODO: 暂时不能编辑视频分 P 文件
+ * @param editVideoRequest 编辑视频信息的请求载荷
+ * @param uploaderUuid 视频发布者 UUID
+ * @param uploaderToken 视频发布者 token
+ * @param esClient Elasticsearch 客户端连接
+ * @returns 编辑视频信息的请求响应
+ */
+export const editVideoService = async (editVideoRequest: EditVideoRequestDto, uploaderUuid: string, uploaderToken: string, esClient?: Client): Promise<EditVideoResponseDto> => {
+	try {
+		if (!checkEditVideoRequest(editVideoRequest) || !esClient || isEmptyObject(esClient)) {
+			logging('ERROR', '编辑视频信息失败，参数不合法或 Elasticsearch 客户端未连接', undefined, { editVideoRequest })
+			return { success: false, message: '编辑视频信息失败，参数不合法或搜索引擎客户端未连接' }
+		}
+		if (!(await checkUserTokenByUuidService(uploaderUuid, uploaderToken)).success) {
+			logging('ERROR', '编辑视频信息失败，用户校验未通过', undefined, { videoId: editVideoRequest.videoId, uploaderUuid })
+			return { success: false, message: '编辑视频信息失败，用户校验未通过' }
+		}
+
+		const nowDate = new Date().getTime()
+		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+		type Video = InferSchemaType<typeof videoSchemaInstance>
+		const where: QueryType<Video> = {
+			videoId: editVideoRequest.videoId,
+			uploaderUUID: uploaderUuid,
+		}
+		const videoTagList = editVideoRequest.videoTagList.map(tag => ({ ...tag, editDateTime: nowDate }))
+		const updateData: UpdateType<Video> = {
+			title: editVideoRequest.title,
+			image: editVideoRequest.image,
+			description: editVideoRequest.description,
+			videoCategory: editVideoRequest.videoCategory,
+			copyright: editVideoRequest.copyright,
+			originalAuthor: editVideoRequest.originalAuthor,
+			originalLink: editVideoRequest.originalLink,
+			pushToFeed: editVideoRequest.pushToFeed,
+			ensureOriginal: editVideoRequest.ensureOriginal,
+			videoTagList: videoTagList as Video['videoTagList'],
+			editDateTime: nowDate,
+		}
+
+		const session = await mongoose.startSession()
+		const updateVideoResult = await findOneAndUpdateData4MongoDB<Video>(where, updateData, videoSchemaInstance, videoCollectionName, { session }, false)
+		if (!updateVideoResult.success || !updateVideoResult.result) {
+			const errorMessage = '编辑视频信息失败，未找到视频或无权编辑'
+			logging('ERROR', errorMessage, undefined, { videoId: editVideoRequest.videoId, uploaderUuid })
+			await abortAndEndSession(session)
+			return { success: false, message: errorMessage }
+		}
+		const { indexName: esIndexName, schema: videoEsSchema } = VideoDocument
+		const videoEsData: EsSchema2TsType<typeof videoEsSchema> = {
+			title: editVideoRequest.title,
+			description: editVideoRequest.description,
+			kvid: editVideoRequest.videoId,
+			videoCategory: editVideoRequest.videoCategory,
+			videoTagList,
+		}
+		const updateElasticsearchResult = await updateData4ElasticsearchCluster(esClient, esIndexName, videoEsSchema, { kvid: editVideoRequest.videoId }, videoEsData, true)
+
+		if (!updateElasticsearchResult.success) {
+			const errorMessage = '编辑视频信息失败，搜索引擎更新失败'
+			logging('ERROR', errorMessage, undefined, { videoId: editVideoRequest.videoId })
+			await abortAndEndSession(session)
+			return { success: false, videoId: editVideoRequest.videoId, message: errorMessage }
+		}
+
+		return { success: true, videoId: editVideoRequest.videoId, message: '编辑视频信息成功' }
+	} catch (error) {
+		logging('ERROR', '编辑视频信息失败', error, { editVideoRequest, uploaderUuid })
+		return { success: false, message: '编辑视频信息失败' }
 	}
 }
 
@@ -1371,6 +1445,25 @@ const checkUploadVideoRequest = (uploadVideoRequest: UploadVideoRequestDto) => {
 }
 
 /**
+ * 检查编辑视频信息的请求载荷
+ * @param editVideoRequest 编辑视频信息的请求载荷
+ * @returns 检查结果，合法返回 true，不合法返回 false
+ */
+const checkEditVideoRequest = (editVideoRequest: EditVideoRequestDto) => {
+	const VIDEO_CATEGORY = ['anime', 'music', 'otomad', 'tech', 'design', 'game', 'misc']
+	return (
+		editVideoRequest.videoId !== null && editVideoRequest.videoId !== undefined && editVideoRequest.videoId >= 0
+		&& !!editVideoRequest.title
+		&& !!editVideoRequest.image
+		&& VIDEO_CATEGORY.includes(editVideoRequest.videoCategory)
+		&& !!editVideoRequest.copyright
+		&& editVideoRequest.pushToFeed !== undefined && editVideoRequest.pushToFeed !== null
+		&& editVideoRequest.ensureOriginal !== undefined && editVideoRequest.ensureOriginal !== null
+		&& Array.isArray(editVideoRequest.videoTagList)
+	)
+}
+
+/**
  * 检查上传的视频中的 videoPartDate 参数是否正确且无疏漏
  * @param videoPartDate 每一 P 视频的数据
  * @returns 检查结果，合法返回 true，不合法返回 false
@@ -1445,4 +1538,3 @@ const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boo
 const checkApprovePendingReviewVideoRequest = (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto) => {
 	return (!!approvePendingReviewVideoRequest.videoId && typeof approvePendingReviewVideoRequest.videoId === 'number' && approvePendingReviewVideoRequest.videoId >= 0)
 }
-

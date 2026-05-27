@@ -42,7 +42,7 @@ import {
 	getUserBootstrapDataByHintController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, updateVideoController, uploaderGetVideoByKvidController } from '../controller/VideoController.js'
+import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, editVideoController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, uploadVideoController, uploaderGetVideoByKvidController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { emitVideoUpvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, cancelVideoDownvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
@@ -401,7 +401,7 @@ router.get('/block/list', getBlockListController) // 获取用户的黑名单列
 
 
 
-router.post('/video/upload', updateVideoController) // 上传视频
+router.post('/video/upload', uploadVideoController) // 上传视频
 // https://localhost:30000/video/upload
 // {
 // 	"videoPart": [
@@ -416,6 +416,17 @@ router.post('/video/upload', updateVideoController) // 上传视频
 // 	"uploader": "cfdxkk@kirakira.moe",
 // 	"uploaderId": "123",
 // 	"duration": "19573",
+// 	"description": "和群里的朋友一起熬夜从凌晨两点看到早上八点。不得不说今年的公民控是真的很精彩。"
+// }
+
+router.post('/video/edit', editVideoController) // 编辑视频信息，不允许编辑视频分 P 文件
+// https://localhost:30000/video/edit
+// cookie: uuid, token
+// {
+// 	"title": "[博物馆奇妙夜] 2953 公民控 VRC 虚拟观赏会（第一天）",
+// 	"image": "https://xxx.xxx.xxx/xxx.png",
+// 	"uploader": "cfdxkk@kirakira.moe",
+// 	"uploaderId": "123",
 // 	"description": "和群里的朋友一起熬夜从凌晨两点看到早上八点。不得不说今年的公民控是真的很精彩。"
 // }
 

@@ -1,8 +1,8 @@
 import { isPassRbacCheck } from '../service/RbacService.js'
-import { approvePendingReviewVideoService, checkVideoExistByKvidService, deleteVideoByKvidService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService, uploaderGetVideoByKvidService } from '../service/VideoService.js'
+import { approvePendingReviewVideoService, checkVideoExistByKvidService, deleteVideoByKvidService, editVideoService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, uploadVideoService, uploaderGetVideoByKvidService } from '../service/VideoService.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploaderGetVideoByKvidRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
+import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteVideoRequestDto, EditVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploaderGetVideoByKvidRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
 
 /**
  * 上传视频
@@ -10,7 +10,7 @@ import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteV
  * @param next context
  * @returns 上传视频的结果
  */
-export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
+export const uploadVideoController = async (ctx: koaCtx, next: koaNext) => {
 	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 
@@ -36,8 +36,38 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		videoTagList: data.videoTagList || [],
 	}
 	const esClient = ctx.elasticsearchClient
-	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, uid, token, esClient)
+	const uploadVideoResponse = await uploadVideoService(uploadVideoRequest, uid, token, esClient)
 	ctx.body = uploadVideoResponse
+	await next()
+}
+
+/**
+ * 编辑视频信息，不允许编辑视频分 P 文件
+ * @param ctx context
+ * @param next context
+ * @returns 编辑视频信息的请求响应
+ */
+export const editVideoController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	const data = ctx.request.body as Partial<EditVideoRequestDto>
+	const editVideoRequest: EditVideoRequestDto = {
+		videoId: parseInteger(data.videoId) ?? -1,
+		title: data.title || '',
+		image: data.image || '',
+		description: data.description || '',
+		videoCategory: data.videoCategory || '',
+		copyright: data.copyright || '',
+		originalAuthor: data.originalAuthor,
+		originalLink: data.originalLink,
+		pushToFeed: data.pushToFeed,
+		ensureOriginal: data.ensureOriginal,
+		videoTagList: data.videoTagList || [],
+	}
+
+	const esClient = ctx.elasticsearchClient
+	ctx.body = await editVideoService(editVideoRequest, uuid, token, esClient)
 	await next()
 }
 
@@ -273,4 +303,3 @@ export const approvePendingReviewVideoController = async (ctx: koaCtx, next: koa
 	ctx.body = await approvePendingReviewVideoService(approvePendingReviewVideoRequest, uid, token)
 	await next()
 }
-

@@ -169,10 +169,67 @@ export const insertData2ElasticsearchCluster = async <T>(client: Client, indexNa
 }
 
 /**
+ * 更新 Elasticsearch 集群中的文档
+ * @param client Elasticsearch 连接，应存放在 ctx 中
+ * @param indexName 索引的名字，该字段应当与 schema 存放于同一个对象中
+ * @param schema 要更新的索引的 schema，主要功能是提供泛型 T 并限定 data 的类型
+ * @param conditions 更新数据的查询条件
+ * @param data 要更新的数据
+ * @param refreshFlag 在更新数据后是否立即刷新搜索
+ * @returns 更新数据的结果，如果成功则返回 {success: true}，否则返回 {success: false}
+ */
+export const updateData4ElasticsearchCluster = async <T>(client: Client, indexName: string, schema: T, conditions: Record<string, string | number>, data: Partial<EsSchema2TsType<T>>, refreshFlag: boolean = false): Promise< EsResultType< EsSchema2TsType<T> > > => {
+	try {
+		if (!isEmptyObject(schema as object) && !isEmptyObject(data) && indexName && client && !isEmptyObject(client) && conditions && !isEmptyObject(conditions)) {
+			const mustConditions = Object.keys(conditions).map(field => ({
+				match: { [field]: conditions[field] },
+			}))
+
+			const searchResponse = await client.search({
+				index: indexName,
+				body: {
+					query: {
+						bool: {
+							must: mustConditions,
+						},
+					},
+				},
+			})
+
+			const hits = searchResponse.hits?.hits
+			if (!hits || hits.length <= 0) {
+				logging('ERROR', '更新 Elasticsearch 数据失败，未找到符合条件的文档', undefined, { indexName, conditions }, { recordingLogs: false })
+				return { success: false, message: '更新 Elasticsearch 数据失败，未找到符合条件的文档' }
+			}
+
+			for (const hit of hits) {
+				await client.update({
+					index: indexName,
+					id: hit._id,
+					doc: data,
+				})
+			}
+
+			if (refreshFlag) {
+				await client.indices.refresh({ index: indexName })
+			}
+
+			return { success: true, message: '更新 Elasticsearch 数据成功', result: hits.map(hit => ({ ...(hit._source as object), ...data }) as EsSchema2TsType<T>) }
+		} else {
+			logging('ERROR', '更新 Elasticsearch 数据失败，必要的参数为空', undefined, { indexName, conditions, data }, { recordingLogs: false })
+			return { success: false, message: '更新 Elasticsearch 数据失败，必要的参数为空' }
+		}
+	} catch (error) {
+		logging('ERROR', '更新 Elasticsearch 数据失败，未知异常', error, { indexName, conditions, data }, { recordingLogs: false })
+		return { success: false, message: '更新 Elasticsearch 数据失败，未知异常' }
+	}
+}
+
+/**
  * 从 Elasticsearch 集群搜索数据
  * @param client Elasticsearch 连接，应存放在 ctx 中
  * @param indexName 索引的名字，该字段应当与 schema 存放于同一个对象中（这样 schema 和 indexName 构成了绑定关系）
- * @param schema 要插入的索引的 schema （在 Elasticsearch 中应该叫做：索引模板），主要功能是只是提供了泛型 T 并限定了 data 的类型，该字段应当与 indexName 存放于同一个对象中（这样 schema 和 indexName 构成了绑定关系）
+ * @param schema 要插入的索引的 schema （在 Elasticsearch 中应该叫做：索引模板），主要功能是提供泛型 T 并限定返回数据的类型，该字段应当与 indexName 存放于同一个对象中（这样 schema 和 indexName 构成了绑定关系）
  * @param query 查询的参数，类似于数据库的 WHERE，但 Elasticsearch 有一套自己的逻辑，建议参考官方文档。
  * @returns 查询的返回结果
  */
@@ -208,8 +265,3 @@ export const searchDataFromElasticsearchCluster = async <T>(client: Client, inde
 		return { success: false, message: '在 Elasticsearch 搜索数据失败，未知异常' }
 	}
 }
-
-
-
-
-
