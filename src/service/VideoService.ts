@@ -21,7 +21,7 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
-import { abortAndEndSession } from '../common/MongoDBSessionTool.js';
+import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js';
 
 /**
  * 上传视频
@@ -185,7 +185,7 @@ export const editVideoService = async (editVideoRequest: EditVideoRequestDto, up
 			editDateTime: nowDate,
 		}
 
-		const session = await mongoose.startSession()
+		const session = await createAndStartSession()
 		const updateVideoResult = await findOneAndUpdateData4MongoDB<Video>(where, updateData, videoSchemaInstance, videoCollectionName, { session }, false)
 		if (!updateVideoResult.success || !updateVideoResult.result) {
 			const errorMessage = '编辑视频信息失败，未找到视频或无权编辑'
@@ -210,6 +210,7 @@ export const editVideoService = async (editVideoRequest: EditVideoRequestDto, up
 			return { success: false, videoId: editVideoRequest.videoId, message: errorMessage }
 		}
 
+		await commitAndEndSession(session)
 		return { success: true, videoId: editVideoRequest.videoId, message: '编辑视频信息成功' }
 	} catch (error) {
 		logging('ERROR', '编辑视频信息失败', error, { editVideoRequest, uploaderUuid })
