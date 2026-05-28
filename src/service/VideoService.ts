@@ -800,8 +800,11 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 			editDateTime: 1,
 		}
 
+		const orderBy: OrderByType<Video> = {
+			editDateTime: -1,
+		}
 		try {
-			const result = await selectDataFromMongoDB<Video>(where, select, schemaInstance, collectionName)
+			const result = await selectDataFromMongoDB<Video>(where, select, schemaInstance, collectionName, undefined, orderBy)
 			const videoResult = result.result
 			if (!result.success || !videoResult) {
 				logging('ERROR', '根据 UID 获取视频失败，获取的结果失败或为空')
