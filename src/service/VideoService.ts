@@ -548,8 +548,6 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 
 			const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
 			const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
-			const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
-			const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
 
 			if ((await checkUserTokenByUuidService(selectorUuid, selectorToken)).success) { // 如果用户已登录
 				const checkBlockUserResult = await checkBlockUserService({ uid: video.uploaderInfo.uid }, selectorUuid, selectorToken)
@@ -589,6 +587,10 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 					id: String(video.videoId),
 				}
 				await createOrUpdateBrowsingHistoryService(createOrUpdateBrowsingHistoryRequest, selectorUuid, selectorToken)
+
+				// 7. 获取用户是否对该视频点过赞或踩
+				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
+				const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
 
 				const [videoUpvoteCount, videoDownvoteCount, userHasUpvoted, userHasDownvoted] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise, userHasUpvotedPromise, userHasDownvotedPromise])
 
