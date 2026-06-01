@@ -546,6 +546,11 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				return { success: false, message: errorMessage, isBlocked: false, isBlockedByOther, isHidden }
 			}
 
+			const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
+			const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
+			const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
+			const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
+
 			if ((await checkUserTokenByUuidService(selectorUuid, selectorToken)).success) { // 如果用户已登录
 				const checkBlockUserResult = await checkBlockUserService({ uid: video.uploaderInfo.uid }, selectorUuid, selectorToken)
 				const checkIsBlockedByOtherUserResult = await checkIsBlockedByOtherUserService({ targetUid: video.uploaderInfo.uid }, selectorUuid, selectorToken)
@@ -585,12 +590,6 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 				await createOrUpdateBrowsingHistoryService(createOrUpdateBrowsingHistoryRequest, selectorUuid, selectorToken)
 
-				// 7. 查询视频点赞/点踩信息
-				const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
-				const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
-				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
-				const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
-
 				const [videoUpvoteCount, videoDownvoteCount, userHasUpvoted, userHasDownvoted] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise, userHasUpvotedPromise, userHasDownvotedPromise])
 
 				video.videoUpvoteCount = videoUpvoteCount
@@ -629,8 +628,8 @@ export const uploaderGetVideoByKvidService = async (uploaderGetVideoByKvidReques
 		const { videoId } = uploaderGetVideoByKvidRequest
 		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 
-		let isHidden = false
-		let isBlockedByOther = false
+		// let isHidden = false
+		// let isBlockedByOther = false
 
 		// 判断请求参数是否合法
 		if (!checkUploaderGetVideoByKvidRequest(uploaderGetVideoByKvidRequest)) {

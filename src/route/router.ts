@@ -425,8 +425,11 @@ router.post('/video/edit', editVideoController) // 编辑视频信息，不允�
 // {
 // 	"title": "[博物馆奇妙夜] 2953 公民控 VRC 虚拟观赏会（第一天）",
 // 	"image": "https://xxx.xxx.xxx/xxx.png",
-// 	"uploader": "cfdxkk@kirakira.moe",
-// 	"uploaderId": "123",
+// 	"videoCategory": "anime",
+// 	"copyright": "original",
+// 	"pushToFeed": true,
+// 	"ensureOriginal": true,
+// 	"videoTagList": [],
 // 	"description": "和群里的朋友一起熬夜从凌晨两点看到早上八点。不得不说今年的公民控是真的很精彩。"
 // }
 
@@ -442,7 +445,7 @@ router.get('/video', getVideoByKvidController) // 根据视频 ID (KVID) 获取�
 
 router.get('/video/uploaderGetVideoByKvid', uploaderGetVideoByKvidController) // 视频发布者根据 kvid 获取视频详细信息
 // https://localhost:30000/video/uploaderGetVideoByKvid?videoId=1
-// cookie: uid, token
+// cookie: uuid, token
 
 router.get('/video/user', getVideoByUidController) // 根据 UID 获取该用户上传的视频
 // https://localhost:30000/video/user?uid=2

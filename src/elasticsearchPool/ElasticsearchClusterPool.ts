@@ -211,8 +211,12 @@ export const updateData4ElasticsearchCluster = async <T>(client: Client, indexNa
 			}
 
 			if (refreshFlag) {
-				await client.indices.refresh({ index: indexName })
-			}
+				try {
+					await client.indices.refresh({ index: indexName })
+				} catch (error) {
+					logging('WARN', '更新 Elasticsearch 数据成功，但刷新搜索时出错', error, { indexName, conditions, data }, { recordingLogs: false })
+				}
+			} 
 
 			return { success: true, message: '更新 Elasticsearch 数据成功', result: hits.map(hit => ({ ...(hit._source as object), ...data }) as EsSchema2TsType<T>) }
 		} else {
