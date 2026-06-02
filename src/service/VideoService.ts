@@ -546,8 +546,12 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				return { success: false, message: errorMessage, isBlocked: false, isBlockedByOther, isHidden }
 			}
 
+			// 获取视频的点赞和点踩总数
 			const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
 			const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
+			const [videoUpvoteCount, videoDownvoteCount] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise])
+			video.videoUpvoteCount = videoUpvoteCount
+			video.videoDownvoteCount = videoDownvoteCount
 
 			if ((await checkUserTokenByUuidService(selectorUuid, selectorToken)).success) { // 如果用户已登录
 				const checkBlockUserResult = await checkBlockUserService({ uid: video.uploaderInfo.uid }, selectorUuid, selectorToken)
@@ -592,10 +596,8 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
 				const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
 
-				const [videoUpvoteCount, videoDownvoteCount, userHasUpvoted, userHasDownvoted] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise, userHasUpvotedPromise, userHasDownvotedPromise])
+				const [userHasUpvoted, userHasDownvoted] = await Promise.all([userHasUpvotedPromise, userHasDownvotedPromise])
 
-				video.videoUpvoteCount = videoUpvoteCount
-				video.videoDownvoteCount = videoDownvoteCount
 				video.userHasUpvoted = userHasUpvoted
 				video.userHasDownvoted = userHasDownvoted
 			}
