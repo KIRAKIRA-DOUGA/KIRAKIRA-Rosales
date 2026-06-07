@@ -178,6 +178,12 @@ export type GetFeedGroupCoverUploadSignedUrlResponseDto = {
 		signedUrl: string;
 		/** 文件名 */
 		fileName: string;
+		/** 图片对象 URL */
+		url: string;
+		/** POST 上传表单字段 */
+		fields?: Record<string, string>;
+		/** 图片最大上传大小，单位 byte */
+		maxSize?: number;
 	};
 }
 
@@ -201,6 +207,30 @@ export type CreateOrEditFeedGroupInfoResponseDto = {
 	success: boolean;
 	/** 附加的文本消息 */
 	message?: string;
+	/** 如果成功，返回动态分组 */
+	feedGroupResult?: FeedGroup
+}
+
+/**
+ * 确认动态分组封面图已上传并写入数据库的请求载荷
+ */
+export type ConfirmFeedGroupCoverUploadRequestDto = {
+	/** 动态分组的 UUID */
+	feedGroupUuid: string;
+	/** 已上传到 TOS 的对象名 */
+	fileName: string;
+}
+
+/**
+ * 确认动态分组封面图已上传并写入数据库的请求响应
+ */
+export type ConfirmFeedGroupCoverUploadResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 图片对象 URL */
+	url?: string;
 	/** 如果成功，返回动态分组 */
 	feedGroupResult?: FeedGroup
 }

@@ -10,6 +10,7 @@ import {
 	checkInvitationCodeController,
 	checkUsernameController,
 	checkUserTokenController,
+	confirmUserAvatarUploadController,
 	createInvitationCodeController,
 	getBlockedUserController,
 	getMyInvitationCodeController,
@@ -47,7 +48,7 @@ import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagC
 import { emitVideoUpvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, cancelVideoDownvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
-import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowerListController, getFollowingListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
+import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, confirmFeedGroupCoverUploadController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowerListController, getFollowingListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
 
 const router = new Router()
@@ -201,6 +202,13 @@ router.get('/user/logout', userLogoutController) // 清除浏览器中的 cookie
 router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 获取用于上传头像的预签名 URL, 上传限时 60 秒
 // https://localhost:30000/user/avatar/preUpload
 // cookie: uid, token
+
+router.post('/user/avatar/confirmUpload', confirmUserAvatarUploadController) // 确认用户头像已上传并写入数据库
+// https://localhost:30000/user/avatar/confirmUpload
+// cookie: uid, token
+// {
+// 	"fileName": "avatar-1-xxxxxxxxxxxxxxxxxxxxx-1710000000000"
+// }
 
 router.post('/user/settings', getUserSettingsController) // 在服务端或客户端获取用户设置信息用以正确渲染页面
 // https://localhost:30000/user/settings
@@ -725,6 +733,14 @@ router.delete('/feed/deleteFeedGroup', deleteFeedGroupController) // 删除动�
 router.get('/feed/getFeedGroupCoverUploadSignedUrl', getFeedGroupCoverUploadSignedUrlController) // 获取用于用户上传头像的预签名 URL, 上传限时 60 秒
 // https://localhost:30000/feed/getFeedGroupCoverUploadSignedUrl
 // cookie: uuid, token
+
+router.post('/feed/confirmFeedGroupCoverUpload', confirmFeedGroupCoverUploadController) // 确认动态分组封面图已上传并写入数据库
+// https://localhost:30000/feed/confirmFeedGroupCoverUpload
+// cookie: uuid, token
+// {
+// 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx",
+// 	"fileName": "feed-group-cover-xxxxxxxxxxxxxxxxxxxxx-yyyyyyyyyyyyyyyyyyyyy-1710000000000"
+// }
 
 router.post('/feed/createOrEditFeedGroupInfo', createOrEditFeedGroupInfoController) // 创建或更新动态分组信息
 // https://localhost:30000/feed/createOrEditFeedGroupInfo

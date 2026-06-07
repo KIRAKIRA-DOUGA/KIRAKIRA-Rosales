@@ -1,6 +1,5 @@
 import { Client } from '@elastic/elasticsearch'
 import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
-import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
@@ -21,6 +20,7 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
+import { createVolcengineTosImageUploadSignedPostPolicy } from '../volcengine/index.js'
 
 /**
  * 上传视频
@@ -765,9 +765,9 @@ export const getVideoCoverUploadSignedUrlService = async (uid: number, token: st
 			const now = new Date().getTime()
 			const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
 			try {
-				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
-				if (signedUrl) {
-					return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: { fileName, signedUrl } }
+				const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660)
+				if (uploadPolicy) {
+					return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: uploadPolicy }
 				}
 			} catch (error) {
 				logging('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
@@ -1299,4 +1299,3 @@ const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boo
 const checkApprovePendingReviewVideoRequest = (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto) => {
 	return (!!approvePendingReviewVideoRequest.videoId && typeof approvePendingReviewVideoRequest.videoId === 'number' && approvePendingReviewVideoRequest.videoId >= 0)
 }
-

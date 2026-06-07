@@ -1,5 +1,4 @@
 import mongoose, { InferSchemaType, PipelineStage, ClientSession, Model } from 'mongoose'
-import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
 import { compareStringSync, hashStringSync } from '../common/HashTool.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
@@ -12,6 +11,8 @@ import {
 	AdminGetUserInfoResponseDto,
 	ApproveUserInfoRequestDto,
 	ApproveUserInfoResponseDto,
+	ConfirmUserAvatarUploadRequestDto,
+	ConfirmUserAvatarUploadResponseDto,
 	CheckInvitationCodeRequestDto,
 	CheckInvitationCodeResponseDto,
 	CheckUsernameRequestDto,
@@ -91,6 +92,7 @@ import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { isToday } from '../common/DateTool.js'
 import { logging } from './loggingService.js'
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl } from '../volcengine/index.js'
 
 authenticator.options = { window: parseInteger(process.env.TOTP_ADDITIONAL_WINDOWS, 1) || 1 } // 设置 TOTP 宽裕窗口，默认为 1
 
@@ -992,9 +994,17 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 		if (await checkUserToken(uid, token)) {
 			const now = new Date().getTime()
 			const fileName = `avatar-${uid}-${generateSecureRandomString(32)}-${now}`
-			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
-			if (signedUrl && fileName) {
-				return { success: true, message: '准备开始上传头像', userAvatarUploadSignedUrl: signedUrl, userAvatarFilename: fileName }
+			const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660)
+			if (uploadPolicy) {
+				return {
+					success: true,
+					message: '准备开始上传头像',
+					userAvatarUploadSignedUrl: uploadPolicy.signedUrl,
+					userAvatarFilename: uploadPolicy.fileName,
+					userAvatarUrl: uploadPolicy.url,
+					userAvatarUploadFields: uploadPolicy.fields,
+					userAvatarMaxSize: uploadPolicy.maxSize,
+				}
 			} else {
 				// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新头像链接替换数据库中的旧头像链接，而且当前图片没有加入审核流程
 				return { success: false, message: '上传失败，无法生成图片上传 URL，请重新上传头像' }
@@ -1005,6 +1015,70 @@ export const getUserAvatarUploadSignedUrlService = async (uid: number, token: st
 		}
 	} catch (error) {
 		logging('ERROR', '获取上传图片用的预签名 URL 失败，错误信息', error, { uid })
+		return { success: false, message: '上传失败，获取图片上传 URL 时出现未知错误' }
+	}
+}
+
+/**
+ * 确认用户头像已上传到 TOS，并写入用户资料
+ * @param confirmUserAvatarUploadRequest 确认头像上传的请求参数
+ * @param uid 用户 ID
+ * @param token 用户 token
+ * @returns 确认并写入头像 URL 的结果
+ */
+export const confirmUserAvatarUploadService = async (confirmUserAvatarUploadRequest: ConfirmUserAvatarUploadRequestDto, uid: number, token: string): Promise<ConfirmUserAvatarUploadResponseDto> => {
+	try {
+		if (!await checkUserToken(uid, token)) {
+			logging('ERROR', '确认头像上传失败，用户不合法', undefined, { uid })
+			return { success: false, message: '确认头像上传失败，无法获取上传权限' }
+		}
+
+		const fileName = confirmUserAvatarUploadRequest.fileName?.trim()
+		if (!fileName || !fileName.startsWith(`avatar-${uid}-`)) {
+			logging('ERROR', '确认头像上传失败，文件名不合法', undefined, { uid, fileName })
+			return { success: false, message: '确认头像上传失败，文件名不合法' }
+		}
+
+		const isObjectValid = await checkVolcengineTosImageObjectValid(fileName)
+		if (!isObjectValid) {
+			logging('ERROR', '确认头像上传失败，TOS 对象不存在或不是合法图片', undefined, { uid, fileName })
+			return { success: false, message: '确认头像上传失败，图片尚未上传成功或图片格式不合法' }
+		}
+
+		const userAvatarUrl = getVolcengineTosImageObjectUrl(fileName)
+		if (!userAvatarUrl) {
+			logging('ERROR', '确认头像上传失败，无法生成图片对象 URL', undefined, { uid, fileName })
+			return { success: false, message: '确认头像上传失败，无法生成图片地址' }
+		}
+
+		const uuid = await getUserUuid(uid)
+		if (!uuid) {
+			logging('ERROR', '确认头像上传失败，UUID 不存在', undefined, { uid, fileName })
+			return { success: false, message: '确认头像上传失败，用户信息不存在' }
+		}
+
+		const { collectionName, schemaInstance } = UserInfoSchema
+		type UserInfo = InferSchemaType<typeof schemaInstance>
+		const updateUserAvatarWhere: QueryType<UserInfo> = {
+			uid,
+		}
+		const updateUserAvatarUpdate: UpdateType<UserInfo> = {
+			avatar: userAvatarUrl,
+			isUpdatedAfterReview: true,
+			editOperatorUUID: uuid,
+			editDateTime: new Date().getTime(),
+		}
+
+		const updateResult = await findOneAndUpdateData4MongoDB(updateUserAvatarWhere, updateUserAvatarUpdate, schemaInstance, collectionName)
+		if (!updateResult?.success || !updateResult.result) {
+			logging('ERROR', '确认头像上传失败，写入数据库失败', undefined, { uid, fileName, userAvatarUrl })
+			return { success: false, message: '确认头像上传失败，写入用户头像失败' }
+		}
+
+		return { success: true, message: '确认头像上传成功', userAvatarUrl }
+	} catch (error) {
+		logging('ERROR', '确认头像上传失败，未知错误', error, { uid })
+		return { success: false, message: '确认头像上传失败，未知错误' }
 	}
 }
 

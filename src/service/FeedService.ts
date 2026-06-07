@@ -1,5 +1,5 @@
 import { InferSchemaType, PipelineStage } from "mongoose";
-import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowListRequestDto, GetFollowListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto, UserInfoForFollowList } from "../controller/FeedControllerDto.js";
+import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, ConfirmFeedGroupCoverUploadRequestDto, ConfirmFeedGroupCoverUploadResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowListRequestDto, GetFollowListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto, UserInfoForFollowList } from "../controller/FeedControllerDto.js";
 import { FeedGroupSchema, FollowingSchema, UnfollowingSchema } from "../dbPool/schema/FeedSchema.js";
 import { UserSettingsSchema } from "../dbPool/schema/UserSchema.js";
 import { checkUserExistsByUuidService, checkUserTokenByUuidService, getUserUuid } from "./UserService.js";
@@ -9,9 +9,9 @@ import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "
 import { CheckUserExistsByUuidRequestDto } from "../controller/UserControllerDto.js";
 import { v4 as uuidV4 } from 'uuid'
 import { generateSecureRandomString } from "../common/RandomTool.js";
-import { createCloudflareImageUploadSignedUrl } from "../cloudflare/index.js";
 import { VideoSchema } from "../dbPool/schema/VideoSchema.js";
 import { logging } from "./loggingService.js";
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl } from "../volcengine/index.js";
 
 /**
  * 用户关注一个创作者
@@ -528,9 +528,9 @@ export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, toke
 		const now = new Date().getTime()
 		const fileName = `feed-group-cover-${uuid}-${generateSecureRandomString(32)}-${now}`
 		try {
-			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
-			if (signedUrl) {
-				return { success: true, message: '获取用于上传动态分组封面图的预签名 URL 成功', result: { fileName, signedUrl } }
+			const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660)
+			if (uploadPolicy) {
+				return { success: true, message: '获取用于上传动态分组封面图的预签名 URL 成功', result: uploadPolicy }
 			}
 		} catch (error) {
 			logging('ERROR', '获取用于上传动态分组封面图的预签名 URL 失败，请求失败', error)
@@ -539,6 +539,64 @@ export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, toke
 	} catch (error) {
 		logging('ERROR', '获取用于上传动态分组封面图的预签名 URL 时出错：', error)
 		return { success: false, message: '获取用于上传动态分组封面图的预签名 URL 时出错，未知原因' }
+	}
+}
+
+/**
+ * 确认动态分组封面图已上传到 TOS，并写入动态分组
+ * @param confirmFeedGroupCoverUploadRequest 确认动态分组封面上传的请求载荷
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 确认并写入动态分组封面的请求响应
+ */
+export const confirmFeedGroupCoverUploadService = async (confirmFeedGroupCoverUploadRequest: ConfirmFeedGroupCoverUploadRequestDto, uuid: string, token: string): Promise<ConfirmFeedGroupCoverUploadResponseDto> => {
+	try {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '确认动态分组封面图上传失败，非法用户')
+			return { success: false, message: '确认动态分组封面图上传失败，非法用户' }
+		}
+
+		const feedGroupUuid = confirmFeedGroupCoverUploadRequest.feedGroupUuid?.trim()
+		const fileName = confirmFeedGroupCoverUploadRequest.fileName?.trim()
+		if (!feedGroupUuid || !fileName || !fileName.startsWith(`feed-group-cover-${uuid}-`)) {
+			logging('ERROR', '确认动态分组封面图上传失败，参数不合法', undefined, { uuid, feedGroupUuid, fileName })
+			return { success: false, message: '确认动态分组封面图上传失败，参数不合法' }
+		}
+
+		const isObjectValid = await checkVolcengineTosImageObjectValid(fileName)
+		if (!isObjectValid) {
+			logging('ERROR', '确认动态分组封面图上传失败，TOS 对象不存在或不是合法图片', undefined, { uuid, feedGroupUuid, fileName })
+			return { success: false, message: '确认动态分组封面图上传失败，图片尚未上传成功或图片格式不合法' }
+		}
+
+		const coverUrl = getVolcengineTosImageObjectUrl(fileName)
+		if (!coverUrl) {
+			logging('ERROR', '确认动态分组封面图上传失败，无法生成图片对象 URL', undefined, { uuid, feedGroupUuid, fileName })
+			return { success: false, message: '确认动态分组封面图上传失败，无法生成图片地址' }
+		}
+
+		const { collectionName: feedGroupCollectionName, schemaInstance: feedGroupSchemaInstance } = FeedGroupSchema
+		type FeedGroup = InferSchemaType<typeof feedGroupSchemaInstance>
+		const updateFeedGroupWhere: QueryType<FeedGroup> = {
+			feedGroupUuid,
+			feedGroupCreatorUuid: uuid,
+		}
+		const updateFeedGroupData: UpdateType<FeedGroup> = {
+			customCover: coverUrl,
+			isUpdatedAfterReview: true,
+			editDateTime: new Date().getTime(),
+		}
+
+		const updateResult = await findOneAndUpdateData4MongoDB<FeedGroup>(updateFeedGroupWhere, updateFeedGroupData, feedGroupSchemaInstance, feedGroupCollectionName)
+		if (!updateResult.success || !updateResult.result) {
+			logging('ERROR', '确认动态分组封面图上传失败，写入数据库失败', undefined, { uuid, feedGroupUuid, fileName, coverUrl })
+			return { success: false, message: '确认动态分组封面图上传失败，写入动态分组封面失败' }
+		}
+
+		return { success: true, message: '确认动态分组封面图上传成功', url: coverUrl, feedGroupResult: updateResult.result }
+	} catch (error) {
+		logging('ERROR', '确认动态分组封面图上传时出错：', error)
+		return { success: false, message: '确认动态分组封面图上传时出错，未知原因' }
 	}
 }
 

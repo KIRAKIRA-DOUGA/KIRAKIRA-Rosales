@@ -10,6 +10,7 @@ import {
 	checkInvitationCodeService,
 	checkUsernameService,
 	checkUserTokenService,
+	confirmUserAvatarUploadService,
 	createInvitationCodeService,
 	getBlockedUserService,
 	getMyInvitationCodeService,
@@ -49,6 +50,7 @@ import {
 	CheckInvitationCodeRequestDto,
 	CheckUserHave2FARequestDto,
 	CheckUsernameRequestDto,
+	ConfirmUserAvatarUploadRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
 	DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto,
 	DeleteUserEmailAuthenticatorRequestDto,
@@ -485,6 +487,28 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
 	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
+	await next()
+}
+
+/**
+ * 确认用户头像已上传并写入数据库
+ * @param ctx context
+ * @param next context
+ */
+export const confirmUserAvatarUploadController = async (ctx: koaCtx, next: koaNext) => {
+	const uid = parseInteger(ctx.cookies.get('uid'))
+	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<ConfirmUserAvatarUploadRequestDto>
+	const confirmUserAvatarUploadRequest: ConfirmUserAvatarUploadRequestDto = {
+		fileName: data.fileName ?? '',
+	}
+
+	ctx.body = await confirmUserAvatarUploadService(confirmUserAvatarUploadRequest, uid, token)
 	await next()
 }
 

@@ -437,8 +437,34 @@ export type GetUserAvatarUploadSignedUrlResponseDto = {
 	userAvatarUploadSignedUrl?: string;
 	/** 用于用户上传头像文件名 */
 	userAvatarFilename?: string;
+	/** 用户头像图片对象 URL */
+	userAvatarUrl?: string;
+	/** POST 上传表单字段 */
+	userAvatarUploadFields?: Record<string, string>;
+	/** 头像最大上传大小，单位 byte */
+	userAvatarMaxSize?: number;
 	/** 附加的文本消息 */
 	message?: string;
+}
+
+/**
+ * 确认用户头像已上传并写入数据库的请求载荷
+ */
+export type ConfirmUserAvatarUploadRequestDto = {
+	/** 已上传到 TOS 的对象名 */
+	fileName: string;
+}
+
+/**
+ * 确认用户头像已上传并写入数据库的请求响应
+ */
+export type ConfirmUserAvatarUploadResponseDto = {
+	/** 执行结果，程序执行成功，返回 true，程序执行失败，返回 false */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 用户头像图片对象 URL */
+	userAvatarUrl?: string;
 }
 
 /**
