@@ -165,9 +165,10 @@ export const getVideoFileTusEndpointController = async (ctx: koaCtx, next: koaNe
  * @returns 用于上传视频封面图的预签名 URL 请求响应
  */
 export const getVideoCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await getVideoCoverUploadSignedUrlService(uid, token)
+	const contentType = typeof ctx.query.contentType === 'string' ? ctx.query.contentType : ''
+	ctx.body = await getVideoCoverUploadSignedUrlService(uuid, token, contentType)
 	await next()
 }
 
@@ -255,4 +256,3 @@ export const approvePendingReviewVideoController = async (ctx: koaCtx, next: koa
 	ctx.body = await approvePendingReviewVideoService(approvePendingReviewVideoRequest, uid, token)
 	await next()
 }
-

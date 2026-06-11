@@ -158,7 +158,8 @@ export const deleteFeedGroupController = async (ctx: koaCtx, next: koaNext) => {
 export const getFeedGroupCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await getFeedGroupCoverUploadSignedUrlService(uuid, token)
+	const contentType = typeof ctx.query.contentType === 'string' ? ctx.query.contentType : ''
+	ctx.body = await getFeedGroupCoverUploadSignedUrlService(uuid, token, contentType)
 	await next()
 }
 

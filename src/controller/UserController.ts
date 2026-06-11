@@ -484,9 +484,10 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
+	const contentType = typeof ctx.query.contentType === 'string' ? ctx.query.contentType : ''
+	ctx.body = await getUserAvatarUploadSignedUrlService(uuid, token, contentType)
 	await next()
 }
 
@@ -496,10 +497,10 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
  * @param next context
  */
 export const confirmUserAvatarUploadController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
@@ -508,7 +509,7 @@ export const confirmUserAvatarUploadController = async (ctx: koaCtx, next: koaNe
 		fileName: data.fileName ?? '',
 	}
 
-	ctx.body = await confirmUserAvatarUploadService(confirmUserAvatarUploadRequest, uid, token)
+	ctx.body = await confirmUserAvatarUploadService(confirmUserAvatarUploadRequest, uuid, token)
 	await next()
 }
 

@@ -759,23 +759,31 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
  * @param token 用户 token
  * @returns GetVideoCoverUploadSignedUrlResponseDto 获取用于上传视频封面图的预签名 URL 响应结果
  */
-export const getVideoCoverUploadSignedUrlService = async (uid: number, token: string): Promise<GetVideoCoverUploadSignedUrlResponseDto> => {
+export const getVideoCoverUploadSignedUrlService = async (uuid: string, token: string, contentType?: string): Promise<GetVideoCoverUploadSignedUrlResponseDto> => {
 	try {
-		if ((await checkUserTokenService(uid, token)).success) {
-			const now = new Date().getTime()
-			const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
-			try {
-				const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660)
-				if (uploadPolicy) {
-					return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: uploadPolicy }
-				}
-			} catch (error) {
-				logging('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
-				return { success: false, message: '获取视频封面图上传预签名 URL 失败，请求失败' }
-			}
-		} else {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '获取视频封面图上传预签名 URL 失败，用户校验未通过')
 			return { success: false, message: '获取视频封面图上传预签名 URL 失败，用户校验未通过' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (uid === undefined) {
+			logging('ERROR', '获取视频封面图上传预签名 URL 失败，无法通过 UUID 获取 UID', undefined, { uuid })
+			return { success: false, message: '获取视频封面图上传预签名 URL 失败，用户信息不存在' }
+		}
+
+		const now = new Date().getTime()
+		const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
+		try {
+			const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660, contentType)
+			if (uploadPolicy) {
+				return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: uploadPolicy }
+			}
+
+			return { success: false, message: '获取视频封面图上传预签名 URL 失败，无法生成图片上传 URL' }
+		} catch (error) {
+			logging('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
+			return { success: false, message: '获取视频封面图上传预签名 URL 失败，请求失败' }
 		}
 	} catch (error) {
 		logging('ERROR', '获取视频封面图上传预签名 URL 失败：', error)

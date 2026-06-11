@@ -435,6 +435,8 @@ export type GetUserAvatarUploadSignedUrlResponseDto = {
 	success: boolean;
 	/** 用于用户上传头像的预签名 URL */
 	userAvatarUploadSignedUrl?: string;
+	/** 用户头像上传方法 */
+	userAvatarUploadMethod?: 'POST';
 	/** 用于用户上传头像文件名 */
 	userAvatarFilename?: string;
 	/** 用户头像图片对象 URL */
@@ -443,6 +445,8 @@ export type GetUserAvatarUploadSignedUrlResponseDto = {
 	userAvatarUploadFields?: Record<string, string>;
 	/** 头像最大上传大小，单位 byte */
 	userAvatarMaxSize?: number;
+	/** 已签名的头像 Content-Type */
+	userAvatarContentType?: string;
 	/** 附加的文本消息 */
 	message?: string;
 }

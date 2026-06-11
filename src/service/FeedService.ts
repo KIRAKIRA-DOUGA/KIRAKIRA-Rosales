@@ -519,7 +519,7 @@ export const deleteFeedGroupService = async (deleteFeedGroupRequest: DeleteFeedG
  * @param token 用户的 token
  * @returns GetFeedGroupCoverUploadSignedUrlResponseDto 获取用于上传动态分组封面图的预签名 URL 的请求响应
  */
-export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, token: string): Promise<GetFeedGroupCoverUploadSignedUrlResponseDto> => {
+export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, token: string, contentType?: string): Promise<GetFeedGroupCoverUploadSignedUrlResponseDto> => {
 	try {
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '获取用于上传动态分组封面图的预签名 URL 失败，用户校验未通过')
@@ -528,7 +528,7 @@ export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, toke
 		const now = new Date().getTime()
 		const fileName = `feed-group-cover-${uuid}-${generateSecureRandomString(32)}-${now}`
 		try {
-			const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660)
+			const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660, contentType)
 			if (uploadPolicy) {
 				return { success: true, message: '获取用于上传动态分组封面图的预签名 URL 成功', result: uploadPolicy }
 			}

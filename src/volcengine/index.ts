@@ -9,15 +9,20 @@ export type VolcengineTosSignedUrlMethod = 'GET' | 'PUT'
 
 export type VolcengineTosImageUploadSignedPostPolicy = {
   signedUrl: string;
+  uploadUrl: string;
   fileName: string;
   url: string;
+  publicUrl: string;
   fields: Record<string, string>;
+  uploadFields: Record<string, string>;
+  uploadMethod: 'POST';
   maxSize: number;
+  contentType: string;
 }
 
 const tosImageMaxSize = 2 * 1024 * 1024
 const tosImageMinSize = 1
-const allowedTosImageContentTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+const allowedTosImageContentTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif']
 
 const getTosImageBucketName = (): string | undefined => process.env['TOS_IMAGE_BUCKET'] || process.env['TOS_BUCKET']
 
@@ -30,18 +35,114 @@ const getTosProtocolEndpoint = (endpoint: string): URL => {
   return new URL(protocolEndpoint)
 }
 
-export const getVolcengineTosImageObjectUrl = (fileName: string): string | undefined => {
+const getTosSdkEndpointConfig = (endpoint: string): { endpoint: string; secure: boolean } => {
+  const endpointUrl = getTosProtocolEndpoint(endpoint)
+  return {
+    endpoint: endpointUrl.host,
+    secure: endpointUrl.protocol === 'https:',
+  }
+}
+
+const encodeTosObjectKey = (objectKey: string): string => objectKey.split('/').map(pathPart => encodeURIComponent(pathPart)).join('/')
+
+const decodeTosObjectKey = (objectKey: string): string => objectKey.split('/').map(pathPart => decodeURIComponent(pathPart)).join('/')
+
+const normalizeTosImageContentType = (contentType?: string): string | undefined => {
+  const normalizedContentType = contentType?.split(';')[0]?.trim().toLowerCase()
+  if (!normalizedContentType || !allowedTosImageContentTypes.includes(normalizedContentType)) {
+    return undefined
+  }
+
+  return normalizedContentType
+}
+
+const getTosImageObjectPublicBaseUrl = (): string | undefined => {
   const publicBaseUrl = getTosImagePublicBaseUrl()
 
-  if (!publicBaseUrl?.trim() || !fileName?.trim()) {
-    logging('ERROR', '无法创建 TOS 图片对象 URL，必要参数为空。请检查 TOS_IMAGE_CDN_BASE_URL 或 TOS_IMAGE_PUBLIC_BASE_URL', undefined, {
-      hasPublicBaseUrl: Boolean(publicBaseUrl),
-      hasFileName: Boolean(fileName),
+  if (publicBaseUrl?.trim()) {
+    return publicBaseUrl.replace(/\/+$/, '')
+  }
+
+  const bucketName = getTosImageBucketName()
+  const endpoint = getTosImageEndpoint()
+
+  if (!bucketName?.trim() || !endpoint?.trim()) {
+    logging('ERROR', '无法创建 TOS 图片公开访问 Base URL，必要参数为空。请检查 TOS_IMAGE_PUBLIC_BASE_URL, TOS_IMAGE_BUCKET 和 TOS_ENDPOINT', undefined, {
+      hasBucketName: Boolean(bucketName),
+      hasEndpoint: Boolean(endpoint),
     })
     return undefined
   }
 
-  return `${publicBaseUrl.replace(/\/+$/, '')}/${encodeURIComponent(fileName)}`
+  try {
+    const endpointUrl = getTosProtocolEndpoint(endpoint)
+    const endpointPath = endpointUrl.pathname === '/' ? '' : endpointUrl.pathname.replace(/\/+$/, '')
+    return `${endpointUrl.protocol}//${bucketName}.${endpointUrl.host}${endpointPath}`
+  } catch (error) {
+    logging('ERROR', '无法创建 TOS 图片公开访问 Base URL，endpoint 不合法', error, { endpoint })
+    return undefined
+  }
+}
+
+export const getVolcengineTosImageObjectUrl = (fileName: string): string | undefined => {
+  const trimmedFileName = fileName?.trim()
+
+  if (!trimmedFileName) {
+    logging('ERROR', '无法创建 TOS 图片对象 URL，fileName 不能为空', undefined, {
+      hasFileName: Boolean(trimmedFileName),
+    })
+    return undefined
+  }
+
+  const publicBaseUrl = getTosImageObjectPublicBaseUrl()
+
+  if (!publicBaseUrl) {
+    return undefined
+  }
+
+  return `${publicBaseUrl}/${encodeTosObjectKey(trimmedFileName)}`
+}
+
+export const getVolcengineTosImageObjectKeyFromUrl = (objectUrl: string): string | undefined => {
+  const publicBaseUrl = getTosImageObjectPublicBaseUrl()
+
+  if (!publicBaseUrl?.trim() || !objectUrl?.trim()) {
+    logging('ERROR', '无法从 TOS 图片对象 URL 解析对象名，必要参数为空', undefined, {
+      hasPublicBaseUrl: Boolean(publicBaseUrl),
+      hasObjectUrl: Boolean(objectUrl),
+    })
+    return undefined
+  }
+
+  try {
+    const baseUrl = new URL(`${publicBaseUrl.replace(/\/+$/, '')}/`)
+    const url = new URL(objectUrl)
+
+    if (url.origin !== baseUrl.origin) {
+      logging('ERROR', '无法从 TOS 图片对象 URL 解析对象名，URL 不属于当前图片公开访问域名', undefined, { objectUrl })
+      return undefined
+    }
+
+    const basePath = baseUrl.pathname.replace(/\/+$/, '')
+    const objectPathPrefix = basePath ? `${basePath}/` : '/'
+
+    if (!url.pathname.startsWith(objectPathPrefix)) {
+      logging('ERROR', '无法从 TOS 图片对象 URL 解析对象名，URL 路径不属于当前图片公开访问路径', undefined, { objectUrl })
+      return undefined
+    }
+
+    const encodedObjectKey = url.pathname.slice(objectPathPrefix.length)
+
+    if (!encodedObjectKey) {
+      logging('ERROR', '无法从 TOS 图片对象 URL 解析对象名，对象名为空', undefined, { objectUrl })
+      return undefined
+    }
+
+    return decodeTosObjectKey(encodedObjectKey)
+  } catch (error) {
+    logging('ERROR', '无法从 TOS 图片对象 URL 解析对象名，URL 不合法', error, { objectUrl })
+    return undefined
+  }
 }
 
 /**
@@ -65,11 +166,13 @@ const createTosClient = (): TosClient | undefined => {
   }
 
   try {
+    const endpointConfig = getTosSdkEndpointConfig(endpoint)
     return new TosClient({
       accessKeyId,
       accessKeySecret,
       region,
-      endpoint,
+      endpoint: endpointConfig.endpoint,
+      secure: endpointConfig.secure,
       connectionTimeout,
     })
   } catch (error) {
@@ -142,9 +245,10 @@ export const createVolcengineTosPutSignedUrl = async (bucketName: string, fileNa
 /**
  * 生成用于上传图片到 TOS 的 POST Policy，限制图片大小最大 2MiB
  */
-export const createVolcengineTosImageUploadSignedPostPolicy = async (fileName: string, expiresIn: number = 660): Promise<VolcengineTosImageUploadSignedPostPolicy | undefined> => {
+export const createVolcengineTosImageUploadSignedPostPolicy = async (fileName: string, expiresIn: number = 660, contentType?: string): Promise<VolcengineTosImageUploadSignedPostPolicy | undefined> => {
   const bucketName = getTosImageBucketName()
   const endpoint = getTosImageEndpoint()
+  const normalizedContentType = normalizeTosImageContentType(contentType)
 
   if (!bucketName?.trim()) {
     logging('ERROR', '无法创建 TOS 图片上传签名，图片 bucket 不能为空。请检查 TOS_IMAGE_BUCKET 或 TOS_BUCKET', undefined, { fileName, expiresIn })
@@ -158,6 +262,16 @@ export const createVolcengineTosImageUploadSignedPostPolicy = async (fileName: s
 
   if (!fileName?.trim()) {
     logging('ERROR', '无法创建 TOS 图片上传签名，fileName 不能为空', undefined, { fileName, expiresIn })
+    return undefined
+  }
+
+  if (!normalizedContentType) {
+    logging('ERROR', '无法创建 TOS 图片上传签名，Content-Type 不合法', undefined, {
+      fileName,
+      expiresIn,
+      contentType,
+      allowedTosImageContentTypes,
+    })
     return undefined
   }
 
@@ -176,9 +290,11 @@ export const createVolcengineTosImageUploadSignedPostPolicy = async (fileName: s
       bucket: bucketName,
       key: fileName,
       expiresIn,
+      fields: {
+        'Content-Type': normalizedContentType,
+      },
       conditions: [
         ['content-length-range', tosImageMinSize, tosImageMaxSize],
-        ['starts-with', '$Content-Type', 'image/'],
       ],
     })
     const endpointUrl = getTosProtocolEndpoint(endpoint)
@@ -190,12 +306,19 @@ export const createVolcengineTosImageUploadSignedPostPolicy = async (fileName: s
       return undefined
     }
 
+    const uploadFields = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, String(value)]))
+
     return {
       signedUrl,
+      uploadUrl: signedUrl,
       fileName,
       url,
-      fields: Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, String(value)])),
+      publicUrl: url,
+      fields: uploadFields,
+      uploadFields,
+      uploadMethod: 'POST',
       maxSize: tosImageMaxSize,
+      contentType: normalizedContentType,
     }
   } catch (error) {
     logging('ERROR', '创建 TOS 图片上传签名失败', error, { fileName, expiresIn })
