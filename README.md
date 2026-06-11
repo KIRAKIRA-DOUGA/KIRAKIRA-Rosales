@@ -13,7 +13,7 @@ API 参考，请参阅 [路由](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosal
 
 ## 开发
 KIRAKIRA-Rosales 提供了可以在本地运行的开发服务器。  
-默认情况下，以下步骤将启动一个开发服务器，并监听 9999 端口。
+默认情况下，以下步骤将启动一个开发服务器，并监听 30000 端口。
 
 ### 安装
 克隆本存储库，你可以使用如下命令，或其他 Git 兼容工具。
@@ -36,7 +36,7 @@ npm install
 如果你使用的是 ```Windows``` 操作系统
 ```powershell
 # 以下为 Windows PowerShell 的示例
-$env:SERVER_PORT="9999"
+$env:SERVER_PORT="30000"
 $env:SERVER_ENV="dev"
 $env:SERVER_ROOT_URL="kirakira.moe"
 ...
@@ -45,7 +45,7 @@ $env:SERVER_ROOT_URL="kirakira.moe"
 如果你使用的是 ```Linux``` 操作系统
 ```bash
 # 以下为 Linux Shell 的示例
-export SERVER_PORT="9999"
+export SERVER_PORT="30000"
 export SERVER_ENV="dev"
 export SERVER_ROOT_URL="kirakira.moe"
 ...
@@ -77,7 +77,7 @@ npm run dev-hot
 
 也可以按下键盘按键 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>，然后选择 `npm: dev-hot`。
 
-成功执行以上命令后，你应该会获得一个监听 9999 端口的 KIRAKIRA-Rosales 开发服务器。🎉  
+成功执行以上命令后，你应该会获得一个监听 30000 端口的 KIRAKIRA-Rosales 开发服务器。🎉  
 在此基础上，你可以审阅、编写或贡献代码，参与 KIRAKIRA 项目开发。
 
 如何开发？请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。

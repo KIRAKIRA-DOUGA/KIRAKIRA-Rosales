@@ -10,7 +10,7 @@ import router from './route/router.js'
 import { parseInteger } from './common/ValidTool.js'
 import { logging } from './service/loggingService.js'
 
-const SERVER_PORT = process.env.SERVER_PORT ? parseInteger(process.env.SERVER_PORT) : 9999 // 从环境变量中获取端口号，如果没获取到，则使用 9999
+const SERVER_PORT = process.env.SERVER_PORT ? parseInteger(process.env.SERVER_PORT) : 30000 // 从环境变量中获取端口号，如果没获取到，则使用 30000
 const SERVER_ENV = process.env.SERVER_ENV
 
 const app = new Koa()
