@@ -5,6 +5,9 @@ node_modules/
 dist/
 .kirakira/
 
+# Ignore Claude File
+.claude/
+
 # ignore some local file
 local/
 

@@ -532,6 +532,7 @@ export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, toke
 			if (uploadPolicy) {
 				return { success: true, message: '获取用于上传动态分组封面图的预签名 URL 成功', result: uploadPolicy }
 			}
+			return { success: false, message: '获取用于上传动态分组封面图的预签名 URL 失败，无法生成图片上传 URL' }
 		} catch (error) {
 			logging('ERROR', '获取用于上传动态分组封面图的预签名 URL 失败，请求失败', error)
 			return { success: false, message: '获取用于上传动态分组封面图的预签名 URL 失败，请求失败' }
