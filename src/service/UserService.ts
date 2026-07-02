@@ -92,7 +92,7 @@ import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { isToday } from '../common/DateTool.js'
 import { logging } from './loggingService.js'
-import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl } from '../volcengine/index.js'
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl, normalizeTosImageObjectKey, persistTosImageVariants } from '../volcengine/index.js'
 
 authenticator.options = { window: parseInteger(process.env.TOTP_ADDITIONAL_WINDOWS, 1) || 1 } // 设置 TOTP 宽裕窗口，默认为 1
 
@@ -563,6 +563,9 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 			editOperatorUUID: uuid,
 			editDateTime: new Date().getTime(),
 		}
+		// 头像数据库仅存图片对象名（key）：若前端回传的是 TOS 完整 URL（如上传确认后的显示地址）则转成 key，空值/非 TOS 值原样保留
+		if (updateOrCreateUserInfoRequest.avatar !== undefined)
+			updateUserInfoUpdate.avatar = normalizeTosImageObjectKey(updateOrCreateUserInfoRequest.avatar)
 		const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
 
 		if (!updateResult || !updateResult.success || !updateResult.result) {
@@ -1059,6 +1062,13 @@ export const confirmUserAvatarUploadService = async (confirmUserAvatarUploadRequ
 			return { success: false, message: '确认头像上传失败，图片尚未上传成功或图片格式不合法' }
 		}
 
+		// 预生成多分辨率变体，全部成功才算确认成功（confirm 成功 = 各档位图片必可用）
+		const isVariantsPersisted = await persistTosImageVariants(fileName)
+		if (!isVariantsPersisted) {
+			logging('ERROR', '确认头像上传失败，生成多分辨率图片变体失败', undefined, { uuid, uid, fileName })
+			return { success: false, message: '确认头像上传失败，生成多分辨率图片失败，请重试' }
+		}
+
 		const userAvatarUrl = getVolcengineTosImageObjectUrl(fileName)
 		if (!userAvatarUrl) {
 			logging('ERROR', '确认头像上传失败，无法生成图片对象 URL', undefined, { uuid, uid, fileName })
@@ -1071,7 +1081,7 @@ export const confirmUserAvatarUploadService = async (confirmUserAvatarUploadRequ
 			uid,
 		}
 		const updateUserAvatarUpdate: UpdateType<UserInfo> = {
-			avatar: userAvatarUrl,
+			avatar: fileName, // 数据库仅存图片对象名（key），完整 URL 由前端按需拼接
 			isUpdatedAfterReview: true,
 			editOperatorUUID: uuid,
 			editDateTime: new Date().getTime(),

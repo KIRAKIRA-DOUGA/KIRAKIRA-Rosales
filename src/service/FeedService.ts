@@ -11,7 +11,7 @@ import { v4 as uuidV4 } from 'uuid'
 import { generateSecureRandomString } from "../common/RandomTool.js";
 import { VideoSchema } from "../dbPool/schema/VideoSchema.js";
 import { logging } from "./loggingService.js";
-import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl } from "../volcengine/index.js";
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl, normalizeTosImageObjectKey, persistTosImageVariants } from "../volcengine/index.js";
 
 /**
  * 用户关注一个创作者
@@ -252,7 +252,8 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
 			feedGroupName,
 			feedGroupCreatorUuid: uuid,
 			uuidList: [...new Set<string>(uuidList)],
-			customCover: withCustomCoverUrl,
+			// 数据库仅存图片对象名（key）：TOS 完整 URL 转成 key，空值/非 TOS 值原样保留
+			customCover: normalizeTosImageObjectKey(withCustomCoverUrl),
 			isUpdatedAfterReview: true,
 			createDateTime: now,
 			editDateTime: now,
@@ -570,6 +571,13 @@ export const confirmFeedGroupCoverUploadService = async (confirmFeedGroupCoverUp
 			return { success: false, message: '确认动态分组封面图上传失败，图片尚未上传成功或图片格式不合法' }
 		}
 
+		// 预生成多分辨率变体，全部成功才算确认成功（confirm 成功 = 各档位图片必可用）
+		const isVariantsPersisted = await persistTosImageVariants(fileName)
+		if (!isVariantsPersisted) {
+			logging('ERROR', '确认动态分组封面图上传失败，生成多分辨率图片变体失败', undefined, { uuid, feedGroupUuid, fileName })
+			return { success: false, message: '确认动态分组封面图上传失败，生成多分辨率图片失败，请重试' }
+		}
+
 		const coverUrl = getVolcengineTosImageObjectUrl(fileName)
 		if (!coverUrl) {
 			logging('ERROR', '确认动态分组封面图上传失败，无法生成图片对象 URL', undefined, { uuid, feedGroupUuid, fileName })
@@ -583,7 +591,7 @@ export const confirmFeedGroupCoverUploadService = async (confirmFeedGroupCoverUp
 			feedGroupCreatorUuid: uuid,
 		}
 		const updateFeedGroupData: UpdateType<FeedGroup> = {
-			customCover: coverUrl,
+			customCover: fileName, // 数据库仅存图片对象名（key），完整 URL 由前端按需拼接
 			isUpdatedAfterReview: true,
 			editDateTime: new Date().getTime(),
 		}
@@ -634,7 +642,8 @@ export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfo
 		}
 		const updateFeedGroupData: UpdateType<FeedGroup> = {
 			feedGroupName,
-			customCover: feedGroupCustomCoverUrl,
+			// 数据库仅存图片对象名（key）：TOS 完整 URL 转成 key，空值/非 TOS 值原样保留
+			customCover: normalizeTosImageObjectKey(feedGroupCustomCoverUrl),
 			isUpdatedAfterReview: true,
 			editDateTime: now,
 		}

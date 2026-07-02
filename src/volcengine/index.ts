@@ -146,6 +146,89 @@ export const getVolcengineTosImageObjectKeyFromUrl = (objectUrl: string): string
 }
 
 /**
+ * 将图片字段值规范化为数据库存储的 TOS 对象名（key）
+ * 仅当传入值为 http(s) URL 时尝试解析为对象名；解析失败（非本站 TOS 域名等）时原样返回。
+ * 空值、裸对象名、旧 Cloudflare 图片 ID 等非 URL 值直接原样返回，避免在正常业务路径上产生错误日志
+ * @param value 图片字段值（TOS 完整 URL、对象名、旧图片 ID 或空值）
+ * @returns 规范化后的值
+ */
+export function normalizeTosImageObjectKey(value: string): string
+export function normalizeTosImageObjectKey(value: string | undefined): string | undefined
+export function normalizeTosImageObjectKey(value: string | undefined): string | undefined {
+  if (!value || !/^https?:\/\//i.test(value)) {
+    return value
+  }
+  return getVolcengineTosImageObjectKeyFromUrl(value) ?? value
+}
+
+/**
+ * 预生成的图片变体档位。
+ * 变体命名为 `{原对象名}.{suffix}.webp`，前端 provider（KIRAKIRA-Cerasus providers/nuxt-image/tos-images.ts）按宽度选档，须与此保持一致。
+ * w32 为预模糊的占位图档位，用于渐进加载的第一帧
+ */
+export const tosImageVariants = [
+  { suffix: 'w32', process: 'image/resize,w_32/format,webp/quality,q_50/blur,r_3,s_2' },
+  { suffix: 'w200', process: 'image/resize,w_200/format,webp/quality,q_80' },
+  { suffix: 'w640', process: 'image/resize,w_640/format,webp/quality,q_80' },
+  { suffix: 'w1280', process: 'image/resize,w_1280/format,webp/quality,q_80' },
+] as const
+
+/**
+ * 用 TOS 图片处理「另存为」为已上传的原图预生成多分辨率变体并落盘
+ * 逐档发起带 x-tos-save-object 的签名 GET 请求（串行，避开图片处理并发上限），处理结果作为普通对象存回同一存储桶。
+ * 读取路径因此无需任何实时处理。文档：https://www.volcengine.com/docs/6349/762921
+ * @param fileName 原图对象名（key）
+ * @returns 是否全部档位生成成功
+ */
+export const persistTosImageVariants = async (fileName: string): Promise<boolean> => {
+  const bucketName = getTosImageBucketName()
+  const trimmedFileName = fileName?.trim()
+
+  if (!bucketName?.trim()) {
+    logging('ERROR', '无法生成 TOS 图片变体，图片 bucket 不能为空。请检查 TOS_IMAGE_BUCKET 或 TOS_BUCKET', undefined, { fileName })
+    return false
+  }
+
+  if (!trimmedFileName) {
+    logging('ERROR', '无法生成 TOS 图片变体，fileName 不能为空', undefined, { fileName })
+    return false
+  }
+
+  const client = createTosClient()
+  if (!client) {
+    return false
+  }
+
+  try {
+    for (const variant of tosImageVariants) {
+      const variantKey = `${trimmedFileName}.${variant.suffix}.webp`
+      const signedUrl = client.getPreSignedUrl({
+        bucket: bucketName,
+        key: trimmedFileName,
+        method: 'GET',
+        expires: 660,
+        query: {
+          'x-tos-process': variant.process,
+          'x-tos-save-object': Buffer.from(variantKey).toString('base64url'), // 目标对象名需 URL 安全的 Base64 编码
+        },
+      })
+
+      const response = await fetch(signedUrl)
+      if (!response.ok) {
+        const errorText = (await response.text()).slice(0, 500)
+        logging('ERROR', '生成 TOS 图片变体失败，处理请求未成功', undefined, { fileName: trimmedFileName, variant: variant.suffix, status: response.status, errorText })
+        return false
+      }
+      await response.arrayBuffer() // 另存为仍会返回处理后的图片数据，消费掉以释放连接
+    }
+    return true
+  } catch (error) {
+    logging('ERROR', '生成 TOS 图片变体失败，未知错误', error, { fileName: trimmedFileName })
+    return false
+  }
+}
+
+/**
  * 创建火山引擎 TOS 客户端实例
  * @returns TOS 客户端实例，创建失败返回 undefined
  */

@@ -20,7 +20,7 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
-import { createVolcengineTosImageUploadSignedPostPolicy } from '../volcengine/index.js'
+import { createVolcengineTosImageUploadSignedPostPolicy, normalizeTosImageObjectKey, persistTosImageVariants } from '../volcengine/index.js'
 
 /**
  * 上传视频
@@ -47,6 +47,18 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '上传视频失败，UUID 不存在' }
 			}
 
+			// 封面图数据库仅存图片对象名（key），完整 URL 由前端按需拼接；若前端传入的是 TOS 完整 URL 则转成 key，非 TOS 值（如默认封面 ID）原样保留
+			const videoCoverImage = normalizeTosImageObjectKey(uploadVideoRequest.image)
+
+			// 对 TOS 封面预生成多分辨率变体（在事务开始前执行，失败则中止投稿）；默认封面等非 TOS 值跳过
+			if (videoCoverImage && !/^https?:/i.test(videoCoverImage) && videoCoverImage.startsWith('video-cover-')) {
+				const isVariantsPersisted = await persistTosImageVariants(videoCoverImage)
+				if (!isVariantsPersisted) {
+					logging('ERROR', '上传视频失败，生成封面多分辨率图片变体失败', undefined, { uid, videoCoverImage })
+					return { success: false, message: '上传视频失败，生成封面多分辨率图片失败，请重试' }
+				}
+			}
+
 			// 启动事务
 			const session = await mongoose.startSession()
 			session.startTransaction()
@@ -71,7 +83,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					videoId,
 					videoPart: videoPart as Video['videoPart'], // TODO: Mongoose issue: #12420
 					title,
-					image: uploadVideoRequest.image,
+					image: videoCoverImage,
 					uploadDate: nowDate,
 					watchedCount: 0,
 					uploaderUUID: UUID,
