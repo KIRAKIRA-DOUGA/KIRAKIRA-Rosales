@@ -10,6 +10,7 @@ import {
 	checkInvitationCodeService,
 	checkUsernameService,
 	checkUserTokenService,
+	confirmUserAvatarUploadService,
 	createInvitationCodeService,
 	getBlockedUserService,
 	getMyInvitationCodeService,
@@ -49,6 +50,7 @@ import {
 	CheckInvitationCodeRequestDto,
 	CheckUserHave2FARequestDto,
 	CheckUsernameRequestDto,
+	ConfirmUserAvatarUploadRequestDto,
 	ConfirmUserTotpAuthenticatorRequestDto,
 	DeleteTotpAuthenticatorByTotpVerificationCodeRequestDto,
 	DeleteUserEmailAuthenticatorRequestDto,
@@ -335,7 +337,7 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 	const updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto = {
 		username: data?.username,
 		userNickname: data?.userNickname,
-		avatar: data?.avatar,
+		// 不透传 avatar：头像必须走 preUpload → confirmUpload 流程写入，不接受客户端直接提交的链接
 		userBannerImage: data?.userBannerImage,
 		signature: data?.signature,
 		gender: data?.gender,
@@ -482,9 +484,32 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
+	const contentType = typeof ctx.query.contentType === 'string' ? ctx.query.contentType : ''
+	ctx.body = await getUserAvatarUploadSignedUrlService(uuid, token, contentType)
+	await next()
+}
+
+/**
+ * 确认用户头像已上传并写入数据库
+ * @param ctx context
+ * @param next context
+ */
+export const confirmUserAvatarUploadController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<ConfirmUserAvatarUploadRequestDto>
+	const confirmUserAvatarUploadRequest: ConfirmUserAvatarUploadRequestDto = {
+		fileName: data.fileName ?? '',
+	}
+
+	ctx.body = await confirmUserAvatarUploadService(confirmUserAvatarUploadRequest, uuid, token)
 	await next()
 }
 

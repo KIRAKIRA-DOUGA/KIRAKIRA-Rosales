@@ -266,8 +266,24 @@ export type GetVideoCoverUploadSignedUrlResponseDto = {
 	result?: {
 		/** 预签名 URL */
 		signedUrl: string;
+		/** POST 上传 URL */
+		uploadUrl: string;
 		/** 文件名 */
 		fileName: string;
+		/** 图片对象 URL */
+		url: string;
+		/** 图片公开 URL */
+		publicUrl: string;
+		/** POST 上传表单字段 */
+		fields: Record<string, string>;
+		/** POST 上传表单字段 */
+		uploadFields: Record<string, string>;
+		/** 上传方法 */
+		uploadMethod: 'POST';
+		/** 图片最大上传大小，单位 byte */
+		maxSize: number;
+		/** 已签名的 Content-Type */
+		contentType: string;
 	};
 }
 

@@ -1,6 +1,5 @@
 import { Client } from '@elastic/elasticsearch'
 import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
-import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
@@ -21,6 +20,7 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, normalizeTosImageObjectKey, persistTosImageVariants } from '../volcengine/index.js'
 
 /**
  * 上传视频
@@ -47,6 +47,37 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '上传视频失败，UUID 不存在' }
 			}
 
+			// 封面图数据库仅存图片对象名（key），完整 URL 由前端按需拼接；若前端传入的是 TOS 完整 URL 则转成 key，非 TOS 值（如默认封面 ID）原样保留
+			const videoCoverImage = normalizeTosImageObjectKey(uploadVideoRequest.image)
+
+			// 经过 normalize 后仍是 http(s) URL 的值不属于本站图片域名，不允许作为封面（防止外链任意图片）
+			if (videoCoverImage && /^https?:/i.test(videoCoverImage)) {
+				logging('ERROR', '上传视频失败，封面图链接不属于本站图片域名', undefined, { uid, videoCoverImage })
+				return { success: false, message: '上传视频失败，封面图链接不合法' }
+			}
+
+			// 视频封面没有独立的 confirm 接口，投稿是封面唯一的落库点，须在此完成与 confirm 同等的校验：
+			// TOS 封面（video-cover- 前缀）必须属于投稿用户本人，且对象已上传成功、是合法图片；默认封面等非 TOS 值跳过
+			if (videoCoverImage?.startsWith('video-cover-')) {
+				if (!videoCoverImage.startsWith(`video-cover-${uid}-`)) {
+					logging('ERROR', '上传视频失败，封面图对象不属于当前用户', undefined, { uid, videoCoverImage })
+					return { success: false, message: '上传视频失败，封面图不属于当前用户' }
+				}
+
+				const isObjectValid = await checkVolcengineTosImageObjectValid(videoCoverImage)
+				if (!isObjectValid) {
+					logging('ERROR', '上传视频失败，封面图对象不存在或不是合法图片', undefined, { uid, videoCoverImage })
+					return { success: false, message: '上传视频失败，封面图尚未上传成功或图片格式不合法' }
+				}
+
+				// 预生成多分辨率变体（在事务开始前执行，失败则中止投稿）
+				const isVariantsPersisted = await persistTosImageVariants(videoCoverImage)
+				if (!isVariantsPersisted) {
+					logging('ERROR', '上传视频失败，生成封面多分辨率图片变体失败', undefined, { uid, videoCoverImage })
+					return { success: false, message: '上传视频失败，生成封面多分辨率图片失败，请重试' }
+				}
+			}
+
 			// 启动事务
 			const session = await mongoose.startSession()
 			session.startTransaction()
@@ -71,7 +102,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					videoId,
 					videoPart: videoPart as Video['videoPart'], // TODO: Mongoose issue: #12420
 					title,
-					image: uploadVideoRequest.image,
+					image: videoCoverImage,
 					uploadDate: nowDate,
 					watchedCount: 0,
 					uploaderUUID: UUID,
@@ -759,23 +790,31 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
  * @param token 用户 token
  * @returns GetVideoCoverUploadSignedUrlResponseDto 获取用于上传视频封面图的预签名 URL 响应结果
  */
-export const getVideoCoverUploadSignedUrlService = async (uid: number, token: string): Promise<GetVideoCoverUploadSignedUrlResponseDto> => {
+export const getVideoCoverUploadSignedUrlService = async (uuid: string, token: string, contentType?: string): Promise<GetVideoCoverUploadSignedUrlResponseDto> => {
 	try {
-		if ((await checkUserTokenService(uid, token)).success) {
-			const now = new Date().getTime()
-			const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
-			try {
-				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
-				if (signedUrl) {
-					return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: { fileName, signedUrl } }
-				}
-			} catch (error) {
-				logging('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
-				return { success: false, message: '获取视频封面图上传预签名 URL 失败，请求失败' }
-			}
-		} else {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '获取视频封面图上传预签名 URL 失败，用户校验未通过')
 			return { success: false, message: '获取视频封面图上传预签名 URL 失败，用户校验未通过' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (uid === undefined) {
+			logging('ERROR', '获取视频封面图上传预签名 URL 失败，无法通过 UUID 获取 UID', undefined, { uuid })
+			return { success: false, message: '获取视频封面图上传预签名 URL 失败，用户信息不存在' }
+		}
+
+		const now = new Date().getTime()
+		const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
+		try {
+			const uploadPolicy = await createVolcengineTosImageUploadSignedPostPolicy(fileName, 660, contentType)
+			if (uploadPolicy) {
+				return { success: true, message: '获取视频封面图上传预签名 URL 成功', result: uploadPolicy }
+			}
+
+			return { success: false, message: '获取视频封面图上传预签名 URL 失败，无法生成图片上传 URL' }
+		} catch (error) {
+			logging('ERROR', '获取视频封面图上传预签名 URL 失败，请求失败', error)
+			return { success: false, message: '获取视频封面图上传预签名 URL 失败，请求失败' }
 		}
 	} catch (error) {
 		logging('ERROR', '获取视频封面图上传预签名 URL 失败：', error)
@@ -1299,4 +1338,3 @@ const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boo
 const checkApprovePendingReviewVideoRequest = (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto) => {
 	return (!!approvePendingReviewVideoRequest.videoId && typeof approvePendingReviewVideoRequest.videoId === 'number' && approvePendingReviewVideoRequest.videoId >= 0)
 }
-

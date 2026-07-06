@@ -80,8 +80,6 @@ export type CreateFeedGroupRequestDto = {
 	feedGroupName: string;
 	/** 创建动态分组时包含 UID 列表 */
 	withUidList?: number[];
-	/** 创建动态分组时包含自定义动态分组封面 */
-	withCustomCoverUrl?: string;
 };
 
 /**
@@ -94,6 +92,8 @@ export type CreateFeedGroupResponseDto = {
 	tooManyUidInOnce: boolean;
 	/** 附加的文本消息 */
 	message?: string;
+	/** 如果成功，返回新创建的动态分组 */
+	feedGroupResult?: FeedGroup;
 };
 
 /**
@@ -176,21 +176,35 @@ export type GetFeedGroupCoverUploadSignedUrlResponseDto = {
 	result?: {
 		/** 预签名 URL */
 		signedUrl: string;
+		/** POST 上传 URL */
+		uploadUrl: string;
 		/** 文件名 */
 		fileName: string;
+		/** 图片对象 URL */
+		url: string;
+		/** 图片公开 URL */
+		publicUrl: string;
+		/** POST 上传表单字段 */
+		fields: Record<string, string>;
+		/** POST 上传表单字段 */
+		uploadFields: Record<string, string>;
+		/** 上传方法 */
+		uploadMethod: 'POST';
+		/** 图片最大上传大小，单位 byte */
+		maxSize: number;
+		/** 已签名的 Content-Type */
+		contentType: string;
 	};
 }
 
 /**
- * 删除动态分组的请求载荷
+ * 创建或更新动态分组信息的请求载荷
  */
 export type CreateOrEditFeedGroupInfoRequestDto = {
-	/** 要删除动态分组的 UUID */
+	/** 要更新的动态分组的 UUID */
 	feedGroupUuid: string;
 	/** 动态分组的名字 */
 	feedGroupName?: string;
-	/** 创建动态分组时包含自定义动态分组封面 */
-	feedGroupCustomCoverUrl?: string;
 }
 
 /***
@@ -201,6 +215,30 @@ export type CreateOrEditFeedGroupInfoResponseDto = {
 	success: boolean;
 	/** 附加的文本消息 */
 	message?: string;
+	/** 如果成功，返回动态分组 */
+	feedGroupResult?: FeedGroup
+}
+
+/**
+ * 确认动态分组封面图已上传并写入数据库的请求载荷
+ */
+export type ConfirmFeedGroupCoverUploadRequestDto = {
+	/** 动态分组的 UUID */
+	feedGroupUuid: string;
+	/** 已上传到 TOS 的对象名 */
+	fileName: string;
+}
+
+/**
+ * 确认动态分组封面图已上传并写入数据库的请求响应
+ */
+export type ConfirmFeedGroupCoverUploadResponseDto = {
+	/** 执行结果 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 图片对象 URL */
+	url?: string;
 	/** 如果成功，返回动态分组 */
 	feedGroupResult?: FeedGroup
 }

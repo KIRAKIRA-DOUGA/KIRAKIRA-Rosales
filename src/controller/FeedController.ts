@@ -1,8 +1,8 @@
 import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowerListService, getFollowingListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, confirmFeedGroupCoverUploadService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowerListService, getFollowingListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
 import { isPassRbacCheck } from "../service/RbacService.js";
 import { koaCtx, koaNext } from "../type/koaTypes.js";
-import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
+import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, ConfirmFeedGroupCoverUploadRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
 
 /**
  * 用户关注一个创作者
@@ -74,7 +74,6 @@ export const createFeedGroupController = async (ctx: koaCtx, next: koaNext) => {
 	const createFeedGroupRequest: CreateFeedGroupRequestDto = {
 		feedGroupName: data.feedGroupName ?? "",
 		withUidList: data.withUidList ?? [],
-		withCustomCoverUrl: data.withCustomCoverUrl ?? "",
 	}
 
 	const feedingUploaderResult = await createFeedGroupService(createFeedGroupRequest, uuid, token)
@@ -158,7 +157,32 @@ export const deleteFeedGroupController = async (ctx: koaCtx, next: koaNext) => {
 export const getFeedGroupCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await getFeedGroupCoverUploadSignedUrlService(uuid, token)
+	const contentType = typeof ctx.query.contentType === 'string' ? ctx.query.contentType : ''
+	ctx.body = await getFeedGroupCoverUploadSignedUrlService(uuid, token, contentType)
+	await next()
+}
+
+/**
+ * 确认动态分组封面图已上传并写入数据库
+ * @param ctx context
+ * @param next context
+ * @return 确认动态分组封面图上传的请求响应
+ */
+export const confirmFeedGroupCoverUploadController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<ConfirmFeedGroupCoverUploadRequestDto>
+	const confirmFeedGroupCoverUploadRequest: ConfirmFeedGroupCoverUploadRequestDto = {
+		feedGroupUuid: data.feedGroupUuid ?? "",
+		fileName: data.fileName ?? "",
+	}
+
+	ctx.body = await confirmFeedGroupCoverUploadService(confirmFeedGroupCoverUploadRequest, uuid, token)
 	await next()
 }
 
@@ -182,7 +206,6 @@ export const createOrEditFeedGroupInfoController = async (ctx: koaCtx, next: koa
 	const createOrEditFeedGroupInfoRequest: CreateOrEditFeedGroupInfoRequestDto = {
 		feedGroupUuid: data.feedGroupUuid ?? "",
 		feedGroupName: data.feedGroupName ?? "",
-		feedGroupCustomCoverUrl: data.feedGroupCustomCoverUrl ?? "",
 	}
 
 	ctx.body = await createOrEditFeedGroupInfoService(createOrEditFeedGroupInfoRequest, uuid, token)
