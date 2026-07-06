@@ -20,7 +20,7 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
-import { createVolcengineTosImageUploadSignedPostPolicy, normalizeTosImageObjectKey, persistTosImageVariants } from '../volcengine/index.js'
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, normalizeTosImageObjectKey, persistTosImageVariants } from '../volcengine/index.js'
 
 /**
  * 上传视频
@@ -50,8 +50,27 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 			// 封面图数据库仅存图片对象名（key），完整 URL 由前端按需拼接；若前端传入的是 TOS 完整 URL 则转成 key，非 TOS 值（如默认封面 ID）原样保留
 			const videoCoverImage = normalizeTosImageObjectKey(uploadVideoRequest.image)
 
-			// 对 TOS 封面预生成多分辨率变体（在事务开始前执行，失败则中止投稿）；默认封面等非 TOS 值跳过
-			if (videoCoverImage && !/^https?:/i.test(videoCoverImage) && videoCoverImage.startsWith('video-cover-')) {
+			// 经过 normalize 后仍是 http(s) URL 的值不属于本站图片域名，不允许作为封面（防止外链任意图片）
+			if (videoCoverImage && /^https?:/i.test(videoCoverImage)) {
+				logging('ERROR', '上传视频失败，封面图链接不属于本站图片域名', undefined, { uid, videoCoverImage })
+				return { success: false, message: '上传视频失败，封面图链接不合法' }
+			}
+
+			// 视频封面没有独立的 confirm 接口，投稿是封面唯一的落库点，须在此完成与 confirm 同等的校验：
+			// TOS 封面（video-cover- 前缀）必须属于投稿用户本人，且对象已上传成功、是合法图片；默认封面等非 TOS 值跳过
+			if (videoCoverImage?.startsWith('video-cover-')) {
+				if (!videoCoverImage.startsWith(`video-cover-${uid}-`)) {
+					logging('ERROR', '上传视频失败，封面图对象不属于当前用户', undefined, { uid, videoCoverImage })
+					return { success: false, message: '上传视频失败，封面图不属于当前用户' }
+				}
+
+				const isObjectValid = await checkVolcengineTosImageObjectValid(videoCoverImage)
+				if (!isObjectValid) {
+					logging('ERROR', '上传视频失败，封面图对象不存在或不是合法图片', undefined, { uid, videoCoverImage })
+					return { success: false, message: '上传视频失败，封面图尚未上传成功或图片格式不合法' }
+				}
+
+				// 预生成多分辨率变体（在事务开始前执行，失败则中止投稿）
 				const isVariantsPersisted = await persistTosImageVariants(videoCoverImage)
 				if (!isVariantsPersisted) {
 					logging('ERROR', '上传视频失败，生成封面多分辨率图片变体失败', undefined, { uid, videoCoverImage })

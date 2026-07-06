@@ -80,8 +80,6 @@ export type CreateFeedGroupRequestDto = {
 	feedGroupName: string;
 	/** 创建动态分组时包含 UID 列表 */
 	withUidList?: number[];
-	/** 创建动态分组时包含自定义动态分组封面 */
-	withCustomCoverUrl?: string;
 };
 
 /**
@@ -94,6 +92,8 @@ export type CreateFeedGroupResponseDto = {
 	tooManyUidInOnce: boolean;
 	/** 附加的文本消息 */
 	message?: string;
+	/** 如果成功，返回新创建的动态分组 */
+	feedGroupResult?: FeedGroup;
 };
 
 /**
@@ -198,15 +198,13 @@ export type GetFeedGroupCoverUploadSignedUrlResponseDto = {
 }
 
 /**
- * 删除动态分组的请求载荷
+ * 创建或更新动态分组信息的请求载荷
  */
 export type CreateOrEditFeedGroupInfoRequestDto = {
-	/** 要删除动态分组的 UUID */
+	/** 要更新的动态分组的 UUID */
 	feedGroupUuid: string;
 	/** 动态分组的名字 */
 	feedGroupName?: string;
-	/** 创建动态分组时包含自定义动态分组封面 */
-	feedGroupCustomCoverUrl?: string;
 }
 
 /***

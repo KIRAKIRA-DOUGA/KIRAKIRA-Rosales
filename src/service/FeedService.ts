@@ -11,7 +11,7 @@ import { v4 as uuidV4 } from 'uuid'
 import { generateSecureRandomString } from "../common/RandomTool.js";
 import { VideoSchema } from "../dbPool/schema/VideoSchema.js";
 import { logging } from "./loggingService.js";
-import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl, normalizeTosImageObjectKey, persistTosImageVariants } from "../volcengine/index.js";
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl, persistTosImageVariants } from "../volcengine/index.js";
 
 /**
  * 用户关注一个创作者
@@ -213,7 +213,7 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
 			return { success: false, tooManyUidInOnce: false, message: '创建动态分组失败，非法用户' }
 		}
 
-		const { feedGroupName, withUidList: uidList, withCustomCoverUrl } = createFeedGroupRequest
+		const { feedGroupName, withUidList: uidList } = createFeedGroupRequest
 		const uuidList = []
 		if (uidList && Array.isArray(uidList) && uidList.length > 0) {
 			if (uidList.length > 50) {
@@ -247,13 +247,12 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
 		const { collectionName: feedGroupCollectionName, schemaInstance: feedGroupSchemaInstance } = FeedGroupSchema
 		type FeedGroup = InferSchemaType<typeof feedGroupSchemaInstance>
 
+		// 创建时不接受客户端直接提交的封面图链接，封面必须走 confirmFeedGroupCoverUploadService 确认流程（校验对象归属和合法性）后写入
 		const feedGroupData: FeedGroup = {
 			feedGroupUuid,
 			feedGroupName,
 			feedGroupCreatorUuid: uuid,
 			uuidList: [...new Set<string>(uuidList)],
-			// 数据库仅存图片对象名（key）：TOS 完整 URL 转成 key，空值/非 TOS 值原样保留
-			customCover: normalizeTosImageObjectKey(withCustomCoverUrl),
 			isUpdatedAfterReview: true,
 			createDateTime: now,
 			editDateTime: now,
@@ -266,7 +265,7 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
 			return { success: false, tooManyUidInOnce: false, message: '创建动态分组失败，插入数据失败' }
 		}
 
-		return { success: true, tooManyUidInOnce: false, message: '创建动态分组成功。' }
+		return { success: true, tooManyUidInOnce: false, message: '创建动态分组成功。', feedGroupResult: insertFeedGroupDataResult.result?.[0] }
 	} catch (error) {
 		logging('ERROR', '创建动态分组时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, message: '创建动态分组时出错：未知原因。' }
@@ -610,8 +609,8 @@ export const confirmFeedGroupCoverUploadService = async (confirmFeedGroupCoverUp
 }
 
 /**
- * 创建或更新动态分组信息
- * 更新动态分组的名称或者头像 URL 都是这个接口
+ * 创建或更新动态分组信息（目前仅支持更新动态分组的名称）
+ * 封面图不通过此接口写入：必须走 getFeedGroupCoverUploadSignedUrlService → 上传 → confirmFeedGroupCoverUploadService 确认流程，由服务端校验对象归属和合法性后写入
  *
  * @param createOrEditFeedGroupInfoRequest 创建或更新动态分组信息的请求载荷
  * @param uuid 用户的 UUID
@@ -630,7 +629,7 @@ export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfo
 			return { success: false, message: '创建或更新动态分组信息失败，非法用户' }
 		}
 
-		const { feedGroupUuid, feedGroupName, feedGroupCustomCoverUrl } = createOrEditFeedGroupInfoRequest
+		const { feedGroupUuid, feedGroupName } = createOrEditFeedGroupInfoRequest
 		const { collectionName: feedGroupCollectionName, schemaInstance: feedGroupSchemaInstance } = FeedGroupSchema
 		type FeedGroup = InferSchemaType<typeof feedGroupSchemaInstance>
 
@@ -640,10 +639,9 @@ export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfo
 			feedGroupUuid,
 			feedGroupCreatorUuid: uuid, // 确保修改的是自己创建的动态分组
 		}
+		// 不更新 customCover：封面只能通过 confirmFeedGroupCoverUploadService 写入，且避免只改名称时把已有封面清空
 		const updateFeedGroupData: UpdateType<FeedGroup> = {
 			feedGroupName,
-			// 数据库仅存图片对象名（key）：TOS 完整 URL 转成 key，空值/非 TOS 值原样保留
-			customCover: normalizeTosImageObjectKey(feedGroupCustomCoverUrl),
 			isUpdatedAfterReview: true,
 			editDateTime: now,
 		}
@@ -655,7 +653,7 @@ export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfo
 			return { success: false, message: '创建或更新动态分组信息失败，更新失败' }
 		}
 
-		return { success: false, message: '创建或更新动态分组信息成功', feedGroupResult: findOneAndUpdateFeedGroupDataResult.result }
+		return { success: true, message: '创建或更新动态分组信息成功', feedGroupResult: findOneAndUpdateFeedGroupDataResult.result }
 	} catch (error) {
 		logging('ERROR', '创建或更新动态分组信息时出错：未知原因', error)
 		return { success: false, message: '创建或更新动态分组信息时出错：未知原因' }

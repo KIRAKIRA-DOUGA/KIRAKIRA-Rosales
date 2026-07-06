@@ -198,8 +198,6 @@ export type UpdateOrCreateUserInfoRequestDto = {
 	username?: string;
 	/** 用户昵称 */
 	userNickname?: string;
-	/** 用户头像的链接 */
-	avatar?: string;
 	/** 用户背景图片的链接 */
 	userBannerImage?: string;
 	/** 用户的个性签名 */
@@ -227,7 +225,7 @@ export type UpdateOrCreateUserInfoResponseDto = {
 	/** 附加的文本消息 */
 	message?: string;
 	/** 请求结果 */
-	result?: {} & UpdateOrCreateUserInfoRequestDto;
+	result?: { avatar?: string } & UpdateOrCreateUserInfoRequestDto;
 }
 
 /**

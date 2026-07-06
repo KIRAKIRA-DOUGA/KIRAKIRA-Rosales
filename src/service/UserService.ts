@@ -92,7 +92,7 @@ import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { isToday } from '../common/DateTool.js'
 import { logging } from './loggingService.js'
-import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl, normalizeTosImageObjectKey, persistTosImageVariants } from '../volcengine/index.js'
+import { checkVolcengineTosImageObjectValid, createVolcengineTosImageUploadSignedPostPolicy, getVolcengineTosImageObjectUrl, persistTosImageVariants } from '../volcengine/index.js'
 
 authenticator.options = { window: parseInteger(process.env.TOTP_ADDITIONAL_WINDOWS, 1) || 1 } // 设置 TOTP 宽裕窗口，默认为 1
 
@@ -563,9 +563,7 @@ export const updateOrCreateUserInfoService = async (updateOrCreateUserInfoReques
 			editOperatorUUID: uuid,
 			editDateTime: new Date().getTime(),
 		}
-		// 头像数据库仅存图片对象名（key）：若前端回传的是 TOS 完整 URL（如上传确认后的显示地址）则转成 key，空值/非 TOS 值原样保留
-		if (updateOrCreateUserInfoRequest.avatar !== undefined)
-			updateUserInfoUpdate.avatar = normalizeTosImageObjectKey(updateOrCreateUserInfoRequest.avatar)
+		// 此接口不写入 avatar：头像必须通过 confirmUserAvatarUploadService（校验 TOS 对象归属和合法性）写入
 		const updateResult = await findOneAndUpdateData4MongoDB(updateUserInfoWhere, updateUserInfoUpdate, schemaInstance, collectionName)
 
 		if (!updateResult || !updateResult.success || !updateResult.result) {
@@ -986,13 +984,14 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 }
 
 /**
- * 更新用户头像，并获取用于用户上传头像的预签名 URL, 上传限时 60 秒
+ * 获取用于上传用户头像的 TOS POST 签名，签名有效期 660 秒
+ * 此接口不修改数据库：头像在上传完成后通过 confirmUserAvatarUploadService 校验并写入用户资料
  * @param uuid 用户 UUID
  * @param token 用户 token
- * @returns 用于用户上传头像的预签名 URL 的结果
+ * @param contentType 要上传的图片的 Content-Type（必填，须为允许的图片类型）
+ * @returns 用于上传头像的 POST 签名的结果
  */
 export const getUserAvatarUploadSignedUrlService = async (uuid: string, token: string, contentType?: string): Promise<GetUserAvatarUploadSignedUrlResponseDto> => {
-	// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新头像链接替换数据库中的旧头像链接，而且当前图片没有加入审核流程
 	try {
 		if (!await checkUserTokenByUUID(uuid, token)) {
 			logging('ERROR', '获取上传图片用的预签名 URL 失败，用户不合法', undefined, { uuid })
@@ -1021,7 +1020,6 @@ export const getUserAvatarUploadSignedUrlService = async (uuid: string, token: s
 				userAvatarContentType: uploadPolicy.contentType,
 			}
 		} else {
-			// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新头像链接替换数据库中的旧头像链接，而且当前图片没有加入审核流程
 			return { success: false, message: '上传失败，无法生成图片上传 URL，请重新上传头像' }
 		}
 	} catch (error) {

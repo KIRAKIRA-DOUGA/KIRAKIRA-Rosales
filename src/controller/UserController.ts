@@ -337,7 +337,7 @@ export const updateOrCreateUserInfoController = async (ctx: koaCtx, next: koaNex
 	const updateOrCreateUserInfoRequest: UpdateOrCreateUserInfoRequestDto = {
 		username: data?.username,
 		userNickname: data?.userNickname,
-		avatar: data?.avatar,
+		// 不透传 avatar：头像必须走 preUpload → confirmUpload 流程写入，不接受客户端直接提交的链接
 		userBannerImage: data?.userBannerImage,
 		signature: data?.signature,
 		gender: data?.gender,

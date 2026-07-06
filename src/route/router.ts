@@ -199,13 +199,13 @@ router.get('/user/check', checkUserTokenController) // 根据 uid, token 校验�
 router.get('/user/logout', userLogoutController) // 清除浏览器中的 cookie（用户登出）
 // https://localhost:30000/user/logout
 
-router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 获取用于上传头像的预签名 URL, 上传限时 60 秒
-// https://localhost:30000/user/avatar/preUpload
-// cookie: uid, token
+router.get('/user/avatar/preUpload', getUserAvatarUploadSignedUrlController) // 获取用于上传头像的 TOS POST 签名，签名有效期 660 秒；头像在 confirmUpload 后才写入数据库
+// https://localhost:30000/user/avatar/preUpload?contentType=image%2Fpng
+// cookie: uuid, token
 
 router.post('/user/avatar/confirmUpload', confirmUserAvatarUploadController) // 确认用户头像已上传并写入数据库
 // https://localhost:30000/user/avatar/confirmUpload
-// cookie: uid, token
+// cookie: uuid, token
 // {
 // 	"fileName": "avatar-1-xxxxxxxxxxxxxxxxxxxxx-1710000000000"
 // }
@@ -453,9 +453,9 @@ router.post('/video/tus', getVideoFileTusEndpointController) // 获取 TUS 上�
 // https://localhost:30000/video/tus
 // cookie: uid, token
 
-router.get('/video/cover/preUpload', getVideoCoverUploadSignedUrlController) // 获取用于上传视频封面图的预签名 URL
-// https://localhost:30000/video/cover/preUpload
-// cookie: uid, token
+router.get('/video/cover/preUpload', getVideoCoverUploadSignedUrlController) // 获取用于上传视频封面图的 TOS POST 签名，签名有效期 660 秒；封面对象名（fileName）随投稿接口提交，投稿时校验归属和合法性
+// https://localhost:30000/video/cover/preUpload?contentType=image%2Fpng
+// cookie: uuid, token
 
 router.delete('/video/delete', deleteVideoByKvidController) // 根据视频 ID 删除视频 // WARN: 仅限管理员
 // https://localhost:30000/video/delete
@@ -698,13 +698,12 @@ router.post('/feed/unfollowing', unfollowingUploaderController) // 取消关注�
 // 	"unfollowingUid": 999
 // }
 
-router.post('/feed/createFeedGroup', createFeedGroupController) // 创建动态分组
+router.post('/feed/createFeedGroup', createFeedGroupController) // 创建动态分组；封面不在此提交，创建后通过 confirmFeedGroupCoverUpload 写入
 // https://localhost:30000/feed/createFeedGroup
 // cookie: uuid, token
 // {
 // 	"feedGroupName": "test",
-// 	"withUidList": [1, 2],
-// 	"withCustomCoverUrl": "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+// 	"withUidList": [1, 2]
 // }
 
 router.post('/feed/addNewUid2FeedGroup', addNewUid2FeedGroupController) // 向一个动态分组中添加新的 UID
@@ -730,8 +729,8 @@ router.delete('/feed/deleteFeedGroup', deleteFeedGroupController) // 删除动�
 // 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx"
 // }
 
-router.get('/feed/getFeedGroupCoverUploadSignedUrl', getFeedGroupCoverUploadSignedUrlController) // 获取用于用户上传头像的预签名 URL, 上传限时 60 秒
-// https://localhost:30000/feed/getFeedGroupCoverUploadSignedUrl
+router.get('/feed/getFeedGroupCoverUploadSignedUrl', getFeedGroupCoverUploadSignedUrlController) // 获取用于上传动态分组封面图的 TOS POST 签名，签名有效期 660 秒；封面在 confirmFeedGroupCoverUpload 后才写入数据库
+// https://localhost:30000/feed/getFeedGroupCoverUploadSignedUrl?contentType=image%2Fpng
 // cookie: uuid, token
 
 router.post('/feed/confirmFeedGroupCoverUpload', confirmFeedGroupCoverUploadController) // 确认动态分组封面图已上传并写入数据库
@@ -742,13 +741,12 @@ router.post('/feed/confirmFeedGroupCoverUpload', confirmFeedGroupCoverUploadCont
 // 	"fileName": "feed-group-cover-xxxxxxxxxxxxxxxxxxxxx-yyyyyyyyyyyyyyyyyyyyy-1710000000000"
 // }
 
-router.post('/feed/createOrEditFeedGroupInfo', createOrEditFeedGroupInfoController) // 创建或更新动态分组信息
+router.post('/feed/createOrEditFeedGroupInfo', createOrEditFeedGroupInfoController) // 更新动态分组信息（仅名称）；封面不在此提交，通过 confirmFeedGroupCoverUpload 写入
 // https://localhost:30000/feed/createOrEditFeedGroupInfo
 // cookie: uuid, token
 // {
 // 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx",
-// 	"feedGroupName": "xxxxx",
-// 	"feedGroupCustomCoverUrl": "xxxxxxxxxxxxxxxxxxxxxxxxxxx",
+// 	"feedGroupName": "xxxxx"
 // }
 
 router.post('/feed/administratorApproveFeedGroupInfoChange', administratorApproveFeedGroupInfoChangeController) // 管理员通过动态分组信息更新审核

@@ -74,7 +74,6 @@ export const createFeedGroupController = async (ctx: koaCtx, next: koaNext) => {
 	const createFeedGroupRequest: CreateFeedGroupRequestDto = {
 		feedGroupName: data.feedGroupName ?? "",
 		withUidList: data.withUidList ?? [],
-		withCustomCoverUrl: data.withCustomCoverUrl ?? "",
 	}
 
 	const feedingUploaderResult = await createFeedGroupService(createFeedGroupRequest, uuid, token)
@@ -207,7 +206,6 @@ export const createOrEditFeedGroupInfoController = async (ctx: koaCtx, next: koa
 	const createOrEditFeedGroupInfoRequest: CreateOrEditFeedGroupInfoRequestDto = {
 		feedGroupUuid: data.feedGroupUuid ?? "",
 		feedGroupName: data.feedGroupName ?? "",
-		feedGroupCustomCoverUrl: data.feedGroupCustomCoverUrl ?? "",
 	}
 
 	ctx.body = await createOrEditFeedGroupInfoService(createOrEditFeedGroupInfoRequest, uuid, token)
