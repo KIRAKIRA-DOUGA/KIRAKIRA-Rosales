@@ -98,8 +98,11 @@ export const getMessageListController = async (ctx: koaCtx, next: koaNext) => {
 
 	const finalPageSize = limitPageSize(pageSize || '20')
 
+	const cursorMessageId = ctx.query.cursorMessageId as string | undefined
+
 	const getMessageListRequest: GetMessageListRequestDto = {
 		conversationId: ctx.query.conversationId as string,
+		cursorMessageId: cursorMessageId?.trim() ? cursorMessageId.trim() : undefined,
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,
 			pageSize: finalPageSize ?? 20,
