@@ -1,15 +1,19 @@
-import mongoose, { InferSchemaType } from 'mongoose'
-import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, AddToFavoritesRequestDto, AddToFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, AddEditorToFavoritesRequestDto, AddEditorToFavoritesResponseDto, RemoveEditorFromFavoritesRequestDto, RemoveEditorFromFavoritesResponseDto, GetFavoritesCoverUploadSignedUrlRequestDto, GetFavoritesCoverUploadSignedUrlResponseDto } from '../controller/FavoritesControllerDto.js'
-import { insertData2MongoDB, insertManyData2MongoDB, selectDataFromMongoDB, deleteOneDataFromMongoDB, updateData4MongoDB, bulkUpdateData4MongoDB, deleteManyDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
+import { CreateFavoritesRequestDto, CreateFavoritesResponseDto, GetFavoritesResponseDto, GetFavoritesByUidRequestDto, GetFavoritesByUidResponseDto, AddToFavoritesRequestDto, AddToFavoritesResponseDto, RemoveFromFavoritesRequestDto, RemoveFromFavoritesResponseDto, GetFavoritesDetailRequestDto, GetFavoritesDetailResponseDto, UpdateFavoritesRequestDto, UpdateFavoritesResponseDto, DeleteFavoritesRequestDto, DeleteFavoritesResponseDto, ReorderFavoritesDetailRequestDto, ReorderFavoritesDetailResponseDto, AddEditorToFavoritesRequestDto, AddEditorToFavoritesResponseDto, RemoveEditorFromFavoritesRequestDto, RemoveEditorFromFavoritesResponseDto, GetFavoritesCoverUploadSignedUrlRequestDto, GetFavoritesCoverUploadSignedUrlResponseDto, CheckFavoritesContentRequestDto, CheckFavoritesContentResponseDto } from '../controller/FavoritesControllerDto.js'
+import { BrowsingHistoryCategory } from '../controller/BrowsingHistoryControllerDto.js'
+import { insertData2MongoDB, insertManyData2MongoDB, selectDataFromMongoDB, deleteOneDataFromMongoDB, updateData4MongoDB, bulkUpdateData4MongoDB, deleteManyDataFromMongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType, OrderByType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesSchema, FavoritesDetailSchema, RemovedFavoritesSchema, RemovedFavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
+import { VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenService, checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
+import { checkVideoExistByKvidService } from './VideoService.js'
 import { logging } from './loggingService.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
+import { parseInteger } from '../common/ValidTool.js'
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js'
 
 /**
@@ -23,16 +27,47 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 	try {
 		if (checkCreateFavoritesRequest(createFavoritesRequest)) {
 			if ((await checkUserTokenService(uid, token)).success) {
-				const { favoritesTitle, favoritesBio, favoritesCover, favoritesVisibility } = createFavoritesRequest
 				const { collectionName, schemaInstance } = FavoritesSchema
 				const now = new Date().getTime()
 
 				type FavoritesType = InferSchemaType<typeof schemaInstance>
 
+				const countWhere: QueryType<FavoritesType> = {
+					creator: uid,
+				}
+				const countSelect: SelectType<FavoritesType> = {
+					favoritesId: 1,
+				}
+				const countResult = await selectDataFromMongoDB<FavoritesType>(countWhere, countSelect, schemaInstance, collectionName)
+				if (countResult.success && countResult.result && countResult.result.length >= 100) {
+					logging('ERROR', '创建收藏夹失败，收藏夹数量已达上限（100个）', undefined, { createFavoritesRequest, uid })
+					return { success: false, message: '创建收藏夹失败，收藏夹数量已达上限（100个）' }
+				}
+
+				const duplicateWhere: QueryType<FavoritesType> = {
+					creator: uid,
+					favoritesTitle: createFavoritesRequest.favoritesTitle,
+				}
+				const duplicateSelect: SelectType<FavoritesType> = {
+					favoritesId: 1,
+				}
+				const duplicateResult = await selectDataFromMongoDB<FavoritesType>(duplicateWhere, duplicateSelect, schemaInstance, collectionName)
+				if (duplicateResult.success && duplicateResult.result && duplicateResult.result.length > 0) {
+					logging('ERROR', '创建收藏夹失败，已存在同名收藏夹', undefined, { createFavoritesRequest, uid })
+					return { success: false, message: '创建收藏夹失败，不能创建同名收藏夹' }
+				}
+
+				const { favoritesTitle, favoritesBio, favoritesCover, favoritesVisibility } = createFavoritesRequest
+
 				// 启动事务
 				const session = await createAndStartSession()
 
 				const favoritesId = (await getNextSequenceValueService('favorites', 1, 1, session))?.sequenceValue
+				if (!favoritesId) {
+					await abortAndEndSession(session)
+					logging('ERROR', '创建收藏夹失败，获取序列值失败', undefined, { createFavoritesRequest, uid })
+					return { success: false, message: '创建收藏夹失败，获取序列值失败' }
+				}
 
 				const createFavoritesData: FavoritesType = {
 					favoritesId,
@@ -48,7 +83,7 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 				}
 
 				try {
-					const createFavoritesResult = await insertData2MongoDB<FavoritesType>(createFavoritesData, schemaInstance, collectionName)
+					const createFavoritesResult = await insertData2MongoDB<FavoritesType>(createFavoritesData, schemaInstance, collectionName, { session })
 					if (createFavoritesResult.success && createFavoritesResult.result?.length === 1 && createFavoritesResult.result?.[0]) {
 						await commitAndEndSession(session)
 						return { success: true, message: '创建收藏夹成功', result: createFavoritesResult.result[0] }
@@ -89,9 +124,12 @@ export const getFavoritesService = async (uid: number, token: string): Promise<G
 
 			type FavoritesType = InferSchemaType<typeof schemaInstance>
 
-			const getFavoritesQuery: QueryType<FavoritesType> = {
-				creator: uid,
-			}
+			const getFavoritesQuery = {
+				$or: [
+					{ creator: uid },
+					{ editor: uid },
+				],
+			} as QueryType<FavoritesType>
 
 			const getFavoritesSelect: SelectType<FavoritesType> = {
 				favoritesId: 1,
@@ -210,7 +248,7 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 			if (userSettingsResult.success && userSettingsResult.result && userSettingsResult.result.length > 0) {
 				const userSettings = userSettingsResult.result[0]
 				const favoritesPrivacySetting = userSettings.userPrivaryVisibilitiesSetting?.find(
-					(setting: any) => setting.privaryId === 'privary.favorites'
+					setting => setting.privaryId === 'privary.favorites'
 				)
 
 				if (favoritesPrivacySetting) {
@@ -248,19 +286,13 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 		try {
 			const visibleFavorites = []
 			for (const fav of favorites) {
-				// 如果是创建者（所有者），直接可以看到
-				if (fav.creator === viewerUid) {
-					visibleFavorites.push(fav)
-				}
 				// 如果是维护者，直接可以看到
-				else if (fav.editor && fav.editor.includes(viewerUid)) {
+				if (fav.editor && fav.editor.includes(viewerUid)) {
 					visibleFavorites.push(fav)
 				}
 				// 非所有者非维护者，需要检查可见性权限
-				else {
-					if (await checkFavoritesViewPermission(fav.favoritesId, viewerUid, uuid)) {
-						visibleFavorites.push(fav)
-					}
+				else if (await checkFavoritesViewPermission(fav.favoritesId, viewerUid, uuid)) {
+					visibleFavorites.push(fav)
 				}
 			}
 			return { success: true, message: '获取指定用户收藏夹列表成功', result: visibleFavorites }
@@ -305,6 +337,13 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 			return { success: false, message: '添加内容到收藏夹失败，没有权限操作该收藏夹' }
 		}
 
+		// 检查收藏的内容是否存在
+		const contentExistsResult = await checkFavoritesContentExists(addToFavoritesRequest.category, addToFavoritesRequest.id)
+		if (!contentExistsResult.success) {
+			logging('ERROR', '添加内容到收藏夹失败，内容不存在或类型暂不支持', undefined, { addToFavoritesRequest, uuid, uid, message: contentExistsResult.message })
+			return { success: false, message: contentExistsResult.message ?? '添加内容到收藏夹失败，内容不存在或类型暂不支持' }
+		}
+
 		const { collectionName, schemaInstance } = FavoritesDetailSchema
 		type FavoritesDetailType = InferSchemaType<typeof schemaInstance>
 		const now = new Date().getTime()
@@ -315,35 +354,43 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 			category: addToFavoritesRequest.category,
 			id: addToFavoritesRequest.id,
 		}
-		const checkResult = await selectDataFromMongoDB<FavoritesDetailType>(checkWhere, { _id: 1 } as any, schemaInstance, collectionName)
+		const checkSelect: SelectType<FavoritesDetailType> = {
+			favoritesListId: 1,
+		}
+		const checkResult = await selectDataFromMongoDB<FavoritesDetailType>(checkWhere, checkSelect, schemaInstance, collectionName)
 		if (checkResult.success && checkResult.result && checkResult.result.length > 0) {
 			return { success: false, message: '该内容已存在于收藏夹中' }
 		}
 
 		// 检查收藏夹内的内容数量是否达到上限（5000个）
-		const favoritesDetailCollection = mongoose.connection.collection(collectionName)
-		const favoritesDetailsCount = await favoritesDetailCollection.countDocuments({
-			favoritesListId: addToFavoritesRequest.favoritesListId,
-		})
+		const favoritesDetailsCountPipeline: PipelineStage[] = [
+			{
+				$match: {
+					favoritesListId: addToFavoritesRequest.favoritesListId,
+				},
+			},
+			{
+				$count: 'totalCount',
+			},
+		]
+		const favoritesDetailsCountResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(schemaInstance, collectionName, favoritesDetailsCountPipeline)
+		const favoritesDetailsCount = favoritesDetailsCountResult.result?.[0]?.totalCount ?? 0
 		if (favoritesDetailsCount >= 5000) {
 			logging('ERROR', '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）', undefined, { addToFavoritesRequest, uuid, uid })
 			return { success: false, message: '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）' }
 		}
 
 		// 获取当前收藏夹中的最大 sortOrder
-		const maxSortOrderDocument = await favoritesDetailCollection.findOne(
-			{
-				favoritesListId: addToFavoritesRequest.favoritesListId,
-			},
-			{
-				projection: {
-					sortOrder: 1,
-				},
-				sort: {
-					sortOrder: -1,
-				},
-			}
+		const maxSortOrderResult = await selectDataFromMongoDB<FavoritesDetailType>(
+			{ favoritesListId: addToFavoritesRequest.favoritesListId },
+			{ sortOrder: 1 },
+			schemaInstance,
+			collectionName,
+			undefined,
+			{ sortOrder: -1 },
+			{ page: 1, pageSize: 1 },
 		)
+		const maxSortOrderDocument = maxSortOrderResult.result?.[0]
 		const newSortOrder = maxSortOrderDocument ? maxSortOrderDocument.sortOrder + 1 : 1
 
 		const favoritesDetailData: FavoritesDetailType = {
@@ -524,18 +571,53 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 			sortOrder: sortOrder as 1 | -1,
 		}
 
+		let skip = 0
+		let pageSize: number | undefined = undefined
+		if (getFavoritesDetailRequest.pagination.page > 0 && getFavoritesDetailRequest.pagination.pageSize > 0) {
+			skip = (getFavoritesDetailRequest.pagination.page - 1) * getFavoritesDetailRequest.pagination.pageSize
+			pageSize = getFavoritesDetailRequest.pagination.pageSize
+		}
+
+		const favoritesDetailCountPipeline: PipelineStage[] = [
+			{ $match: where },
+			{ $count: 'totalCount' },
+		]
+		const favoritesDetailListPipeline: PipelineStage[] = [
+			{ $match: where },
+			{ $sort: { sortOrder } },
+			{ $skip: skip },
+			...(pageSize ? [{ $limit: pageSize }] : []),
+			{
+				$project: {
+					favoritesListId: 1,
+					operator: 1,
+					category: 1,
+					id: 1,
+					addedDateTime: 1,
+					sortOrder: 1,
+					editDateTime: 1,
+				},
+			},
+		]
+
 		try {
-			const result = await selectDataFromMongoDB<FavoritesDetailType>(where, select, schemaInstance, collectionName, undefined, orderBy)
-			if (result.success && result.result) {
-				return { success: true, message: '获取收藏夹内容成功', result: result.result }
-				} else {
-					logging('ERROR', '获取收藏夹内容失败，查询数据失败', undefined, { getFavoritesDetailRequest, uuid, uid })
-					return { success: false, message: '获取收藏夹内容失败，查询数据失败' }
+			const favoritesDetailCountResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(schemaInstance, collectionName, favoritesDetailCountPipeline)
+			const favoritesDetailListResult = await selectDataByAggregateFromMongoDB<FavoritesDetailType>(schemaInstance, collectionName, favoritesDetailListPipeline)
+			if (favoritesDetailCountResult.success && favoritesDetailListResult.success) {
+				return {
+					success: true,
+					message: '获取收藏夹内容成功',
+					totalCount: favoritesDetailCountResult.result?.[0]?.totalCount ?? 0,
+					result: favoritesDetailListResult.result ?? [],
 				}
-			} catch (error) {
-				logging('ERROR', '获取收藏夹内容失败，查询数据时出错：', error, { getFavoritesDetailRequest, uuid, uid })
-				return { success: false, message: '获取收藏夹内容失败，查询数据时出错' }
+			} else {
+				logging('ERROR', '获取收藏夹内容失败，查询数据失败', undefined, { getFavoritesDetailRequest, uuid, uid })
+				return { success: false, message: '获取收藏夹内容失败，查询数据失败' }
 			}
+		} catch (error) {
+			logging('ERROR', '获取收藏夹内容失败，查询数据时出错：', error, { getFavoritesDetailRequest, uuid, uid })
+			return { success: false, message: '获取收藏夹内容失败，查询数据时出错' }
+		}
 		} catch (error) {
 			logging('ERROR', '获取收藏夹内容失败，未知原因：', error, { getFavoritesDetailRequest, uuid })
 			return { success: false, message: '获取收藏夹内容失败，未知原因' }
@@ -849,10 +931,10 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 			for (const item of existing) {
 				maxExistingOrder = Math.max(maxExistingOrder, item.sortOrder ?? 0)
 				workingMap.set(
-					keyOf(item.category as any, item.id as any),
+					keyOf(String(item.category), String(item.id)),
 					{
-						category: item.category as any,
-						id: item.id as any,
+						category: String(item.category),
+						id: String(item.id),
 						currentOrder: item.sortOrder ?? 0,
 						desiredOrder: item.sortOrder ?? 0,
 						addedDateTime: item.addedDateTime,
@@ -1127,7 +1209,6 @@ export const removeEditorFromFavoritesService = async (removeEditorFromFavorites
  * @returns GetFavoritesCoverUploadSignedUrlResponseDto 获取用于上传收藏夹封面图的预签名 URL 的请求响应
  */
 export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverUploadSignedUrlRequest: GetFavoritesCoverUploadSignedUrlRequestDto, uid: number, token: string): Promise<GetFavoritesCoverUploadSignedUrlResponseDto> => {
-	// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新封面链接替换数据库中的旧封面链接，而且当前图片没有加入审核流程
 	try {
 		if ((await checkUserTokenService(uid, token)).success) {
 			// 检查用户是否有权限操作该收藏夹（只有创建者和维护者可以上传封面）
@@ -1155,6 +1236,92 @@ export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverU
 }
 
 /**
+ * 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中
+ * @param checkFavoritesContentRequest 检查收藏状态的请求载荷
+ * @param uuid 用户 UUID
+ * @param token 用户 Token
+ * @returns 检查收藏状态的请求响应
+ */
+export const checkFavoritesContentService = async (checkFavoritesContentRequest: CheckFavoritesContentRequestDto, uuid: string, token: string): Promise<CheckFavoritesContentResponseDto> => {
+	try {
+		if (!checkCheckFavoritesContentRequest(checkFavoritesContentRequest)) {
+			logging('ERROR', '检查收藏状态失败，参数校验失败', undefined, { checkFavoritesContentRequest, uuid })
+			return { success: false, message: '检查收藏状态失败，参数校验失败' }
+		}
+
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '检查收藏状态失败，用户校验失败', undefined, { checkFavoritesContentRequest, uuid })
+			return { success: false, message: '检查收藏状态失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			logging('ERROR', '检查收藏状态失败，用户ID不存在', undefined, { checkFavoritesContentRequest, uuid })
+			return { success: false, message: '检查收藏状态失败，用户 uid 不存在' }
+		}
+
+		const { category, id } = checkFavoritesContentRequest
+		const { collectionName: detailCollectionName, schemaInstance: detailSchemaInstance } = FavoritesDetailSchema
+		type FavoritesDetailType = InferSchemaType<typeof detailSchemaInstance>
+		const detailWhere: QueryType<FavoritesDetailType> = {
+			operator: uid,
+			category,
+			id,
+		}
+		const detailSelect: SelectType<FavoritesDetailType> = {
+			favoritesListId: 1,
+		}
+		const detailResult = await selectDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSelect, detailSchemaInstance, detailCollectionName)
+		if (!detailResult.success || !detailResult.result) {
+			logging('ERROR', '检查收藏状态失败，查询收藏明细失败', undefined, { checkFavoritesContentRequest, uuid, uid })
+			return { success: false, message: '检查收藏状态失败，查询收藏明细失败' }
+		}
+
+		const favoritesListIds = [...new Set(detailResult.result.map(item => item.favoritesListId))]
+		if (favoritesListIds.length === 0) {
+			return { success: true, message: '当前用户未收藏该内容', isFavorited: false, result: [] }
+		}
+
+		const { collectionName: favoritesCollectionName, schemaInstance: favoritesSchemaInstance } = FavoritesSchema
+		type FavoritesType = InferSchemaType<typeof favoritesSchemaInstance>
+		const favoritesSelect: SelectType<FavoritesType> = {
+			favoritesId: 1,
+			creator: 1,
+			editor: 1,
+			favoritesTitle: 1,
+			favoritesBio: 1,
+			favoritesCover: 1,
+			favoritesVisibility: 1,
+			favoritesCreateDateTime: 1,
+		}
+		const visibleFavorites: FavoritesType[] = []
+		for (const favoritesListId of favoritesListIds) {
+			const favoritesWhere: QueryType<FavoritesType> = {
+				favoritesId: favoritesListId,
+			}
+			const favoritesResult = await selectDataFromMongoDB<FavoritesType>(favoritesWhere, favoritesSelect, favoritesSchemaInstance, favoritesCollectionName)
+			if (!favoritesResult.success || !favoritesResult.result || favoritesResult.result.length === 0) {
+				continue
+			}
+			const favorites = favoritesResult.result[0]
+			if (await checkFavoritesPermission(favoritesListId, uid) || await checkFavoritesViewPermission(favoritesListId, uid, uuid)) {
+				visibleFavorites.push(favorites)
+			}
+		}
+
+		return {
+			success: true,
+			message: visibleFavorites.length > 0 ? '检查收藏状态成功' : '当前用户未收藏该内容',
+			isFavorited: favoritesListIds.length > 0,
+			result: visibleFavorites,
+		}
+	} catch (error) {
+		logging('ERROR', '检查收藏状态失败，未知原因：', error, { checkFavoritesContentRequest, uuid })
+		return { success: false, message: '检查收藏状态失败，未知原因' }
+	}
+}
+
+/**
  * 检查创建收藏夹的请求载荷
  * @param createFavoritesRequest  创建收藏夹的请求载荷
  * @returns 合法返回 true, 不合法返回 false
@@ -1169,7 +1336,12 @@ const checkCreateFavoritesRequest = (createFavoritesRequest: CreateFavoritesRequ
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkAddToFavoritesRequest = (addToFavoritesRequest: AddToFavoritesRequestDto): boolean => {
-	return (!!addToFavoritesRequest.favoritesListId && addToFavoritesRequest.favoritesListId > 0 && !!addToFavoritesRequest.category && !!addToFavoritesRequest.id)
+	return (
+		!!addToFavoritesRequest.favoritesListId
+		&& addToFavoritesRequest.favoritesListId > 0
+		&& isSupportedFavoritesCategory(addToFavoritesRequest.category)
+		&& !!addToFavoritesRequest.id
+	)
 }
 
 /**
@@ -1187,7 +1359,75 @@ const checkRemoveFromFavoritesRequest = (removeFromFavoritesRequest: RemoveFromF
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkGetFavoritesDetailRequest = (getFavoritesDetailRequest: GetFavoritesDetailRequestDto): boolean => {
-	return !!getFavoritesDetailRequest.favoritesListId
+	return (
+		!!getFavoritesDetailRequest.favoritesListId
+		&& getFavoritesDetailRequest.favoritesListId > 0
+		&& getFavoritesDetailRequest.pagination.page > 0
+		&& getFavoritesDetailRequest.pagination.pageSize > 0
+	)
+}
+
+/**
+ * 检查收藏状态查询的请求载荷
+ * @param checkFavoritesContentRequest 检查收藏状态的请求载荷
+ * @returns 合法返回 true, 不合法返回 false
+ */
+const checkCheckFavoritesContentRequest = (checkFavoritesContentRequest: CheckFavoritesContentRequestDto): boolean => {
+	return isSupportedFavoritesCategory(checkFavoritesContentRequest.category) && !!checkFavoritesContentRequest.id && checkFavoritesContentRequest.id.length > 0
+}
+
+/**
+ * 判断收藏内容类型是否为当前后端支持的类型
+ * @param category 收藏内容类型
+ * @returns 是否支持
+ */
+const isSupportedFavoritesCategory = (category: BrowsingHistoryCategory): boolean => {
+	return category === 'video' || category === 'photo' || category === 'comment'
+}
+
+/**
+ * 检查要收藏的内容是否存在
+ * @param category 内容类型
+ * @param id 内容 ID
+ * @returns 检查结果
+ */
+const checkFavoritesContentExists = async (category: BrowsingHistoryCategory, id: string): Promise<{ success: boolean; message?: string }> => {
+	if (category === 'photo') {
+		return { success: false, message: '添加内容到收藏夹失败，photo 为预留类型，当前后端尚未实现相册功能，暂不支持收藏' }
+	}
+
+	if (category === 'video') {
+		const videoId = parseInteger(id)
+		if (!videoId || videoId <= 0) {
+			return { success: false, message: '添加内容到收藏夹失败，视频 ID 不合法' }
+		}
+		const checkVideoExistResult = await checkVideoExistByKvidService({ videoId })
+		if (!checkVideoExistResult.success || !checkVideoExistResult.exist) {
+			return { success: false, message: '添加内容到收藏夹失败，视频不存在' }
+		}
+		return { success: true }
+	}
+
+	if (category === 'comment') {
+		if (!mongoose.isValidObjectId(id)) {
+			return { success: false, message: '添加内容到收藏夹失败，评论 ID 不合法' }
+		}
+		const { collectionName, schemaInstance } = VideoCommentSchema
+		type VideoComment = InferSchemaType<typeof schemaInstance>
+		const commentWhere: QueryType<VideoComment> = {
+			_id: id,
+		}
+		const commentSelect: SelectType<VideoComment> = {
+			commentRoute: 1,
+		}
+		const commentResult = await selectDataFromMongoDB<VideoComment>(commentWhere, commentSelect, schemaInstance, collectionName)
+		if (!commentResult.success || !commentResult.result || commentResult.result.length !== 1) {
+			return { success: false, message: '添加内容到收藏夹失败，评论不存在' }
+		}
+		return { success: true }
+	}
+
+	return { success: false, message: '添加内容到收藏夹失败，不支持的内容类型' }
 }
 
 /**
@@ -1304,7 +1544,7 @@ const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: numb
 			if (userSettingsResult.success && userSettingsResult.result && userSettingsResult.result.length > 0) {
 				const userSettings = userSettingsResult.result[0]
 				const favoritesPrivacySetting = userSettings.userPrivaryVisibilitiesSetting?.find(
-					(setting: any) => setting.privaryId === 'privary.favorites'
+					setting => setting.privaryId === 'privary.favorites'
 				)
 
 				if (favoritesPrivacySetting) {

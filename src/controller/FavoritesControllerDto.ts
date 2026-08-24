@@ -1,7 +1,6 @@
-/**
- * 浏览的内容的类型
- */
-export type BrowsingHistoryCategory = 'video' | 'photo' | 'comment'
+import { BrowsingHistoryCategory } from './BrowsingHistoryControllerDto.js'
+
+export type { BrowsingHistoryCategory }
 
 /**
  * 收藏夹
@@ -157,6 +156,13 @@ export type GetFavoritesDetailRequestDto = {
 	favoritesListId: number;
 	/** 排序方式：1 为正序（sortOrder 从小到大），-1 为倒序（sortOrder 从大到小），默认为 1 */
 	sortOrder?: 1 | -1;
+	/** 分页查询 */
+	pagination: {
+		/** 当前在第几页 */
+		page: number;
+		/** 一页显示多少条 */
+		pageSize: number;
+	};
 }
 
 /**
@@ -167,8 +173,34 @@ export type GetFavoritesDetailResponseDto = {
 	success: boolean;
 	/** 附加的文本消息 */
 	message?: string;
-	/** 如果成功，返回收藏夹中的所有内容 */
+	/** 总数 */
+	totalCount?: number;
+	/** 如果成功，返回收藏夹中的内容（分页） */
 	result?: FavoritesDetail[];
+}
+
+/**
+ * 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中的请求载荷
+ */
+export type CheckFavoritesContentRequestDto = {
+	/** 内容的类型 - 非空 */
+	category: BrowsingHistoryCategory;
+	/** 内容的唯一 ID - 非空 */
+	id: string;
+}
+
+/**
+ * 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中的请求响应
+ */
+export type CheckFavoritesContentResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 当前用户是否已收藏该内容 */
+	isFavorited?: boolean;
+	/** 收藏该内容的收藏夹列表（仅包含当前用户有权限查看的收藏夹） */
+	result?: Favorites[];
 }
 
 /**

@@ -1,7 +1,7 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
-import { createFavoritesController, getFavoritesController, getFavoritesByUidController, addToFavoritesController, removeFromFavoritesController, getFavoritesDetailController, updateFavoritesController, deleteFavoritesController, reorderFavoritesDetailController, addEditorToFavoritesController, removeEditorFromFavoritesController, getFavoritesCoverUploadSignedUrlController } from '../controller/FavoritesController.js'
+import { createFavoritesController, getFavoritesController, getFavoritesByUidController, addToFavoritesController, removeFromFavoritesController, getFavoritesDetailController, updateFavoritesController, deleteFavoritesController, reorderFavoritesDetailController, addEditorToFavoritesController, removeEditorFromFavoritesController, getFavoritesCoverUploadSignedUrlController, checkFavoritesContentController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
 	adminClearUserInfoController,
@@ -691,11 +691,20 @@ router.delete('/favorites/remove', removeFromFavoritesController) // 从收藏�
 // }
 
 router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表
-// https://localhost:9999/favorites/detail?favoritesListId=1&sortOrder=1
+// https://localhost:9999/favorites/detail?favoritesListId=1&sortOrder=1&page=1&pageSize=30
 // cookie: uuid, token
 // query:
 // favoritesListId (必填)
 // sortOrder (可选，1 正序，-1 倒序，默认 1)
+// page (可选，默认 1)
+// pageSize (可选，默认 50，最大 100)
+
+router.get('/favorites/check', checkFavoritesContentController) // 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中
+// https://localhost:9999/favorites/check?category=video&id=13
+// cookie: uuid, token
+// query:
+// category (必填，video | comment；photo 为预留类型，当前暂不支持)
+// id (必填)
 
 router.post('/favorites/update', updateFavoritesController) // 更新收藏夹信息
 // https://localhost:9999/favorites/update

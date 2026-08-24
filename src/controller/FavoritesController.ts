@@ -1,7 +1,8 @@
-import { createFavoritesService, getFavoritesService, getFavoritesByUidService, addToFavoritesService, removeFromFavoritesService, getFavoritesDetailService, updateFavoritesService, deleteFavoritesService, reorderFavoritesDetailService, addEditorToFavoritesService, removeEditorFromFavoritesService, getFavoritesCoverUploadSignedUrlService } from '../service/FavoritesService.js'
+import { createFavoritesService, getFavoritesService, getFavoritesByUidService, addToFavoritesService, removeFromFavoritesService, getFavoritesDetailService, updateFavoritesService, deleteFavoritesService, reorderFavoritesDetailService, addEditorToFavoritesService, removeEditorFromFavoritesService, getFavoritesCoverUploadSignedUrlService, checkFavoritesContentService } from '../service/FavoritesService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { parseInteger } from '../common/ValidTool.js'
-import { CreateFavoritesRequestDto, GetFavoritesByUidRequestDto, AddToFavoritesRequestDto, RemoveFromFavoritesRequestDto, GetFavoritesDetailRequestDto, UpdateFavoritesRequestDto, DeleteFavoritesRequestDto, ReorderFavoritesDetailRequestDto, AddEditorToFavoritesRequestDto, RemoveEditorFromFavoritesRequestDto, GetFavoritesCoverUploadSignedUrlRequestDto } from './FavoritesControllerDto.js'
+import { limitPageSize, parseInteger } from '../common/ValidTool.js'
+import { CreateFavoritesRequestDto, GetFavoritesByUidRequestDto, AddToFavoritesRequestDto, RemoveFromFavoritesRequestDto, GetFavoritesDetailRequestDto, UpdateFavoritesRequestDto, DeleteFavoritesRequestDto, ReorderFavoritesDetailRequestDto, AddEditorToFavoritesRequestDto, RemoveEditorFromFavoritesRequestDto, GetFavoritesCoverUploadSignedUrlRequestDto, CheckFavoritesContentRequestDto } from './FavoritesControllerDto.js'
+import { BrowsingHistoryCategory } from './BrowsingHistoryControllerDto.js'
 
 /**
  * 创建收藏夹
@@ -103,11 +104,18 @@ export const removeFromFavoritesController = async (ctx: koaCtx, next: koaNext) 
 export const getFavoritesDetailController = async (ctx: koaCtx, next: koaNext) => {
 	const favoritesListId = parseInteger(ctx.query.favoritesListId as string)
 	const sortOrder = parseInteger(ctx.query.sortOrder as string) as 1 | -1 | undefined
+	const page = ctx.query.page as string
+	const pageSize = ctx.query.pageSize as string
+	const finalPageSize = limitPageSize(pageSize)
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const getFavoritesDetailRequest: GetFavoritesDetailRequestDto = {
 		favoritesListId: favoritesListId ?? -1,
 		sortOrder: sortOrder === 1 || sortOrder === -1 ? sortOrder : 1,
+		pagination: {
+			page: parseInteger(page || '1') ?? 1,
+			pageSize: finalPageSize ?? 50,
+		},
 	}
 	const getFavoritesDetailResponse = await getFavoritesDetailService(getFavoritesDetailRequest, uuid, token)
 	ctx.body = getFavoritesDetailResponse
@@ -224,5 +232,23 @@ export const getFavoritesCoverUploadSignedUrlController = async (ctx: koaCtx, ne
 		favoritesId: favoritesId ?? -1,
 	}
 	ctx.body = await getFavoritesCoverUploadSignedUrlService(getFavoritesCoverUploadSignedUrlRequest, uid, token)
+	await next()
+}
+
+/**
+ * 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中
+ * @param ctx context
+ * @param next context
+ */
+export const checkFavoritesContentController = async (ctx: koaCtx, next: koaNext) => {
+	const category = ctx.query.category as BrowsingHistoryCategory
+	const id = ctx.query.id as string
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+	const checkFavoritesContentRequest: CheckFavoritesContentRequestDto = {
+		category,
+		id: id ?? '',
+	}
+	ctx.body = await checkFavoritesContentService(checkFavoritesContentRequest, uuid, token)
 	await next()
 }
