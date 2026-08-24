@@ -205,10 +205,6 @@ export const removeEditorFromFavoritesController = async (ctx: koaCtx, next: koa
 	const data = ctx.request.body as Partial<RemoveEditorFromFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	if (!uuid || !token) {
-		ctx.body = { success: false, message: '参数不合法：缺少 uuid 或 token' }
-		return
-	}
 	const removeEditorFromFavoritesRequest: RemoveEditorFromFavoritesRequestDto = {
 		favoritesId: data.favoritesId ?? -1,
 		editorUid: data.editorUid ?? -1,
