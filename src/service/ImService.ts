@@ -74,7 +74,11 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 
 		// 检查接收者是否拉黑了发送者
 		const checkBlockResult = await checkIsBlockedByOtherUserService({ targetUid: receiverUid }, senderUuid, token)
-		if (checkBlockResult.success && checkBlockResult.isBlocked) {
+		if (!checkBlockResult.success) {
+			logging('ERROR', '发送消息失败，检查拉黑状态失败')
+			return { success: false, message: '发送消息失败，检查拉黑状态失败' }
+		}
+		if (checkBlockResult.isBlocked) {
 			logging('ERROR', '发送消息失败，对方已拉黑你')
 			return { success: false, message: '发送消息失败，对方已拉黑你' }
 		}
@@ -196,7 +200,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			}
 
 			await commitAndEndSession(session)
-			return { success: true, message: '发送消息成功', messageId, conversationId }
+			return { success: true, message: '发送消息成功', result: { messageId, conversationId } }
 		} catch (error) {
 			await abortAndEndSession(session)
 			throw error
@@ -487,12 +491,13 @@ export const getConversationListService = async (getConversationListRequest: Get
 				const isSender = lastMessageData.senderUuid === uuid
 				const isDeleted = isSender ? lastMessageData.senderDeleted : lastMessageData.receiverDeleted
 
+				const isRecalled = (lastMessageData.isRecalled as boolean) || false
 				lastMessage = {
 					messageId: (lastMessageData.messageId as string) || '',
 					messageType: lastMessageData.messageType as IM_MESSAGE_TYPE,
-					content: (lastMessageData.content as string) || '',
+					content: isRecalled ? '' : ((lastMessageData.content as string) || ''),
 					senderUuid: (lastMessageData.senderUuid as string) || '',
-					isRecalled: (lastMessageData.isRecalled as boolean) || false,
+					isRecalled,
 					isDeleted: (isDeleted as boolean) || false,
 					createdDateTime: (lastMessageData.createdDateTime as number) || 0,
 				}
@@ -513,7 +518,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			}
 		})
 
-		return { success: true, message: '获取会话列表成功', conversations, totalCount }
+		return { success: true, message: '获取会话列表成功', result: conversations, totalCount }
 	} catch (error) {
 		logging('ERROR', '获取会话列表失败，未知错误', error)
 		return { success: false, message: '获取会话列表失败，未知错误' }
@@ -585,14 +590,20 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			const cursorWhere: QueryType<Message> = {
 				conversationId,
 				messageId: cursorMessageId,
+				$or: [
+					{ senderUuid: uuid, senderDeleted: false },
+					{ receiverUuid: uuid, receiverDeleted: false },
+				],
 			}
 			const cursorSelect: SelectType<Message> = {
 				createdDateTime: 1,
 			}
 			const cursorResult = await selectDataFromMongoDB<Message>(cursorWhere, cursorSelect, messageSchemaInstance, messageCollectionName)
-			if (cursorResult.success && cursorResult.result && cursorResult.result.length === 1) {
-				cursorCreatedDateTime = cursorResult.result[0].createdDateTime
+			if (!cursorResult.success || !cursorResult.result || cursorResult.result.length !== 1) {
+				logging('ERROR', '获取消息列表失败，游标消息不存在或无权访问')
+				return { success: false, message: '获取消息列表失败，游标消息不存在或无权访问' }
 			}
+			cursorCreatedDateTime = cursorResult.result[0].createdDateTime
 		}
 
 		const matchStage: PipelineStage.Match = {
@@ -697,10 +708,14 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 
 		// 如果需要标记为已读（使用上面收集的未读 messageId 列表）
 		if (markAsRead && unreadMessageIds.length > 0) {
-			await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
+			const markReadResult = await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
+			if (!markReadResult.success) {
+				logging('ERROR', '获取消息列表失败，标记已读失败')
+				return { success: false, message: markReadResult.message || '获取消息列表失败，标记已读失败' }
+			}
 		}
 
-		return { success: true, message: '获取消息列表成功', messages, totalCount }
+		return { success: true, message: '获取消息列表成功', result: messages, totalCount }
 	} catch (error) {
 		logging('ERROR', '获取消息列表失败，未知错误', error)
 		return { success: false, message: '获取消息列表失败，未知错误' }
@@ -859,7 +874,7 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 			}
 
 			await commitAndEndSession(session)
-			return { success: true, message: '标记消息已读成功', markedCount }
+			return { success: true, message: '标记消息已读成功', result: { markedCount } }
 		} catch (error) {
 			await abortAndEndSession(session)
 			throw error
@@ -987,6 +1002,8 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 			messageId: 1,
 			senderUuid: 1,
 			receiverUuid: 1,
+			conversationId: 1,
+			isRead: 1,
 		}
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
 
@@ -1022,6 +1039,50 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 			logging('ERROR', '删除消息失败，更新失败', undefined, { messageId, uuid })
 			return { success: false, message: '删除消息失败，更新失败' }
 		}
+
+		// 接收者删除未读消息时，同步会话表中的未读计数
+		if (message.receiverUuid === uuid && !message.isRead) {
+			const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
+			type Conversation = InferSchemaType<typeof conversationSchemaInstance>
+			const conversationWhere: QueryType<Conversation> = {
+				conversationId: message.conversationId,
+			}
+			const conversationSelect: SelectType<Conversation> = {
+				user1Uuid: 1,
+				user2Uuid: 1,
+			}
+			const conversationResult = await selectDataFromMongoDB<Conversation>(
+				conversationWhere,
+				conversationSelect,
+				conversationSchemaInstance,
+				conversationCollectionName,
+			)
+			if (conversationResult.success && conversationResult.result && conversationResult.result.length > 0) {
+				const conversation = conversationResult.result[0]
+				const isUser1 = uuid === conversation.user1Uuid
+				const unreadCountField = isUser1 ? 'user1UnreadCount' : 'user2UnreadCount'
+				const actualUnreadCount = await countUnreadMessagesForReceiver(
+					message.conversationId,
+					uuid,
+					messageSchemaInstance,
+					messageCollectionName,
+				)
+				const syncNow = new Date().getTime()
+				await findOneAndUpdateData4MongoDB<Conversation>(
+					conversationWhere,
+					{
+						[unreadCountField]: actualUnreadCount,
+						editedDateTime: syncNow,
+						editedBy: uuid,
+					},
+					conversationSchemaInstance,
+					conversationCollectionName,
+					undefined,
+					false,
+				)
+			}
+		}
+
 		return { success: true, message: '删除消息成功' }
 	} catch (error) {
 		logging('ERROR', '删除消息失败，未知错误', error)
@@ -1073,7 +1134,7 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 
 		const conversationIds = (activeConversationResult.result || []).map(item => item.conversationId).filter(Boolean)
 		if (conversationIds.length === 0) {
-			return { success: true, message: '获取未读消息总数成功', totalUnreadCount: 0 }
+			return { success: true, message: '获取未读消息总数成功', result: { totalUnreadCount: 0 } }
 		}
 
 		const unreadCountPipeline: PipelineStage[] = [
@@ -1099,7 +1160,7 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 
 		const totalUnreadCount = result.result && result.result.length > 0 ? result.result[0].totalCount : 0
 
-		return { success: true, message: '获取未读消息总数成功', totalUnreadCount }
+		return { success: true, message: '获取未读消息总数成功', result: { totalUnreadCount } }
 	} catch (error) {
 		logging('ERROR', '获取未读消息总数失败，未知错误', error)
 		return { success: false, message: '获取未读消息总数失败，未知错误' }
@@ -1212,7 +1273,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		const senderUid = await getUserUid(senderUuid)
 		const receiverUid = await getUserUid(receiverUuid)
 		if (!senderUid || !receiverUid) {
-			return false
+			return true
 		}
 		const conversationId = generateConversationId(senderUid, receiverUid)
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
@@ -1235,7 +1296,10 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			messageCollectionName,
 			senderCountPipeline,
 		)
-		const senderMessageCount = senderCountResult.success && senderCountResult.result?.[0]?.totalCount ? senderCountResult.result[0].totalCount : 0
+		if (!senderCountResult.success) {
+			return true
+		}
+		const senderMessageCount = senderCountResult.result?.[0]?.totalCount ?? 0
 		if (senderMessageCount < 3) {
 			return false
 		}
@@ -1261,11 +1325,14 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 			messageCollectionName,
 			receiverReplyPipeline,
 		)
-		const receiverReplyCount = receiverReplyResult.success && receiverReplyResult.result?.[0]?.totalCount ? receiverReplyResult.result[0].totalCount : 0
+		if (!receiverReplyResult.success) {
+			return true
+		}
+		const receiverReplyCount = receiverReplyResult.result?.[0]?.totalCount ? receiverReplyResult.result[0].totalCount : 0
 		return receiverReplyCount === 0
 	} catch (error) {
 		logging('ERROR', '检查是否有未回复消息失败，', error, { senderUuid, receiverUuid })
-		return false
+		return true
 	}
 }
 

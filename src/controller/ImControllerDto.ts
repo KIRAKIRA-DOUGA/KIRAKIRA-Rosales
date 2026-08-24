@@ -20,10 +20,13 @@ export type SendMessageResponseDto = {
 	success: boolean
 	/** 文本消息 */
 	message: string
-	/** 消息 ID */
-	messageId?: string
-	/** 会话 ID */
-	conversationId?: string
+	/** 发送成功时返回的消息与会话信息 */
+	result?: {
+		/** 消息 ID */
+		messageId: string
+		/** 会话 ID */
+		conversationId: string
+	}
 }
 
 /**
@@ -92,7 +95,7 @@ export type GetConversationListResponseDto = {
 	/** 文本消息 */
 	message: string
 	/** 会话列表 */
-	conversations?: ConversationInfo[]
+	result?: ConversationInfo[]
 	/** 总数 */
 	totalCount?: number
 }
@@ -157,7 +160,7 @@ export type GetMessageListResponseDto = {
 	/** 文本消息 */
 	message: string
 	/** 消息列表 */
-	messages?: MessageInfo[]
+	result?: MessageInfo[]
 	/** 总数 */
 	totalCount?: number
 }
@@ -181,7 +184,9 @@ export type MarkMessageReadResponseDto = {
 	/** 文本消息 */
 	message: string
 	/** 已标记的消息数量 */
-	markedCount?: number
+	result?: {
+		markedCount: number
+	}
 }
 
 /**
@@ -247,6 +252,7 @@ export type GetUnreadMessageCountResponseDto = {
 	/** 文本消息 */
 	message: string
 	/** 未读消息总数 */
-	totalUnreadCount?: number
+	result?: {
+		totalUnreadCount: number
+	}
 }
-
