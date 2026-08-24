@@ -32,7 +32,6 @@ export const sendMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	// RBAC 权限验证
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -59,6 +58,10 @@ export const sendMessageController = async (ctx: koaCtx, next: koaNext) => {
 export const getConversationListController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
 
 	const page = ctx.query.page as string | undefined
 	const pageSize = ctx.query.pageSize as string | undefined
@@ -93,6 +96,10 @@ export const getMessageListController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
 	const page = ctx.query.page as string | undefined
 	const pageSize = ctx.query.pageSize as string | undefined
 
@@ -125,6 +132,10 @@ export const markMessageReadController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
 	const data = ctx.request.body as Partial<MarkMessageReadRequestDto>
 
 	const markMessageReadRequest: MarkMessageReadRequestDto = {
@@ -147,6 +158,10 @@ export const deleteConversationController = async (ctx: koaCtx, next: koaNext) =
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
 	const data = ctx.request.body as Partial<DeleteConversationRequestDto>
 
 	const deleteConversationRequest: DeleteConversationRequestDto = {
@@ -167,6 +182,10 @@ export const deleteConversationController = async (ctx: koaCtx, next: koaNext) =
 export const deleteMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
 
 	const data = ctx.request.body as Partial<DeleteMessageRequestDto>
 
@@ -189,6 +208,10 @@ export const getUnreadMessageCountController = async (ctx: koaCtx, next: koaNext
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
 	const getUnreadMessageCountResult = await getUnreadMessageCountService(uuid, token)
 	ctx.body = getUnreadMessageCountResult
 	await next()
@@ -204,7 +227,6 @@ export const recallMessageController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	// RBAC 权限验证
 	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
@@ -219,4 +241,3 @@ export const recallMessageController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.body = recallMessageResult
 	await next()
 }
-
