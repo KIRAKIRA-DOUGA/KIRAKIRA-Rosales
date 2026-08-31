@@ -6,10 +6,8 @@ import { Schema } from 'mongoose'
 export enum IM_MESSAGE_TYPE {
 	/** 文本消息 */
 	text = 'text',
-	/** 图片消息（预留） */
+	/** 图片消息 */
 	image = 'image',
-	/** 文件消息（预留） */
-	file = 'file',
 }
 
 /**
