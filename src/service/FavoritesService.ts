@@ -8,7 +8,7 @@ import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-import { checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
+import { checkUserExistsByUIDService, checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
 import { checkVideoExistByKvidService } from './VideoService.js'
 import { logging } from './loggingService.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
@@ -1079,16 +1079,27 @@ export const addEditorToFavoritesService = async (addEditorToFavoritesRequest: A
 			return { success: false, message: '添加维护者到收藏夹失败，只有创建者可以添加维护者' }
 		}
 
-		// 检查要添加的用户是否已经是维护者
-		if (favorites.editor && favorites.editor.includes(addEditorToFavoritesRequest.editorUid)) {
-			logging('ERROR', '添加维护者到收藏夹失败，该用户已经是维护者', undefined, { addEditorToFavoritesRequest, uuid, uid })
-			return { success: false, message: '添加维护者到收藏夹失败，该用户已经是维护者' }
-		}
-
 		// 检查要添加的用户是否是创建者
 		if (favorites.creator === addEditorToFavoritesRequest.editorUid) {
 			logging('ERROR', '添加维护者到收藏夹失败，不能将创建者添加为维护者', undefined, { addEditorToFavoritesRequest, uuid, uid })
 			return { success: false, message: '添加维护者到收藏夹失败，不能将创建者添加为维护者' }
+		}
+
+		// 检查目标用户是否存在
+		const editorExistsResult = await checkUserExistsByUIDService({ uid: addEditorToFavoritesRequest.editorUid })
+		if (!editorExistsResult.success) {
+			logging('ERROR', '添加维护者到收藏夹失败，查询目标用户是否存在时失败', undefined, { addEditorToFavoritesRequest, uuid, uid, editorExistsResult })
+			return { success: false, message: '添加维护者到收藏夹失败，查询目标用户是否存在时失败' }
+		}
+		if (!editorExistsResult.exists) {
+			logging('ERROR', '添加维护者到收藏夹失败，目标用户不存在', undefined, { addEditorToFavoritesRequest, uuid, uid })
+			return { success: false, message: '添加维护者到收藏夹失败，目标用户不存在' }
+		}
+
+		// 检查要添加的用户是否已经是维护者
+		if (favorites.editor && favorites.editor.includes(addEditorToFavoritesRequest.editorUid)) {
+			logging('ERROR', '添加维护者到收藏夹失败，该用户已经是维护者', undefined, { addEditorToFavoritesRequest, uuid, uid })
+			return { success: false, message: '添加维护者到收藏夹失败，该用户已经是维护者' }
 		}
 
 		// 更新维护者列表
@@ -1477,12 +1488,25 @@ const resolveFavoritesUpdateServiceResponse = async (
 }
 
 /**
+ * 检查收藏夹可见性是否为合法枚举值：1 公开，0 仅关注者，-1 私有
+ * @param favoritesVisibility 收藏夹可见性
+ * @returns 合法返回 true，否则 false
+ */
+const isValidFavoritesVisibility = (favoritesVisibility: number | undefined | null): boolean => {
+	return favoritesVisibility === 1 || favoritesVisibility === 0 || favoritesVisibility === -1
+}
+
+/**
  * 检查创建收藏夹的请求载荷
  * @param createFavoritesRequest  创建收藏夹的请求载荷
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkCreateFavoritesRequest = (createFavoritesRequest: CreateFavoritesRequestDto): boolean => {
-	return (!!createFavoritesRequest.favoritesTitle && createFavoritesRequest.favoritesTitle.length < 200)
+	return (
+		!!createFavoritesRequest.favoritesTitle
+		&& createFavoritesRequest.favoritesTitle.length < 200
+		&& isValidFavoritesVisibility(createFavoritesRequest.favoritesVisibility)
+	)
 }
 
 /**
@@ -1593,6 +1617,9 @@ const checkUpdateFavoritesRequest = (updateFavoritesRequest: UpdateFavoritesRequ
 		return false
 	}
 	if (updateFavoritesRequest.favoritesTitle !== undefined && updateFavoritesRequest.favoritesTitle.length >= 200) {
+		return false
+	}
+	if (updateFavoritesRequest.favoritesVisibility !== undefined && !isValidFavoritesVisibility(updateFavoritesRequest.favoritesVisibility)) {
 		return false
 	}
 	const hasUpdatableField = updateFavoritesRequest.favoritesTitle !== undefined
