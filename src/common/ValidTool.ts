@@ -72,3 +72,12 @@ export const parseInteger = (raw: unknown, fallback?: number): number => {
 	if (!Number.isFinite(n) || Number.isNaN(n)) return fallback === undefined ? NaN : fallback
 	return Math.trunc(n)
 }
+
+/**
+ * 校验分页页码是否合法（页码从 1 开始，小于 1 不合法）
+ * @param page 页码
+ * @returns 合法返回 true，否则 false
+ */
+export const isValidPageNumber = (page: number): boolean => {
+	return Number.isFinite(page) && !Number.isNaN(page) && page >= 1
+}

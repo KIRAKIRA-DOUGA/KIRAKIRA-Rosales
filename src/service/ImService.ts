@@ -14,6 +14,7 @@ import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
+import { isValidPageNumber } from '../common/ValidTool.js'
 
 /**
  * 发送消息
@@ -218,6 +219,12 @@ export const getConversationListService = async (getConversationListRequest: Get
 
 		const { pagination, isFollowing, isFollower } = getConversationListRequest
 		const { page, pageSize } = pagination
+
+		if (!isValidPageNumber(page)) {
+			logging('ERROR', '获取会话列表失败，页码不合法')
+			return { success: false, message: '获取会话列表失败，页码不合法' }
+		}
+
 		const skip = (page - 1) * pageSize
 
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
@@ -546,6 +553,12 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 
 		const { conversationId, cursorMessageId, pagination, markAsRead = false } = getMessageListRequest
 		const { page, pageSize } = pagination
+
+		if (!isValidPageNumber(page)) {
+			logging('ERROR', '获取消息列表失败，页码不合法')
+			return { success: false, message: '获取消息列表失败，页码不合法' }
+		}
+
 		// IM 场景：如果存在 cursorMessageId，则仅从该游标往前取 pageSize 条，不再使用 page 做偏移（建议前端固定传 page=1）
 		const skip = cursorMessageId ? 0 : (page - 1) * pageSize
 
