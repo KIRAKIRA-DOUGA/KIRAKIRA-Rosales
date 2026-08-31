@@ -666,7 +666,7 @@ router.get('/favorites', getFavoritesController) // 获取当前登录用户的�
 // https://localhost:9999/favorites
 // cookie: uid, token
 
-router.get('/favorites/byUid', getFavoritesByUidController) // 获取指定用户的收藏夹列表（需要验证用户整体可见性设置）
+router.get('/favorites/byUid', getFavoritesByUidController) // 获取指定用户的收藏夹列表（公开可匿名；私有/仅关注者需登录）
 // https://localhost:9999/favorites/byUid?uid=123
 // cookie: uuid, token
 // query:
@@ -690,7 +690,7 @@ router.delete('/favorites/remove', removeFromFavoritesController) // 从收藏�
 // 	"id": "13"
 // }
 
-router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表
+router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表（公开可匿名；私有/仅关注者需登录）
 // https://localhost:9999/favorites/detail?favoritesListId=1&sortOrder=1&page=1&pageSize=30
 // cookie: uuid, token
 // query:

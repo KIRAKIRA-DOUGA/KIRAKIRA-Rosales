@@ -8,7 +8,7 @@ import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-import { checkUserTokenService, checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
+import { checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
 import { checkVideoExistByKvidService } from './VideoService.js'
 import { logging } from './loggingService.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
@@ -19,181 +19,181 @@ import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '
 /**
  * 创建收藏夹
  * @param createFavoritesRequest 创建收藏夹的请求载荷
- * @param uid 用户 ID
+ * @param uuid 用户 UUID
  * @param token 用户安全令牌
  * @returns 创建收藏夹的请求响应
  */
-export const createFavoritesService = async (createFavoritesRequest: CreateFavoritesRequestDto, uid: number, token: string): Promise<CreateFavoritesResponseDto> => {
+export const createFavoritesService = async (createFavoritesRequest: CreateFavoritesRequestDto, uuid: string, token: string): Promise<CreateFavoritesResponseDto> => {
 	try {
-		if (!isValidUserId(uid)) {
-			logging('ERROR', '创建收藏夹失败，参数校验失败', undefined, { createFavoritesRequest, uid })
+		if (!checkCreateFavoritesRequest(createFavoritesRequest)) {
+			logging('ERROR', '创建收藏夹失败，参数校验失败', undefined, { createFavoritesRequest, uuid })
 			return { success: false, message: '创建收藏夹失败，参数校验失败' }
 		}
-		if (checkCreateFavoritesRequest(createFavoritesRequest)) {
-			if ((await checkUserTokenService(uid, token)).success) {
-				const { collectionName, schemaInstance } = FavoritesSchema
-				const now = new Date().getTime()
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '创建收藏夹失败，用户校验失败', undefined, { createFavoritesRequest, uuid })
+			return { success: false, message: '创建收藏夹失败，用户校验失败' }
+		}
+		const uid = await resolveOperatorUidFromUuid(uuid, '创建收藏夹失败，用户 uid 不存在', { createFavoritesRequest, uuid })
+		if (uid === undefined) {
+			return { success: false, message: '创建收藏夹失败，用户 uid 不存在' }
+		}
 
-				type FavoritesType = InferSchemaType<typeof schemaInstance>
+		const { collectionName, schemaInstance } = FavoritesSchema
+		const now = new Date().getTime()
 
-				const countWhere: QueryType<FavoritesType> = {
-					creator: uid,
-				}
-				const countSelect: SelectType<FavoritesType> = {
-					favoritesId: 1,
-				}
-				const countResult = await selectDataFromMongoDB<FavoritesType>(countWhere, countSelect, schemaInstance, collectionName)
-				if (countResult.success && countResult.result && countResult.result.length >= 100) {
-					logging('ERROR', '创建收藏夹失败，收藏夹数量已达上限（100个）', undefined, { createFavoritesRequest, uid })
-					return { success: false, message: '创建收藏夹失败，收藏夹数量已达上限（100个）' }
-				}
+		type FavoritesType = InferSchemaType<typeof schemaInstance>
 
-				const duplicateWhere: QueryType<FavoritesType> = {
-					creator: uid,
-					favoritesTitle: createFavoritesRequest.favoritesTitle,
-				}
-				const duplicateSelect: SelectType<FavoritesType> = {
-					favoritesId: 1,
-				}
-				const duplicateResult = await selectDataFromMongoDB<FavoritesType>(duplicateWhere, duplicateSelect, schemaInstance, collectionName)
-				if (duplicateResult.success && duplicateResult.result && duplicateResult.result.length > 0) {
-					logging('ERROR', '创建收藏夹失败，已存在同名收藏夹', undefined, { createFavoritesRequest, uid })
-					return { success: false, message: '创建收藏夹失败，不能创建同名收藏夹' }
-				}
+		const countWhere: QueryType<FavoritesType> = {
+			creator: uid,
+		}
+		const countSelect: SelectType<FavoritesType> = {
+			favoritesId: 1,
+		}
+		const countResult = await selectDataFromMongoDB<FavoritesType>(countWhere, countSelect, schemaInstance, collectionName)
+		if (countResult.success && countResult.result && countResult.result.length >= 100) {
+			logging('ERROR', '创建收藏夹失败，收藏夹数量已达上限（100个）', undefined, { createFavoritesRequest, uuid, uid })
+			return { success: false, message: '创建收藏夹失败，收藏夹数量已达上限（100个）' }
+		}
 
-				const { favoritesTitle, favoritesBio, favoritesCover, favoritesVisibility } = createFavoritesRequest
+		const duplicateWhere: QueryType<FavoritesType> = {
+			creator: uid,
+			favoritesTitle: createFavoritesRequest.favoritesTitle,
+		}
+		const duplicateSelect: SelectType<FavoritesType> = {
+			favoritesId: 1,
+		}
+		const duplicateResult = await selectDataFromMongoDB<FavoritesType>(duplicateWhere, duplicateSelect, schemaInstance, collectionName)
+		if (duplicateResult.success && duplicateResult.result && duplicateResult.result.length > 0) {
+			logging('ERROR', '创建收藏夹失败，已存在同名收藏夹', undefined, { createFavoritesRequest, uuid, uid })
+			return { success: false, message: '创建收藏夹失败，不能创建同名收藏夹' }
+		}
 
-				// 启动事务
-				const session = await createAndStartSession()
+		const { favoritesTitle, favoritesBio, favoritesCover, favoritesVisibility } = createFavoritesRequest
 
-				const favoritesId = (await getNextSequenceValueService('favorites', 1, 1, session))?.sequenceValue
-				if (!favoritesId) {
-					await abortAndEndSession(session)
-					logging('ERROR', '创建收藏夹失败，获取序列值失败', undefined, { createFavoritesRequest, uid })
-					return { success: false, message: '创建收藏夹失败，获取序列值失败' }
-				}
+		// 启动事务
+		const session = await createAndStartSession()
 
-				const createFavoritesData: FavoritesType = {
-					favoritesId,
-					creator: uid,
-					editor: [],
-					favoritesTitle,
-					favoritesBio,
-					favoritesCover,
-					favoritesVisibility,
-					favoritesCreateDateTime: now,
-					createDateTime: now,
-					editDateTime: now,
-				}
+		const favoritesId = (await getNextSequenceValueService('favorites', 1, 1, session))?.sequenceValue
+		if (!favoritesId) {
+			await abortAndEndSession(session)
+			logging('ERROR', '创建收藏夹失败，获取序列值失败', undefined, { createFavoritesRequest, uuid, uid })
+			return { success: false, message: '创建收藏夹失败，获取序列值失败' }
+		}
 
-				try {
-					const createFavoritesResult = await insertData2MongoDB<FavoritesType>(createFavoritesData, schemaInstance, collectionName, { session })
-					if (createFavoritesResult.success && createFavoritesResult.result?.length === 1 && createFavoritesResult.result?.[0]) {
-						await commitAndEndSession(session)
-						return { success: true, message: '创建收藏夹成功', result: createFavoritesResult.result[0] }
-					} else {
-						await abortAndEndSession(session)
-						logging('ERROR', '创建收藏夹失败，数据存储失败')
-						return { success: false, message: '创建收藏夹失败，数据存储失败' }
-					}
-				} catch (error) {
-					await abortAndEndSession(session)
-					logging('ERROR', '创建收藏夹失败，数据存储时出错：', error)
-					return { success: false, message: '创建收藏夹失败，数据存储时出错' }
-				}
+		const createFavoritesData: FavoritesType = {
+			favoritesId,
+			creator: uid,
+			editor: [],
+			favoritesTitle,
+			favoritesBio,
+			favoritesCover,
+			favoritesVisibility,
+			favoritesCreateDateTime: now,
+			createDateTime: now,
+			editDateTime: now,
+		}
+
+		try {
+			const createFavoritesResult = await insertData2MongoDB<FavoritesType>(createFavoritesData, schemaInstance, collectionName, { session })
+			if (createFavoritesResult.success && createFavoritesResult.result?.length === 1 && createFavoritesResult.result?.[0]) {
+				await commitAndEndSession(session)
+				return { success: true, message: '创建收藏夹成功', result: createFavoritesResult.result[0] }
 			} else {
-				logging('ERROR', '创建收藏夹失败，用户校验失败')
-				return { success: false, message: '创建收藏夹失败，用户校验失败' }
+				await abortAndEndSession(session)
+				logging('ERROR', '创建收藏夹失败，数据存储失败', undefined, { createFavoritesRequest, uuid, uid })
+				return { success: false, message: '创建收藏夹失败，数据存储失败' }
 			}
-		} else {
-			logging('ERROR', '创建收藏夹失败，参数校验失败', undefined, { createFavoritesRequest, uid })
-			return { success: false, message: '创建收藏夹失败，参数校验失败' }
+		} catch (error) {
+			await abortAndEndSession(session)
+			logging('ERROR', '创建收藏夹失败，数据存储时出错：', error, { createFavoritesRequest, uuid, uid })
+			return { success: false, message: '创建收藏夹失败，数据存储时出错' }
 		}
 	} catch (error) {
-		logging('ERROR', '创建收藏夹失败，未知原因：', error)
+		logging('ERROR', '创建收藏夹失败，未知原因：', error, { createFavoritesRequest, uuid })
 		return { success: false, message: '创建收藏夹失败，未知原因' }
 	}
 }
 
 /**
  * 获取当前登录用户的收藏夹列表
- * @param uid 用户 ID
+ * @param uuid 用户 UUID
  * @param token 用户安全令牌
  * @returns 获取当前登录用户的收藏夹列表的请求响应
  */
-export const getFavoritesService = async (uid: number, token: string): Promise<GetFavoritesResponseDto> => {
+export const getFavoritesService = async (uuid: string, token: string): Promise<GetFavoritesResponseDto> => {
 	try {
-		if (!isValidUserId(uid)) {
-			logging('ERROR', '获取收藏夹失败，参数校验失败', undefined, { uid })
-			return { success: false, message: '获取收藏夹失败，参数校验失败' }
-		}
-		if ((await checkUserTokenService(uid, token)).success) {
-			const { collectionName, schemaInstance } = FavoritesSchema
-
-			type FavoritesType = InferSchemaType<typeof schemaInstance>
-
-			const getFavoritesQuery = {
-				$or: [
-					{ creator: uid },
-					{ editor: uid },
-				],
-			} as QueryType<FavoritesType>
-
-			const getFavoritesSelect: SelectType<FavoritesType> = {
-				favoritesId: 1,
-				creator: 1,
-				editor: 1,
-				favoritesTitle: 1,
-				favoritesBio: 1,
-				favoritesCover: 1,
-				favoritesVisibility: 1,
-				favoritesCreateDateTime: 1,
-			}
-
-			try {
-				const getFavoritesResult = await selectDataFromMongoDB<FavoritesType>(getFavoritesQuery, getFavoritesSelect, schemaInstance, collectionName)
-				const favorites = getFavoritesResult?.result
-				if (getFavoritesResult.success && favorites) {
-					if (favorites?.length > 0) {
-						return { success: true, message: '获取收藏夹列表成功', result: favorites }
-					} else {
-						return { success: true, message: '收藏夹列表为空', result: [] }
-					}
-				} else {
-					logging('ERROR', '获取收藏夹失败，请求收藏夹数据失败')
-					return { success: false, message: '获取收藏夹失败，请求收藏夹数据失败' }
-				}
-			} catch (error) {
-				logging('ERROR', '获取收藏夹失败，请求收藏夹数据时出错', error)
-				return { success: false, message: '获取收藏夹失败，请求收藏夹数据时出错' }
-			}
-		} else {
-			logging('ERROR', '获取收藏夹失败，用户校验失败')
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '获取收藏夹失败，用户校验失败', undefined, { uuid })
 			return { success: false, message: '获取收藏夹失败，用户校验失败' }
 		}
+		const uid = await resolveOperatorUidFromUuid(uuid, '获取收藏夹失败，用户 uid 不存在', { uuid })
+		if (uid === undefined) {
+			return { success: false, message: '获取收藏夹失败，用户 uid 不存在' }
+		}
+
+		const { collectionName, schemaInstance } = FavoritesSchema
+
+		type FavoritesType = InferSchemaType<typeof schemaInstance>
+
+		const getFavoritesQuery = {
+			$or: [
+				{ creator: uid },
+				{ editor: uid },
+			],
+		} as QueryType<FavoritesType>
+
+		const getFavoritesSelect: SelectType<FavoritesType> = {
+			favoritesId: 1,
+			creator: 1,
+			editor: 1,
+			favoritesTitle: 1,
+			favoritesBio: 1,
+			favoritesCover: 1,
+			favoritesVisibility: 1,
+			favoritesCreateDateTime: 1,
+		}
+
+		try {
+			const getFavoritesResult = await selectDataFromMongoDB<FavoritesType>(getFavoritesQuery, getFavoritesSelect, schemaInstance, collectionName)
+			const favorites = getFavoritesResult?.result
+			if (getFavoritesResult.success && favorites) {
+				if (favorites?.length > 0) {
+					return { success: true, message: '获取收藏夹列表成功', result: favorites }
+				} else {
+					return { success: true, message: '收藏夹列表为空', result: [] }
+				}
+			} else {
+				logging('ERROR', '获取收藏夹失败，请求收藏夹数据失败', undefined, { uuid, uid })
+				return { success: false, message: '获取收藏夹失败，请求收藏夹数据失败' }
+			}
+		} catch (error) {
+			logging('ERROR', '获取收藏夹失败，请求收藏夹数据时出错', error, { uuid, uid })
+			return { success: false, message: '获取收藏夹失败，请求收藏夹数据时出错' }
+		}
 	} catch (error) {
-		logging('ERROR', '获取收藏夹失败，未知原因：', error)
+		logging('ERROR', '获取收藏夹失败，未知原因：', error, { uuid })
 		return { success: false, message: '获取收藏夹失败，未知原因' }
 	}
 }
 
 /**
- * 获取指定用户的收藏夹列表（需要验证用户整体可见性设置）
+ * 获取指定用户的收藏夹列表（公开收藏夹可匿名访问；私有/仅关注者需有效登录）
  * @param getFavoritesByUidRequest 获取指定用户收藏夹列表的请求载荷
- * @param uuid 查看者用户 UUID
- * @param token 查看者用户 Token
+ * @param uuid 查看者用户 UUID（可选，匿名访问公开收藏夹时可为空）
+ * @param token 查看者用户 Token（可选）
  * @returns 获取指定用户收藏夹列表的请求响应
  */
-export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavoritesByUidRequestDto, uuid: string, token: string): Promise<GetFavoritesByUidResponseDto> => {
+export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavoritesByUidRequestDto, uuid?: string, token?: string): Promise<GetFavoritesByUidResponseDto> => {
 	try {
-		if (!uuid || !token || !checkGetFavoritesByUidRequest(getFavoritesByUidRequest)) {
+		if (!checkGetFavoritesByUidRequest(getFavoritesByUidRequest)) {
 			logging('ERROR', '获取指定用户收藏夹列表失败，参数校验失败', undefined, { getFavoritesByUidRequest, uuid })
 			return { success: false, message: '获取指定用户收藏夹列表失败，参数校验失败' }
 		}
 		const targetUid = getFavoritesByUidRequest.uid
-		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取指定用户收藏夹列表失败，用户校验失败', undefined, { getFavoritesByUidRequest, uuid })
-			return { success: false, message: '获取指定用户收藏夹列表失败，用户校验失败' }
+
+		const viewerAuth = await resolveOptionalViewerAuth(uuid, token, '获取指定用户收藏夹列表失败', { getFavoritesByUidRequest, uuid })
+		if (viewerAuth.status === 'invalid') {
+			return { success: false, message: viewerAuth.message }
 		}
 
 		const targetUuid = await getUserUuid(targetUid)
@@ -202,15 +202,13 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 			return { success: false, message: '获取指定用户收藏夹列表失败，目标用户不存在' }
 		}
 
-		const viewerUid = await resolveOperatorUidFromUuid(uuid, '获取指定用户收藏夹列表失败，查看者用户ID不存在', { getFavoritesByUidRequest, uuid })
-		if (viewerUid === undefined) {
-			return { success: false, message: '获取指定用户收藏夹列表失败，查看者用户ID不存在' }
+		// 如果是查看自己的收藏夹，直接返回所有收藏夹
+		if (viewerAuth.status === 'authenticated' && targetUid === viewerAuth.uid) {
+			return await getFavoritesService(viewerAuth.uuid, token as string)
 		}
 
-		// 如果是查看自己的收藏夹，直接返回所有收藏夹
-		if (targetUid === viewerUid) {
-			return await getFavoritesService(viewerUid, token)
-		}
+		const viewerUid = viewerAuth.status === 'authenticated' ? viewerAuth.uid : undefined
+		const viewerUuid = viewerAuth.status === 'authenticated' ? viewerAuth.uuid : undefined
 
 		// 先获取收藏夹列表，检查查看者是否是任何收藏夹的维护者
 		const { collectionName, schemaInstance } = FavoritesSchema
@@ -237,7 +235,7 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 		}
 
 		// 检查查看者是否是任何收藏夹的维护者
-		const isEditor = favorites.some(fav => fav.editor && fav.editor.includes(viewerUid))
+		const isEditor = viewerUid !== undefined && favorites.some(fav => fav.editor && fav.editor.includes(viewerUid))
 
 		// 第一层验证：检查用户整体的收藏夹可见性设置（privary.favorites）
 		// 如果查看者是维护者，可以绕过第一层验证
@@ -263,11 +261,15 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 						logging('ERROR', '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有', undefined, { getFavoritesByUidRequest, uuid, viewerUid, targetUid })
 						return { success: false, message: '获取指定用户收藏夹列表失败，该用户的收藏夹设置为私有' }
 					} else if (favoritesPrivacySetting.visibilitiesType === 'following') {
+						if (!viewerUuid) {
+							logging('ERROR', '获取指定用户收藏夹列表失败，需要登录并关注该用户才能查看收藏夹', undefined, { getFavoritesByUidRequest, targetUid })
+							return { success: false, message: '获取指定用户收藏夹列表失败，需要登录并关注该用户才能查看收藏夹' }
+						}
 						// 需要检查是否关注了目标用户
 						const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
 						type Following = InferSchemaType<typeof followingSchemaInstance>
 						const followingWhere: QueryType<Following> = {
-							followerUuid: uuid,
+							followerUuid: viewerUuid,
 							followingUuid: targetUuid,
 						}
 						const followingSelect: SelectType<Following> = {
@@ -289,16 +291,16 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 
 		// 第二层验证：过滤收藏夹列表
 		// 所有者或维护者可以看到他们有权限的收藏夹，即使隐私设置不允许
-		// 非所有者非维护者需要检查可见性权限
+		// 非所有者非维护者需要检查可见性权限（匿名仅能看到公开收藏夹）
 		try {
 			const visibleFavorites = []
 			for (const fav of favorites) {
 				// 如果是维护者，直接可以看到
-				if (fav.editor && fav.editor.includes(viewerUid)) {
+				if (viewerUid !== undefined && fav.editor && fav.editor.includes(viewerUid)) {
 					visibleFavorites.push(fav)
 				}
-				// 非所有者非维护者，需要检查可见性权限
-				else if (await checkFavoritesViewPermission(fav.favoritesId, viewerUid, uuid)) {
+				// 非所有者非维护者（含匿名），需要检查可见性权限
+				else if (await checkFavoritesViewPermission(fav.favoritesId, viewerUid, viewerUuid)) {
 					visibleFavorites.push(fav)
 				}
 			}
@@ -538,32 +540,32 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 }
 
 /**
- * 获取收藏夹内容列表
+ * 获取收藏夹内容列表（公开收藏夹可匿名访问；私有/仅关注者需有效登录）
  * @param getFavoritesDetailRequest 获取收藏夹内容的请求载荷
- * @param uuid 用户 UUID
- * @param token 用户 Token
+ * @param uuid 用户 UUID（可选，匿名访问公开收藏夹时可为空）
+ * @param token 用户 Token（可选）
  * @returns 获取收藏夹内容的请求响应
  */
-export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFavoritesDetailRequestDto, uuid: string, token: string): Promise<GetFavoritesDetailResponseDto> => {
+export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFavoritesDetailRequestDto, uuid?: string, token?: string): Promise<GetFavoritesDetailResponseDto> => {
 	try {
 		if (!checkGetFavoritesDetailRequest(getFavoritesDetailRequest)) {
 			logging('ERROR', '获取收藏夹内容失败，参数校验失败', undefined, { getFavoritesDetailRequest, uuid })
 			return { success: false, message: '获取收藏夹内容失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取收藏夹内容失败，用户校验失败', undefined, { getFavoritesDetailRequest, uuid })
-			return { success: false, message: '获取收藏夹内容失败，用户校验失败' }
+		const viewerAuth = await resolveOptionalViewerAuth(uuid, token, '获取收藏夹内容失败', { getFavoritesDetailRequest, uuid })
+		if (viewerAuth.status === 'invalid') {
+			return { success: false, message: viewerAuth.message }
 		}
 
-		const uid = await resolveOperatorUidFromUuid(uuid, '获取收藏夹内容失败，用户 uid 不存在', { getFavoritesDetailRequest, uuid })
-		if (uid === undefined) {
-			return { success: false, message: '获取收藏夹内容失败，用户 uid 不存在' }
-		}
+		const viewerUid = viewerAuth.status === 'authenticated' ? viewerAuth.uid : undefined
+		const viewerUuid = viewerAuth.status === 'authenticated' ? viewerAuth.uuid : undefined
 
-		// 检查用户是否有权限查看该收藏夹（根据可见性设置）
-		if (!(await checkFavoritesViewPermission(getFavoritesDetailRequest.favoritesListId, uid, uuid)) && !(await checkFavoritesPermission(getFavoritesDetailRequest.favoritesListId, uid))) {
-			logging('ERROR', '获取收藏夹内容失败，没有权限查看该收藏夹', undefined, { getFavoritesDetailRequest, uuid, uid })
+		// 检查用户是否有权限查看该收藏夹（根据可见性设置；匿名仅可查看公开收藏夹）
+		const canView = await checkFavoritesViewPermission(getFavoritesDetailRequest.favoritesListId, viewerUid, viewerUuid)
+		const canEdit = viewerUid !== undefined && await checkFavoritesPermission(getFavoritesDetailRequest.favoritesListId, viewerUid)
+		if (!canView && !canEdit) {
+			logging('ERROR', '获取收藏夹内容失败，没有权限查看该收藏夹', undefined, { getFavoritesDetailRequest, uuid, viewerUid })
 			return { success: false, message: '获取收藏夹内容失败，没有权限查看该收藏夹' }
 		}
 
@@ -614,17 +616,17 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 					result: favoritesDetailListResult.result ?? [],
 				}
 			} else {
-				logging('ERROR', '获取收藏夹内容失败，查询数据失败', undefined, { getFavoritesDetailRequest, uuid, uid })
+				logging('ERROR', '获取收藏夹内容失败，查询数据失败', undefined, { getFavoritesDetailRequest, uuid, viewerUid })
 				return { success: false, message: '获取收藏夹内容失败，查询数据失败' }
 			}
 		} catch (error) {
-			logging('ERROR', '获取收藏夹内容失败，查询数据时出错：', error, { getFavoritesDetailRequest, uuid, uid })
+			logging('ERROR', '获取收藏夹内容失败，查询数据时出错：', error, { getFavoritesDetailRequest, uuid, viewerUid })
 			return { success: false, message: '获取收藏夹内容失败，查询数据时出错' }
 		}
-		} catch (error) {
-			logging('ERROR', '获取收藏夹内容失败，未知原因：', error, { getFavoritesDetailRequest, uuid })
-			return { success: false, message: '获取收藏夹内容失败，未知原因' }
-		}
+	} catch (error) {
+		logging('ERROR', '获取收藏夹内容失败，未知原因：', error, { getFavoritesDetailRequest, uuid })
+		return { success: false, message: '获取收藏夹内容失败，未知原因' }
+	}
 }
 
 /**
@@ -1215,27 +1217,27 @@ export const removeEditorFromFavoritesService = async (removeEditorFromFavorites
 /**
  * 获取用于上传收藏夹封面图的预签名 URL
  * @param getFavoritesCoverUploadSignedUrlRequest 获取用于上传收藏夹封面图的预签名 URL 的请求载荷
- * @param uid 用户 ID
+ * @param uuid 用户 UUID
  * @param token 用户的 token
  * @returns GetFavoritesCoverUploadSignedUrlResponseDto 获取用于上传收藏夹封面图的预签名 URL 的请求响应
  */
-export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverUploadSignedUrlRequest: GetFavoritesCoverUploadSignedUrlRequestDto, uid: number, token: string): Promise<GetFavoritesCoverUploadSignedUrlResponseDto> => {
+export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverUploadSignedUrlRequest: GetFavoritesCoverUploadSignedUrlRequestDto, uuid: string, token: string): Promise<GetFavoritesCoverUploadSignedUrlResponseDto> => {
 	try {
 		if (!checkGetFavoritesCoverUploadSignedUrlRequest(getFavoritesCoverUploadSignedUrlRequest)) {
-			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，参数校验失败', undefined, { getFavoritesCoverUploadSignedUrlRequest, uid })
+			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，参数校验失败', undefined, { getFavoritesCoverUploadSignedUrlRequest, uuid })
 			return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，参数校验失败' }
 		}
-		if (!isValidUserId(uid)) {
-			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，参数校验失败', undefined, { getFavoritesCoverUploadSignedUrlRequest, uid })
-			return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，参数校验失败' }
-		}
-		if (!(await checkUserTokenService(uid, token)).success) {
-			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，用户校验失败', undefined, { getFavoritesCoverUploadSignedUrlRequest, uid })
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，用户校验失败', undefined, { getFavoritesCoverUploadSignedUrlRequest, uuid })
 			return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，用户校验失败' }
+		}
+		const uid = await resolveOperatorUidFromUuid(uuid, '获取用于上传收藏夹封面图的预签名 URL 失败，用户 uid 不存在', { getFavoritesCoverUploadSignedUrlRequest, uuid })
+		if (uid === undefined) {
+			return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，用户 uid 不存在' }
 		}
 		// 检查用户是否有权限操作该收藏夹（只有创建者和维护者可以上传封面）
 		if (!(await checkFavoritesPermission(getFavoritesCoverUploadSignedUrlRequest.favoritesId, uid))) {
-			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，没有权限操作该收藏夹', undefined, { getFavoritesCoverUploadSignedUrlRequest, uid })
+			logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，没有权限操作该收藏夹', undefined, { getFavoritesCoverUploadSignedUrlRequest, uuid, uid })
 			return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，没有权限操作该收藏夹' }
 		}
 		const now = new Date().getTime()
@@ -1247,7 +1249,7 @@ export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverU
 		// TODO 图片上传逻辑需要重写，当前如何用户上传图片失败，仍然会用新封面链接替换数据库中的旧封面链接，而且当前图片没有加入审核流程
 		return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，无法生成图片上传 URL' }
 	} catch (error) {
-		logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，未知原因', error, { uid, getFavoritesCoverUploadSignedUrlRequest })
+		logging('ERROR', '获取用于上传收藏夹封面图的预签名 URL 失败，未知原因', error, { uuid, getFavoritesCoverUploadSignedUrlRequest })
 		return { success: false, message: '获取用于上传收藏夹封面图的预签名 URL 失败，未知原因' }
 	}
 }
@@ -1351,6 +1353,44 @@ const resolveOperatorUidFromUuid = async (uuid: string, logMessage: string, logC
 		return undefined
 	}
 	return uid
+}
+
+type OptionalViewerAuthResult =
+	| { status: 'authenticated'; uuid: string; uid: number }
+	| { status: 'anonymous' }
+	| { status: 'invalid'; message: string }
+
+/**
+ * 解析可选登录态：两端都空视为匿名；仅一端有值或校验失败视为非法；两端齐全且校验通过视为已登录
+ * @param uuid 用户 UUID（可空）
+ * @param token 用户 Token（可空）
+ * @param failMessagePrefix 失败时的错误消息前缀
+ * @param logContext 附加日志上下文
+ */
+const resolveOptionalViewerAuth = async (
+	uuid: string | undefined,
+	token: string | undefined,
+	failMessagePrefix: string,
+	logContext?: Record<string, unknown>,
+): Promise<OptionalViewerAuthResult> => {
+	const hasUuid = !!uuid
+	const hasToken = !!token
+	if (!hasUuid && !hasToken) {
+		return { status: 'anonymous' }
+	}
+	if (!hasUuid || !hasToken) {
+		logging('ERROR', `${failMessagePrefix}，参数校验失败`, undefined, logContext)
+		return { status: 'invalid', message: `${failMessagePrefix}，参数校验失败` }
+	}
+	if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+		logging('ERROR', `${failMessagePrefix}，用户校验失败`, undefined, logContext)
+		return { status: 'invalid', message: `${failMessagePrefix}，用户校验失败` }
+	}
+	const uid = await resolveOperatorUidFromUuid(uuid, `${failMessagePrefix}，用户 uid 不存在`, logContext)
+	if (uid === undefined) {
+		return { status: 'invalid', message: `${failMessagePrefix}，用户 uid 不存在` }
+	}
+	return { status: 'authenticated', uuid, uid }
 }
 
 /**
@@ -1630,11 +1670,11 @@ const checkRemoveEditorFromFavoritesRequest = (removeEditorFromFavoritesRequest:
 /**
  * 检查用户是否有权限查看收藏夹（根据可见性设置）
  * @param favoritesId 收藏夹 ID
- * @param viewerUid 查看者用户 ID
- * @param viewerUuid 查看者用户 UUID
+ * @param viewerUid 查看者用户 ID（匿名访问时可为空）
+ * @param viewerUuid 查看者用户 UUID（匿名访问时可为空）
  * @returns 有权限返回 true，否则返回 false
  */
-const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: number, viewerUuid: string): Promise<boolean> => {
+const checkFavoritesViewPermission = async (favoritesId: number, viewerUid?: number, viewerUuid?: string): Promise<boolean> => {
 	try {
 		const { collectionName, schemaInstance } = FavoritesSchema
 		type FavoritesType = InferSchemaType<typeof schemaInstance>
@@ -1655,10 +1695,10 @@ const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: numb
 		const { creator, editor, favoritesVisibility } = favorites
 
 		// 如果是创建者或维护者，始终可以查看（不受任何可见性设置限制）
-		if (creator === viewerUid) {
+		if (viewerUid !== undefined && creator === viewerUid) {
 			return true
 		}
-		if (editor && editor.includes(viewerUid)) {
+		if (viewerUid !== undefined && editor && editor.includes(viewerUid)) {
 			return true
 		}
 
@@ -1687,7 +1727,10 @@ const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: numb
 						// 用户整体设置为私有，拒绝访问
 						return false
 					} else if (favoritesPrivacySetting.visibilitiesType === 'following') {
-						// 用户整体设置为仅关注者，需要检查是否关注了创建者
+						// 用户整体设置为仅关注者，匿名无法通过；登录用户需要检查是否关注了创建者
+						if (!viewerUuid) {
+							return false
+						}
 						const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
 						type Following = InferSchemaType<typeof followingSchemaInstance>
 						const followingWhere: QueryType<Following> = {
@@ -1716,8 +1759,8 @@ const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: numb
 			// 私有：只有创建者和维护者可以查看（上面已检查）
 			return false
 		} else if (favoritesVisibility === 0) {
-			// 仅关注者：需要检查查看者是否关注了创建者
-			if (!creatorUuid) {
+			// 仅关注者：匿名无法通过；登录用户需要检查查看者是否关注了创建者
+			if (!viewerUuid || !creatorUuid) {
 				return false
 			}
 
@@ -1737,7 +1780,7 @@ const checkFavoritesViewPermission = async (favoritesId: number, viewerUid: numb
 			}
 			return false
 		} else if (favoritesVisibility === 1) {
-			// 公开：所有人都可以查看
+			// 公开：所有人都可以查看（含匿名）
 			return true
 		}
 

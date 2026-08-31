@@ -11,7 +11,7 @@ import { BrowsingHistoryCategory } from './BrowsingHistoryControllerDto.js'
  */
 export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CreateFavoritesRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const createFavoritesRequest: CreateFavoritesRequestDto = {
 		/** 收藏夹标题 - 非空 */
@@ -23,7 +23,7 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 		/** 收藏夹可见性，默认 -1（私有） */
 		favoritesVisibility: data.favoritesVisibility ?? -1,
 	}
-	const createFavoritesResponse = await createFavoritesService(createFavoritesRequest, uid, token)
+	const createFavoritesResponse = await createFavoritesService(createFavoritesRequest, uuid, token)
 	ctx.body = createFavoritesResponse
 	await next()
 }
@@ -34,15 +34,15 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	const getFavoritesResponse = await getFavoritesService(uid, token)
+	const getFavoritesResponse = await getFavoritesService(uuid, token)
 	ctx.body = getFavoritesResponse
 	await next()
 }
 
 /**
- * 获取指定用户的收藏夹列表（需要验证用户整体可见性设置）
+ * 获取指定用户的收藏夹列表（公开收藏夹可匿名访问；私有/仅关注者需登录）
  * @param ctx context
  * @param next context
  */
@@ -97,7 +97,7 @@ export const removeFromFavoritesController = async (ctx: koaCtx, next: koaNext) 
 }
 
 /**
- * 获取收藏夹内容列表
+ * 获取收藏夹内容列表（公开收藏夹可匿名访问；私有/仅关注者需登录）
  * @param ctx context
  * @param next context
  */
@@ -221,13 +221,13 @@ export const removeEditorFromFavoritesController = async (ctx: koaCtx, next: koa
  * @returns 用于上传收藏夹封面图的预签名 URL 请求响应
  */
 export const getFavoritesCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const favoritesId = parseInteger(ctx.query.favoritesId as string)
 	const getFavoritesCoverUploadSignedUrlRequest: GetFavoritesCoverUploadSignedUrlRequestDto = {
 		favoritesId: favoritesId ?? -1,
 	}
-	ctx.body = await getFavoritesCoverUploadSignedUrlService(getFavoritesCoverUploadSignedUrlRequest, uid, token)
+	ctx.body = await getFavoritesCoverUploadSignedUrlService(getFavoritesCoverUploadSignedUrlRequest, uuid, token)
 	await next()
 }
 
