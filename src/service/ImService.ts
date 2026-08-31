@@ -1442,20 +1442,21 @@ const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: nu
 			const deletedField = isUser1 ? 'user1Deleted' : 'user2Deleted'
 			const otherDeletedField = isUser1 ? 'user2Deleted' : 'user1Deleted'
 
-			// 如果会话被当前用户删除，恢复它（保留删除时间戳）
-			// 如果双方都删除了，同时恢复双方（这样对方也能看到新消息）
-			if (conversation[deletedField]) {
+			// 发送新消息时恢复会话：当前用户删过则恢复自己；对方删过也恢复对方（新消息应重新出现在对方列表）
+			const needsRestoreSelf = conversation[deletedField]
+			const needsRestoreOther = conversation[otherDeletedField]
+			if (needsRestoreSelf || needsRestoreOther) {
 				const updateWhere: QueryType<Conversation> = {
 					conversationId,
 				}
 				const updateData: UpdateType<Conversation> = {
-					[deletedField]: false,
 					editedDateTime: now,
-					editedBy: currentUserUuid, // 使用发起恢复的用户
+					editedBy: currentUserUuid,
 				}
-
-				// 如果对方也删除了，同时恢复对方
-				if (conversation[otherDeletedField]) {
+				if (needsRestoreSelf) {
+					updateData[deletedField] = false
+				}
+				if (needsRestoreOther) {
 					updateData[otherDeletedField] = false
 				}
 
