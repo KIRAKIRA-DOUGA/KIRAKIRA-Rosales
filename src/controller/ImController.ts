@@ -9,6 +9,7 @@ import {
 	deleteMessageService,
 	getUnreadMessageCountService,
 	recallMessageService,
+	getImImageUploadSignedUrlService,
 } from '../service/ImService.js'
 import {
 	SendMessageRequestDto,
@@ -21,6 +22,25 @@ import {
 } from './ImControllerDto.js'
 import { IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
 import { limitPageSize, parseInteger } from '../common/ValidTool.js'
+
+/**
+ * 获取 IM 图片上传预签名 URL
+ * @param ctx context
+ * @param next context
+ * @returns 预签名 URL 与文件名
+ */
+export const getImImageUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
+	const uuid = ctx.cookies.get('uuid')
+	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const getImImageUploadSignedUrlResult = await getImImageUploadSignedUrlService(uuid, token)
+	ctx.body = getImImageUploadSignedUrlResult
+	await next()
+}
 
 /**
  * 用户发送消息

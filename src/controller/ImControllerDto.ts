@@ -256,3 +256,20 @@ export type GetUnreadMessageCountResponseDto = {
 		totalUnreadCount: number
 	}
 }
+
+/**
+ * 获取 IM 图片上传预签名 URL 的请求响应
+ */
+export type GetImImageUploadSignedUrlResponseDto = {
+	/** 执行结果 */
+	success: boolean
+	/** 文本消息 */
+	message: string
+	/** 预签名 URL 与文件名 */
+	result?: {
+		/** Cloudflare Images 图片 ID（文件名） */
+		fileName: string
+		/** 用于直传 Cloudflare Images 的预签名 URL */
+		signedUrl: string
+	}
+}

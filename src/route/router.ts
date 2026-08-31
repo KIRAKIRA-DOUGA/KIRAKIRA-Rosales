@@ -46,7 +46,7 @@ import { adminGetUserRolesByUidController, adminUpdateUserRoleController, create
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
 import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
-import { sendMessageController, getConversationListController, getMessageListController, markMessageReadController, deleteConversationController, deleteMessageController, getUnreadMessageCountController, recallMessageController } from '../controller/ImController.js'
+import { sendMessageController, getConversationListController, getMessageListController, markMessageReadController, deleteConversationController, deleteMessageController, getUnreadMessageCountController, recallMessageController, getImImageUploadSignedUrlController } from '../controller/ImController.js'
 
 const router = new Router()
 
@@ -841,6 +841,11 @@ router.get('/secret/getStgEnvBackEndSecret', getStgEnvBackEndSecretController) /
 
 
 
+router.get('/im/image/preUpload', getImImageUploadSignedUrlController) // 获取 IM 图片上传预签名 URL
+// https://localhost:9999/im/image/preUpload
+// cookie: uuid, token
+// Response result: { fileName, signedUrl }
+
 router.post('/im/sendMessage', sendMessageController) // 发送消息
 // https://localhost:9999/im/sendMessage
 // cookie: uuid, token
@@ -849,6 +854,7 @@ router.post('/im/sendMessage', sendMessageController) // 发送消息
 // 	"messageType": "text",
 // 	"content": "这是一条消息"
 // }
+// messageType 为 "image" 时，content 为图片 fileName 或 CDN URL（与头像上传一致，由客户端在 sendMessage 时传入）
 
 router.get('/im/conversationList', getConversationListController) // 获取会话列表
 // https://localhost:9999/im/conversationList?page=1&pageSize=20&isFollowing=true&isFollower=false

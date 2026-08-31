@@ -13,6 +13,7 @@ import {
 	DeleteMessageRequestDto,
 	DeleteMessageResponseDto,
 	GetUnreadMessageCountResponseDto,
+	GetImImageUploadSignedUrlResponseDto,
 	RecallMessageRequestDto,
 	RecallMessageResponseDto,
 	ConversationInfo,
@@ -30,6 +31,8 @@ import { checkUserIsFollowing } from './FeedService.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
+import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
+import { generateSecureRandomString } from '../common/RandomTool.js'
 
 /**
  * 发送消息
@@ -111,6 +114,12 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			if (content.length > 10000) {
 				logging('ERROR', '发送消息失败，消息内容过长')
 				return { success: false, message: '发送消息失败，消息内容过长' }
+			}
+		}
+		if (messageType === IM_MESSAGE_TYPE.image) {
+			if (!content || content.trim().length === 0) {
+				logging('ERROR', '发送消息失败，图片内容不能为空')
+				return { success: false, message: '发送消息失败，图片内容不能为空' }
 			}
 		}
 
@@ -1247,6 +1256,40 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 	} catch (error) {
 		logging('ERROR', '撤回消息失败，未知错误', error)
 		return { success: false, message: '撤回消息失败，未知错误' }
+	}
+}
+
+/**
+ * 获取 IM 图片上传预签名 URL
+ * @param uuid 用户的 UUID
+ * @param token 用户的 token
+ * @returns 预签名 URL 与文件名
+ */
+export const getImImageUploadSignedUrlService = async (uuid: string, token: string): Promise<GetImImageUploadSignedUrlResponseDto> => {
+	try {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，用户校验失败')
+			return { success: false, message: '获取 IM 图片上传预签名 URL 失败，用户校验失败' }
+		}
+
+		const uid = await getUserUid(uuid)
+		if (!uid) {
+			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，用户不存在')
+			return { success: false, message: '获取 IM 图片上传预签名 URL 失败，用户不存在' }
+		}
+
+		const now = new Date().getTime()
+		const fileName = `im-image-${uid}-${generateSecureRandomString(32)}-${now}`
+		const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
+		if (!signedUrl) {
+			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，无法生成上传 URL')
+			return { success: false, message: '获取 IM 图片上传预签名 URL 失败，无法生成上传 URL' }
+		}
+
+		return { success: true, message: '获取 IM 图片上传预签名 URL 成功', result: { fileName, signedUrl } }
+	} catch (error) {
+		logging('ERROR', '获取 IM 图片上传预签名 URL 失败，未知错误', error)
+		return { success: false, message: '获取 IM 图片上传预签名 URL 失败，未知错误' }
 	}
 }
 
