@@ -542,6 +542,7 @@ export const removeFromFavoritesService = async (removeFromFavoritesRequest: Rem
 
 /**
  * 获取收藏夹内容列表（公开收藏夹可匿名访问；私有/仅关注者需有效登录）
+ * 可通过 category 筛选 video | photo | comment；不传则返回全部类型
  * @param getFavoritesDetailRequest 获取收藏夹内容的请求载荷
  * @param uuid 用户 UUID（可选，匿名访问公开收藏夹时可为空）
  * @param token 用户 Token（可选）
@@ -574,6 +575,7 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 		type FavoritesDetailType = InferSchemaType<typeof schemaInstance>
 		const where: QueryType<FavoritesDetailType> = {
 			favoritesListId: getFavoritesDetailRequest.favoritesListId,
+			...(getFavoritesDetailRequest.category ? { category: getFavoritesDetailRequest.category } : {}),
 		}
 		const sortOrder = getFavoritesDetailRequest.sortOrder ?? 1
 
@@ -1540,11 +1542,17 @@ const checkRemoveFromFavoritesRequest = (removeFromFavoritesRequest: RemoveFromF
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkGetFavoritesDetailRequest = (getFavoritesDetailRequest: GetFavoritesDetailRequestDto): boolean => {
-	return (
-		isValidFavoritesId(getFavoritesDetailRequest.favoritesListId)
-		&& getFavoritesDetailRequest.pagination.page > 0
-		&& getFavoritesDetailRequest.pagination.pageSize > 0
-	)
+	if (!isValidFavoritesId(getFavoritesDetailRequest.favoritesListId)) {
+		return false
+	}
+	if (getFavoritesDetailRequest.pagination.page <= 0 || getFavoritesDetailRequest.pagination.pageSize <= 0) {
+		return false
+	}
+	// category 可选；传入时必须是 video | photo | comment（含可读的 photo）
+	if (getFavoritesDetailRequest.category !== undefined && !isSupportedFavoritesCategory(getFavoritesDetailRequest.category)) {
+		return false
+	}
+	return true
 }
 
 /**

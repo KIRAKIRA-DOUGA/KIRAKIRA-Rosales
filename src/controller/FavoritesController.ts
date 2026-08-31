@@ -103,6 +103,7 @@ export const removeFromFavoritesController = async (ctx: koaCtx, next: koaNext) 
  */
 export const getFavoritesDetailController = async (ctx: koaCtx, next: koaNext) => {
 	const favoritesListId = parseInteger(ctx.query.favoritesListId as string)
+	const category = ctx.query.category as BrowsingHistoryCategory | undefined
 	const sortOrder = parseInteger(ctx.query.sortOrder as string) as 1 | -1 | undefined
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
@@ -111,6 +112,7 @@ export const getFavoritesDetailController = async (ctx: koaCtx, next: koaNext) =
 	const token = ctx.cookies.get('token')
 	const getFavoritesDetailRequest: GetFavoritesDetailRequestDto = {
 		favoritesListId: favoritesListId ?? -1,
+		category: category || undefined,
 		sortOrder: sortOrder === 1 || sortOrder === -1 ? sortOrder : 1,
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,

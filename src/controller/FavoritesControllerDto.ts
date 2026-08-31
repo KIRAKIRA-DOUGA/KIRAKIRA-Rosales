@@ -170,6 +170,12 @@ export type RemoveFromFavoritesResponseDto = {
 export type GetFavoritesDetailRequestDto = {
 	/** 收藏夹唯一 ID - 非空 */
 	favoritesListId: number;
+	/**
+	 * 可选：只返回某一类媒体（video | photo | comment）
+	 * 不传则返回该收藏夹内全部类型混排
+	 * photo 虽暂不支持写入，但库内已有 category 字段，可读
+	 */
+	category?: BrowsingHistoryCategory;
 	/** 排序方式：1 为正序（sortOrder 从小到大），-1 为倒序（sortOrder 从大到小），默认为 1 */
 	sortOrder?: 1 | -1;
 	/** 分页查询 */
