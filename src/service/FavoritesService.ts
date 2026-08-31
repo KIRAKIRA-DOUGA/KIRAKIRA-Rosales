@@ -7,6 +7,7 @@ import { FavoritesSchema, FavoritesDetailSchema, RemovedFavoritesSchema, Removed
 import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
+import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserExistsByUIDService, checkUserTokenByUuidService, getUserUid, getUserUuid } from './UserService.js'
 import { checkVideoExistByKvidService } from './VideoService.js'
@@ -609,11 +610,13 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 			const favoritesDetailCountResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(schemaInstance, collectionName, favoritesDetailCountPipeline)
 			const favoritesDetailListResult = await selectDataByAggregateFromMongoDB<FavoritesDetailType>(schemaInstance, collectionName, favoritesDetailListPipeline)
 			if (favoritesDetailCountResult.success && favoritesDetailListResult.success) {
+				const detailRows = favoritesDetailListResult.result ?? []
+				const result = await attachFavoritesDetailContent(detailRows)
 				return {
 					success: true,
 					message: '获取收藏夹内容成功',
 					totalCount: favoritesDetailCountResult.result?.[0]?.totalCount ?? 0,
-					result: favoritesDetailListResult.result ?? [],
+					result,
 				}
 			} else {
 				logging('ERROR', '获取收藏夹内容失败，查询数据失败', undefined, { getFavoritesDetailRequest, uuid, viewerUid })
@@ -1560,6 +1563,111 @@ const checkCheckFavoritesContentRequest = (checkFavoritesContentRequest: CheckFa
  */
 const isSupportedFavoritesCategory = (category: BrowsingHistoryCategory): boolean => {
 	return category === 'video' || category === 'photo' || category === 'comment'
+}
+
+type FavoritesDetailRow = {
+	_id?: unknown
+	favoritesListId: number
+	operator: number
+	category: string
+	id: string
+	addedDateTime: number
+	sortOrder: number
+	editDateTime: number
+}
+
+type FavoritesDetailResponseItem = NonNullable<GetFavoritesDetailResponseDto['result']>[number]
+
+/**
+ * 为收藏夹明细批量附带内容摘要（视频标题/封面、评论正文），放入嵌套 content 字段
+ * @param rows 原始收藏明细行
+ * @returns 带 content 结构的明细列表
+ */
+const attachFavoritesDetailContent = async (rows: FavoritesDetailRow[]): Promise<FavoritesDetailResponseItem[]> => {
+	const videoIds = [...new Set(
+		rows
+			.filter(row => row.category === 'video')
+			.map(row => parseInteger(row.id))
+			.filter((videoId): videoId is number => typeof videoId === 'number' && videoId > 0),
+	)]
+	const commentIds = [...new Set(
+		rows
+			.filter(row => row.category === 'comment' && mongoose.isValidObjectId(row.id))
+			.map(row => row.id),
+	)]
+
+	const videoMap = new Map<number, { title: string; image: string }>()
+	if (videoIds.length > 0) {
+		const { collectionName, schemaInstance } = VideoSchema
+		type Video = InferSchemaType<typeof schemaInstance>
+		const videoWhere = {
+			videoId: { $in: videoIds },
+		} as QueryType<Video>
+		const videoSelect: SelectType<Video> = {
+			videoId: 1,
+			title: 1,
+			image: 1,
+		}
+		const videoResult = await selectDataFromMongoDB<Video>(videoWhere, videoSelect, schemaInstance, collectionName)
+		if (videoResult.success && videoResult.result) {
+			for (const video of videoResult.result) {
+				videoMap.set(video.videoId, { title: video.title, image: video.image })
+			}
+		}
+	}
+
+	const commentMap = new Map<string, { text: string }>()
+	if (commentIds.length > 0) {
+		const { collectionName, schemaInstance } = VideoCommentSchema
+		type VideoComment = InferSchemaType<typeof schemaInstance>
+		const commentWhere = {
+			_id: { $in: commentIds },
+		} as QueryType<VideoComment>
+		const commentSelect: SelectType<VideoComment> = {
+			text: 1,
+		}
+		const commentResult = await selectDataFromMongoDB<VideoComment>(commentWhere, commentSelect, schemaInstance, collectionName)
+		if (commentResult.success && commentResult.result) {
+			for (const comment of commentResult.result) {
+				const commentId = String((comment as { _id?: unknown })._id ?? '')
+				if (commentId) {
+					commentMap.set(commentId, { text: comment.text })
+				}
+			}
+		}
+	}
+
+	return rows.map(row => {
+		const category = row.category as BrowsingHistoryCategory
+		const content: FavoritesDetailResponseItem['content'] = {
+			category,
+			id: row.id,
+			available: false,
+		}
+
+		if (category === 'video') {
+			const videoId = parseInteger(row.id)
+			const videoMeta = videoId ? videoMap.get(videoId) : undefined
+			content.available = !!videoMeta
+			content.title = videoMeta?.title ?? ''
+			content.image = videoMeta?.image ?? ''
+		} else if (category === 'comment') {
+			const commentMeta = commentMap.get(row.id)
+			content.available = !!commentMeta
+			content.text = commentMeta?.text ?? ''
+		}
+		// photo：相册未实现，仅保留 category/id，available 恒为 false
+
+		return {
+			_id: row._id !== undefined && row._id !== null ? String(row._id) : undefined,
+			favoritesListId: row.favoritesListId,
+			operator: row.operator,
+			addedDateTime: row.addedDateTime,
+			sortOrder: row.sortOrder,
+			editDateTime: row.editDateTime,
+			content,
+		}
+	})
 }
 
 /**

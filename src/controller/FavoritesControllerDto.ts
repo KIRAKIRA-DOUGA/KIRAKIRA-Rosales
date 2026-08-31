@@ -25,6 +25,24 @@ type Favorites = {
 }
 
 /**
+ * 收藏夹明细中嵌套的内容摘要（与明细元数据分离）
+ */
+type FavoritesDetailContent = {
+	/** 内容的类型 */
+	category: BrowsingHistoryCategory;
+	/** 内容的唯一 ID */
+	id: string;
+	/** 源内容是否仍存在（已删除等异常时为 false） */
+	available: boolean;
+	/** 视频标题（category=video 时始终返回；不可用时为空字符串） */
+	title?: string;
+	/** 视频封面（category=video 时始终返回；不可用时为空字符串） */
+	image?: string;
+	/** 评论正文（category=comment 时始终返回；不可用时为空字符串） */
+	text?: string;
+}
+
+/**
  * 收藏夹明细
  */
 type FavoritesDetail = {
@@ -34,16 +52,14 @@ type FavoritesDetail = {
 	favoritesListId: number;
 	/** 谁将本条内容添加到收藏夹 */
 	operator: number;
-	/** 内容的类型 */
-	category: string;
-	/** 内容的唯一 ID */
-	id: string;
 	/** 添加到收藏的时间 */
 	addedDateTime: number;
 	/** 排序顺序 */
 	sortOrder: number;
 	/** 最后编辑时间 */
 	editDateTime: number;
+	/** 收藏的内容摘要（视频标题/封面、评论正文等，与元数据字段分离） */
+	content: FavoritesDetailContent;
 }
 
 /**

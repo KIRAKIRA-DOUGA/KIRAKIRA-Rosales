@@ -690,8 +690,9 @@ router.delete('/favorites/remove', removeFromFavoritesController) // 从收藏�
 // 	"id": "13"
 // }
 
-router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表（公开可匿名；私有/仅关注者需登录）
+router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表（公开可匿名；私有/仅关注者需登录；content 嵌套标题/封面/正文）
 // https://localhost:9999/favorites/detail?favoritesListId=1&sortOrder=1&page=1&pageSize=30
+// 返回 result[].content：video 含 title/image；comment 含 text；photo 为预留（仅 category/id，available=false）
 // cookie: uuid, token
 // query:
 // favoritesListId (必填)
