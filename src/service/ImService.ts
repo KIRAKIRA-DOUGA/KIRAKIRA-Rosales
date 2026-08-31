@@ -472,13 +472,22 @@ export const getConversationListService = async (getConversationListRequest: Get
 		}
 
 		const totalCount = countResult.success && countResult.result && countResult.result.length > 0 ? countResult.result[0].totalCount : 0
-		const conversations = (conversationsResult.result || []).map((item: unknown): ConversationInfo => {
+		const rawConversations = conversationsResult.result || []
+		const lastMessageSenderUidMap = await resolveUuidsToUidMap(
+			rawConversations.flatMap((item: unknown) => {
+				const lastMessageData = (item as Record<string, unknown>).lastMessage as Record<string, unknown> | undefined
+				const senderUuid = lastMessageData?.senderUuid as string | undefined
+				return senderUuid ? [senderUuid] : []
+			}),
+		)
+		const conversations = rawConversations.map((item: unknown): ConversationInfo => {
 			const itemData = item as Record<string, unknown>
 			const lastMessageData = itemData.lastMessage as Record<string, unknown> | undefined
 			let lastMessage = undefined
 			if (lastMessageData) {
 				// 判断当前用户是否删除了这条消息
-				const isSender = lastMessageData.senderUuid === uuid
+				const senderUuid = (lastMessageData.senderUuid as string) || ''
+				const isSender = senderUuid === uuid
 				const isDeleted = isSender ? lastMessageData.senderDeleted : lastMessageData.receiverDeleted
 
 				const isRecalled = (lastMessageData.isRecalled as boolean) || false
@@ -486,7 +495,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 					messageId: (lastMessageData.messageId as string) || '',
 					messageType: lastMessageData.messageType as IM_MESSAGE_TYPE,
 					content: isRecalled ? '' : ((lastMessageData.content as string) || ''),
-					senderUuid: (lastMessageData.senderUuid as string) || '',
+					senderUid: lastMessageSenderUidMap.get(senderUuid) || 0,
 					isRecalled,
 					isDeleted: (isDeleted as boolean) || false,
 					createdDateTime: (lastMessageData.createdDateTime as number) || 0,
@@ -665,13 +674,20 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		const uidMap = await resolveUuidsToUidMap(
 			rawMessages.flatMap((item: unknown) => {
 				const itemData = item as Record<string, unknown>
-				return [(itemData.senderUuid as string) || '', (itemData.receiverUuid as string) || '']
+				return [
+					(itemData.senderUuid as string) || '',
+					(itemData.receiverUuid as string) || '',
+					(itemData.createdBy as string) || '',
+					(itemData.editedBy as string) || '',
+				]
 			}),
 		)
 		const messages: MessageInfo[] = rawMessages.map((item: unknown): MessageInfo => {
 				const itemData = item as Record<string, unknown>
 				const senderUuid = (itemData.senderUuid as string) || ''
 				const receiverUuid = (itemData.receiverUuid as string) || ''
+				const createdByUuid = (itemData.createdBy as string) || ''
+				const editedByUuid = (itemData.editedBy as string) || ''
 				const messageId = (itemData.messageId as string) || ''
 				const isRead = (itemData.isRead as boolean) || false
 
@@ -690,9 +706,9 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 					isRecalled: (itemData.isRecalled as boolean) || false,
 					recalledTime: itemData.recalledTime as number | undefined,
 					createdDateTime: (itemData.createdDateTime as number) || 0,
-					createdBy: (itemData.createdBy as string) || '',
+					createdByUid: uidMap.get(createdByUuid) || 0,
 					editedDateTime: (itemData.editedDateTime as number) || 0,
-					editedBy: (itemData.editedBy as string) || '',
+					editedByUid: uidMap.get(editedByUuid) || 0,
 				}
 			})
 

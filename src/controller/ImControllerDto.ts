@@ -71,8 +71,8 @@ export type ConversationInfo = {
 		messageType: IM_MESSAGE_TYPE
 		/** 消息内容 */
 		content: string
-		/** 发送者 UUID */
-		senderUuid: string
+		/** 发送者 UID */
+		senderUid: number
 		/** 是否已撤回 */
 		isRecalled: boolean
 		/** 是否已删除（当前用户是否删除了这条消息） */
@@ -143,12 +143,12 @@ export type MessageInfo = {
 	recalledTime?: number
 	/** 创建时间 */
 	createdDateTime: number
-	/** 创建者 UUID */
-	createdBy: string
+	/** 创建者 UID */
+	createdByUid: number
 	/** 最后编辑时间 */
 	editedDateTime: number
-	/** 最后编辑者 UUID */
-	editedBy: string
+	/** 最后编辑者 UID */
+	editedByUid: number
 }
 
 /**
