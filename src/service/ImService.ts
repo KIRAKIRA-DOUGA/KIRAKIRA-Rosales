@@ -4,7 +4,7 @@ import { ImConversationSchema, ImMessageSchema, IM_MESSAGE_TYPE } from '../dbPoo
 import { UserSettingsSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB } from '../dbPool/DbClusterPool.js'
+import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '../common/MongoDBSessionTool.js'
 import { ClientSession } from 'mongoose'
 import { checkIsBlockedByOtherUserService } from './BlockService.js'
@@ -807,74 +807,34 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 
 		try {
 			const now = new Date().getTime()
-			let markedCount = 0
 
-			if (messageIds && messageIds.length > 0) {
-				// 标记指定消息为已读
-				for (const messageId of messageIds) {
-					const messageWhere: QueryType<Message> = {
-						messageId,
-						conversationId,
-						receiverUuid: uuid,
-						isRead: false,
-					}
-					const messageUpdate: UpdateType<Message> = {
-						isRead: true,
-						readTime: now,
-						editedDateTime: now,
-						editedBy: uuid,
-					}
-					const updateResult = await findOneAndUpdateData4MongoDB<Message>(
-						messageWhere,
-						messageUpdate,
-						messageSchemaInstance,
-						messageCollectionName,
-						{ session },
-						false,
-					)
-					if (updateResult.success && updateResult.result?.isRead) {
-						markedCount++
-					}
+			const messageUpdate: UpdateType<Message> = {
+				isRead: true,
+				readTime: now,
+				editedDateTime: now,
+				editedBy: uuid,
+			}
+			const messageWhere: QueryType<Message> = messageIds && messageIds.length > 0
+				? {
+					conversationId,
+					receiverUuid: uuid,
+					isRead: false,
+					messageId: { $in: messageIds },
 				}
-			} else {
-				// 标记该会话所有未读消息为已读
-				const messageWhere: QueryType<Message> = {
+				: {
 					conversationId,
 					receiverUuid: uuid,
 					isRead: false,
 				}
-				const messageSelect: SelectType<Message> = {
-					messageId: 1,
-				}
-				const unreadMessages = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName, { session })
 
-				if (unreadMessages.success && unreadMessages.result) {
-					for (const msg of unreadMessages.result) {
-						const messageUpdate: UpdateType<Message> = {
-							isRead: true,
-							readTime: now,
-							editedDateTime: now,
-							editedBy: uuid,
-						}
-						const updateResult = await findOneAndUpdateData4MongoDB<Message>(
-							{
-								messageId: msg.messageId,
-								conversationId,
-								receiverUuid: uuid,
-								isRead: false,
-							},
-							messageUpdate,
-							messageSchemaInstance,
-							messageCollectionName,
-							{ session },
-							false,
-						)
-						if (updateResult.success && updateResult.result?.isRead) {
-							markedCount++
-						}
-					}
-				}
-			}
+			const markReadResult = await updateData4MongoDB<Message>(
+				messageWhere,
+				messageUpdate,
+				messageSchemaInstance,
+				messageCollectionName,
+				{ session },
+			)
+			const markedCount = markReadResult.result?.modifiedCount ?? 0
 
 			// 根据消息表实际未读数同步会话未读计数，避免扣减累计误差
 			if (markedCount > 0) {
