@@ -597,7 +597,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 
 		let cursorCreatedDateTime: number | undefined = undefined
 
-		// 如果传入了游标 messageId，则以该消息的 createdDateTime 为“锚点”，只查更早的消息
+		// 如果传入了游标 messageId，则以 (createdDateTime, messageId) 复合游标定位，只查更早的消息（含同毫秒内的其余消息）
 		if (cursorMessageId) {
 			const cursorWhere: QueryType<Message> = {
 				conversationId,
@@ -609,6 +609,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			}
 			const cursorSelect: SelectType<Message> = {
 				createdDateTime: 1,
+				messageId: 1,
 			}
 			const cursorResult = await selectDataFromMongoDB<Message>(cursorWhere, cursorSelect, messageSchemaInstance, messageCollectionName)
 			if (!cursorResult.success || !cursorResult.result || cursorResult.result.length !== 1) {
@@ -618,19 +619,29 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			cursorCreatedDateTime = cursorResult.result[0].createdDateTime
 		}
 
-		const matchStage: PipelineStage.Match = {
-			$match: cursorCreatedDateTime
-				? {
-						...matchBase,
-						createdDateTime: { $lt: cursorCreatedDateTime },
-				  }
-				: matchBase,
-		}
+		const matchStage: PipelineStage.Match = cursorCreatedDateTime !== undefined && cursorMessageId
+			? {
+				$match: {
+					$and: [
+						matchBase,
+						{
+							$or: [
+								{ createdDateTime: { $lt: cursorCreatedDateTime } },
+								{
+									createdDateTime: cursorCreatedDateTime,
+									messageId: { $lt: cursorMessageId },
+								},
+							],
+						},
+					],
+				},
+			}
+			: { $match: matchBase }
 
 		const pipeline: PipelineStage[] = [
 			matchStage,
 			{
-				$sort: { createdDateTime: -1 },
+				$sort: { createdDateTime: -1, messageId: -1 },
 			},
 			{
 				$skip: skip,
