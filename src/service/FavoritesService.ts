@@ -1272,6 +1272,7 @@ export const getFavoritesCoverUploadSignedUrlService = async (getFavoritesCoverU
 
 /**
  * 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中
+ * 判定规则：内容存在于当前用户可管理的收藏夹（创建者或维护者）中，即视为已收藏
  * @param checkFavoritesContentRequest 检查收藏状态的请求载荷
  * @param uuid 用户 UUID
  * @param token 用户 Token
@@ -1295,29 +1296,16 @@ export const checkFavoritesContentService = async (checkFavoritesContentRequest:
 		}
 
 		const { category, id } = checkFavoritesContentRequest
-		const { collectionName: detailCollectionName, schemaInstance: detailSchemaInstance } = FavoritesDetailSchema
-		type FavoritesDetailType = InferSchemaType<typeof detailSchemaInstance>
-		const detailWhere: QueryType<FavoritesDetailType> = {
-			operator: uid,
-			category,
-			id,
-		}
-		const detailSelect: SelectType<FavoritesDetailType> = {
-			favoritesListId: 1,
-		}
-		const detailResult = await selectDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSelect, detailSchemaInstance, detailCollectionName)
-		if (!detailResult.success || !detailResult.result) {
-			logging('ERROR', '检查收藏状态失败，查询收藏明细失败', undefined, { checkFavoritesContentRequest, uuid, uid })
-			return { success: false, message: '检查收藏状态失败，查询收藏明细失败' }
-		}
 
-		const favoritesListIds = [...new Set(detailResult.result.map(item => item.favoritesListId))]
-		if (favoritesListIds.length === 0) {
-			return { success: true, message: '当前用户未收藏该内容', isFavorited: false, result: [] }
-		}
-
+		// 先取当前用户可管理的收藏夹（创建者或维护者），再判断内容是否在其中
 		const { collectionName: favoritesCollectionName, schemaInstance: favoritesSchemaInstance } = FavoritesSchema
 		type FavoritesType = InferSchemaType<typeof favoritesSchemaInstance>
+		const managedFavoritesQuery = {
+			$or: [
+				{ creator: uid },
+				{ editor: uid },
+			],
+		} as QueryType<FavoritesType>
 		const favoritesSelect: SelectType<FavoritesType> = {
 			favoritesId: 1,
 			creator: 1,
@@ -1328,26 +1316,47 @@ export const checkFavoritesContentService = async (checkFavoritesContentRequest:
 			favoritesVisibility: 1,
 			favoritesCreateDateTime: 1,
 		}
-		const visibleFavorites: FavoritesType[] = []
-		for (const favoritesListId of favoritesListIds) {
-			const favoritesWhere: QueryType<FavoritesType> = {
-				favoritesId: favoritesListId,
-			}
-			const favoritesResult = await selectDataFromMongoDB<FavoritesType>(favoritesWhere, favoritesSelect, favoritesSchemaInstance, favoritesCollectionName)
-			if (!favoritesResult.success || !favoritesResult.result || favoritesResult.result.length === 0) {
-				continue
-			}
-			const favorites = favoritesResult.result[0]
-			if (await checkFavoritesPermission(favoritesListId, uid) || await checkFavoritesViewPermission(favoritesListId, uid, uuid)) {
-				visibleFavorites.push(favorites)
-			}
+		const managedFavoritesResult = await selectDataFromMongoDB<FavoritesType>(
+			managedFavoritesQuery,
+			favoritesSelect,
+			favoritesSchemaInstance,
+			favoritesCollectionName,
+		)
+		if (!managedFavoritesResult.success || !managedFavoritesResult.result) {
+			logging('ERROR', '检查收藏状态失败，查询收藏夹失败', undefined, { checkFavoritesContentRequest, uuid, uid })
+			return { success: false, message: '检查收藏状态失败，查询收藏夹失败' }
 		}
+
+		const managedFavorites = managedFavoritesResult.result
+		if (managedFavorites.length === 0) {
+			return { success: true, message: '当前用户未收藏该内容', isFavorited: false, result: [] }
+		}
+
+		const managedFavoritesIds = managedFavorites.map(item => item.favoritesId)
+		const { collectionName: detailCollectionName, schemaInstance: detailSchemaInstance } = FavoritesDetailSchema
+		type FavoritesDetailType = InferSchemaType<typeof detailSchemaInstance>
+		const detailWhere = {
+			favoritesListId: { $in: managedFavoritesIds },
+			category,
+			id,
+		} as QueryType<FavoritesDetailType>
+		const detailSelect: SelectType<FavoritesDetailType> = {
+			favoritesListId: 1,
+		}
+		const detailResult = await selectDataFromMongoDB<FavoritesDetailType>(detailWhere, detailSelect, detailSchemaInstance, detailCollectionName)
+		if (!detailResult.success || !detailResult.result) {
+			logging('ERROR', '检查收藏状态失败，查询收藏明细失败', undefined, { checkFavoritesContentRequest, uuid, uid })
+			return { success: false, message: '检查收藏状态失败，查询收藏明细失败' }
+		}
+
+		const favoritedFolderIds = new Set(detailResult.result.map(item => item.favoritesListId))
+		const favoritedFavorites = managedFavorites.filter(item => favoritedFolderIds.has(item.favoritesId))
 
 		return {
 			success: true,
-			message: visibleFavorites.length > 0 ? '检查收藏状态成功' : '当前用户未收藏该内容',
-			isFavorited: visibleFavorites.length > 0,
-			result: visibleFavorites,
+			message: favoritedFavorites.length > 0 ? '检查收藏状态成功' : '当前用户未收藏该内容',
+			isFavorited: favoritedFavorites.length > 0,
+			result: favoritedFavorites,
 		}
 	} catch (error) {
 		logging('ERROR', '检查收藏状态失败，未知原因：', error, { checkFavoritesContentRequest, uuid })

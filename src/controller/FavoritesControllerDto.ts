@@ -221,7 +221,7 @@ export type CheckFavoritesContentResponseDto = {
 	message?: string;
 	/** 当前用户是否已收藏该内容 */
 	isFavorited?: boolean;
-	/** 收藏该内容的收藏夹列表（仅包含当前用户有权限查看的收藏夹） */
+	/** 收藏该内容的收藏夹列表（仅包含当前用户可管理的收藏夹：创建者或维护者） */
 	result?: Favorites[];
 }
 
