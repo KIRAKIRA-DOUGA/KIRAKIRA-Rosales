@@ -8,6 +8,7 @@ import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseD
 import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndPlusByMongodbId, insertIfNotExist, isQueryResultsEmpty } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
+import { FavoritesDetailSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
@@ -508,6 +509,42 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				video.videoDownvoteCount = videoDownvoteCount
 				video.userHasUpvoted = userHasUpvoted
 				video.userHasDownvoted = userHasDownvoted
+			}
+
+			// 8. 计算视频收藏数（被同一个人收藏进多个收藏夹也只算一个）
+			try {
+				const { collectionName: favoritesDetailCollectionName, schemaInstance: favoritesDetailSchemaInstance } = FavoritesDetailSchema
+				type FavoritesDetailCountResult = { favoritesCount: number }
+				const favoritesCountPipeline: PipelineStage[] = [
+					{
+						$match: {
+							category: 'video',
+							id: String(video.videoId),
+						},
+					},
+					{
+						$group: {
+							_id: '$operator',
+						},
+					},
+					{
+						$count: 'favoritesCount',
+					},
+				]
+				const favoritesCountResult = await selectDataByAggregateFromMongoDB(
+					favoritesDetailSchemaInstance,
+					favoritesDetailCollectionName,
+					favoritesCountPipeline,
+				)
+				if (favoritesCountResult.success) {
+					const aggregateResult = favoritesCountResult.result?.[0] as FavoritesDetailCountResult | undefined
+					video.favoritesCount = aggregateResult?.favoritesCount ?? 0
+				} else {
+					video.favoritesCount = 0
+				}
+			} catch (error) {
+				logging('ERROR', '计算视频收藏数失败：', error)
+				video.favoritesCount = 0
 			}
 
 			return {

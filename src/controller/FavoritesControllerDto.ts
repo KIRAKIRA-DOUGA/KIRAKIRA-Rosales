@@ -1,7 +1,6 @@
-/**
- * 浏览的内容的类型
- */
-export type BrowsingHistoryCategory = 'video' | 'photo' | 'comment'
+import { BrowsingHistoryCategory } from './BrowsingHistoryControllerDto.js'
+
+export type { BrowsingHistoryCategory }
 
 /**
  * 收藏夹
@@ -23,6 +22,44 @@ type Favorites = {
 	favoritesVisibility: number;
 	/** 收藏夹创建时间 - 非空 */
 	favoritesCreateDateTime: number;
+}
+
+/**
+ * 收藏夹明细中嵌套的内容摘要（与明细元数据分离）
+ */
+type FavoritesDetailContent = {
+	/** 内容的类型 */
+	category: BrowsingHistoryCategory;
+	/** 内容的唯一 ID */
+	id: string;
+	/** 源内容是否仍存在（已删除等异常时为 false） */
+	available: boolean;
+	/** 视频标题（category=video 时始终返回；不可用时为空字符串） */
+	title?: string;
+	/** 视频封面（category=video 时始终返回；不可用时为空字符串） */
+	image?: string;
+	/** 评论正文（category=comment 时始终返回；不可用时为空字符串） */
+	text?: string;
+}
+
+/**
+ * 收藏夹明细
+ */
+type FavoritesDetail = {
+	/** 收藏夹明细记录的唯一 ID */
+	_id?: string;
+	/** 收藏夹唯一 ID */
+	favoritesListId: number;
+	/** 谁将本条内容添加到收藏夹 */
+	operator: number;
+	/** 添加到收藏的时间 */
+	addedDateTime: number;
+	/** 排序顺序 */
+	sortOrder: number;
+	/** 最后编辑时间 */
+	editDateTime: number;
+	/** 收藏的内容摘要（视频标题/封面、评论正文等，与元数据字段分离） */
+	content: FavoritesDetailContent;
 }
 
 /**
@@ -52,7 +89,7 @@ export type CreateFavoritesResponseDto = {
 }
 
 /**
- * 获取某个用户的收藏夹
+ * 获取当前登录用户自己的收藏夹列表的请求响应
  */
 export type GetFavoritesResponseDto = {
 	/** 是否请求成功 */
@@ -61,4 +98,271 @@ export type GetFavoritesResponseDto = {
 	message?: string;
 	/** 如果成功，返回用户所有的收藏夹 */
 	result?: Favorites[];
+}
+
+/**
+ * 获取指定用户收藏夹列表的请求载荷
+ */
+export type GetFavoritesByUidRequestDto = {
+	/** 目标用户 UID - 非空 */
+	uid: number;
+}
+
+/**
+ * 获取指定用户收藏夹列表的请求响应
+ */
+export type GetFavoritesByUidResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回可见的收藏夹列表 */
+	result?: Favorites[];
+}
+
+/**
+ * 添加内容到收藏夹的请求载荷
+ */
+export type AddToFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesListId: number;
+	/** 内容的类型 - 非空 */
+	category: BrowsingHistoryCategory;
+	/** 内容的唯一 ID - 非空 */
+	id: string;
+}
+
+/**
+ * 添加内容到收藏夹的请求响应
+ */
+export type AddToFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 从收藏夹移除内容的请求载荷
+ */
+export type RemoveFromFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesListId: number;
+	/** 内容的类型 - 非空 */
+	category: BrowsingHistoryCategory;
+	/** 内容的唯一 ID - 非空 */
+	id: string;
+}
+
+/**
+ * 从收藏夹移除内容的请求响应
+ */
+export type RemoveFromFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 获取收藏夹内容的请求载荷
+ */
+export type GetFavoritesDetailRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesListId: number;
+	/**
+	 * 可选：只返回某一类媒体（video | photo | comment）
+	 * 不传则返回该收藏夹内全部类型混排
+	 * photo 虽暂不支持写入，但库内已有 category 字段，可读
+	 */
+	category?: BrowsingHistoryCategory;
+	/** 排序方式：1 为正序（sortOrder 从小到大），-1 为倒序（sortOrder 从大到小），默认为 1 */
+	sortOrder?: 1 | -1;
+	/** 分页查询 */
+	pagination: {
+		/** 当前在第几页 */
+		page: number;
+		/** 一页显示多少条 */
+		pageSize: number;
+	};
+}
+
+/**
+ * 获取收藏夹内容的请求响应
+ */
+export type GetFavoritesDetailResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 总数 */
+	totalCount?: number;
+	/** 如果成功，返回收藏夹中的内容（分页） */
+	result?: FavoritesDetail[];
+}
+
+/**
+ * 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中的请求载荷
+ */
+export type CheckFavoritesContentRequestDto = {
+	/** 内容的类型 - 非空 */
+	category: BrowsingHistoryCategory;
+	/** 内容的唯一 ID - 非空 */
+	id: string;
+}
+
+/**
+ * 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中的请求响应
+ */
+export type CheckFavoritesContentResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 当前用户是否已收藏该内容 */
+	isFavorited?: boolean;
+	/** 收藏该内容的收藏夹列表（仅包含当前用户可管理的收藏夹：创建者或维护者） */
+	result?: Favorites[];
+}
+
+/**
+ * 更新收藏夹信息的请求载荷
+ */
+export type UpdateFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+	/** 收藏夹标题 */
+	favoritesTitle?: string;
+	/** 收藏夹简介 */
+	favoritesBio?: string;
+	/** 收藏夹封面 */
+	favoritesCover?: string;
+	/** 收藏夹可见性 */
+	favoritesVisibility?: number;
+}
+
+/**
+ * 更新收藏夹信息的请求响应
+ */
+export type UpdateFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回更新后的收藏夹数据 */
+	result?: Favorites;
+}
+
+/**
+ * 删除收藏夹的请求载荷
+ */
+export type DeleteFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+}
+
+/**
+ * 删除收藏夹的请求响应
+ */
+export type DeleteFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 调整收藏夹内部排序的请求载荷
+ */
+export type ReorderFavoritesDetailRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesListId: number;
+	/** 要调整排序的内容项列表，按新的顺序排列 */
+	items: {
+		/** 内容的类型 - 非空 */
+		category: BrowsingHistoryCategory;
+		/** 内容的唯一 ID - 非空 */
+		id: string;
+		/** 新的排序顺序 - 非空 */
+		sortOrder: number;
+	}[];
+}
+
+/**
+ * 调整收藏夹内部排序的请求响应
+ */
+export type ReorderFavoritesDetailResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+}
+
+/**
+ * 添加维护者到收藏夹的请求载荷
+ */
+export type AddEditorToFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+	/** 要添加的维护者 UID - 非空 */
+	editorUid: number;
+}
+
+/**
+ * 添加维护者到收藏夹的请求响应
+ */
+export type AddEditorToFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回更新后的收藏夹数据 */
+	result?: Favorites;
+}
+
+/**
+ * 移除收藏夹维护者的请求载荷
+ */
+export type RemoveEditorFromFavoritesRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+	/** 要移除的维护者 UID - 非空 */
+	editorUid: number;
+}
+
+/**
+ * 移除收藏夹维护者的请求响应
+ */
+export type RemoveEditorFromFavoritesResponseDto = {
+	/** 是否请求成功 */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 如果成功，返回更新后的收藏夹数据 */
+	result?: Favorites;
+}
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL 的请求载荷
+ */
+export type GetFavoritesCoverUploadSignedUrlRequestDto = {
+	/** 收藏夹唯一 ID - 非空 */
+	favoritesId: number;
+}
+
+/**
+ * 获取用于上传收藏夹封面图的预签名 URL 的请求响应
+ */
+export type GetFavoritesCoverUploadSignedUrlResponseDto = {
+	/** 请求是否成功，成功返回 true，否则返回 false */
+	success: boolean;
+	/** 附加的文本消息 */
+	message?: string;
+	/** 请求到的收藏夹封面图上传预签名 URL 数据 */
+	result?: {
+		/** 预签名 URL */
+		signedUrl: string;
+		/** 文件名 */
+		fileName: string;
+	};
 }
