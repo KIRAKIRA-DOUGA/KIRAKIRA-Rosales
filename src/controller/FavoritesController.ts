@@ -1,4 +1,5 @@
 import { createFavoritesService, getFavoritesService, getFavoritesByUidService, addToFavoritesService, removeFromFavoritesService, getFavoritesDetailService, updateFavoritesService, deleteFavoritesService, reorderFavoritesDetailService, addEditorToFavoritesService, removeEditorFromFavoritesService, getFavoritesCoverUploadSignedUrlService, checkFavoritesContentService } from '../service/FavoritesService.js'
+import { isPassRbacCheck } from '../service/RbacService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { limitPageSize, parseInteger } from '../common/ValidTool.js'
 import { CreateFavoritesRequestDto, GetFavoritesByUidRequestDto, AddToFavoritesRequestDto, RemoveFromFavoritesRequestDto, GetFavoritesDetailRequestDto, UpdateFavoritesRequestDto, DeleteFavoritesRequestDto, ReorderFavoritesDetailRequestDto, AddEditorToFavoritesRequestDto, RemoveEditorFromFavoritesRequestDto, GetFavoritesCoverUploadSignedUrlRequestDto, CheckFavoritesContentRequestDto } from './FavoritesControllerDto.js'
@@ -10,9 +11,14 @@ import { BrowsingHistoryCategory } from './BrowsingHistoryControllerDto.js'
  * @param next context
  */
 export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<CreateFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<CreateFavoritesRequestDto>
 	const createFavoritesRequest: CreateFavoritesRequestDto = {
 		/** 收藏夹标题 - 非空 */
 		favoritesTitle: data?.favoritesTitle ?? '',
@@ -36,6 +42,11 @@ export const createFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 export const getFavoritesController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
 	const getFavoritesResponse = await getFavoritesService(uuid, token)
 	ctx.body = getFavoritesResponse
 	await next()
@@ -64,9 +75,14 @@ export const getFavoritesByUidController = async (ctx: koaCtx, next: koaNext) =>
  * @param next context
  */
 export const addToFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<AddToFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<AddToFavoritesRequestDto>
 	const addToFavoritesRequest: AddToFavoritesRequestDto = {
 		favoritesListId: data.favoritesListId ?? -1,
 		category: data.category ?? 'video',
@@ -83,9 +99,14 @@ export const addToFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const removeFromFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RemoveFromFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<RemoveFromFavoritesRequestDto>
 	const removeFromFavoritesRequest: RemoveFromFavoritesRequestDto = {
 		favoritesListId: data.favoritesListId ?? -1,
 		category: data.category ?? 'video',
@@ -130,9 +151,14 @@ export const getFavoritesDetailController = async (ctx: koaCtx, next: koaNext) =
  * @param next context
  */
 export const updateFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<UpdateFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<UpdateFavoritesRequestDto>
 	const updateFavoritesRequest: UpdateFavoritesRequestDto = {
 		favoritesId: data.favoritesId ?? -1,
 		favoritesTitle: data.favoritesTitle,
@@ -151,9 +177,14 @@ export const updateFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const deleteFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<DeleteFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<DeleteFavoritesRequestDto>
 	const deleteFavoritesRequest: DeleteFavoritesRequestDto = {
 		favoritesId: data.favoritesId ?? -1,
 	}
@@ -168,9 +199,14 @@ export const deleteFavoritesController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const reorderFavoritesDetailController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<ReorderFavoritesDetailRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<ReorderFavoritesDetailRequestDto>
 	const reorderFavoritesDetailRequest: ReorderFavoritesDetailRequestDto = {
 		favoritesListId: data.favoritesListId ?? -1,
 		items: data.items ?? [],
@@ -186,9 +222,14 @@ export const reorderFavoritesDetailController = async (ctx: koaCtx, next: koaNex
  * @param next context
  */
 export const addEditorToFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<AddEditorToFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<AddEditorToFavoritesRequestDto>
 	const addEditorToFavoritesRequest: AddEditorToFavoritesRequestDto = {
 		favoritesId: data.favoritesId ?? -1,
 		editorUid: data.editorUid ?? -1,
@@ -204,9 +245,14 @@ export const addEditorToFavoritesController = async (ctx: koaCtx, next: koaNext)
  * @param next context
  */
 export const removeEditorFromFavoritesController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<RemoveEditorFromFavoritesRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const data = ctx.request.body as Partial<RemoveEditorFromFavoritesRequestDto>
 	const removeEditorFromFavoritesRequest: RemoveEditorFromFavoritesRequestDto = {
 		favoritesId: data.favoritesId ?? -1,
 		editorUid: data.editorUid ?? -1,
@@ -225,6 +271,11 @@ export const removeEditorFromFavoritesController = async (ctx: koaCtx, next: koa
 export const getFavoritesCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
 	const favoritesId = parseInteger(ctx.query.favoritesId as string)
 	const getFavoritesCoverUploadSignedUrlRequest: GetFavoritesCoverUploadSignedUrlRequestDto = {
 		favoritesId: favoritesId ?? -1,
@@ -239,10 +290,15 @@ export const getFavoritesCoverUploadSignedUrlController = async (ctx: koaCtx, ne
  * @param next context
  */
 export const checkFavoritesContentController = async (ctx: koaCtx, next: koaNext) => {
-	const category = ctx.query.category as BrowsingHistoryCategory
-	const id = ctx.query.id as string
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
+
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
+		return
+	}
+
+	const category = ctx.query.category as BrowsingHistoryCategory
+	const id = ctx.query.id as string
 	const checkFavoritesContentRequest: CheckFavoritesContentRequestDto = {
 		category,
 		id: id ?? '',
