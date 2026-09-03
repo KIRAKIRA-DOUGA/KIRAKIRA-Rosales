@@ -9,7 +9,6 @@ import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '
 import { ClientSession } from 'mongoose'
 import { checkIsBlockedByOtherUserService } from './BlockService.js'
 import { checkUserIsFollowing } from './FeedService.js'
-import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { v4 as uuidV4 } from 'uuid'
 import { logging } from './loggingService.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
@@ -228,7 +227,6 @@ export const getConversationListService = async (getConversationListRequest: Get
 		const skip = (page - 1) * pageSize
 
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
-		const { collectionName: followingCollectionName } = FollowingSchema
 
 		// 根据 query 生成关注筛选条件（未传则不过滤）
 		const followFilterConditions: Record<string, unknown>[] = []
@@ -270,7 +268,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			// 关注关系：我是否关注对方（uuid -> otherUserUuid）
 			{
 				$lookup: {
-					from: followingCollectionName,
+					from: 'followings',
 					let: { otherUserUuid: '$otherUserUuid' },
 					pipeline: [
 						{
@@ -291,7 +289,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			// 关注关系：对方是否关注我（otherUserUuid -> uuid）
 			{
 				$lookup: {
-					from: followingCollectionName,
+					from: 'followings',
 					let: { otherUserUuid: '$otherUserUuid' },
 					pipeline: [
 						{
@@ -346,7 +344,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			},
 			{
 				$lookup: {
-					from: 'im-message',
+					from: 'im-messages',
 					localField: 'lastMessageId',
 					foreignField: 'messageId',
 					as: 'lastMessageData',
@@ -414,7 +412,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			},
 			{
 				$lookup: {
-					from: followingCollectionName,
+					from: 'followings',
 					let: { otherUserUuid: '$otherUserUuid' },
 					pipeline: [
 						{
@@ -434,7 +432,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			},
 			{
 				$lookup: {
-					from: followingCollectionName,
+					from: 'followings',
 					let: { otherUserUuid: '$otherUserUuid' },
 					pipeline: [
 						{
@@ -1308,7 +1306,6 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 					conversationId,
 					senderUuid,
 					receiverUuid,
-					senderDeleted: false,
 				},
 			},
 			{
@@ -1334,7 +1331,6 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 					conversationId,
 					senderUuid: receiverUuid,
 					receiverUuid: senderUuid,
-					senderDeleted: false,
 				},
 			},
 			{
@@ -1545,17 +1541,16 @@ const countUnreadMessagesForReceiver = async (
 		isRead: false,
 		receiverDeleted: false,
 	}
-	const unreadSelect: SelectType<Message> = {
-		messageId: 1,
-	}
-	const unreadResult = await selectDataFromMongoDB<Message>(
-		unreadWhere,
-		unreadSelect,
+	const unreadResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(
 		messageSchemaInstance,
 		messageCollectionName,
-		session ? { session } : undefined,
+		[
+			{ $match: unreadWhere as PipelineStage.Match['$match'] },
+			{ $count: 'totalCount' },
+		],
+		session,
 	)
-	return unreadResult.success && unreadResult.result ? unreadResult.result.length : 0
+	return unreadResult.result?.[0]?.totalCount ?? 0
 }
 
 /**
@@ -1690,4 +1685,3 @@ const checkReceiverImPrivacy = async (receiverUuid: string, senderUuid: string, 
 		return { allow: false, message: '发送消息失败，检查对方隐私设置时出错' }
 	}
 }
-
