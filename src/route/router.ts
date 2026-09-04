@@ -49,6 +49,7 @@ import { adminGetUserRolesByUidController, adminUpdateUserRoleController, create
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
 import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowerListController, getFollowingListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
+import { sendMessageController, getConversationListController, getMessageListController, markMessageReadController, deleteConversationController, deleteMessageController, getUnreadMessageCountController, recallMessageController, getImImageUploadSignedUrlController } from '../controller/ImController.js'
 
 const router = new Router()
 
@@ -904,6 +905,75 @@ router.get('/rbac/adminGetUserRolesByUid', adminGetUserRolesByUidController) // 
 router.get('/secret/getStgEnvBackEndSecret', getStgEnvBackEndSecretController) // 获取预生产环境后端环境变量机密
 // https://localhost:30000/secret/getStgEnvBackEndSecret
 // cookie: uuid, token
+
+
+
+router.get('/im/image/preUpload', getImImageUploadSignedUrlController) // 获取 IM 图片上传预签名 URL
+// https://localhost:9999/im/image/preUpload
+// cookie: uuid, token
+// Response result: { fileName, signedUrl }
+
+router.post('/im/sendMessage', sendMessageController) // 发送消息
+// https://localhost:9999/im/sendMessage
+// cookie: uuid, token
+// {
+// 	"receiverUid": 123,
+// 	"messageType": "text",
+// 	"content": "这是一条消息"
+// }
+// messageType 为 "image" 时，content 为图片 fileName 或 CDN URL（与头像上传一致，由客户端在 sendMessage 时传入）
+
+router.get('/im/conversationList', getConversationListController) // 获取会话列表
+// https://localhost:9999/im/conversationList?page=1&pageSize=20&isFollowing=true&isFollower=false
+// cookie: uuid, token
+// Query:
+// page
+// pageSize
+// isFollowing // 可选：true=只看我关注的，false=只看我未关注的
+// isFollower  // 可选：true=只看关注我的，false=只看未关注我的
+
+router.get('/im/messageList', getMessageListController) // 获取消息列表
+// https://localhost:9999/im/messageList?conversationId=conv_xxx_yyy&page=1&pageSize=20&markAsRead=true
+// cookie: uuid, token
+// Query:
+// conversationId
+// cursorMessageId
+// page
+// pageSize
+// markAsRead
+
+router.post('/im/markMessageRead', markMessageReadController) // 标记消息已读
+// https://localhost:9999/im/markMessageRead
+// cookie: uuid, token
+// {
+// 	"conversationId": "conv_xxx_yyy",
+// 	"messageIds": ["msg_xxx", "msg_yyy"] // 可选，为空则标记该会话所有未读消息为已读
+// }
+
+router.delete('/im/conversation', deleteConversationController) // 删除会话
+// https://localhost:9999/im/conversation
+// cookie: uuid, token
+// {
+// 	"conversationId": "conv_xxx_yyy"
+// }
+
+router.delete('/im/message', deleteMessageController) // 删除消息
+// https://localhost:9999/im/message
+// cookie: uuid, token
+// {
+// 	"messageId": "msg_xxx"
+// }
+
+router.get('/im/unreadCount', getUnreadMessageCountController) // 获取未读消息总数
+// https://localhost:9999/im/unreadCount
+// cookie: uuid, token
+
+router.post('/im/recallMessage', recallMessageController) // 撤回消息
+// https://localhost:9999/im/recallMessage
+// cookie: uuid, token
+// {
+// 	"messageId": "msg_xxx"
+// }
 
 
 // router-end

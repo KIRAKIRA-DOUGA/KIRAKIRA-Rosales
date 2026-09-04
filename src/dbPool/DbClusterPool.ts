@@ -317,9 +317,10 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
  * @param schema MongoDB Schema 对象
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @param props 聚合查询的步骤
+ * @param session 可选事务 session
  * @returns 查询状态和结果
  */
-export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, collectionName: string, props: PipelineStage[]): Promise< DbPoolResultsType<T> > => {
+export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, collectionName: string, props: PipelineStage[], session?: ClientSession): Promise< DbPoolResultsType<T> > => {
 	try {
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
@@ -330,7 +331,11 @@ export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, col
 		}
 
 		try {
-			const result = (await mongoModel.aggregate(props)) as T[]
+			const aggregate = mongoModel.aggregate(props)
+			if (session) {
+				aggregate.session(session)
+			}
+			const result = (await aggregate) as T[]
 			return { success: true, message: '数据聚合查询成功', result }
 		} catch (error) {
 			logging('ERROR', '数据聚合查询失败：', error, undefined, { recordingLogs: false })
