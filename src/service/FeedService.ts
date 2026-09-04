@@ -11,6 +11,7 @@ import { v4 as uuidV4 } from 'uuid'
 import { generateSecureRandomString } from "../common/RandomTool.js";
 import { createCloudflareImageUploadSignedUrl } from "../cloudflare/index.js";
 import { VideoSchema } from "../dbPool/schema/VideoSchema.js";
+import { BlockListSchema } from "../dbPool/schema/BlockSchema.js";
 import { logging } from "./loggingService.js";
 
 /**
@@ -729,7 +730,8 @@ export const getFeedGroupListService = async (uuid: string, token: string): Prom
 }
 
 /**
- * 获取动态内容
+ * 获取动态内容（关注推送流）
+ * 支持：全部关注 / 指定关注分组 / 指定单个已关注用户；仅返回 pushToFeed 为 true 的视频
  * @param getFeedContentRequest 获取动态内容的请求载荷
  * @param uuid 用户的 UUID
  * @param token 用户的 token
@@ -742,40 +744,76 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 			return { success: false, message: '获取动态内容失败，参数不合法', isLonely: false }
 		}
 
-		if (!(await checkUserTokenByUuidService(uuid, uuid)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '获取动态内容失败，非法用户')
 			return { success: false, message: '获取动态内容失败，非法用户', isLonely: false }
 		}
 
-		const { feedGroupUuid, pagination } = getFeedContentRequest
+		const { feedGroupUuid, followingUid, pagination } = getFeedContentRequest
+		let uploaderUuidList: string[] = []
 
-		const uuidList = []
 		if (feedGroupUuid) {
 			const { collectionName: feedGroupCollectionName, schemaInstance: feedGroupSchemaInstance } = FeedGroupSchema
 			type FeedGroup = InferSchemaType<typeof feedGroupSchemaInstance>
 
 			const getFeedGroupUuidListWhere: QueryType<FeedGroup> = {
 				feedGroupUuid,
+				feedGroupCreatorUuid: uuid, // 仅允许读取自己创建的分组
 			}
 
 			const getFeedGroupUuidListSelect: SelectType<FeedGroup> = {
-				uuidList: 1, // 动态分组中的用户
+				uuidList: 1,
 			}
 
 			const getFeedGroupUserListResult = await selectDataFromMongoDB<FeedGroup>(getFeedGroupUuidListWhere, getFeedGroupUuidListSelect, feedGroupSchemaInstance, feedGroupCollectionName)
-			const uuidListResult = getFeedGroupUserListResult.result?.[0]?.uuidList
-
 			if (!getFeedGroupUserListResult.success) {
 				logging('ERROR', '获取动态内容失败，查询动态分组中的用户失败')
-				return { success: false, message: '获取动态内容失败，查询动态分组中的用户失败', isLonely: { noUserInFeedGroup: true } }
+				return { success: false, message: '获取动态内容失败，查询动态分组中的用户失败', isLonely: false }
 			}
 
-			if (Array.isArray(uuidListResult) && uuidList.length <= 0) {
-				logging('WARN', '你选择动态分组中没有用户')
-				return { success: true, message: '你选择动态分组中没有用户', isLonely: { noUserInFeedGroup: true }, result: { count: 0, content: [] } }
+			const feedGroup = getFeedGroupUserListResult.result?.[0]
+			if (!feedGroup) {
+				logging('ERROR', '获取动态内容失败，动态分组不存在或无权访问')
+				return { success: false, message: '获取动态内容失败，动态分组不存在或无权访问', isLonely: false }
 			}
 
-			uuidList.push(uuidListResult)
+			const uuidListResult = feedGroup.uuidList
+			if (!Array.isArray(uuidListResult) || uuidListResult.length <= 0) {
+				logging('WARN', '你选择的动态分组中没有用户')
+				return { success: true, message: '你选择的动态分组中没有用户', isLonely: { noUserInFeedGroup: true }, result: { count: 0, content: [] } }
+			}
+
+			uploaderUuidList = uuidListResult
+		} else if (followingUid !== undefined && followingUid !== null) {
+			const followingUuid = await getUserUuid(followingUid)
+			if (!followingUuid) {
+				logging('ERROR', '获取动态内容失败，目标用户不存在')
+				return { success: false, message: '获取动态内容失败，目标用户不存在', isLonely: false }
+			}
+
+			const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+			type Following = InferSchemaType<typeof followingSchemaInstance>
+
+			const getFollowingWhere: QueryType<Following> = {
+				followerUuid: uuid,
+				followingUuid,
+			}
+			const getFollowingSelect: SelectType<Following> = {
+				followingUuid: 1,
+			}
+
+			const getFollowingResult = await selectDataFromMongoDB<Following>(getFollowingWhere, getFollowingSelect, followingSchemaInstance, followingCollectionName)
+			if (!getFollowingResult.success) {
+				logging('ERROR', '获取动态内容失败，查询关注关系失败')
+				return { success: false, message: '获取动态内容失败，查询关注关系失败', isLonely: false }
+			}
+
+			if (!getFollowingResult.result || getFollowingResult.result.length <= 0) {
+				logging('WARN', '获取动态内容失败，你未关注该用户')
+				return { success: false, message: '获取动态内容失败，你未关注该用户', isLonely: { noFollowing: true } }
+			}
+
+			uploaderUuidList = [followingUuid]
 		} else {
 			const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
 			type Following = InferSchemaType<typeof followingSchemaInstance>
@@ -783,52 +821,65 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 			const getFollowingUuidListWhere: QueryType<Following> = {
 				followerUuid: uuid,
 			}
-
 			const getFollowingUuidListSelect: SelectType<Following> = {
 				followingUuid: 1,
 			}
 
 			const getFollowingUserListResult = await selectDataFromMongoDB<Following>(getFollowingUuidListWhere, getFollowingUuidListSelect, followingSchemaInstance, followingCollectionName)
-			const uuidListResult = getFollowingUserListResult.result?.map(followingResult => followingResult.followingUuid)
-
 			if (!getFollowingUserListResult.success) {
 				logging('ERROR', '获取动态内容失败，查询用户关注的用户失败')
-				return { success: false, message: '获取动态内容失败，查询用户关注的用户失败', isLonely: { noFollowing: true } }
+				return { success: false, message: '获取动态内容失败，查询用户关注的用户失败', isLonely: false }
 			}
 
-			if (Array.isArray(uuidListResult) && uuidList.length <= 0) {
+			const uuidListResult = getFollowingUserListResult.result?.map(followingResult => followingResult.followingUuid) ?? []
+			if (uuidListResult.length <= 0) {
 				logging('WARN', '你没有关注任何用户')
 				return { success: true, message: '你没有关注任何用户', isLonely: { noFollowing: true }, result: { count: 0, content: [] } }
 			}
 
-			uuidList.push(uuidListResult)
+			uploaderUuidList = uuidListResult
 		}
 
-		// 根据 uuid 匹配视频的基础 pipeline
+		// 过滤：我拉黑的人 + 拉黑我的人（双向屏蔽，不进入推送流）
+		const filteredUploaderUuidList = await filterBlockedUploaderUuidsForFeed(uploaderUuidList, uuid)
+		if (!filteredUploaderUuidList.success) {
+			logging('ERROR', '获取动态内容失败，过滤屏蔽关系失败')
+			return { success: false, message: '获取动态内容失败，过滤屏蔽关系失败', isLonely: false }
+		}
+		uploaderUuidList = filteredUploaderUuidList.uploaderUuidList
+		if (uploaderUuidList.length <= 0) {
+			logging('WARN', '过滤屏蔽关系后，没有可展示的推送用户')
+			return { success: true, message: '获取动态内容成功，长度为零', isLonely: false, result: { count: 0, content: [] } }
+		}
+
+		const skip = (pagination.page - 1) * pagination.pageSize
+		const pageSize = pagination.pageSize
+
+		// 仅推送允许进入动态流、且已通过审核的视频
 		const feedContentMatchPipeline: PipelineStage[] = [
 			{
 				$match: {
-					uploaderUUID: { $in: uuidList },
+					uploaderUUID: { $in: uploaderUuidList },
+					pushToFeed: true,
+					pendingReview: false,
 				},
 			},
 		]
 
-		// 获取动态视频总数的 pipeline
-		const countFeedContentBasePipeline: PipelineStage[] = [
+		const countFeedContentPipeline: PipelineStage[] = feedContentMatchPipeline.concat([
 			{
-				$count: 'totalCount', // 统计总文档数
-			}
-		]
+				$count: 'totalCount',
+			},
+		])
 
-		let skip = 0
-		let pageSize = undefined
-		if (pagination && pagination.page > 0 && pagination.pageSize > 0) {
-			skip = (pagination.page - 1) * pagination.pageSize
-			pageSize = pagination.pageSize
-		}
-
-		// 匹配视频信息的 pipeline
-		const getFeedContentBasePipeline: PipelineStage[] = [
+		const getFeedContentPipeline: PipelineStage[] = feedContentMatchPipeline.concat([
+			{
+				$sort: {
+					uploadDate: -1,
+				},
+			},
+			{ $skip: skip },
+			{ $limit: pageSize },
 			{
 				$lookup: {
 					from: 'user-infos',
@@ -837,15 +888,8 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 					as: 'uploader_info',
 				},
 			},
-			{ $skip: skip }, // 跳过指定数量的文档
-			{ $limit: pageSize }, // 限制返回的文档数量
 			{
 				$unwind: '$uploader_info',
-			},
-			{
-				$sort: {
-					uploadDate: -1, // 按 uploadDate 降序排序
-				},
 			},
 			{
 				$project: {
@@ -854,33 +898,28 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 					image: 1,
 					uploadDate: 1,
 					watchedCount: 1,
-					uploaderId: 1, // 上传者 UID
+					uploaderId: 1,
 					duration: 1,
 					description: 1,
 					editDateTime: 1,
-					uploader: '$uploader_info.username', // 上传者的名字
-					uploaderNickname: '$uploader_info.userNickname', // 上传者的昵称
-				}
-			}
-		]
-
-		const countFeedContentPipeline = feedContentMatchPipeline.concat(countFeedContentBasePipeline)
-		const getFeedContentPipeline = feedContentMatchPipeline.concat(getFeedContentBasePipeline)
+					uploader: '$uploader_info.username',
+					uploaderNickname: '$uploader_info.userNickname',
+				},
+			},
+		])
 
 		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 		type ThumbVideo = InferSchemaType<typeof videoSchemaInstance>
 
-		const feedContentCountPromise = selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, countFeedContentPipeline)
-		const feedContentDataPromise = selectDataByAggregateFromMongoDB<ThumbVideo>(videoSchemaInstance, videoCollectionName, getFeedContentPipeline)
+		const [feedContentCountResult, feedContentDataResult] = await Promise.all([
+			selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, countFeedContentPipeline),
+			selectDataByAggregateFromMongoDB<ThumbVideo>(videoSchemaInstance, videoCollectionName, getFeedContentPipeline),
+		])
 
-		const [ feedContentCountResult, feedContentDataResult ] = await Promise.all([feedContentCountPromise, feedContentDataPromise])
-		const count = feedContentCountResult.result?.[0]?.totalCount
-		const content = feedContentDataResult.result
+		const count = feedContentCountResult.result?.[0]?.totalCount ?? 0
+		const content = feedContentDataResult.result ?? []
 
-		if ( !feedContentCountResult.success || !feedContentDataResult.success
-			|| typeof count !== 'number' || count < 0
-			|| ( Array.isArray(content) && !content )
-		) {
+		if (!feedContentCountResult.success || !feedContentDataResult.success || typeof count !== 'number' || count < 0 || !Array.isArray(content)) {
 			logging('ERROR', '获取动态内容失败，查询视频数据失败')
 			return { success: false, message: '获取动态内容失败，查询视频数据失败', isLonely: false }
 		}
@@ -1260,15 +1299,94 @@ const checkAdministratorDeleteFeedGroupRequest = (administratorDeleteFeedGroupRe
 }
 
 /**
+ * 从推送流候选 UP 主 UUID 列表中，排除「我拉黑的人」和「拉黑我的人」
+ * @param uploaderUuidList 候选上传者 UUID 列表
+ * @param viewerUuid 当前查看者 UUID
+ * @returns 过滤结果；查询失败时 success 为 false
+ */
+const filterBlockedUploaderUuidsForFeed = async (uploaderUuidList: string[], viewerUuid: string): Promise<{ success: boolean, uploaderUuidList: string[] }> => {
+	if (!uploaderUuidList.length) {
+		return { success: true, uploaderUuidList }
+	}
+
+	const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
+	type BlockList = InferSchemaType<typeof blockListSchemaInstance>
+
+	const blockedByMeWhere: QueryType<BlockList> = {
+		operatorUUID: viewerUuid,
+		type: 'block',
+	}
+	const blockedByMeSelect: SelectType<BlockList> = {
+		value: 1,
+	}
+
+	const blockedMeWhere: QueryType<BlockList> = {
+		value: viewerUuid,
+		type: 'block',
+	}
+	const blockedMeSelect: SelectType<BlockList> = {
+		operatorUUID: 1,
+	}
+
+	const [blockedByMeResult, blockedMeResult] = await Promise.all([
+		selectDataFromMongoDB<BlockList>(blockedByMeWhere, blockedByMeSelect, blockListSchemaInstance, blockListCollectionName),
+		selectDataFromMongoDB<BlockList>(blockedMeWhere, blockedMeSelect, blockListSchemaInstance, blockListCollectionName),
+	])
+
+	if (!blockedByMeResult.success || !blockedMeResult.success) {
+		logging('ERROR', '过滤推送流屏蔽关系失败，查询黑名单失败')
+		return { success: false, uploaderUuidList: [] }
+	}
+
+	const excludedUuidSet = new Set<string>()
+	for (const item of blockedByMeResult.result ?? []) {
+		if (item.value) {
+			excludedUuidSet.add(item.value)
+		}
+	}
+	for (const item of blockedMeResult.result ?? []) {
+		if (item.operatorUUID) {
+			excludedUuidSet.add(item.operatorUUID)
+		}
+	}
+
+	if (excludedUuidSet.size <= 0) {
+		return { success: true, uploaderUuidList }
+	}
+
+	return {
+		success: true,
+		uploaderUuidList: uploaderUuidList.filter(uploaderUuid => !excludedUuidSet.has(uploaderUuid)),
+	}
+}
+
+/**
  * 校验获取动态内容的请求载荷
  * @param getFeedContentRequest 获取动态内容的请求载荷
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequestDto): boolean => {
+	const { feedGroupUuid, followingUid, pagination } = getFeedContentRequest
+
+	// feedGroupUuid 与 followingUid 互斥
+	if (feedGroupUuid && followingUid !== undefined && followingUid !== null) {
+		return false
+	}
+
+	if (followingUid !== undefined && followingUid !== null && (!(typeof followingUid === 'number') || Number.isNaN(followingUid) || followingUid <= 0)) {
+		return false
+	}
+
+	if (feedGroupUuid !== undefined && feedGroupUuid !== null && typeof feedGroupUuid === 'string' && feedGroupUuid.trim() === '') {
+		return false
+	}
+
 	return (
-		!!getFeedContentRequest.pagination
-		&& getFeedContentRequest.pagination.page >= 0 && getFeedContentRequest.pagination.pageSize > 0 && getFeedContentRequest.pagination.pageSize <= 200
-	);
+		!!pagination
+		&& pagination.page >= 1
+		&& pagination.pageSize > 0
+		&& pagination.pageSize <= 200
+	)
 }
 
 /**

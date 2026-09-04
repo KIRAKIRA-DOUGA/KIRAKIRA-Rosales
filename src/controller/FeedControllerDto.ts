@@ -255,9 +255,16 @@ export type GetFeedGroupListResponseDto = {
 
 /**
  * 获取动态内容的请求载荷
+ * 三种互斥模式：
+ * 1. 不传 feedGroupUuid / followingUid → 全部关注用户的推送流
+ * 2. 传 feedGroupUuid → 指定关注分组内用户的推送流
+ * 3. 传 followingUid → 指定单个已关注用户的推送流
  */
 export type GetFeedContentRequestDto = {
+	/** 动态分组 UUID（可选，与 followingUid 互斥） */
 	feedGroupUuid?: string;
+	/** 单个关注用户的 UID（可选，与 feedGroupUuid 互斥） */
+	followingUid?: number;
 	/** 分页查询 */
 	pagination: {
 		/** 当前在第几页 */

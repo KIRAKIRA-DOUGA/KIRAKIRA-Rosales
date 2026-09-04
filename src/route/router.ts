@@ -754,12 +754,16 @@ router.get('/feed/getFeedGroupList', getFeedGroupListController) // 获取动态
 // cookie: uuid, token
 
 
-router.get('/feed/getFeedContent', getFeedContentController) // 获取动态分组
+router.get('/feed/getFeedContent', getFeedContentController) // 获取关注推送流（全部关注 / 分组 / 单用户）
 // https://localhost:30000/feed/getFeedContent?page=1&pageSize=30
+// https://localhost:30000/feed/getFeedContent?feedGroupUuid=xxxxxxxxxxxxxxxxxxxxx&page=1&pageSize=30
+// https://localhost:30000/feed/getFeedContent?followingUid=999&page=1&pageSize=30
 // cookie: uuid, token
-// {
-// 	"feedGroupUuid": "xxxxxxxxxxxxxxxxxxxxx"
-// }
+// Query:
+// feedGroupUuid（可选，与 followingUid 互斥）
+// followingUid（可选，与 feedGroupUuid 互斥）
+// page
+// pageSize
 
 router.get('/feed/stats', getFollowStatsController) // 获取用户关注数和粉丝数
 // https://localhost:30000/feed/stats?targetUid=999

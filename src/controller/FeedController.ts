@@ -254,7 +254,7 @@ export const getFeedGroupListController = async (ctx: koaCtx, next: koaNext) => 
 }
 
 /**
- * 获取动态内容
+ * 获取动态内容（关注推送流）
  * @param ctx context
  * @param next context
  * @return 获取动态内容的请求响应
@@ -266,9 +266,15 @@ export const getFeedContentController = async (ctx: koaCtx, next: koaNext) => {
 	const page = ctx.query.page as string
 	const pageSize = ctx.query.pageSize as string
 	const finalPageSize = limitPageSize(pageSize)
+	const feedGroupUuid = (ctx.query.feedGroupUuid as string | undefined)?.trim() || undefined
+	const followingUidRaw = ctx.query.followingUid as string | undefined
+	const followingUid = followingUidRaw !== undefined && followingUidRaw !== null && String(followingUidRaw).trim() !== ''
+		? parseInteger(followingUidRaw)
+		: undefined
 
 	const getFeedContentRequest: GetFeedContentRequestDto = {
-		feedGroupUuid: uuid ?? "",
+		feedGroupUuid,
+		followingUid: followingUid !== undefined && !Number.isNaN(followingUid) ? followingUid : undefined,
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,
 			pageSize: finalPageSize ?? 50,
