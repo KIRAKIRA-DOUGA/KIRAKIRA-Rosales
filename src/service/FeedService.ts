@@ -11,6 +11,7 @@ import { v4 as uuidV4 } from 'uuid'
 import { generateSecureRandomString } from "../common/RandomTool.js";
 import { createCloudflareImageUploadSignedUrl } from "../cloudflare/index.js";
 import { VideoSchema } from "../dbPool/schema/VideoSchema.js";
+import { BlockListSchema } from "../dbPool/schema/BlockSchema.js";
 import { logging } from "./loggingService.js";
 
 /**
@@ -839,10 +840,22 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 			uploaderUuidList = uuidListResult
 		}
 
+		// 过滤：我拉黑的人 + 拉黑我的人（双向屏蔽，不进入推送流）
+		const filteredUploaderUuidList = await filterBlockedUploaderUuidsForFeed(uploaderUuidList, uuid)
+		if (!filteredUploaderUuidList.success) {
+			logging('ERROR', '获取动态内容失败，过滤屏蔽关系失败')
+			return { success: false, message: '获取动态内容失败，过滤屏蔽关系失败', isLonely: false }
+		}
+		uploaderUuidList = filteredUploaderUuidList.uploaderUuidList
+		if (uploaderUuidList.length <= 0) {
+			logging('WARN', '过滤屏蔽关系后，没有可展示的推送用户')
+			return { success: true, message: '获取动态内容成功，长度为零', isLonely: false, result: { count: 0, content: [] } }
+		}
+
 		const skip = (pagination.page - 1) * pagination.pageSize
 		const pageSize = pagination.pageSize
 
-		// 仅推送允许进入动态流的视频
+		// 仅推送允许进入动态流、且已通过审核的视频
 		const feedContentMatchPipeline: PipelineStage[] = [
 			{
 				$match: {
@@ -1283,6 +1296,68 @@ const checkAdministratorApproveFeedGroupInfoChangeRequest = (administratorApprov
  */
 const checkAdministratorDeleteFeedGroupRequest = (administratorDeleteFeedGroupRequest: AdministratorDeleteFeedGroupRequestDto): boolean => {
 	return ( !!administratorDeleteFeedGroupRequest.feedGroupUuid )
+}
+
+/**
+ * 从推送流候选 UP 主 UUID 列表中，排除「我拉黑的人」和「拉黑我的人」
+ * @param uploaderUuidList 候选上传者 UUID 列表
+ * @param viewerUuid 当前查看者 UUID
+ * @returns 过滤结果；查询失败时 success 为 false
+ */
+const filterBlockedUploaderUuidsForFeed = async (uploaderUuidList: string[], viewerUuid: string): Promise<{ success: boolean, uploaderUuidList: string[] }> => {
+	if (!uploaderUuidList.length) {
+		return { success: true, uploaderUuidList }
+	}
+
+	const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
+	type BlockList = InferSchemaType<typeof blockListSchemaInstance>
+
+	const blockedByMeWhere: QueryType<BlockList> = {
+		operatorUUID: viewerUuid,
+		type: 'block',
+	}
+	const blockedByMeSelect: SelectType<BlockList> = {
+		value: 1,
+	}
+
+	const blockedMeWhere: QueryType<BlockList> = {
+		value: viewerUuid,
+		type: 'block',
+	}
+	const blockedMeSelect: SelectType<BlockList> = {
+		operatorUUID: 1,
+	}
+
+	const [blockedByMeResult, blockedMeResult] = await Promise.all([
+		selectDataFromMongoDB<BlockList>(blockedByMeWhere, blockedByMeSelect, blockListSchemaInstance, blockListCollectionName),
+		selectDataFromMongoDB<BlockList>(blockedMeWhere, blockedMeSelect, blockListSchemaInstance, blockListCollectionName),
+	])
+
+	if (!blockedByMeResult.success || !blockedMeResult.success) {
+		logging('ERROR', '过滤推送流屏蔽关系失败，查询黑名单失败')
+		return { success: false, uploaderUuidList: [] }
+	}
+
+	const excludedUuidSet = new Set<string>()
+	for (const item of blockedByMeResult.result ?? []) {
+		if (item.value) {
+			excludedUuidSet.add(item.value)
+		}
+	}
+	for (const item of blockedMeResult.result ?? []) {
+		if (item.operatorUUID) {
+			excludedUuidSet.add(item.operatorUUID)
+		}
+	}
+
+	if (excludedUuidSet.size <= 0) {
+		return { success: true, uploaderUuidList }
+	}
+
+	return {
+		success: true,
+		uploaderUuidList: uploaderUuidList.filter(uploaderUuid => !excludedUuidSet.has(uploaderUuid)),
+	}
 }
 
 /**
