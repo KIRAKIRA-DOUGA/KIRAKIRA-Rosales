@@ -51,7 +51,7 @@ git clone https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales.git
 > 全部环境变量及其作用请参阅：[.env.template](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/blob/develop/.env.template)。
 ``` powershell
 # 对于不同操作系统，设置环境变量的方式也不同。以下为 Windows PowerShell 的示例
-$env:SERVER_PORT="9999"
+$env:SERVER_PORT="30000"
 $env:SERVER_ENV="dev"
 $env:SERVER_ROOT_URL="kirakira.moe"
 ...
@@ -75,8 +75,8 @@ npm run dev-hot
 
 
 ### 4. 检查
-成功执行以上命令后，您应该会获得一个监听 9999（或您在环境变量中自定义的）端口的 KIRAKIRA-Rosales 开发服务器。🎉
-在您的浏览器中输入 https://localhost:9999 即可测试运行状态。如果已经正常启动完毕，应当可以看到 “Hello World” 或类似字样。
+成功执行以上命令后，您应该会获得一个监听 30000（或您在环境变量中自定义的）端口的 KIRAKIRA-Rosales 开发服务器。🎉
+在您的浏览器中输入 https://localhost:30000 即可测试运行状态。如果已经正常启动完毕，应当可以看到 “Hello World” 或类似字样。
 
 在此基础上，您可以编写、贡献代码，参与 KIRAKIRA 项目开发。
 
@@ -177,7 +177,7 @@ await next()
 这一行代码的作用是等待下一个中间件执行完成，如果没有下一个，则完成请求并将响应返回给客户端。
 
 以上便是 KIRAKIRA-Rosales 通过 Koa 响应一个网络请求的最简单的流程。
-打开您的浏览器，在地址栏输入`https://localhost:9999?something=Beautiful` 后回车，您将会在页面中看到 `Hello Beautiful World` 字样。🎉
+打开您的浏览器，在地址栏输入`https://localhost:30000?something=Beautiful` 后回车，您将会在页面中看到 `Hello Beautiful World` 字样。🎉
 
 
 ### 路由
@@ -227,7 +227,7 @@ HTTP 请求的 URL 中可以传递数据。
 使用 URL 传递数据时，本项目倾向于使用 [Parameters (参数)](https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/What_is_a_URL#parameters) 而不是 [Path (路径)](https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Web_mechanics/What_is_a_URL#path_to_resource)，因为 Path 需要动态路由匹配。
 ``` shell
 # 使用 curl 命令向一个带有 Parameters 的 URL 发送 GET 请求
-curl https://localhost:9999?something=Beautiful
+curl https://localhost:30000?something=Beautiful
 ```
 
 > [!IMPORTANT]
@@ -249,7 +249,7 @@ const something = ctx.query.something
 
 ``` shell
 # 使用 curl 命令向一个 URL 发送带有请求体的 POST 请求
-curl -d "param1=value1&param2=value2" -X POST https://localhost:9999/xxxxx
+curl -d "param1=value1&param2=value2" -X POST https://localhost:30000/xxxxx
 ```
 在后端 Controller 函数中，你可以从 ctx 对象中获取请求体数据
 ``` typescript

@@ -11,7 +11,7 @@ export type DbPoolResultsType<T> = {
 	/** 错误信息（如果有的话） */
 	error?: unknown;
 	/** 数据操作的结果数组（如果有的话） */
-	result?: T[];
+	result?: (T & { _id?: string })[];
 }
 
 /**
@@ -25,7 +25,7 @@ export type DbPoolResultType<T> = {
 	/** 错误信息（如果有的话） */
 	error?: unknown;
 	/** 数据操作的结果对象（如果有的话） */
-	result?: T;
+	result?: T & { _id?: string };
 }
 
 /**
@@ -92,7 +92,7 @@ export type UpdateType<T> = {
 // 数据库 Select 投影，相当于 SQL 中的 SELECT
 export type SelectType<T> = {
 	[K in keyof T]?: 1;
-}
+} & { _id?: 0 | 1 };
 
 // 数据库排序，相当于 SQL 中的 ORDER BY
 export type OrderByType<T> = {

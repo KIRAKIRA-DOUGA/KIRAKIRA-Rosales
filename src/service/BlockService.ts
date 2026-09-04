@@ -1,10 +1,10 @@
 import { InferSchemaType, PipelineStage } from "mongoose";
 import safeRegex from 'safe-regex';
 import { AddRegexRequestDto, AddRegexResponseDto, BlockKeywordRequestDto, BlockKeywordResponseDto, BlockTagRequestDto, BlockTagResponseDto, BlockUserByUidRequestDto, BlockUserByUidResponseDto, CheckContentIsBlockedRequestDto, CheckIsBlockedByOtherUserRequestDto, CheckIsBlockedByOtherUserResponseDto, CheckIsBlockedResponseDto, CheckTagIsBlockedRequestDto, CheckUserIsBlockedRequestDto, CheckUserIsBlockedResponseDto, GetBlockListRequestDto, GetBlockListResponseDto, HideUserByUidRequestDto, HideUserByUidResponseDto, RemoveRegexRequestDto, RemoveRegexResponseDto, ShowUserByUidRequestDto, ShowUserByUidResponseDto, UnblockKeywordRequestDto, UnblockKeywordResponseDto, UnblockTagRequestDto, UnblockTagResponseDto, UnblockUserByUidRequestDto, UnblockUserByUidResponseDto } from "../controller/BlockControllerDto.js";
-import { checkUserExistsByUIDService, checkUserTokenByUuidService, getUserUid, getUserUuid } from "./UserService.js";
+import { checkUserBootstrapHintByUid, checkUserExistsByUIDService, checkUserTokenByUuidService, getUserUid, getUserUuid } from "./UserService.js";
 import { QueryType, SelectType } from "../dbPool/DbClusterPoolTypes.js";
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
-import { selectDataFromMongoDB, insertData2MongoDB, deleteDataFromMongoDB, selectDataByAggregateFromMongoDB } from "../dbPool/DbClusterPool.js";
+import { selectDataFromMongoDB, insertData2MongoDB, deleteOneDataFromMongoDB, selectDataByAggregateFromMongoDB } from "../dbPool/DbClusterPool.js";
 import { BlockListSchema, UnblockListSchema } from "../dbPool/schema/BlockSchema.js";
 import { parseInteger } from '../common/ValidTool.js'
 import { logging } from "./loggingService.js";
@@ -464,7 +464,7 @@ export const unBlockUserService = async (unblockUserByUidRequest: UnblockUserByU
 			return { success: false, message: '取消屏蔽用户失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '取消屏蔽用户失败，查询数据失败')
@@ -559,7 +559,7 @@ export const showUserService = async (showUserByUidRequest: ShowUserByUidRequest
 			return { success: false, message: '显示用户失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '显示用户失败，查询数据失败')
@@ -645,7 +645,7 @@ export const unBlockTagService = async (unblockTagRequest: UnblockTagRequestDto,
 			return { success: false, message: '取消屏蔽标签失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '取消屏蔽标签失败，查询数据失败')
@@ -731,7 +731,7 @@ export const unBlockKeywordService = async (unblockKeywordRequest: UnblockKeywor
 			return { success: false, message: '取消屏蔽关键词失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '取消屏蔽关键词失败，查询数据失败')
@@ -817,7 +817,7 @@ export const removeRegexService = async (removeRegexRequest: RemoveRegexRequestD
 			return { success: false, message: '删除正则表达式失败，查询数据失败' }
 		}
 
-		const deleteResult = await deleteDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
+		const deleteResult = await deleteOneDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSchemaInstance, blockListCollectionName, {session})
 		if (!deleteResult) {
 			await abortAndEndSession(session)
 			logging('ERROR', '删除正则表达式失败，查询数据失败')
@@ -995,6 +995,7 @@ export const getBlockListService = async (getBlockListRequest: GetBlockListReque
 type BlockListFilterCategory = 'block-uuid' | 'hide-uuid' | 'keyword' | 'tag-id' | 'regex'
 /** 设置哪些属性需要使用哪种类型的黑名单过滤，其中 attr 参数**必须**为开发者硬编码的安全字段，**禁止**由用户传入 */
 type BlockListAttrs = { attr: string, category: BlockListFilterCategory }[]
+type BlockListFilterBuilderAuthenticator = { uuid?: string, token?: string } | { uid?: number, userDataBootstrapHint?: string }
 /** 黑名单功能的附加字段 Project */
 type AdditionalFieldsProject = {
 	/** 是否被其他用户屏蔽 */
@@ -1002,6 +1003,7 @@ type AdditionalFieldsProject = {
 }
 /** 返回值，一个构建好的 Monogoose Pipeline 查询 */
 type BlockListFilterResult = { success: boolean, filter: PipelineStage.Match[], additionalFields: AdditionalFieldsProject }
+
 /**
  * 构建 Mongoose Pipeline 黑名单过滤器
  * @param attrs 哪些属性需要过滤，以及使用的过滤方式
@@ -1009,18 +1011,36 @@ type BlockListFilterResult = { success: boolean, filter: PipelineStage.Match[], 
  * @param token 用户 Token
  * @returns Mongoose Pipeline 黑名单过滤器
  */
-export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, uuid?: string, token?: string): Promise<BlockListFilterResult> => {
+export const buildBlockListMongooseFilter = async (attrs: BlockListAttrs, authenticator: BlockListFilterBuilderAuthenticator): Promise<BlockListFilterResult> => {
 	// MEME: Is that a dog...?
 	try {
-		if (!uuid || !token) {
-			return { success: false, filter: [], additionalFields: { } }
+		let uuid: string | undefined = undefined
+
+		if ('uuid' in authenticator && 'token' in authenticator) {
+			if (!(await checkUserTokenByUuidService(authenticator.uuid, authenticator.token)).success) {
+				logging('ERROR', '构建黑名单过滤器失败，用户 Token 不合法')
+				return { success: false, filter: [], additionalFields: { } }
+			}
+			uuid = authenticator.uuid
 		}
 
-		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '构建黑名单过滤器失败，用户 Token 不合法')
-			return { success: false, filter: [], additionalFields: { } }
+		if ('uid' in authenticator && 'userDataBootstrapHint' in authenticator) {
+			if (!await checkUserBootstrapHintByUid(authenticator.uid, authenticator.userDataBootstrapHint)) {
+				logging('ERROR', '构建黑名单过滤器失败，用户 userDataBootstrapHint 不合法')
+				return { success: false, filter: [], additionalFields: { } }
+			}
+			const uuidResult = await getUserUuid(authenticator.uid)
+			if (!uuidResult) {
+				logging('ERROR', '构建黑名单过滤器失败，使用 uid 获取 uuid 失败')
+				return { success: false, filter: [], additionalFields: { } }
+			}
+			uuid = uuidResult
 		}
 
+		if (!uuid) {
+			logging('ERROR', '构建黑名单过滤器失败，未提供合法的用户凭证')
+			return { success: false, filter: [], additionalFields: { } }
+		}
 		const { collectionName: blockListCollectionName, schemaInstance: blockListSchemaInstance } = BlockListSchema
 		type BlockListSchemaType = InferSchemaType<typeof blockListSchemaInstance>
 

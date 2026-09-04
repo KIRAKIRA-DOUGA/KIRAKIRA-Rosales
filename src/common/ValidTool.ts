@@ -19,6 +19,26 @@ export const validateNameField = (fieldValue) => {
 }
 
 /**
+ * 限制数量最大大小
+ * @param size 数量大小
+ * @returns 限制后的数量大小
+ */
+export const limitSize = (field: string, max: number): number => {
+	const MAX_SIZE = max
+	const raw = field as any
+	let n = Number(raw)
+	if (!Number.isFinite(n) || Number.isNaN(n)) {
+		n = Number.parseInt(String(raw), 10)
+	}
+	if (!Number.isFinite(n) || Number.isNaN(n)) {
+		n = Number.MAX_SAFE_INTEGER
+	}
+	n = Math.trunc(n)
+	n = Math.min(n, MAX_SIZE)
+	return n
+}
+
+/**
  * 限制页面数量最大大小
  * @param pageSize 页面大小
  * @returns 限制后的页面大小
