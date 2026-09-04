@@ -48,6 +48,12 @@ import { emitVideoUpvoteController, cancelVideoUpvoteController, emitVideoDownvo
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
 import { getStgEnvBackEndSecretController } from '../controller/ConsoleSecretController.js'
 import { addNewUid2FeedGroupController, administratorApproveFeedGroupInfoChangeController, administratorDeleteFeedGroupController, createFeedGroupController, createOrEditFeedGroupInfoController, deleteFeedGroupController, followingUploaderController, getFeedContentController, getFeedGroupCoverUploadSignedUrlController, getFeedGroupListController, getFollowerListController, getFollowingListController, getFollowStatsController, removeUidFromFeedGroupController, unfollowingUploaderController } from '../controller/FeedController.js'
+import {
+	getUnreadUpvoteNotificationCountController,
+	getUpvoteNotificationListController,
+	markAllUpvoteNotificationReadController,
+	markUpvoteNotificationReadByIdsController,
+} from '../controller/UpvoteNotificationController.js'
 import { addRegexController, blockKeywordController, blockTagController, blockUserByUidController, getBlockListController, hideUserByUidController, removeRegexController, showUserByUidController, unblockKeywordController, unblockTagController, unblockUserByUidController } from '../controller/BlockController.js'
 
 const router = new Router()
@@ -792,6 +798,33 @@ router.get('/feed/follower/list', getFollowerListController) // 获取用户粉�
 
 
 
+
+
+
+
+router.get('/notification/upvote/list', getUpvoteNotificationListController) // 获取点赞通知列表（未读/已读/全部）
+// https://localhost:30000/notification/upvote/list?page=1&pageSize=20
+// 可选 Query: isRead=true|false（不传则返回全部未软删）；category=video|video_comment
+// cookie: uuid, token
+
+router.get('/notification/upvote/unreadCount', getUnreadUpvoteNotificationCountController) // 获取未读点赞通知数
+// https://localhost:30000/notification/upvote/unreadCount
+// 可选 Query: category=video|video_comment
+// cookie: uuid, token
+
+router.post('/notification/upvote/markRead', markUpvoteNotificationReadByIdsController) // 按通知编号标记已读
+// https://localhost:30000/notification/upvote/markRead
+// cookie: uuid, token
+// {
+// 	"notificationIds": ["xxxxxxxx", "yyyyyyyy"]
+// }
+
+router.post('/notification/upvote/markAllRead', markAllUpvoteNotificationReadController) // 全部已读（仅可见且未软删）
+// https://localhost:30000/notification/upvote/markAllRead
+// cookie: uuid, token
+// {
+// 	"category": "video" // 可选
+// }
 
 
 

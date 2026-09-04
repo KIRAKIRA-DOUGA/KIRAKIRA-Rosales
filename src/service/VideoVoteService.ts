@@ -4,7 +4,78 @@ import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { VideoVoteRequestDto, VideoUpvoteResponseDto, VideoDownvoteResponseDto } from '../controller/VideoVoteControllerDto.js'
 import { VideoUpvoteSchema, VideoDownvoteSchema } from '../dbPool/schema/VideoVoteSchema.js'
+import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { createOrRestoreUpvoteNotificationService, softDeleteUpvoteNotificationService } from './UpvoteNotificationService.js'
+
+/**
+ * 根据 videoId 获取上传者信息
+ */
+const getVideoUploaderByVideoId = async (videoId: number): Promise<{ uploaderUUID: string; uploaderId: number } | undefined> => {
+	try {
+		const { collectionName, schemaInstance } = VideoSchema
+		type Video = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<Video> = { videoId }
+		const select: SelectType<Video> = { uploaderUUID: 1, uploaderId: 1 }
+		const result = await selectDataFromMongoDB<Video>(where, select, schemaInstance, collectionName)
+		if (result.success && result.result && result.result.length === 1) {
+			const video = result.result[0]
+			if (video.uploaderUUID && typeof video.uploaderId === 'number') {
+				return { uploaderUUID: video.uploaderUUID, uploaderId: video.uploaderId }
+			}
+		}
+		return undefined
+	} catch (error) {
+		logging('ERROR', '获取视频上传者失败', error, { videoId })
+		return undefined
+	}
+}
+
+/**
+ * 视频点赞成功后写入/恢复点赞通知（失败只记日志，不影响点赞结果）
+ */
+const notifyVideoUpvote = async (videoId: number, likerUuid: string, likerUid: number): Promise<void> => {
+	try {
+		const uploader = await getVideoUploaderByVideoId(videoId)
+		if (!uploader) {
+			logging('WARN', '视频点赞通知跳过，未找到上传者', undefined, { videoId, likerUuid })
+			return
+		}
+		const notifyResult = await createOrRestoreUpvoteNotificationService({
+			receiverUuid: uploader.uploaderUUID,
+			receiverUid: uploader.uploaderId,
+			likerUuid,
+			likerUid,
+			category: 'video',
+			videoId,
+		})
+		if (!notifyResult.success) {
+			logging('WARN', '视频点赞通知写入失败', undefined, { videoId, likerUuid, notifyResult })
+		}
+	} catch (error) {
+		logging('WARN', '视频点赞通知写入异常', error, { videoId, likerUuid })
+	}
+}
+
+/**
+ * 取消视频点赞后软删通知
+ */
+const softDeleteVideoUpvoteNotification = async (videoId: number, likerUuid: string): Promise<void> => {
+	try {
+		const uploader = await getVideoUploaderByVideoId(videoId)
+		if (!uploader) {
+			return
+		}
+		await softDeleteUpvoteNotificationService({
+			receiverUuid: uploader.uploaderUUID,
+			likerUuid,
+			category: 'video',
+			videoId,
+		})
+	} catch (error) {
+		logging('WARN', '取消视频点赞通知软删异常', error, { videoId, likerUuid })
+	}
+}
 
 /**
  * 用户给视频点赞
@@ -50,10 +121,27 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 			}
 			const existingVoteResult = await selectDataFromMongoDB<VideoUpvote>(existingVoteWhere, existingVoteSelect, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 
+			const insertNewUpvoteAndNotify = async (): Promise<VideoUpvoteResponseDto> => {
+				const videoUpvote: VideoUpvote = {
+					videoId,
+					UUID,
+					uid,
+					upvoteTime: nowDate,
+					invalidFlag: false,
+					editDateTime: nowDate,
+				}
+				const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+				if (!insertResult || !insertResult.success) {
+					logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
+					return { success: false, message: '视频点赞失败，存储数据失败' }
+				}
+				await notifyVideoUpvote(videoId, UUID, uid)
+				return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
+			}
+
 			if (!existingVoteResult?.result || existingVoteResult.result?.length !== 1) {
-				// 没有记录，先对是否点踩进行查询
+				// 没有记录：若已点踩则先取消点踩再点赞；否则直接点赞
 				if (await checkUserHasDownvoted(videoId, uuid)) {
-					// 用户已点踩，取消点踩并进行点赞
 					const cancelVideoDownvoteRequest: VideoVoteRequestDto = {
 						videoId,
 					}
@@ -62,23 +150,8 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 						logging('ERROR', '视频点赞失败，但取消点踩失败', undefined, { emitVideoUpvoteRequest, uuid })
 						return { success: false, message: '视频点赞失败，但取消点踩失败' }
 					}
-
-					const videoUpvote: VideoUpvote = {
-						videoId,
-						UUID,
-						uid,
-						upvoteTime: nowDate,
-						invalidFlag: false,
-						editDateTime: nowDate,
-					}
-
-					const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
-					if (!insertResult || !insertResult.success) {
-						logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
-						return { success: false, message: '视频点赞失败，存储数据失败' }
-					}
-					return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
 				}
+				return await insertNewUpvoteAndNotify()
 			}
 
 			if (existingVoteResult.result[0].invalidFlag) {
@@ -89,6 +162,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 					logging('ERROR', '视频点赞失败，更新已有记录失败', undefined, { emitVideoUpvoteRequest, uuid })
 					return { success: false, message: '视频点赞失败，更新记录失败' }
 				}
+				await notifyVideoUpvote(videoId, UUID, uid)
 				return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
 			}
 			// 已有记录，且有效，提示用户已点赞
@@ -153,6 +227,7 @@ export const cancelVideoUpvoteService = async (cancelVideoUpvoteRequest: VideoVo
 				logging('ERROR', '取消视频点赞失败：更新记录失败', undefined, { cancelVideoUpvoteRequest, uid })
 				return { success: false, message: '取消视频点赞失败：更新记录失败' }
 			}
+			await softDeleteVideoUpvoteNotification(videoId, uuid)
 			return { success: true, message: '取消视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
 		} catch (error) {
 			logging('ERROR', '取消视频点赞失败，数据库操作出错：', error, { cancelVideoUpvoteRequest, uuid })

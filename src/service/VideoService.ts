@@ -21,6 +21,7 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
+import { cascadeSoftDeleteUpvoteNotificationsByVideoIdService } from './UpvoteNotificationService.js'
 
 /**
  * 上传视频
@@ -937,6 +938,11 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 							if (deleteResult.success && deleteFromElasticsearchResult) {
 								await session.commitTransaction()
 								session.endSession()
+								try {
+									await cascadeSoftDeleteUpvoteNotificationsByVideoIdService(videoId)
+								} catch (notifyError) {
+									logging('WARN', '删除视频成功，但级联软删点赞通知失败', notifyError, { videoId })
+								}
 								return { success: true, message: '删除视频成功' }
 							} else {
 								if (session.inTransaction()) {

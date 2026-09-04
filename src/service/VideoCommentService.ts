@@ -9,6 +9,11 @@ import { checkUserTokenByUuidService, checkUserTokenService, getUserInfoByUidSer
 import { buildBlockListMongooseFilter } from './BlockService.js'
 import { checkVideoBlockedByKvidService } from './VideoService.js'
 import { logging } from './loggingService.js'
+import {
+	cascadeSoftDeleteUpvoteNotificationsByCommentIdService,
+	createOrRestoreUpvoteNotificationService,
+	softDeleteUpvoteNotificationService,
+} from './UpvoteNotificationService.js'
 
 /**
  * 用户发送视频评论
@@ -492,6 +497,24 @@ export const emitVideoCommentUpvoteService = async (emitVideoCommentUpvoteReques
 							try {
 								const updateResult = await findOneAndPlusByMongodbId(commentId, upvoteBy, correctVideoCommentSchema, videoCommentCollectionName)
 								if (updateResult && updateResult.success) {
+									// 写入/恢复评论点赞通知（接收者为评论作者）
+									try {
+										const commentAuthor = await getVideoCommentAuthorById(commentId)
+										if (commentAuthor) {
+											await createOrRestoreUpvoteNotificationService({
+												receiverUuid: commentAuthor.UUID,
+												receiverUid: commentAuthor.uid,
+												likerUuid: UUID,
+												likerUid: uid,
+												category: 'video_comment',
+												videoId,
+												commentId,
+											})
+										}
+									} catch (notifyError) {
+										logging('WARN', '视频评论点赞成功，但通知写入失败', notifyError, { emitVideoCommentUpvoteRequest, uid })
+									}
+
 									if (await checkUserHasDownvoted(commentId, uid)) { // 用户在点赞一个视频评论时，如果用户之前对这个视频评论有点踩，需要将视频评论的点踩取消
 										const cancelVideoCommentDownvoteRequest: CancelVideoCommentDownvoteRequestDto = {
 											id: commentId,
@@ -572,6 +595,21 @@ export const cancelVideoCommentUpvoteService = async (cancelVideoCommentUpvoteRe
 					const updateResult = await updateData4MongoDB(cancelVideoCommentUpvoteWhere, cancelVideoCommentUpvoteUpdate, correctVideoCommentUpvoteSchema, videoCommentUpvoteCollectionName)
 					if (updateResult && updateResult.success && updateResult.result) {
 						if (updateResult.result.matchedCount > 0 && updateResult.result.modifiedCount > 0) {
+							try {
+								const UUID = await getUserUuid(uid)
+								const commentAuthor = await getVideoCommentAuthorById(commentId)
+								if (UUID && commentAuthor) {
+									await softDeleteUpvoteNotificationService({
+										receiverUuid: commentAuthor.UUID,
+										likerUuid: UUID,
+										category: 'video_comment',
+										videoId: cancelVideoCommentUpvoteRequest.videoId,
+										commentId,
+									})
+								}
+							} catch (notifyError) {
+								logging('WARN', '用户取消评论点赞成功，但通知软删失败', notifyError, { cancelVideoCommentUpvoteRequest, uid })
+							}
 							try {
 								const { collectionName: videoCommentCollectionName, schemaInstance: correctVideoCommentSchema } = VideoCommentSchema
 								const upvoteBy = 'upvoteCount'
@@ -970,6 +1008,14 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 
 				await session.commitTransaction()
 				session.endSession()
+				try {
+					const deletedCommentId = deleteSelfVideoCommentSelectResult.result[0]._id?.toString()
+					if (deletedCommentId) {
+						await cascadeSoftDeleteUpvoteNotificationsByCommentIdService(deletedCommentId)
+					}
+				} catch (notifyError) {
+					logging('WARN', '删除视频评论成功，但级联软删点赞通知失败', notifyError, { commentRoute, videoId })
+				}
 				return { success: true, message: '删除视频评论成功' }
 			} catch (error) {
 				if (session.inTransaction()) {
@@ -1085,6 +1131,14 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 
 				await session.commitTransaction()
 				session.endSession()
+				try {
+					const deletedCommentId = deleteSelfVideoCommentSelectResult.result[0]._id?.toString()
+					if (deletedCommentId) {
+						await cascadeSoftDeleteUpvoteNotificationsByCommentIdService(deletedCommentId)
+					}
+				} catch (notifyError) {
+					logging('WARN', '管理员删除视频评论成功，但级联软删点赞通知失败', notifyError, { commentRoute, videoId })
+				}
 				return { success: true, message: '管理员删除视频评论成功' }
 			} catch (error) {
 				if (session.inTransaction()) {
@@ -1104,6 +1158,32 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 	}
 }
 
+
+/**
+ * 根据评论 MongoDB _id 获取评论作者
+ */
+const getVideoCommentAuthorById = async (commentId: string): Promise<{ UUID: string; uid: number } | undefined> => {
+	try {
+		if (!commentId) {
+			return undefined
+		}
+		const { collectionName, schemaInstance } = VideoCommentSchema
+		type VideoComment = InferSchemaType<typeof schemaInstance>
+		const where: QueryType<VideoComment> = { _id: commentId }
+		const select: SelectType<VideoComment> = { UUID: 1, uid: 1 }
+		const result = await selectDataFromMongoDB<VideoComment>(where, select, schemaInstance, collectionName)
+		if (result.success && result.result && result.result.length === 1) {
+			const comment = result.result[0]
+			if (comment.UUID && typeof comment.uid === 'number') {
+				return { UUID: comment.UUID, uid: comment.uid }
+			}
+		}
+		return undefined
+	} catch (error) {
+		logging('ERROR', '获取评论作者失败', error, { commentId })
+		return undefined
+	}
+}
 
 /**
  * 校验发送视频评论数据是否合法
