@@ -1654,7 +1654,7 @@ const checkReceiverImPrivacy = async (receiverUuid: string, senderUuid: string, 
 		type UserSettings = InferSchemaType<typeof schemaInstance>
 		const where: QueryType<UserSettings> = { UUID: receiverUuid }
 		const select: SelectType<UserSettings> = { userPrivaryVisibilitiesSetting: 1 }
-		const settingsResult = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
+		const settingsResult = await selectDataFromMongoDB<UserSettings>(where, select, schemaInstance, collectionName)
 
 		if (!settingsResult.success || !settingsResult.result || settingsResult.result.length === 0) {
 			// 未找到设置，视为无特殊限制
