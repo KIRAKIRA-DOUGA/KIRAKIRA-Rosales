@@ -26,13 +26,13 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 	try {
 		// 验证请求参数
 		if (!checkSendMessageRequest(sendMessageRequest)) {
-			logging('ERROR', '发送消息失败，参数校验失败')
+			logging('ERROR', '发送消息失败，参数校验失败', undefined, { sendMessageRequest, senderUuid })
 			return { success: false, message: '发送消息失败，参数校验失败' }
 		}
 
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(senderUuid, token)).success) {
-			logging('ERROR', '发送消息失败，用户校验失败')
+			logging('ERROR', '发送消息失败，用户校验失败', undefined, { sendMessageRequest, senderUuid })
 			return { success: false, message: '发送消息失败，用户校验失败' }
 		}
 
@@ -41,29 +41,29 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 		// 获取接收者UUID（仅用于内部验证，不暴露）
 		const receiverUuid = await getUserUuid(receiverUid)
 		if (!receiverUuid) {
-			logging('ERROR', '发送消息失败，接收者不存在')
+			logging('ERROR', '发送消息失败，接收者不存在', undefined, { sendMessageRequest, senderUuid, receiverUid })
 			return { success: false, message: '发送消息失败，接收者不存在' }
 		}
 
 		// 不能给自己发消息
 		const senderUid = await getUserUid(senderUuid)
 		if (!senderUid) {
-			logging('ERROR', '发送消息失败，发送者不存在')
+			logging('ERROR', '发送消息失败，发送者不存在', undefined, { sendMessageRequest, senderUuid, receiverUid, receiverUuid })
 			return { success: false, message: '发送消息失败，发送者不存在' }
 		}
 		if (senderUid === receiverUid) {
-			logging('ERROR', '发送消息失败，不能给自己发消息')
+			logging('ERROR', '发送消息失败，不能给自己发消息', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid })
 			return { success: false, message: '发送消息失败，不能给自己发消息' }
 		}
 
 		// 检查接收者是否拉黑了发送者
 		const checkBlockResult = await checkIsBlockedByOtherUserService({ targetUid: receiverUid }, senderUuid, token)
 		if (!checkBlockResult.success) {
-			logging('ERROR', '发送消息失败，检查拉黑状态失败')
+			logging('ERROR', '发送消息失败，检查拉黑状态失败', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid })
 			return { success: false, message: '发送消息失败，检查拉黑状态失败' }
 		}
 		if (checkBlockResult.isBlocked) {
-			logging('ERROR', '发送消息失败，对方已拉黑你')
+			logging('ERROR', '发送消息失败，对方已拉黑你', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid })
 			return { success: false, message: '发送消息失败，对方已拉黑你' }
 		}
 
@@ -74,7 +74,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 		if (!isFollowing) {
 			const hasUnreplied = await checkHasUnrepliedMessage(senderUuid, receiverUuid)
 			if (hasUnreplied) {
-				logging('ERROR', '发送消息失败，对方未回复你的消息，且对方未关注你（最多可发送3条消息）')
+				logging('ERROR', '发送消息失败，对方未回复你的消息，且对方未关注你（最多可发送3条消息）', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, isFollowing })
 				return { success: false, message: '发送消息失败，对方未回复你的消息，且对方未关注你（最多可发送3条消息）' }
 			}
 		}
@@ -82,24 +82,24 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 		// 检查接收者的私信隐私设置
 		const imPrivacyCheck = await checkReceiverImPrivacy(receiverUuid, senderUuid, isFollowing)
 		if (!imPrivacyCheck.allow) {
-			logging('ERROR', imPrivacyCheck.message || '发送消息失败，对方隐私设置不允许私信')
+			logging('ERROR', imPrivacyCheck.message || '发送消息失败，对方隐私设置不允许私信', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, isFollowing })
 			return { success: false, message: imPrivacyCheck.message || '发送消息失败，对方隐私设置不允许私信' }
 		}
 
 		// 验证消息内容
 		if (messageType === IM_MESSAGE_TYPE.text) {
 			if (!content || content.trim().length === 0) {
-				logging('ERROR', '发送消息失败，消息内容不能为空')
+				logging('ERROR', '发送消息失败，消息内容不能为空', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, messageType })
 				return { success: false, message: '发送消息失败，消息内容不能为空' }
 			}
 			if (content.length > 10000) {
-				logging('ERROR', '发送消息失败，消息内容过长')
+				logging('ERROR', '发送消息失败，消息内容过长', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, messageType, contentLength: content.length })
 				return { success: false, message: '发送消息失败，消息内容过长' }
 			}
 		}
 		if (messageType === IM_MESSAGE_TYPE.image) {
 			if (!content || content.trim().length === 0) {
-				logging('ERROR', '发送消息失败，图片内容不能为空')
+				logging('ERROR', '发送消息失败，图片内容不能为空', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, messageType })
 				return { success: false, message: '发送消息失败，图片内容不能为空' }
 			}
 		}
@@ -113,7 +113,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			const conversationResult = await getOrCreateConversation(senderUuid, receiverUid, session)
 			if (!conversationResult.success || !conversationResult.conversation) {
 				await abortAndEndSession(session)
-				logging('ERROR', '发送消息失败，创建会话失败')
+				logging('ERROR', '发送消息失败，创建会话失败', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid })
 				return { success: false, message: '发送消息失败，创建会话失败' }
 			}
 
@@ -146,7 +146,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			const insertMessageResult = await insertData2MongoDB<Message>(messageData, messageSchemaInstance, messageCollectionName, { session })
 			if (!insertMessageResult.success) {
 				await abortAndEndSession(session)
-				logging('ERROR', '发送消息失败，插入消息失败')
+				logging('ERROR', '发送消息失败，插入消息失败', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, conversationId, messageId })
 				return { success: false, message: '发送消息失败，插入消息失败' }
 			}
 
@@ -185,7 +185,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 
 			if (!updateConversationResult.success) {
 				await abortAndEndSession(session)
-				logging('ERROR', '发送消息失败，更新会话失败')
+				logging('ERROR', '发送消息失败，更新会话失败', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, conversationId, messageId })
 				return { success: false, message: '发送消息失败，更新会话失败' }
 			}
 
@@ -196,7 +196,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			throw error
 		}
 	} catch (error) {
-		logging('ERROR', '发送消息失败，未知错误', error)
+		logging('ERROR', '发送消息失败，未知错误', error, { sendMessageRequest, senderUuid })
 		return { success: false, message: '发送消息失败，未知错误' }
 	}
 }
@@ -212,7 +212,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取会话列表失败，用户校验失败')
+			logging('ERROR', '获取会话列表失败，用户校验失败', undefined, { getConversationListRequest, uuid })
 			return { success: false, message: '获取会话列表失败，用户校验失败' }
 		}
 
@@ -220,7 +220,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 		const { page, pageSize } = pagination
 
 		if (!isValidPageNumber(page)) {
-			logging('ERROR', '获取会话列表失败，页码不合法')
+			logging('ERROR', '获取会话列表失败，页码不合法', undefined, { getConversationListRequest, uuid, page, pageSize })
 			return { success: false, message: '获取会话列表失败，页码不合法' }
 		}
 
@@ -472,7 +472,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 		])
 
 		if (!conversationsResult.success) {
-			logging('ERROR', '获取会话列表失败，查询失败')
+			logging('ERROR', '获取会话列表失败，查询失败', undefined, { getConversationListRequest, uuid, page, pageSize })
 			return { success: false, message: '获取会话列表失败，查询失败' }
 		}
 
@@ -524,7 +524,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 
 		return { success: true, message: '获取会话列表成功', result: conversations, totalCount }
 	} catch (error) {
-		logging('ERROR', '获取会话列表失败，未知错误', error)
+		logging('ERROR', '获取会话列表失败，未知错误', error, { getConversationListRequest, uuid })
 		return { success: false, message: '获取会话列表失败，未知错误' }
 	}
 }
@@ -540,12 +540,12 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取消息列表失败，用户校验失败')
+			logging('ERROR', '获取消息列表失败，用户校验失败', undefined, { getMessageListRequest, uuid })
 			return { success: false, message: '获取消息列表失败，用户校验失败' }
 		}
 
 		if (!checkGetMessageListRequest(getMessageListRequest)) {
-			logging('ERROR', '获取消息列表失败，参数校验失败')
+			logging('ERROR', '获取消息列表失败，参数校验失败', undefined, { getMessageListRequest, uuid })
 			return { success: false, message: '获取消息列表失败，参数校验失败' }
 		}
 
@@ -553,7 +553,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		const { page, pageSize } = pagination
 
 		if (!isValidPageNumber(page)) {
-			logging('ERROR', '获取消息列表失败，页码不合法')
+			logging('ERROR', '获取消息列表失败，页码不合法', undefined, { getMessageListRequest, uuid, conversationId, page, pageSize })
 			return { success: false, message: '获取消息列表失败，页码不合法' }
 		}
 
@@ -577,7 +577,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
 
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
-			logging('ERROR', '获取消息列表失败，会话不存在或无权限')
+			logging('ERROR', '获取消息列表失败，会话不存在或无权限', undefined, { getMessageListRequest, uuid, conversationId })
 			return { success: false, message: '获取消息列表失败，会话不存在或无权限' }
 		}
 
@@ -611,7 +611,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 			}
 			const cursorResult = await selectDataFromMongoDB<Message>(cursorWhere, cursorSelect, messageSchemaInstance, messageCollectionName)
 			if (!cursorResult.success || !cursorResult.result || cursorResult.result.length !== 1) {
-				logging('ERROR', '获取消息列表失败，游标消息不存在或无权访问')
+				logging('ERROR', '获取消息列表失败，游标消息不存在或无权访问', undefined, { getMessageListRequest, uuid, conversationId, cursorMessageId })
 				return { success: false, message: '获取消息列表失败，游标消息不存在或无权访问' }
 			}
 			cursorCreatedDateTime = cursorResult.result[0].createdDateTime
@@ -686,7 +686,7 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		const countResult = await selectDataByAggregateFromMongoDB(messageSchemaInstance, messageCollectionName, countPipeline)
 
 		if (!messagesResult.success) {
-			logging('ERROR', '获取消息列表失败，查询失败')
+			logging('ERROR', '获取消息列表失败，查询失败', undefined, { getMessageListRequest, uuid, conversationId, cursorMessageId, page, pageSize })
 			return { success: false, message: '获取消息列表失败，查询失败' }
 		}
 
@@ -738,14 +738,14 @@ export const getMessageListService = async (getMessageListRequest: GetMessageLis
 		if (markAsRead && unreadMessageIds.length > 0) {
 			const markReadResult = await markMessageReadService({ conversationId, messageIds: unreadMessageIds }, uuid, token)
 			if (!markReadResult.success) {
-				logging('ERROR', '获取消息列表失败，标记已读失败')
+				logging('ERROR', '获取消息列表失败，标记已读失败', undefined, { getMessageListRequest, uuid, conversationId, unreadMessageIds })
 				return { success: false, message: markReadResult.message || '获取消息列表失败，标记已读失败' }
 			}
 		}
 
 		return { success: true, message: '获取消息列表成功', result: messages, totalCount }
 	} catch (error) {
-		logging('ERROR', '获取消息列表失败，未知错误', error)
+		logging('ERROR', '获取消息列表失败，未知错误', error, { getMessageListRequest, uuid })
 		return { success: false, message: '获取消息列表失败，未知错误' }
 	}
 }
@@ -761,12 +761,12 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '标记消息已读失败，用户校验失败')
+			logging('ERROR', '标记消息已读失败，用户校验失败', undefined, { markMessageReadRequest, uuid })
 			return { success: false, message: '标记消息已读失败，用户校验失败' }
 		}
 
 		if (!checkMarkMessageReadRequest(markMessageReadRequest)) {
-			logging('ERROR', '标记消息已读失败，参数校验失败')
+			logging('ERROR', '标记消息已读失败，参数校验失败', undefined, { markMessageReadRequest, uuid })
 			return { success: false, message: '标记消息已读失败，参数校验失败' }
 		}
 
@@ -790,7 +790,7 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
 
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
-			logging('ERROR', '标记消息已读失败，会话不存在或无权限')
+			logging('ERROR', '标记消息已读失败，会话不存在或无权限', undefined, { markMessageReadRequest, uuid, conversationId })
 			return { success: false, message: '标记消息已读失败，会话不存在或无权限' }
 		}
 
@@ -868,7 +868,7 @@ export const markMessageReadService = async (markMessageReadRequest: MarkMessage
 			throw error
 		}
 	} catch (error) {
-		logging('ERROR', '标记消息已读失败，未知错误', error)
+		logging('ERROR', '标记消息已读失败，未知错误', error, { markMessageReadRequest, uuid })
 		return { success: false, message: '标记消息已读失败，未知错误' }
 	}
 }
@@ -884,12 +884,12 @@ export const deleteConversationService = async (deleteConversationRequest: Delet
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '删除会话失败，用户校验失败')
+			logging('ERROR', '删除会话失败，用户校验失败', undefined, { deleteConversationRequest, uuid })
 			return { success: false, message: '删除会话失败，用户校验失败' }
 		}
 
 		if (!checkDeleteConversationRequest(deleteConversationRequest)) {
-			logging('ERROR', '删除会话失败，参数校验失败')
+			logging('ERROR', '删除会话失败，参数校验失败', undefined, { deleteConversationRequest, uuid })
 			return { success: false, message: '删除会话失败，参数校验失败' }
 		}
 
@@ -913,7 +913,7 @@ export const deleteConversationService = async (deleteConversationRequest: Delet
 		const conversationResult = await selectDataFromMongoDB<Conversation>(conversationWhere, conversationSelect, conversationSchemaInstance, conversationCollectionName)
 
 		if (!conversationResult.success || !conversationResult.result || conversationResult.result.length === 0) {
-			logging('ERROR', '删除会话失败，会话不存在或无权限')
+			logging('ERROR', '删除会话失败，会话不存在或无权限', undefined, { deleteConversationRequest, uuid, conversationId })
 			return { success: false, message: '删除会话失败，会话不存在或无权限' }
 		}
 
@@ -943,13 +943,13 @@ export const deleteConversationService = async (deleteConversationRequest: Delet
 		)
 
 		if (!updateResult.success) {
-			logging('ERROR', '删除会话失败，更新失败')
+			logging('ERROR', '删除会话失败，更新失败', undefined, { deleteConversationRequest, uuid, conversationId })
 			return { success: false, message: '删除会话失败，更新失败' }
 		}
 
 		return { success: true, message: '删除会话成功' }
 	} catch (error) {
-		logging('ERROR', '删除会话失败，未知错误', error)
+		logging('ERROR', '删除会话失败，未知错误', error, { deleteConversationRequest, uuid })
 		return { success: false, message: '删除会话失败，未知错误' }
 	}
 }
@@ -965,12 +965,12 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '删除消息失败，用户校验失败')
+			logging('ERROR', '删除消息失败，用户校验失败', undefined, { deleteMessageRequest, uuid })
 			return { success: false, message: '删除消息失败，用户校验失败' }
 		}
 
 		if (!checkDeleteMessageRequest(deleteMessageRequest)) {
-			logging('ERROR', '删除消息失败，参数校验失败')
+			logging('ERROR', '删除消息失败，参数校验失败', undefined, { deleteMessageRequest, uuid })
 			return { success: false, message: '删除消息失败，参数校验失败' }
 		}
 
@@ -996,7 +996,7 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
 
 		if (!messageResult.success || !messageResult.result || messageResult.result.length === 0) {
-			logging('ERROR', '删除消息失败，消息不存在或无权限')
+			logging('ERROR', '删除消息失败，消息不存在或无权限', undefined, { deleteMessageRequest, uuid, messageId })
 			return { success: false, message: '删除消息失败，消息不存在或无权限' }
 		}
 
@@ -1024,7 +1024,7 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 		)
 
 		if (!updateResult.success) {
-			logging('ERROR', '删除消息失败，更新失败', undefined, { messageId, uuid })
+			logging('ERROR', '删除消息失败，更新失败', undefined, { deleteMessageRequest, uuid, messageId, conversationId: message.conversationId })
 			return { success: false, message: '删除消息失败，更新失败' }
 		}
 
@@ -1073,7 +1073,7 @@ export const deleteMessageService = async (deleteMessageRequest: DeleteMessageRe
 
 		return { success: true, message: '删除消息成功' }
 	} catch (error) {
-		logging('ERROR', '删除消息失败，未知错误', error)
+		logging('ERROR', '删除消息失败，未知错误', error, { deleteMessageRequest, uuid })
 		return { success: false, message: '删除消息失败，未知错误' }
 	}
 }
@@ -1088,7 +1088,7 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取未读消息总数失败，用户校验失败')
+			logging('ERROR', '获取未读消息总数失败，用户校验失败', undefined, { uuid })
 			return { success: false, message: '获取未读消息总数失败，用户校验失败' }
 		}
 
@@ -1150,7 +1150,7 @@ export const getUnreadMessageCountService = async (uuid: string, token: string):
 
 		return { success: true, message: '获取未读消息总数成功', result: { totalUnreadCount } }
 	} catch (error) {
-		logging('ERROR', '获取未读消息总数失败，未知错误', error)
+		logging('ERROR', '获取未读消息总数失败，未知错误', error, { uuid })
 		return { success: false, message: '获取未读消息总数失败，未知错误' }
 	}
 }
@@ -1166,12 +1166,12 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 	try {
 		// 验证用户token
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '撤回消息失败，用户校验失败')
+			logging('ERROR', '撤回消息失败，用户校验失败', undefined, { recallMessageRequest, uuid })
 			return { success: false, message: '撤回消息失败，用户校验失败' }
 		}
 
 		if (!checkRecallMessageRequest(recallMessageRequest)) {
-			logging('ERROR', '撤回消息失败，参数校验失败')
+			logging('ERROR', '撤回消息失败，参数校验失败', undefined, { recallMessageRequest, uuid })
 			return { success: false, message: '撤回消息失败，参数校验失败' }
 		}
 
@@ -1193,7 +1193,7 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 		const messageResult = await selectDataFromMongoDB<Message>(messageWhere, messageSelect, messageSchemaInstance, messageCollectionName)
 
 		if (!messageResult.success || !messageResult.result || messageResult.result.length === 0) {
-			logging('ERROR', '撤回消息失败，消息不存在或无权限')
+			logging('ERROR', '撤回消息失败，消息不存在或无权限', undefined, { recallMessageRequest, uuid, messageId })
 			return { success: false, message: '撤回消息失败，消息不存在或无权限' }
 		}
 
@@ -1201,7 +1201,7 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 
 		// 检查是否已经撤回
 		if (message.isRecalled) {
-			logging('ERROR', '撤回消息失败，消息已被撤回')
+			logging('ERROR', '撤回消息失败，消息已被撤回', undefined, { recallMessageRequest, uuid, messageId })
 			return { success: false, message: '撤回消息失败，消息已被撤回' }
 		}
 
@@ -1227,13 +1227,13 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 		)
 
 		if (!updateResult.success) {
-			logging('ERROR', '撤回消息失败，更新失败')
+			logging('ERROR', '撤回消息失败，更新失败', undefined, { recallMessageRequest, uuid, messageId })
 			return { success: false, message: '撤回消息失败，更新失败' }
 		}
 
 		return { success: true, message: '撤回消息成功' }
 	} catch (error) {
-		logging('ERROR', '撤回消息失败，未知错误', error)
+		logging('ERROR', '撤回消息失败，未知错误', error, { recallMessageRequest, uuid })
 		return { success: false, message: '撤回消息失败，未知错误' }
 	}
 }
@@ -1247,13 +1247,13 @@ export const recallMessageService = async (recallMessageRequest: RecallMessageRe
 export const getImImageUploadSignedUrlService = async (uuid: string, token: string): Promise<GetImImageUploadSignedUrlResponseDto> => {
 	try {
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，用户校验失败')
+			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，用户校验失败', undefined, { uuid })
 			return { success: false, message: '获取 IM 图片上传预签名 URL 失败，用户校验失败' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，用户不存在')
+			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，用户不存在', undefined, { uuid })
 			return { success: false, message: '获取 IM 图片上传预签名 URL 失败，用户不存在' }
 		}
 
@@ -1261,13 +1261,13 @@ export const getImImageUploadSignedUrlService = async (uuid: string, token: stri
 		const fileName = `im-image-${uid}-${generateSecureRandomString(32)}-${now}`
 		const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
 		if (!signedUrl) {
-			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，无法生成上传 URL')
+			logging('ERROR', '获取 IM 图片上传预签名 URL 失败，无法生成上传 URL', undefined, { uuid, uid, fileName })
 			return { success: false, message: '获取 IM 图片上传预签名 URL 失败，无法生成上传 URL' }
 		}
 
 		return { success: true, message: '获取 IM 图片上传预签名 URL 成功', result: { fileName, signedUrl } }
 	} catch (error) {
-		logging('ERROR', '获取 IM 图片上传预签名 URL 失败，未知错误', error)
+		logging('ERROR', '获取 IM 图片上传预签名 URL 失败，未知错误', error, { uuid })
 		return { success: false, message: '获取 IM 图片上传预签名 URL 失败，未知错误' }
 	}
 }
@@ -1351,7 +1351,7 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		const receiverReplyCount = receiverReplyResult.result?.[0]?.totalCount ? receiverReplyResult.result[0].totalCount : 0
 		return receiverReplyCount === 0
 	} catch (error) {
-		logging('ERROR', '检查是否有未回复消息失败，', error, { senderUuid, receiverUuid })
+		logging('ERROR', '检查是否有未回复消息失败', error, { senderUuid, receiverUuid })
 		return true
 	}
 }
@@ -1465,7 +1465,7 @@ const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: nu
 			throw error
 		}
 	} catch (error) {
-		logging('ERROR', '获取或创建会话失败，', error, { currentUserUuid, otherUserUid })
+		logging('ERROR', '获取或创建会话失败', error, { currentUserUuid, otherUserUid })
 		return { success: false }
 	}
 }
