@@ -75,9 +75,9 @@ export const searchVideoTagService = async (searchVideoTagRequest: SearchVideoTa
 			type VideoTag = InferSchemaType<typeof schemaInstance>
 
 			const regex = new RegExp(searchVideoTagRequest.tagNameSearchKey, 'i') // 忽略大小写
-			const where: QueryType<VideoTag> = {
+			const where = {
 				'tagNameList.tagName.name': { $regex: regex },
-			}
+			} as QueryType<VideoTag>
 			const select: SelectType<VideoTag> = {
 				tagId: 1,
 				tagNameList: 1,

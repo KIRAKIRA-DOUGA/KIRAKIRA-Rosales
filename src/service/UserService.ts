@@ -2921,7 +2921,7 @@ export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest:
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
 		const where: QueryType<UserAuth> = {
-			uuid,
+			UUID: uuid,
 		}
 		const select: SelectType<UserAuth> = {
 			UUID: 1,
@@ -4401,6 +4401,7 @@ const ALLOWED_PRIVARY_ID = [
 	'privary.follow', // 关注
 	'privary.fans', // 粉丝
 	'privary.favorites', // 收藏
+	'privary.im', // 聊天
 ]
 
 /**
