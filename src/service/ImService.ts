@@ -1,5 +1,5 @@
 import { InferSchemaType, PipelineStage } from 'mongoose'
-import { SendMessageRequestDto, SendMessageResponseDto, GetConversationListRequestDto, GetConversationListResponseDto, GetMessageListRequestDto, GetMessageListResponseDto, MarkMessageReadRequestDto, MarkMessageReadResponseDto, DeleteConversationRequestDto, DeleteConversationResponseDto, DeleteMessageRequestDto, DeleteMessageResponseDto, GetUnreadMessageCountResponseDto, GetImImageUploadSignedUrlResponseDto, RecallMessageRequestDto, RecallMessageResponseDto, ConversationInfo, MessageInfo } from '../controller/ImControllerDto.js'
+import { SendMessageRequestDto, SendMessageResponseDto, GetConversationListRequestDto, GetConversationListResponseDto, GetMessageListRequestDto, GetMessageListResponseDto, MarkMessageReadRequestDto, MarkMessageReadResponseDto, DeleteConversationRequestDto, DeleteConversationResponseDto, DeleteMessageRequestDto, DeleteMessageResponseDto, GetUnreadMessageCountResponseDto, GetImImageUploadSignedUrlResponseDto, RecallMessageRequestDto, RecallMessageResponseDto, ConversationInfo, MessageInfo, ConversationFilter, CONVERSATION_FILTER_VALUES } from '../controller/ImControllerDto.js'
 import { ImConversationSchema, ImMessageSchema, IM_MESSAGE_TYPE } from '../dbPool/schema/ImSchema.js'
 import { UserSettingsSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserService.js'
@@ -201,6 +201,30 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 	}
 }
 
+/** 根据 conversationFilter 生成关注关系筛选条件 */
+const buildFollowFilterConditions = (conversationFilter: ConversationFilter | undefined): Record<string, unknown>[] => {
+	switch (conversationFilter) {
+		case 'following':
+			return [{ iFollowOther: true }]
+		case 'notFollowing':
+			return [{ iFollowOther: false }]
+		case 'follower':
+			return [{ otherFollowsMe: true }]
+		case 'notFollower':
+			return [{ otherFollowsMe: false }]
+		case 'followingAndFollower':
+			return [{ iFollowOther: true }, { otherFollowsMe: true }]
+		case 'followingAndNotFollower':
+			return [{ iFollowOther: true }, { otherFollowsMe: false }]
+		case 'notFollowingAndFollower':
+			return [{ iFollowOther: false }, { otherFollowsMe: true }]
+		case 'notFollowingAndNotFollower':
+			return [{ iFollowOther: false }, { otherFollowsMe: false }]
+		default:
+			return []
+	}
+}
+
 /**
  * 获取会话列表
  * @param getConversationListRequest 获取会话列表的请求载荷
@@ -216,7 +240,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 			return { success: false, message: '获取会话列表失败，用户校验失败' }
 		}
 
-		const { pagination, isFollowing, isFollower } = getConversationListRequest
+		const { pagination, conversationFilter } = getConversationListRequest
 		const { page, pageSize } = pagination
 
 		if (!isValidPageNumber(page)) {
@@ -224,18 +248,16 @@ export const getConversationListService = async (getConversationListRequest: Get
 			return { success: false, message: '获取会话列表失败，页码不合法' }
 		}
 
+		if (conversationFilter !== undefined && !CONVERSATION_FILTER_VALUES.includes(conversationFilter)) {
+			logging('ERROR', '获取会话列表失败，conversationFilter 不合法', undefined, { getConversationListRequest, uuid, conversationFilter })
+			return { success: false, message: '获取会话列表失败，conversationFilter 不合法' }
+		}
+
 		const skip = (page - 1) * pageSize
 
 		const { collectionName: conversationCollectionName, schemaInstance: conversationSchemaInstance } = ImConversationSchema
 
-		// 根据 query 生成关注筛选条件（未传则不过滤）
-		const followFilterConditions: Record<string, unknown>[] = []
-		if (isFollowing !== undefined) {
-			followFilterConditions.push({ iFollowOther: isFollowing })
-		}
-		if (isFollower !== undefined) {
-			followFilterConditions.push({ otherFollowsMe: isFollower })
-		}
+		const followFilterConditions = buildFollowFilterConditions(conversationFilter)
 
 		// 构建查询管道
 		const pipeline: PipelineStage[] = [
@@ -313,7 +335,7 @@ export const getConversationListService = async (getConversationListRequest: Get
 					otherFollowsMe: { $gt: [{ $size: '$otherFollowsMeData' }, 0] },
 				},
 			},
-			// 根据 isFollowing/isFollower 做筛选（发生在分页之前，保证 pageSize 尽量填满）
+			// 根据 conversationFilter 做筛选（发生在分页之前，保证 pageSize 尽量填满）
 			...(followFilterConditions.length > 0 ? [{
 				$match: {
 					$and: followFilterConditions,

@@ -924,13 +924,12 @@ router.post('/im/sendMessage', sendMessageController) // 发送消息
 // messageType 为 "image" 时，content 为图片 fileName 或 CDN URL（与头像上传一致，由客户端在 sendMessage 时传入）
 
 router.get('/im/conversationList', getConversationListController) // 获取会话列表
-// https://localhost:9999/im/conversationList?page=1&pageSize=20&isFollowing=true&isFollower=false
+// https://localhost:9999/im/conversationList?page=1&pageSize=20&conversationFilter=followingAndFollower
 // cookie: uuid, token
 // Query:
 // page
 // pageSize
-// isFollowing // 可选：true=只看我关注的，false=只看我未关注的
-// isFollower  // 可选：true=只看关注我的，false=只看未关注我的
+// conversationFilter // 可选：following | notFollowing | follower | notFollower | followingAndFollower | followingAndNotFollower | notFollowingAndFollower | notFollowingAndNotFollower
 
 router.get('/im/messageList', getMessageListController) // 获取消息列表
 // https://localhost:9999/im/messageList?conversationId=conv_xxx_yyy&page=1&pageSize=20&markAsRead=true

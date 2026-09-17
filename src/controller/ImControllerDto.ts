@@ -29,6 +29,29 @@ export type SendMessageResponseDto = {
 	}
 }
 
+/** 会话列表关注关系筛选 */
+export type ConversationFilter =
+	| 'following' // 我关注的
+	| 'notFollowing' // 我未关注的
+	| 'follower' // 关注我的
+	| 'notFollower' // 未关注我的
+	| 'followingAndFollower' // 我关注的且关注我的
+	| 'followingAndNotFollower' // 我关注的且未关注我的
+	| 'notFollowingAndFollower' // 我未关注的且关注我的
+	| 'notFollowingAndNotFollower' // 我未关注的且未关注我的
+
+/** 合法的 conversationFilter 取值 */
+export const CONVERSATION_FILTER_VALUES: readonly ConversationFilter[] = [
+	'following',
+	'notFollowing',
+	'follower',
+	'notFollower',
+	'followingAndFollower',
+	'followingAndNotFollower',
+	'notFollowingAndFollower',
+	'notFollowingAndNotFollower',
+]
+
 /**
  * 获取会话列表的请求载荷
  */
@@ -40,10 +63,8 @@ export type GetConversationListRequestDto = {
 		/** 一页显示多少条 */
 		pageSize: number
 	}
-	/** 是否只看“我关注的人”的会话（true=只看我关注的，false=只看我未关注的，不传=不过滤） */
-	isFollowing?: boolean
-	/** 是否只看“关注我的人”的会话（true=只看关注我的，false=只看未关注我的，不传=不过滤） */
-	isFollower?: boolean
+	/** 按关注关系筛选会话（不传=不过滤） */
+	conversationFilter?: ConversationFilter
 }
 
 /**
