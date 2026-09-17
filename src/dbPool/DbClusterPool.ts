@@ -1,6 +1,6 @@
 import { ReadPreferenceMode } from 'mongodb'
 import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
-import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
+import { CountDocumentsResultType, DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
 import { logging } from '../service/loggingService.js'
@@ -313,14 +313,49 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 }
 
 /**
+ * 在 MongoDB 数据库中统计符合条件的文档数量
+ * @param where 查询条件
+ * @param schema MongoDB Schema 对象
+ * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
+ * @param options 设置项
+ * @returns 统计结果
+ */
+export const countDocumentsFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise<CountDocumentsResultType> => {
+	try {
+		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
+		if (options?.session) {
+			options.readPreference = 'primary'
+		}
+
+		let mongoModel: Model<T>
+		// 检查模型是否已存在
+		if (mongoose.models[collectionName]) {
+			mongoModel = mongoose.models[collectionName]
+		} else {
+			mongoModel = mongoose.model<T>(collectionName, schema)
+		}
+
+		try {
+			const result = await mongoModel.countDocuments(where, options)
+			return { success: true, message: '数据统计成功', result }
+		} catch (error) {
+			logging('ERROR', '数据统计失败：', error, undefined, { recordingLogs: false })
+			throw { success: false, message: '数据统计失败', error }
+		}
+	} catch (error) {
+		logging('ERROR', 'countDocumentsFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
+		throw { success: false, message: '数据统计失败，countDocumentsFromMongoDB 中发生错误：', error }
+	}
+}
+
+/**
  * 在 MongoDB 数据库中使用 Aggregate 查找数据
  * @param schema MongoDB Schema 对象
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @param props 聚合查询的步骤
- * @param session 可选事务 session
  * @returns 查询状态和结果
  */
-export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, collectionName: string, props: PipelineStage[], session?: ClientSession): Promise< DbPoolResultsType<T> > => {
+export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, collectionName: string, props: PipelineStage[]): Promise< DbPoolResultsType<T> > => {
 	try {
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
@@ -331,11 +366,7 @@ export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, col
 		}
 
 		try {
-			const aggregate = mongoModel.aggregate(props)
-			if (session) {
-				aggregate.session(session)
-			}
-			const result = (await aggregate) as T[]
+			const result = (await mongoModel.aggregate(props)) as T[]
 			return { success: true, message: '数据聚合查询成功', result }
 		} catch (error) {
 			logging('ERROR', '数据聚合查询失败：', error, undefined, { recordingLogs: false })

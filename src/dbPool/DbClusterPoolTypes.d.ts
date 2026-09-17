@@ -49,6 +49,16 @@ export type UpdateResultType = {
 }
 
 /**
+ * countDocuments 统计数量的结果
+ */
+export type CountDocumentsResultType = {
+	success: boolean;
+	message: string;
+	error?: unknown;
+	result?: number;
+}
+
+/**
  * MongoDB 可用的查询条件
  */
 type MongoDBConditionsType<T> = {

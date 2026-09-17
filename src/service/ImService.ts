@@ -4,7 +4,7 @@ import { ImConversationSchema, ImMessageSchema, IM_MESSAGE_TYPE } from '../dbPoo
 import { UserSettingsSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserTokenByUuidService, getUserUuid, getUserUid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
-import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
+import { selectDataFromMongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, countDocumentsFromMongoDB, findOneAndUpdateData4MongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { createAndStartSession, commitAndEndSession, abortAndEndSession } from '../common/MongoDBSessionTool.js'
 import { ClientSession } from 'mongoose'
 import { checkIsBlockedByOtherUserService } from './BlockService.js'
@@ -1563,16 +1563,13 @@ const countUnreadMessagesForReceiver = async (
 		isRead: false,
 		receiverDeleted: false,
 	}
-	const unreadResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(
+	const unreadResult = await countDocumentsFromMongoDB(
+		unreadWhere,
 		messageSchemaInstance,
 		messageCollectionName,
-		[
-			{ $match: unreadWhere as PipelineStage.Match['$match'] },
-			{ $count: 'totalCount' },
-		],
-		session,
+		session ? { session } : undefined,
 	)
-	return unreadResult.result?.[0]?.totalCount ?? 0
+	return unreadResult.result ?? 0
 }
 
 /**
