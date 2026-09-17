@@ -2921,7 +2921,7 @@ export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest:
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
 		const where: QueryType<UserAuth> = {
-			uuid,
+			UUID: uuid,
 		}
 		const select: SelectType<UserAuth> = {
 			UUID: 1,
