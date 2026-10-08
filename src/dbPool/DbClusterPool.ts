@@ -4,6 +4,7 @@ import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
 import { logging } from '../service/loggingService.js'
+import { buildMongoDBConnectionConfig, MongoDBConfigurationError } from './MongoDBConnectionConfig.js'
 
 /**
  * 虚拟属性，用于关联查询
@@ -63,55 +64,11 @@ export type DbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> =
  */
 export const connectMongoDBCluster = async (): Promise<void> => {
 	try {
-		const databaseProtocol = process.env.MONGODB_PROTOCOL
-		const databaseHost = process.env.MONGODB_CLUSTER_HOST
-		const databaseTlsCa = process.env.MONGODB_TLS_CA_BASE64 ? Buffer.from(process.env.MONGODB_TLS_CA_BASE64, 'base64').toString('utf-8') : ''
-		const databaseTlsCert = process.env.MONGODB_TLS_CERT_BASE64 ? Buffer.from(process.env.MONGODB_TLS_CERT_BASE64, 'base64').toString('utf-8') : ''
-		const databaseTlsKey = process.env.MONGODB_TLS_KEY_BASE64 ? Buffer.from(process.env.MONGODB_TLS_KEY_BASE64, 'base64').toString('utf-8') : ''
-		const databaseName = process.env.MONGODB_NAME
-		const databaseUsername = process.env.MONGODB_USERNAME
-		const databasePassword = process.env.MONGODB_PASSWORD
-
-		if (!databaseHost) {
-			logging('ERROR', '创建数据库连接失败， databaseHost 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
-		}
-		if (!databaseName) {
-			logging('ERROR', '创建数据库连接失败， databaseName 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
-		}
-		if (!databaseUsername) {
-			logging('ERROR', '创建数据库连接失败， databaseUsername 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
-		}
-		if (!databasePassword) {
-			logging('ERROR', '创建数据库连接失败， databasePassword 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
-		}
-
-		const protocol = databaseProtocol === 'mongodb+srv' ? 'mongodb+srv' : 'mongodb'
-		const mongoURL = `${protocol}://${databaseUsername}:${databasePassword}@${databaseHost}/${databaseName}?authSource=admin`
-
-		const connectionOptions = {
-			readPreference: ReadPreferenceMode.secondaryPreferred, // 默认的读偏好为优先从副本中读取，在某些情况下会覆盖这个设置，比如说使用事务时会优先从主读取。
-		}
-
-		if (databaseProtocol === 'mongodb+srv' && !databaseTlsCa) {
-			connectionOptions['tlsAllowInvalidCertificates'] = true
-			logging('WARN', "Your MongoDB connection protocol is 'mongodb+srv', but can not find any TLS credentials. Communications with the database may be eavesdropped!", undefined, undefined, { recordingLogs: false })
-		}
-
-		if (databaseTlsCa && databaseTlsCert && databaseTlsKey) {
-			connectionOptions['tls'] = true
-			connectionOptions['ca'] = databaseTlsCa
-			connectionOptions['cert'] = databaseTlsCert
-			connectionOptions['key'] = databaseTlsKey
-			connectionOptions['tlsAllowInvalidCertificates'] = false
-		}
+		const { uri, options } = buildMongoDBConnectionConfig()
 
 		try {
 			mongoose.set('strictQuery', true) // 设为 true 的话，如果在查询时传入了 schema 定义的字段以外的字段，则会忽略这些字段
-			await mongoose.connect(mongoURL, connectionOptions)
+			await mongoose.connect(uri, options)
 
 			// 在此处放置需要提前注册的 Model
 			// 用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据
@@ -121,12 +78,14 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 
 			console.info('MongoDB Cluster Connect successfully!\n')
 		} catch (error) {
-			logging('ERROR', '创建数据库连接失败：', error, undefined, { recordingLogs: false })
-			process.exit()
+			// 驱动错误可能包含 URI 或凭据，日志不输出原始错误对象。
+			logging('ERROR', '创建数据库连接失败，请检查 MongoDB 地址、认证和 TLS 配置', undefined, undefined, { recordingLogs: false })
+			process.exit(1)
 		}
 	} catch (error) {
-		logging('ERROR', '创建数据库连接失败：connectMongoDBCluster 意外终止：', error, undefined, { recordingLogs: false })
-		process.exit()
+		const message = error instanceof MongoDBConfigurationError ? error.message : 'MongoDB 初始化失败'
+		logging('ERROR', message, undefined, undefined, { recordingLogs: false })
+		process.exit(1)
 	}
 }
 

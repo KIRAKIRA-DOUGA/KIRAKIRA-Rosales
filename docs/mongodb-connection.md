@@ -1,0 +1,108 @@
+# MongoDB 连接配置
+
+使用 `MONGODB_URI` 配置标准 MongoDB 连接字符串。支持单节点、副本集、分片集群入口和 DNS SRV；驱动原生参数直接放入 URI，无需为每个连接选项增加应用环境变量。
+
+## 环境变量
+
+| 变量 | 用途 |
+| --- | --- |
+| `MONGODB_URI` | 推荐的完整连接字符串，支持 `mongodb://` 和 `mongodb+srv://` |
+| `MONGODB_USERNAME` | URI 未包含认证资料时使用的用户名 |
+| `MONGODB_PASSWORD` | URI 未包含认证资料时使用的原始密码，不进行百分号编码 |
+| `MONGODB_TLS_CA_FILE` | 自定义 CA 的 PEM 文件路径，可包含 CA 链 |
+| `MONGODB_TLS_CERTIFICATE_KEY_FILE` | 包含客户端证书与私钥的 PEM 文件路径，用于双向 TLS 或 X.509 |
+| `MONGODB_TLS_CERTIFICATE_KEY_PASSWORD` | 加密客户端私钥的密码，未加密时省略 |
+| `MONGODB_PROTOCOL` | 兼容旧配置；未设置 URI 时使用，默认为 `mongodb` |
+| `MONGODB_CLUSTER_HOST` | 兼容旧配置；普通连接填写逗号分隔的主机与端口，SRV 填写一个不带端口的域名 |
+| `MONGODB_NAME` | 兼容旧配置；未设置 URI 时使用的业务数据库名称 |
+| `MONGODB_TLS_CA_BASE64` | 兼容旧配置；Base64 编码的 CA PEM，可单独使用 |
+| `MONGODB_TLS_CERT_BASE64` | 兼容旧配置；Base64 编码的客户端证书 PEM |
+| `MONGODB_TLS_KEY_BASE64` | 兼容旧配置；Base64 编码的客户端私钥 PEM，与客户端证书同时提供 |
+
+设置 `MONGODB_URI` 后，忽略旧的协议、主机列表和数据库名称。URI 自带的用户名密码优先于独立凭据；未包含认证资料时使用独立凭据。没有配置任何认证资料时，由驱动使用 URI 指定的认证机制或无认证连接。
+
+URI 中的用户名密码需要按 MongoDB 规则进行百分号编码。使用独立用户名密码变量时直接传给驱动，支持密码中的 `@`、`:`、`/`、`?` 等字符，不需要手工编码。凭据放入 Secret，不写入 ConfigMap 或提交到仓库。
+
+读偏好默认保持 `secondaryPreferred`；可在 URI 中通过 `readPreference` 覆盖。副本集可填写 `replicaSet`，并保持 `directConnection` 为默认的 `false`，以便驱动发现成员与新主节点。
+
+## 集群内 SRV 无 TLS
+
+```dotenv
+MONGODB_URI="mongodb+srv://db-svc.demo-database.svc.cluster.local/appdb?replicaSet=db&authSource=admin&tls=false"
+MONGODB_USERNAME="app-client"
+MONGODB_PASSWORD="replace-with-secret"
+```
+
+Kubernetes Headless Service 的 TCP 端口命名为 `mongodb` 时，会生成 `_mongodb._tcp` SRV 记录。URI 中不填写端口或成员列表。此示例只适用于能解析并访问集群内部地址的客户端。
+
+`mongodb+srv` 默认启用 TLS，无 TLS 必须显式写入 `tls=false`。关闭 TLS 时不配置 MongoDB 证书变量。
+
+## 普通副本集无 TLS
+
+```dotenv
+MONGODB_URI="mongodb://db-0.example.com:27017,db-1.example.com:27017,db-2.example.com:27017/appdb?replicaSet=db&authSource=admin&tls=false"
+MONGODB_USERNAME="app-client"
+MONGODB_PASSWORD="replace-with-secret"
+```
+
+列表是驱动建立连接的初始入口；驱动连接成功后发现完整副本集。扩容通常不需要更新入口列表，移除成员时仍应保留至少一个有效入口供应用重启使用。
+
+## TLS 与自签 CA
+
+```dotenv
+MONGODB_URI="mongodb+srv://db.example.com/appdb?authSource=admin&tls=true"
+MONGODB_USERNAME="app-client"
+MONGODB_PASSWORD="replace-with-secret"
+MONGODB_TLS_CA_FILE="/run/mongodb/ca.pem"
+```
+
+由系统信任的 CA 签发证书时可省略自定义 CA。自签证书通过指定 CA 建立信任，同时验证服务端证书的有效期与主机名。仅进行服务端 TLS 认证时无需客户端证书。
+
+需要双向 TLS 时增加：
+
+```dotenv
+MONGODB_TLS_CERTIFICATE_KEY_FILE="/run/mongodb/client.pem"
+```
+
+文件包含客户端证书和私钥；加密私钥另设 `MONGODB_TLS_CERTIFICATE_KEY_PASSWORD`。挂载文件更新后滚动重启应用，让驱动重新读取证书。不增加证书复制或同步脚本。
+
+## X.509 认证
+
+```dotenv
+MONGODB_URI="mongodb://db.example.com:27017/appdb?tls=true&authMechanism=MONGODB-X509&authSource=%24external"
+MONGODB_TLS_CA_FILE="/run/mongodb/ca.pem"
+MONGODB_TLS_CERTIFICATE_KEY_FILE="/run/mongodb/client.pem"
+```
+
+数据库需预先配置相应证书身份及权限。此模式不设置密码，用户名通常可以由客户端证书推导。
+
+## 旧配置迁移
+
+原有 `MONGODB_PROTOCOL`、`MONGODB_CLUSTER_HOST`、`MONGODB_NAME`、用户名密码和三项 Base64 证书变量继续受支持。全部提供旧证书时启用 TLS；CA 现在也可以单独提供，不再要求配置客户端证书和私钥。
+
+独立用户名密码变量现在使用原始值。如果旧部署曾手工对这些变量进行 URI 百分号编码，迁移时恢复为原始用户名密码；写在完整 URI 内的凭据仍需编码。
+
+新部署优先使用 URI 和证书文件。无需新增 `MONGODB_TLS_ENABLED`：在 URI 中使用驱动原生的 `tls=true` 或 `tls=false`。
+
+以下配置会明确报错：
+
+- 同一种证书同时提供 URI 文件参数、文件环境变量或 Base64 内容。
+- 客户端证书与私钥只提供其中一个。
+- `tls=false` 同时配置 TLS 证书。
+- URI 中 `tls` 和 `ssl` 相互冲突，或取值不是 `true`、`false`。
+
+原实现会在 SRV 缺少 CA 时自动跳过证书校验；新实现取消此行为。使用有效公有证书的连接继续使用系统信任库。旧自签 TLS 部署需提供 CA；内网无 TLS 使用 `tls=false`。不会自动降级到明文连接。
+
+连接失败时记录配置问题或通用连接失败信息，不记录原始 URI、密码、证书或驱动错误对象。
+
+## 验证
+
+```sh
+npm ci
+npm run test:mongodb
+npm run build
+```
+
+部署后验证数据库认证、业务读写及副本集选主恢复。使用 TLS 的部署同时验证受信任 CA 能连接，错误 CA 不能连接。
+
+参考：[MongoDB URI](https://www.mongodb.com/docs/manual/reference/connection-string-formats/)、[Node.js TLS 配置](https://www.mongodb.com/docs/drivers/node/current/security/tls/)、[Kubernetes SRV 记录](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#srv-records)。

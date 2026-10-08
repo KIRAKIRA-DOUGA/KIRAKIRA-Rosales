@@ -28,6 +28,9 @@ npm install
 ```
 
 ### 设置环境变量
+
+MongoDB 的 URI、认证、TLS 与旧配置迁移方式见 [MongoDB 连接配置](docs/mongodb-connection.md)。
+
 > [!IMPORTANT]
 > 下方的示例代码中并没有包含全部环境变量。
 > 对于不同操作系统，设置环境变量的方式也不同。
