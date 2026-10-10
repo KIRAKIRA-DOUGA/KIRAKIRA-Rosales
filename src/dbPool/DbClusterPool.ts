@@ -73,7 +73,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			process.exit(1)
 		}
 
-		// 这里只读取应用需要处理的参数；URI 格式和参数是否合法由 MongoDB 驱动校验。
+		// 读取 MongoDB 连接 URL 中的参数。
 		// 参数名不区分大小写，保留参数值的原始内容。
 		const query = databaseUri.includes('?') ? databaseUri.slice(databaseUri.indexOf('?') + 1) : ''
 		const uriParameters = new Map<string, string>()
@@ -81,39 +81,36 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			uriParameters.set(name.toLowerCase(), value)
 		}
 
-		// 证书只接受 Base64 内容，禁止通过 URI 让驱动读取证书或私钥文件。
+		// 只允许通过环境变量提供 Base64 的证书，不允许通过 URI 让驱动读取证书或私钥文件。
 		const fileParameters = ['tlscafile', 'tlscertificatekeyfile', 'tlscertificatekeyfilepassword', 'tlscrlfile']
 		if (fileParameters.some(name => uriParameters.has(name))) {
-			logging('ERROR', '创建数据库连接失败，MongoDB 证书须使用 Base64 内容，不能配置文件参数', undefined, undefined, { recordingLogs: false })
+			logging('ERROR', '创建数据库连接失败，只允许通过环境变量提供 Base64 的证书，不允许通过 URI 让驱动读取证书或私钥文件', undefined, undefined, { recordingLogs: false })
 			process.exit(1)
 		}
 
+		// 数据库连接配置。
 		const connectionOptions: ConnectOptions = {}
+
 		// 默认优先从副本读取；URI 明确指定读偏好时，以 URI 为准。
 		if (!uriParameters.has('readpreference')) {
 			connectionOptions.readPreference = ReadPreferenceMode.secondaryPreferred
 		}
 
-		// URI 自带账号时，独立用户名密码一起忽略；否则直接传入原始值，不做 URL 编码。
-		// 只检查地址中的认证部分，认证机制及其凭据要求由驱动处理。
-		const uriContainsCredentials = /^mongodb(?:\+srv)?:\/\/[^/?#]*@/.test(databaseUri)
-		if (!uriContainsCredentials && (databaseUsername !== undefined || databasePassword !== undefined)) {
-			connectionOptions.auth = { username: databaseUsername, password: databasePassword }
+		// 环境变量中的数据库登录凭据优先于 URI 中的凭据；均未设置时使用 URI 中的凭据。
+		if (databaseUsername !== undefined || databasePassword !== undefined) {
+			connectionOptions.auth = {
+				username: databaseUsername,
+				password: databasePassword,
+			}
 		}
 
 		// 在内存中把 Base64 解码为 PEM 文本。CA 可单独提供，客户端证书和私钥必须成对提供。
 		const databaseTlsCa = process.env.MONGODB_TLS_CA_BASE64
 		const databaseTlsCert = process.env.MONGODB_TLS_CERT_BASE64
 		const databaseTlsKey = process.env.MONGODB_TLS_KEY_BASE64
-		if (Boolean(databaseTlsCert) !== Boolean(databaseTlsKey)) {
-			logging('ERROR', '创建数据库连接失败，MONGODB_TLS_CERT_BASE64 和 MONGODB_TLS_KEY_BASE64 必须同时提供', undefined, undefined, { recordingLogs: false })
-			process.exit(1)
-		}
-
-		// TLS 启停由 URI 决定，提供证书不会自动开启 TLS；显式关闭 TLS 时不应同时配置证书。
 		const tlsDisabled = uriParameters.get('tls') === 'false' || uriParameters.get('ssl') === 'false'
-		if (tlsDisabled && (databaseTlsCa || databaseTlsCert || databaseTlsKey)) {
-			logging('ERROR', '创建数据库连接失败，tls=false 不能同时配置 MongoDB 证书', undefined, undefined, { recordingLogs: false })
+		if (tlsDisabled && (!databaseTlsCert !== !databaseTlsKey)) {
+			logging('ERROR', '创建数据库连接失败，MONGODB_TLS_CERT_BASE64 和 MONGODB_TLS_KEY_BASE64 必须同时提供', undefined, undefined, { recordingLogs: false })
 			process.exit(1)
 		}
 		if (databaseTlsCa) connectionOptions.ca = Buffer.from(databaseTlsCa, 'base64').toString('utf-8')
@@ -131,7 +128,6 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 
 		console.info('MongoDB Cluster Connect successfully!\n')
 	} catch {
-		// 驱动错误可能包含 URI 或凭据，不把原始错误对象、密码或证书写入日志。
 		logging('ERROR', '创建数据库连接失败，请检查 MongoDB 地址、认证和 TLS 配置', undefined, undefined, { recordingLogs: false })
 		process.exit(1)
 	}
