@@ -96,7 +96,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			connectionOptions.readPreference = ReadPreferenceMode.secondaryPreferred
 		}
 
-		// 环境变量中的数据库登录凭据优先于 URI 中的凭据；均未设置时使用 URI 中的凭据。
+		// 独立用户名密码整组覆盖 URI 中的凭据，不从 URI 补全缺失项；均未设置时使用 URI 中的凭据。
 		if (databaseUsername !== undefined || databasePassword !== undefined) {
 			connectionOptions.auth = {
 				username: databaseUsername,
@@ -104,12 +104,13 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			}
 		}
 
-		// 在内存中把 Base64 解码为 PEM 文本。CA 可单独提供，客户端证书和私钥必须成对提供。
+		// 在内存中把 Base64 解码为 PEM 文本，CA 可单独提供。
 		const databaseTlsCa = process.env.MONGODB_TLS_CA_BASE64
 		const databaseTlsCert = process.env.MONGODB_TLS_CERT_BASE64
 		const databaseTlsKey = process.env.MONGODB_TLS_KEY_BASE64
 		const tlsDisabled = uriParameters.get('tls') === 'false' || uriParameters.get('ssl') === 'false'
-		if (tlsDisabled && (!databaseTlsCert !== !databaseTlsKey)) {
+		// 显式关闭 TLS 时跳过证书检查；否则客户端证书和私钥必须成对提供。
+		if (!tlsDisabled && (!databaseTlsCert !== !databaseTlsKey)) {
 			logging('ERROR', '创建数据库连接失败，MONGODB_TLS_CERT_BASE64 和 MONGODB_TLS_KEY_BASE64 必须同时提供', undefined, undefined, { recordingLogs: false })
 			process.exit(1)
 		}

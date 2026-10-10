@@ -7,17 +7,17 @@
 | 变量 | 用途 |
 | --- | --- |
 | `MONGODB_URI` | 必填，包含数据库名称的完整连接字符串，支持 `mongodb://` 和 `mongodb+srv://` |
-| `MONGODB_USERNAME` | URI 未包含认证资料时使用的用户名 |
-| `MONGODB_PASSWORD` | URI 未包含认证资料时使用的原始密码，不进行百分号编码 |
+| `MONGODB_USERNAME` | 独立用户名，与独立密码一起覆盖 URI 凭据 |
+| `MONGODB_PASSWORD` | 独立原始密码，与独立用户名一起覆盖 URI 凭据，不进行百分号编码 |
 | `MONGODB_TLS_CA_BASE64` | Base64 编码的完整 CA PEM 文本，可包含 CA 链，可单独使用 |
 | `MONGODB_TLS_CERT_BASE64` | Base64 编码的完整客户端证书 PEM 文本 |
 | `MONGODB_TLS_KEY_BASE64` | Base64 编码的完整、未加密客户端私钥 PEM 文本，与客户端证书同时提供 |
 
-URI 自带的认证资料优先于独立凭据。只要 URI 包含认证资料，`MONGODB_USERNAME` 和 `MONGODB_PASSWORD` 就会一起被忽略，不混用两个来源，也不会在认证失败后回退到独立凭据。URI 中的空密码不会被独立密码补全。
+独立凭据优先于 URI 自带的认证资料。只要设置了 `MONGODB_USERNAME` 或 `MONGODB_PASSWORD` 中的任意一项，两项独立变量就会整组覆盖 URI 凭据，不从 URI 补全缺失项，也不会在认证失败后回退到 URI 凭据。仅设置独立密码时，不会沿用 URI 中的用户名。
 
-例如 URI 为 `mongodb://uri-user:uri-pass@db.example.com/appdb?authSource=admin`，即使独立变量配置为 `env-user` 和 `env-pass`，实际使用的仍是 `uri-user` 和 `uri-pass`。
+例如 URI 为 `mongodb://uri-user:uri-pass@db.example.com/appdb?authSource=admin`，独立变量配置为 `env-user` 和 `env-pass` 时，实际使用的是 `env-user` 和 `env-pass`。
 
-URI 未包含认证资料时，使用独立用户名密码；认证机制及其凭据要求由 MongoDB 驱动处理。没有配置任何认证资料时，由驱动使用 URI 指定的认证机制或无认证连接。
+两项独立变量均未设置时，使用 URI 中的凭据。空字符串也属于已设置；使用 URI 凭据时需删除这两项变量。认证机制及其凭据要求由 MongoDB 驱动处理。没有配置任何认证资料时，由驱动使用 URI 指定的认证机制或无认证连接。
 
 URI 中的用户名密码需要按 MongoDB 规则进行百分号编码。使用独立用户名密码变量时直接传给驱动，支持密码中的 `@`、`:`、`/`、`?` 等字符，不需要手工编码。凭据放入 Secret，不写入 ConfigMap 或提交到仓库。
 
@@ -33,7 +33,7 @@ MONGODB_PASSWORD="replace-with-secret"
 
 Kubernetes Headless Service 的 TCP 端口命名为 `mongodb` 时，会生成 `_mongodb._tcp` SRV 记录。URI 中不填写端口或成员列表。此示例只适用于能解析并访问集群内部地址的客户端。
 
-`mongodb+srv` 默认启用 TLS，无 TLS 必须显式写入 `tls=false`。关闭 TLS 时不配置 MongoDB 证书变量。
+`mongodb+srv` 默认启用 TLS，无 TLS 必须显式写入 `tls=false`。显式设置 `tls=false` 或 `ssl=false` 时，跳过客户端证书与私钥的成对检查，连接不使用证书；已有证书变量无需为此删除。
 
 ## 普通副本集无 TLS
 
@@ -63,7 +63,7 @@ MONGODB_TLS_CERT_BASE64="<完整客户端证书 PEM 文本的 Base64>"
 MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 ```
 
-Base64 编码的输入包含 PEM 的 BEGIN/END 行及换行。客户端证书和私钥必须成对提供；不支持私钥口令配置。通过 Secret 注入上述环境变量，更新 Secret 后滚动重启 Rosales。
+Base64 编码的输入包含 PEM 的 BEGIN/END 行及换行。未显式关闭 TLS 时，客户端证书和私钥必须成对提供；不支持私钥口令配置。通过 Secret 注入上述环境变量，更新 Secret 后滚动重启 Rosales。
 
 Kubernetes Secret 使用 `stringData` 时，直接填写环境变量的值：证书项是 PEM 的一层 Base64，用户名密码是原始文本。若使用 `data`，所有环境变量值都需再进行一层 Base64 编码；Kubernetes 会解开外层编码，应用解开证书内容的编码。
 
@@ -92,8 +92,7 @@ MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 
 - 缺少 `MONGODB_URI`。
 - URI 中包含 `tlsCAFile`、`tlsCertificateKeyFile`、`tlsCertificateKeyFilePassword` 或 `tlsCRLFile`，包括大小写或百分号编码的写法。
-- 客户端证书与私钥只提供其中一个。
-- `tls=false` 同时配置 TLS 证书。
+- 未显式设置 `tls=false` 或 `ssl=false`，且客户端证书与私钥只提供其中一个。
 
 URI 格式、TLS 参数和认证机制由 MongoDB 驱动校验；解码后的 PEM 内容由 TLS 实现处理。
 
