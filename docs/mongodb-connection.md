@@ -1,25 +1,23 @@
 # MongoDB 连接配置
 
-使用 `MONGODB_URI` 配置标准 MongoDB 连接字符串。支持单节点、副本集、分片集群入口和 DNS SRV；驱动原生参数直接放入 URI，无需为每个连接选项增加应用环境变量。
+使用 `MONGODB_URI` 配置完整 MongoDB 连接字符串。支持单节点、副本集、分片集群入口和 DNS SRV；连接参数放入 URI。自定义证书仅使用 Base64 编码的 PEM 内容，启动时在内存中解码，不读取证书文件。
 
 ## 环境变量
 
 | 变量 | 用途 |
 | --- | --- |
-| `MONGODB_URI` | 推荐的完整连接字符串，支持 `mongodb://` 和 `mongodb+srv://` |
+| `MONGODB_URI` | 必填，包含数据库名称的完整连接字符串，支持 `mongodb://` 和 `mongodb+srv://` |
 | `MONGODB_USERNAME` | URI 未包含认证资料时使用的用户名 |
 | `MONGODB_PASSWORD` | URI 未包含认证资料时使用的原始密码，不进行百分号编码 |
-| `MONGODB_TLS_CA_FILE` | 自定义 CA 的 PEM 文件路径，可包含 CA 链 |
-| `MONGODB_TLS_CERTIFICATE_KEY_FILE` | 包含客户端证书与私钥的 PEM 文件路径，用于双向 TLS 或 X.509 |
-| `MONGODB_TLS_CERTIFICATE_KEY_PASSWORD` | 加密客户端私钥的密码，未加密时省略 |
-| `MONGODB_PROTOCOL` | 兼容旧配置；未设置 URI 时使用，默认为 `mongodb` |
-| `MONGODB_CLUSTER_HOST` | 兼容旧配置；普通连接填写逗号分隔的主机与端口，SRV 填写一个不带端口的域名 |
-| `MONGODB_NAME` | 兼容旧配置；未设置 URI 时使用的业务数据库名称 |
-| `MONGODB_TLS_CA_BASE64` | 兼容旧配置；Base64 编码的 CA PEM，可单独使用 |
-| `MONGODB_TLS_CERT_BASE64` | 兼容旧配置；Base64 编码的客户端证书 PEM |
-| `MONGODB_TLS_KEY_BASE64` | 兼容旧配置；Base64 编码的客户端私钥 PEM，与客户端证书同时提供 |
+| `MONGODB_TLS_CA_BASE64` | Base64 编码的完整 CA PEM 文本，可包含 CA 链，可单独使用 |
+| `MONGODB_TLS_CERT_BASE64` | Base64 编码的完整客户端证书 PEM 文本 |
+| `MONGODB_TLS_KEY_BASE64` | Base64 编码的完整、未加密客户端私钥 PEM 文本，与客户端证书同时提供 |
 
-设置 `MONGODB_URI` 后，忽略旧的协议、主机列表和数据库名称。URI 自带的用户名密码优先于独立凭据；未包含认证资料时使用独立凭据。没有配置任何认证资料时，由驱动使用 URI 指定的认证机制或无认证连接。
+URI 自带的认证资料优先于独立凭据。只要 URI 包含认证资料，`MONGODB_USERNAME` 和 `MONGODB_PASSWORD` 就会一起被忽略，不混用两个来源，也不会在认证失败后回退到独立凭据。URI 中的空密码不会被独立密码补全。
+
+例如 URI 为 `mongodb://uri-user:uri-pass@db.example.com/appdb?authSource=admin`，即使独立变量配置为 `env-user` 和 `env-pass`，实际使用的仍是 `uri-user` 和 `uri-pass`。
+
+URI 未包含认证资料时，使用独立用户名密码；普通密码认证需同时提供两项。没有配置任何认证资料时，由驱动使用 URI 指定的认证机制或无认证连接。
 
 URI 中的用户名密码需要按 MongoDB 规则进行百分号编码。使用独立用户名密码变量时直接传给驱动，支持密码中的 `@`、`:`、`/`、`?` 等字符，不需要手工编码。凭据放入 Secret，不写入 ConfigMap 或提交到仓库。
 
@@ -53,7 +51,7 @@ MONGODB_PASSWORD="replace-with-secret"
 MONGODB_URI="mongodb+srv://db.example.com/appdb?authSource=admin&tls=true"
 MONGODB_USERNAME="app-client"
 MONGODB_PASSWORD="replace-with-secret"
-MONGODB_TLS_CA_FILE="/run/mongodb/ca.pem"
+MONGODB_TLS_CA_BASE64="<完整 CA PEM 文本的 Base64>"
 ```
 
 由系统信任的 CA 签发证书时可省略自定义 CA。自签证书通过指定 CA 建立信任，同时验证服务端证书的有效期与主机名。仅进行服务端 TLS 认证时无需客户端证书。
@@ -61,32 +59,42 @@ MONGODB_TLS_CA_FILE="/run/mongodb/ca.pem"
 需要双向 TLS 时增加：
 
 ```dotenv
-MONGODB_TLS_CERTIFICATE_KEY_FILE="/run/mongodb/client.pem"
+MONGODB_TLS_CERT_BASE64="<完整客户端证书 PEM 文本的 Base64>"
+MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 ```
 
-文件包含客户端证书和私钥；加密私钥另设 `MONGODB_TLS_CERTIFICATE_KEY_PASSWORD`。挂载文件更新后滚动重启应用，让驱动重新读取证书。不增加证书复制或同步脚本。
+Base64 编码的输入包含 PEM 的 BEGIN/END 行及换行。客户端证书和私钥必须成对提供；不支持私钥口令配置。通过 Secret 注入上述环境变量，更新 Secret 后滚动重启 Rosales。
+
+Kubernetes Secret 使用 `stringData` 时，直接填写环境变量的值：证书项是 PEM 的一层 Base64，用户名密码是原始文本。若使用 `data`，所有环境变量值都需再进行一层 Base64 编码；Kubernetes 会解开外层编码，应用解开证书内容的编码。
 
 ## X.509 认证
 
 ```dotenv
 MONGODB_URI="mongodb://db.example.com:27017/appdb?tls=true&authMechanism=MONGODB-X509&authSource=%24external"
-MONGODB_TLS_CA_FILE="/run/mongodb/ca.pem"
-MONGODB_TLS_CERTIFICATE_KEY_FILE="/run/mongodb/client.pem"
+MONGODB_TLS_CA_BASE64="<完整 CA PEM 文本的 Base64>"
+MONGODB_TLS_CERT_BASE64="<完整客户端证书 PEM 文本的 Base64>"
+MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 ```
 
 数据库需预先配置相应证书身份及权限。此模式不设置密码，用户名通常可以由客户端证书推导。
 
 ## 旧配置迁移
 
-原有 `MONGODB_PROTOCOL`、`MONGODB_CLUSTER_HOST`、`MONGODB_NAME`、用户名密码和三项 Base64 证书变量继续受支持。全部提供旧证书时启用 TLS；CA 现在也可以单独提供，不再要求配置客户端证书和私钥。
+`MONGODB_PROTOCOL`、`MONGODB_CLUSTER_HOST`、`MONGODB_NAME` 已删除。将协议、主机或 SRV 名称、数据库名称合并到 `MONGODB_URI`，并显式填写需要的 `authSource` 和连接选项。没有 URI 时启动报错，不再拼接旧变量。
+
+`MONGODB_TLS_CA_FILE`、`MONGODB_TLS_CERTIFICATE_KEY_FILE`、`MONGODB_TLS_CERTIFICATE_KEY_PASSWORD` 已删除。从应用部署中移除对应变量和 MongoDB 客户端证书挂载，将证书与未加密私钥的 PEM 内容转换为 Base64，分别写入三项证书内容变量。MongoDB 服务端的证书配置由其部署单独管理。
+
+三项 Base64 证书变量继续使用。提供 CA 或客户端证书时启用 TLS；CA 可以单独提供，无需同时提供客户端证书和私钥。
 
 独立用户名密码变量现在使用原始值。如果旧部署曾手工对这些变量进行 URI 百分号编码，迁移时恢复为原始用户名密码；写在完整 URI 内的凭据仍需编码。
 
-新部署优先使用 URI 和证书文件。无需新增 `MONGODB_TLS_ENABLED`：在 URI 中使用驱动原生的 `tls=true` 或 `tls=false`。
+无需新增 `MONGODB_TLS_ENABLED`：在 URI 中使用驱动原生的 `tls=true` 或 `tls=false`。
 
 以下配置会明确报错：
 
-- 同一种证书同时提供 URI 文件参数、文件环境变量或 Base64 内容。
+- 缺少 `MONGODB_URI`。
+- URI 中包含 `tlsCAFile`、`tlsCertificateKeyFile`、`tlsCertificateKeyFilePassword` 或 `tlsCRLFile`，包括大小写或百分号编码的写法。
+- 证书内容不是有效的 Base64。
 - 客户端证书与私钥只提供其中一个。
 - `tls=false` 同时配置 TLS 证书。
 - URI 中 `tls` 和 `ssl` 相互冲突，或取值不是 `true`、`false`。
