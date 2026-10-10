@@ -1,27 +1,27 @@
 name: Check for env theft
 
 on:
-  pull_request:
-    branches:
-      - '**'
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   check-process-env:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Fetch target branch
+    # Only read the diff; never check out or execute PR code with a write token.
+    - name: Check environment access and notify the PR
+      shell: bash
       run: |
-        git fetch origin ${{ github.base_ref }}
-
-    - name: Search for process.env in code diff
-      run: |
-        # Check for changes in code (not just file names)
-        if git diff origin/${{ github.base_ref }} --unified=0 | grep -E "^\+.*process.env"; then
-          echo "Found process.env in changed code, check failed!"
+        gh pr diff "$PR_NUMBER" --color never > "$RUNNER_TEMP/pr.diff"
+        if grep -qE '^\+.*process\.env' "$RUNNER_TEMP/pr.diff"; then
+          gh pr comment "$PR_NUMBER" --body 'Potential environment variable theft detected: this PR adds references to `process.env`. Please review whether these changes could expose secrets. This is a heuristic warning, not proof of theft.'
           exit 1
-        else
-          echo "No process.env found in changed code, check passed!"
         fi

@@ -101,14 +101,4 @@ MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 
 连接失败时记录配置问题或通用连接失败信息，不记录原始 URI、密码、证书或驱动错误对象。
 
-## 验证
-
-```sh
-npm ci
-npm run test:mongodb
-npm run build
-```
-
-部署后验证数据库认证、业务读写及副本集选主恢复。使用 TLS 的部署同时验证受信任 CA 能连接，错误 CA 不能连接。
-
 参考：[MongoDB URI](https://www.mongodb.com/docs/manual/reference/connection-string-formats/)、[Node.js TLS 配置](https://www.mongodb.com/docs/drivers/node/current/security/tls/)、[Kubernetes SRV 记录](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#srv-records)。

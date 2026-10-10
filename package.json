@@ -7,7 +7,6 @@
 	"author": "KIRAKIRA Project Team",
 	"private": true,
 	"scripts": {
-		"test:mongodb": "tsc --noEmitOnError && node --test tests/mongodb-connection.test.mjs",
 		"start": "rimraf .kirakira && tsc --noEmitOnError --sourceMap --outDir .kirakira && npm run copy-assets-dev && node ./.kirakira/app.js",
 		"dev": "npm start",
 		"serve": "npm start",
