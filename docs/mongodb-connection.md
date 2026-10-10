@@ -17,7 +17,7 @@ URI 自带的认证资料优先于独立凭据。只要 URI 包含认证资料�
 
 例如 URI 为 `mongodb://uri-user:uri-pass@db.example.com/appdb?authSource=admin`，即使独立变量配置为 `env-user` 和 `env-pass`，实际使用的仍是 `uri-user` 和 `uri-pass`。
 
-URI 未包含认证资料时，使用独立用户名密码；普通密码认证需同时提供两项。没有配置任何认证资料时，由驱动使用 URI 指定的认证机制或无认证连接。
+URI 未包含认证资料时，使用独立用户名密码；认证机制及其凭据要求由 MongoDB 驱动处理。没有配置任何认证资料时，由驱动使用 URI 指定的认证机制或无认证连接。
 
 URI 中的用户名密码需要按 MongoDB 规则进行百分号编码。使用独立用户名密码变量时直接传给驱动，支持密码中的 `@`、`:`、`/`、`?` 等字符，不需要手工编码。凭据放入 Secret，不写入 ConfigMap 或提交到仓库。
 
@@ -82,7 +82,7 @@ MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 
 `MONGODB_PROTOCOL`、`MONGODB_CLUSTER_HOST`、`MONGODB_NAME` 已删除。将协议、主机或 SRV 名称、数据库名称合并到 `MONGODB_URI`，并显式填写需要的 `authSource` 和连接选项。没有 URI 时启动报错，不再拼接旧变量。
 
-三项 Base64 证书变量继续使用。提供 CA 或客户端证书时启用 TLS；CA 可以单独提供，无需同时提供客户端证书和私钥。
+三项 Base64 证书变量继续使用。TLS 启停由 URI 决定：普通连接需要 TLS 时设置 `tls=true`，SRV 默认启用 TLS。提供证书内容不会自动开启 TLS。CA 可以单独提供，无需同时提供客户端证书和私钥。
 
 独立用户名密码变量现在使用原始值。如果旧部署曾手工对这些变量进行 URI 百分号编码，迁移时恢复为原始用户名密码；写在完整 URI 内的凭据仍需编码。
 
@@ -92,13 +92,13 @@ MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 
 - 缺少 `MONGODB_URI`。
 - URI 中包含 `tlsCAFile`、`tlsCertificateKeyFile`、`tlsCertificateKeyFilePassword` 或 `tlsCRLFile`，包括大小写或百分号编码的写法。
-- 证书内容不是有效的 Base64。
 - 客户端证书与私钥只提供其中一个。
 - `tls=false` 同时配置 TLS 证书。
-- URI 中 `tls` 和 `ssl` 相互冲突，或取值不是 `true`、`false`。
+
+URI 格式、TLS 参数和认证机制由 MongoDB 驱动校验；解码后的 PEM 内容由 TLS 实现处理。
 
 原实现会在 SRV 缺少 CA 时自动跳过证书校验；新实现取消此行为。使用有效公有证书的连接继续使用系统信任库。旧自签 TLS 部署需提供 CA；内网无 TLS 使用 `tls=false`。不会自动降级到明文连接。
 
-连接失败时记录配置问题或通用连接失败信息，不记录原始 URI、密码、证书或驱动错误对象。
+连接配置直接位于 `src/dbPool/DbClusterPool.ts` 的 `connectMongoDBCluster` 中。连接失败时记录配置问题或通用连接失败信息，不记录原始 URI、密码、证书或驱动错误对象。
 
 参考：[MongoDB URI](https://www.mongodb.com/docs/manual/reference/connection-string-formats/)、[Node.js TLS 配置](https://www.mongodb.com/docs/drivers/node/current/security/tls/)、[Kubernetes SRV 记录](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#srv-records)。

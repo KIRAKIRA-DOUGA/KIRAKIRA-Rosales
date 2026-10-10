@@ -1,10 +1,10 @@
+import { URLSearchParams } from 'node:url'
 import { ReadPreferenceMode } from 'mongodb'
-import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
+import mongoose, { AnyKeys, ClientSession, ConnectOptions, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
 import { logging } from '../service/loggingService.js'
-import { buildMongoDBConnectionConfig, MongoDBConfigurationError } from './MongoDBConnectionConfig.js'
 
 /**
  * 虚拟属性，用于关联查询
@@ -60,31 +60,79 @@ export type DbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> =
 		}
 
 /**
- * 连接 MongoDB 复制集，这个方法应当在系统初始化时调用
+ * 使用 MONGODB_URI 连接 MongoDB，在系统初始化时调用。
  */
 export const connectMongoDBCluster = async (): Promise<void> => {
 	try {
-		const { uri, options } = buildMongoDBConnectionConfig()
-
-		try {
-			mongoose.set('strictQuery', true) // 设为 true 的话，如果在查询时传入了 schema 定义的字段以外的字段，则会忽略这些字段
-			await mongoose.connect(uri, options)
-
-			// 在此处放置需要提前注册的 Model
-			// 用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据
-			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
-			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
-			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
-
-			console.info('MongoDB Cluster Connect successfully!\n')
-		} catch (error) {
-			// 驱动错误可能包含 URI 或凭据，日志不输出原始错误对象。
-			logging('ERROR', '创建数据库连接失败，请检查 MongoDB 地址、认证和 TLS 配置', undefined, undefined, { recordingLogs: false })
+		// URI 统一配置协议、地址、数据库和连接参数，不再拼接旧的分项配置。
+		const databaseUri = process.env.MONGODB_URI?.trim()
+		const databaseUsername = process.env.MONGODB_USERNAME
+		const databasePassword = process.env.MONGODB_PASSWORD
+		if (!databaseUri) {
+			logging('ERROR', '创建数据库连接失败，MONGODB_URI 为空', undefined, undefined, { recordingLogs: false })
 			process.exit(1)
 		}
-	} catch (error) {
-		const message = error instanceof MongoDBConfigurationError ? error.message : 'MongoDB 初始化失败'
-		logging('ERROR', message, undefined, undefined, { recordingLogs: false })
+
+		// 这里只读取应用需要处理的参数；URI 格式和参数是否合法由 MongoDB 驱动校验。
+		// 参数名不区分大小写，保留参数值的原始内容。
+		const query = databaseUri.includes('?') ? databaseUri.slice(databaseUri.indexOf('?') + 1) : ''
+		const uriParameters = new Map<string, string>()
+		for (const [name, value] of new URLSearchParams(query)) {
+			uriParameters.set(name.toLowerCase(), value)
+		}
+
+		// 证书只接受 Base64 内容，禁止通过 URI 让驱动读取证书或私钥文件。
+		const fileParameters = ['tlscafile', 'tlscertificatekeyfile', 'tlscertificatekeyfilepassword', 'tlscrlfile']
+		if (fileParameters.some(name => uriParameters.has(name))) {
+			logging('ERROR', '创建数据库连接失败，MongoDB 证书须使用 Base64 内容，不能配置文件参数', undefined, undefined, { recordingLogs: false })
+			process.exit(1)
+		}
+
+		const connectionOptions: ConnectOptions = {}
+		// 默认优先从副本读取；URI 明确指定读偏好时，以 URI 为准。
+		if (!uriParameters.has('readpreference')) {
+			connectionOptions.readPreference = ReadPreferenceMode.secondaryPreferred
+		}
+
+		// URI 自带账号时，独立用户名密码一起忽略；否则直接传入原始值，不做 URL 编码。
+		// 只检查地址中的认证部分，认证机制及其凭据要求由驱动处理。
+		const uriContainsCredentials = /^mongodb(?:\+srv)?:\/\/[^/?#]*@/.test(databaseUri)
+		if (!uriContainsCredentials && (databaseUsername !== undefined || databasePassword !== undefined)) {
+			connectionOptions.auth = { username: databaseUsername, password: databasePassword }
+		}
+
+		// 在内存中把 Base64 解码为 PEM 文本。CA 可单独提供，客户端证书和私钥必须成对提供。
+		const databaseTlsCa = process.env.MONGODB_TLS_CA_BASE64
+		const databaseTlsCert = process.env.MONGODB_TLS_CERT_BASE64
+		const databaseTlsKey = process.env.MONGODB_TLS_KEY_BASE64
+		if (Boolean(databaseTlsCert) !== Boolean(databaseTlsKey)) {
+			logging('ERROR', '创建数据库连接失败，MONGODB_TLS_CERT_BASE64 和 MONGODB_TLS_KEY_BASE64 必须同时提供', undefined, undefined, { recordingLogs: false })
+			process.exit(1)
+		}
+
+		// TLS 启停由 URI 决定，提供证书不会自动开启 TLS；显式关闭 TLS 时不应同时配置证书。
+		const tlsDisabled = uriParameters.get('tls') === 'false' || uriParameters.get('ssl') === 'false'
+		if (tlsDisabled && (databaseTlsCa || databaseTlsCert || databaseTlsKey)) {
+			logging('ERROR', '创建数据库连接失败，tls=false 不能同时配置 MongoDB 证书', undefined, undefined, { recordingLogs: false })
+			process.exit(1)
+		}
+		if (databaseTlsCa) connectionOptions.ca = Buffer.from(databaseTlsCa, 'base64').toString('utf-8')
+		if (databaseTlsCert) connectionOptions.cert = Buffer.from(databaseTlsCert, 'base64').toString('utf-8')
+		if (databaseTlsKey) connectionOptions.key = Buffer.from(databaseTlsKey, 'base64').toString('utf-8')
+
+		mongoose.set('strictQuery', true) // 查询时忽略 schema 中没有定义的字段。
+		await mongoose.connect(databaseUri, connectionOptions)
+
+		// 在此处放置需要提前注册的 Model。
+		// 用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据。
+		mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
+		// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
+		mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
+
+		console.info('MongoDB Cluster Connect successfully!\n')
+	} catch {
+		// 驱动错误可能包含 URI 或凭据，不把原始错误对象、密码或证书写入日志。
+		logging('ERROR', '创建数据库连接失败，请检查 MongoDB 地址、认证和 TLS 配置', undefined, undefined, { recordingLogs: false })
 		process.exit(1)
 	}
 }
