@@ -82,8 +82,6 @@ MONGODB_TLS_KEY_BASE64="<完整未加密客户端私钥 PEM 文本的 Base64>"
 
 `MONGODB_PROTOCOL`、`MONGODB_CLUSTER_HOST`、`MONGODB_NAME` 已删除。将协议、主机或 SRV 名称、数据库名称合并到 `MONGODB_URI`，并显式填写需要的 `authSource` 和连接选项。没有 URI 时启动报错，不再拼接旧变量。
 
-`MONGODB_TLS_CA_FILE`、`MONGODB_TLS_CERTIFICATE_KEY_FILE`、`MONGODB_TLS_CERTIFICATE_KEY_PASSWORD` 已删除。从应用部署中移除对应变量和 MongoDB 客户端证书挂载，将证书与未加密私钥的 PEM 内容转换为 Base64，分别写入三项证书内容变量。MongoDB 服务端的证书配置由其部署单独管理。
-
 三项 Base64 证书变量继续使用。提供 CA 或客户端证书时启用 TLS；CA 可以单独提供，无需同时提供客户端证书和私钥。
 
 独立用户名密码变量现在使用原始值。如果旧部署曾手工对这些变量进行 URI 百分号编码，迁移时恢复为原始用户名密码；写在完整 URI 内的凭据仍需编码。
