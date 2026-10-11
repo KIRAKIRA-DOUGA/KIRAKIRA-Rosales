@@ -90,7 +90,8 @@
 		}
 	},
 	"cSpell.words": [
-		"KIRAKIRA"
+		"KIRAKIRA",
+		"KVID"
 	],
 	"js/ts.tsdk.path": "node_modules/typescript/lib",
 }

@@ -21,17 +21,19 @@ export const createAndStartSession = async (): Promise<ClientSession> => {
  * @returns 成功回滚并结束事务返回 true，否则返回 false
  */
 export const abortAndEndSession = async (session: ClientSession): Promise<boolean> => {
-	if (!session) {
+	if (!session || session.hasEnded) {
 		return false
 	}
 
-	if (!session.inTransaction()) {
-		return false
+	try {
+		if (!session.inTransaction()) {
+			return false
+		}
+		await session.abortTransaction()
+		return true
+	} finally {
+		await session.endSession()
 	}
-
-	await session.abortTransaction()
-	session.endSession()
-	return true
 }
 
 /**
@@ -45,5 +47,6 @@ export const commitAndEndSession = async (session: ClientSession): Promise<boole
 	}
 
 	await session.commitTransaction()
-	session.endSession()
+	await session.endSession()
+	return true
 }
