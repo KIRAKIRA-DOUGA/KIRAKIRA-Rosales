@@ -1,5 +1,6 @@
+import { URLSearchParams } from 'node:url'
 import { ReadPreferenceMode } from 'mongodb'
-import mongoose, { AnyKeys, ClientSession, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
+import mongoose, { AnyKeys, ClientSession, ConnectOptions, InferSchemaType, Model, PipelineStage, Schema } from 'mongoose'
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
@@ -59,74 +60,75 @@ export type DbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> =
 		}
 
 /**
- * 连接 MongoDB 复制集，这个方法应当在系统初始化时调用
+ * 使用 MONGODB_URI 连接 MongoDB，在系统初始化时调用。
  */
 export const connectMongoDBCluster = async (): Promise<void> => {
 	try {
-		const databaseProtocol = process.env.MONGODB_PROTOCOL
-		const databaseHost = process.env.MONGODB_CLUSTER_HOST
-		const databaseTlsCa = process.env.MONGODB_TLS_CA_BASE64 ? Buffer.from(process.env.MONGODB_TLS_CA_BASE64, 'base64').toString('utf-8') : ''
-		const databaseTlsCert = process.env.MONGODB_TLS_CERT_BASE64 ? Buffer.from(process.env.MONGODB_TLS_CERT_BASE64, 'base64').toString('utf-8') : ''
-		const databaseTlsKey = process.env.MONGODB_TLS_KEY_BASE64 ? Buffer.from(process.env.MONGODB_TLS_KEY_BASE64, 'base64').toString('utf-8') : ''
-		const databaseName = process.env.MONGODB_NAME
+		const databaseUri = process.env.MONGODB_URI?.trim()
 		const databaseUsername = process.env.MONGODB_USERNAME
 		const databasePassword = process.env.MONGODB_PASSWORD
-
-		if (!databaseHost) {
-			logging('ERROR', '创建数据库连接失败， databaseHost 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
-		}
-		if (!databaseName) {
-			logging('ERROR', '创建数据库连接失败， databaseName 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
-		}
-		if (!databaseUsername) {
-			logging('ERROR', '创建数据库连接失败， databaseUsername 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
-		}
-		if (!databasePassword) {
-			logging('ERROR', '创建数据库连接失败， databasePassword 为空', undefined, undefined, { recordingLogs: false })
-			process.exit()
+		if (!databaseUri) {
+			logging('ERROR', '创建数据库连接失败，MONGODB_URI 为空', undefined, undefined, { recordingLogs: false })
+			process.exit(1)
 		}
 
-		const protocol = databaseProtocol === 'mongodb+srv' ? 'mongodb+srv' : 'mongodb'
-		const mongoURL = `${protocol}://${databaseUsername}:${databasePassword}@${databaseHost}/${databaseName}?authSource=admin`
-
-		const connectionOptions = {
-			readPreference: ReadPreferenceMode.secondaryPreferred, // 默认的读偏好为优先从副本中读取，在某些情况下会覆盖这个设置，比如说使用事务时会优先从主读取。
+		// 读取 MongoDB 连接 URL 中的参数。
+		// 参数名不区分大小写，保留参数值的原始内容。
+		const query = databaseUri.includes('?') ? databaseUri.slice(databaseUri.indexOf('?') + 1) : ''
+		const uriParameters = new Map<string, string>()
+		for (const [name, value] of new URLSearchParams(query)) {
+			uriParameters.set(name.toLowerCase(), value)
 		}
 
-		if (databaseProtocol === 'mongodb+srv' && !databaseTlsCa) {
-			connectionOptions['tlsAllowInvalidCertificates'] = true
-			logging('WARN', "Your MongoDB connection protocol is 'mongodb+srv', but can not find any TLS credentials. Communications with the database may be eavesdropped!", undefined, undefined, { recordingLogs: false })
+		// 只允许通过环境变量提供 Base64 的证书，不允许通过 URI 让驱动读取证书或私钥文件。
+		const fileParameters = ['tlscafile', 'tlscertificatekeyfile', 'tlscertificatekeyfilepassword', 'tlscrlfile']
+		if (fileParameters.some(name => uriParameters.has(name))) {
+			logging('ERROR', '创建数据库连接失败，只允许通过环境变量提供 Base64 的证书，不允许通过 URI 让驱动读取证书或私钥文件', undefined, undefined, { recordingLogs: false })
+			process.exit(1)
 		}
 
-		if (databaseTlsCa && databaseTlsCert && databaseTlsKey) {
-			connectionOptions['tls'] = true
-			connectionOptions['ca'] = databaseTlsCa
-			connectionOptions['cert'] = databaseTlsCert
-			connectionOptions['key'] = databaseTlsKey
-			connectionOptions['tlsAllowInvalidCertificates'] = false
+		// 开始构建数据库连接配置。
+		const connectionOptions: ConnectOptions = {}
+
+		// 设置默认优先从副本读取；URI 显式指定读偏好时，以 URI 为准。
+		if (!uriParameters.has('readpreference')) {
+			connectionOptions.readPreference = ReadPreferenceMode.secondaryPreferred
 		}
 
-		try {
-			mongoose.set('strictQuery', true) // 设为 true 的话，如果在查询时传入了 schema 定义的字段以外的字段，则会忽略这些字段
-			await mongoose.connect(mongoURL, connectionOptions)
-
-			// 在此处放置需要提前注册的 Model
-			// 用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据
-			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
-			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
-			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
-
-			console.info('MongoDB Cluster Connect successfully!\n')
-		} catch (error) {
-			logging('ERROR', '创建数据库连接失败：', error, undefined, { recordingLogs: false })
-			process.exit()
+		// 从环境变量中加载数据库连接凭据，会覆盖 URI 中的凭据。
+		if (databaseUsername !== undefined || databasePassword !== undefined) {
+			connectionOptions.auth = {
+				username: databaseUsername,
+				password: databasePassword,
+			}
 		}
-	} catch (error) {
-		logging('ERROR', '创建数据库连接失败：connectMongoDBCluster 意外终止：', error, undefined, { recordingLogs: false })
-		process.exit()
+
+		// 在内存中把 Base64 的证书解码为 PEM 文本，CA 可单独提供。
+		const databaseTlsCa = process.env.MONGODB_TLS_CA_BASE64
+		const databaseTlsCert = process.env.MONGODB_TLS_CERT_BASE64
+		const databaseTlsKey = process.env.MONGODB_TLS_KEY_BASE64
+		const tlsDisabled = uriParameters.get('tls') === 'false' || uriParameters.get('ssl') === 'false'
+		if (!tlsDisabled && (!databaseTlsCert !== !databaseTlsKey)) { // 显式关闭 TLS 时跳过证书检查；否则必须同时提供证书和私钥。
+			logging('ERROR', '创建数据库连接失败，MONGODB_TLS_CERT_BASE64 和 MONGODB_TLS_KEY_BASE64 必须同时提供', undefined, undefined, { recordingLogs: false })
+			process.exit(1)
+		}
+		if (databaseTlsCa) connectionOptions.ca = Buffer.from(databaseTlsCa, 'base64').toString('utf-8')
+		if (databaseTlsCert) connectionOptions.cert = Buffer.from(databaseTlsCert, 'base64').toString('utf-8')
+		if (databaseTlsKey) connectionOptions.key = Buffer.from(databaseTlsKey, 'base64').toString('utf-8')
+
+		mongoose.set('strictQuery', true) // 查询时忽略 schema 中没有定义的字段。
+		await mongoose.connect(databaseUri, connectionOptions)
+
+		// 在此处放置需要提前注册的 Model。
+		// 用户信息应当提前注册才能让其他表使用 Mongoose 的虚拟属性来关联用户信息数据。
+		mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
+		// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
+		mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
+
+		console.info('MongoDB Cluster Connect successfully!\n')
+	} catch {
+		logging('ERROR', '创建数据库连接失败，请检查 MongoDB 地址、认证和 TLS 配置', undefined, undefined, { recordingLogs: false })
+		process.exit(1)
 	}
 }
 
