@@ -1,5 +1,5 @@
 import { isPassRbacCheck } from '../service/RbacService.js'
-import { approvePendingReviewVideoService, checkVideoExistByKvidService, deleteVideoByKvidService, editVideoService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, uploadVideoService, uploaderGetVideoByKvidService } from '../service/VideoService.js'
+import { approvePendingReviewVideoService, checkVideoExistByKvidService, deleteVideoByKvidService, deleteSelfVideoService, editVideoService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, uploadVideoService, uploaderGetVideoByKvidService } from '../service/VideoService.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteVideoRequestDto, EditVideoRequestDto, GetVideoByKvidRequestDto, GetVideoByUidRequestDto, GetVideoFileTusEndpointRequestDto, SearchVideoByKeywordRequestDto, SearchVideoByVideoTagIdRequestDto, UploaderGetVideoByKvidRequestDto, UploadVideoRequestDto } from './VideoControllerDto.js'
@@ -258,6 +258,22 @@ export const deleteVideoByKvidController = async (ctx: koaCtx, next: koaNext) =>
 
 	const esClient = ctx.elasticsearchClient
 	ctx.body = await deleteVideoByKvidService(deleteVideoRequest, uid, token, esClient)
+	await next()
+}
+
+/**
+ * 删除登录用户自己上传的视频，所有权由服务层查询条件校验。
+ * @param ctx context
+ * @param next context
+ */
+export const deleteSelfVideoController = async (ctx: koaCtx, next: koaNext) => {
+	const data = ctx.request.body as Partial<DeleteVideoRequestDto>
+	ctx.body = await deleteSelfVideoService(
+		{ videoId: data?.videoId ?? -1 },
+		ctx.cookies.get('uuid'),
+		ctx.cookies.get('token'),
+		ctx.elasticsearchClient,
+	)
 	await next()
 }
 

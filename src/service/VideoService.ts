@@ -1,5 +1,5 @@
 import { Client } from '@elastic/elasticsearch'
-import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
+import mongoose, { ClientSession, InferSchemaType, PipelineStage } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
@@ -153,6 +153,7 @@ export const uploadVideoService = async (uploadVideoRequest: UploadVideoRequestD
  * @returns 编辑视频信息的请求响应
  */
 export const editVideoService = async (editVideoRequest: EditVideoRequestDto, uploaderUuid: string, uploaderToken: string, esClient?: Client): Promise<EditVideoResponseDto> => {
+	let session: ClientSession | undefined
 	try {
 		if (!checkEditVideoRequest(editVideoRequest) || !esClient || isEmptyObject(esClient)) {
 			logging('ERROR', '编辑视频信息失败，参数不合法或 Elasticsearch 客户端未连接', undefined, { editVideoRequest })
@@ -185,12 +186,11 @@ export const editVideoService = async (editVideoRequest: EditVideoRequestDto, up
 			editDateTime: nowDate,
 		}
 
-		const session = await createAndStartSession()
+		session = await createAndStartSession()
 		const updateVideoResult = await findOneAndUpdateData4MongoDB<Video>(where, updateData, videoSchemaInstance, videoCollectionName, { session }, false)
 		if (!updateVideoResult.success || !updateVideoResult.result) {
 			const errorMessage = '编辑视频信息失败，未找到视频或无权编辑'
 			logging('ERROR', errorMessage, undefined, { videoId: editVideoRequest.videoId, uploaderUuid })
-			await abortAndEndSession(session)
 			return { success: false, message: errorMessage }
 		}
 		const { indexName: esIndexName, schema: videoEsSchema } = VideoDocument
@@ -206,7 +206,6 @@ export const editVideoService = async (editVideoRequest: EditVideoRequestDto, up
 		if (!updateElasticsearchResult.success) {
 			const errorMessage = '编辑视频信息失败，搜索引擎更新失败'
 			logging('ERROR', errorMessage, undefined, { videoId: editVideoRequest.videoId })
-			await abortAndEndSession(session)
 			return { success: false, videoId: editVideoRequest.videoId, message: errorMessage }
 		}
 
@@ -215,6 +214,14 @@ export const editVideoService = async (editVideoRequest: EditVideoRequestDto, up
 	} catch (error) {
 		logging('ERROR', '编辑视频信息失败', error, { editVideoRequest, uploaderUuid })
 		return { success: false, message: '编辑视频信息失败' }
+	} finally {
+		if (session) {
+			try {
+				await abortAndEndSession(session)
+			} catch (error) {
+				logging('ERROR', '编辑视频后清理事务失败', error, { videoId: editVideoRequest.videoId })
+			}
+		}
 	}
 }
 
@@ -1104,101 +1111,106 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
  */
 export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, adminUid: number, adminToken: string, esClient: Client): Promise<DeleteVideoResponseDto> => {
 	try {
-		if (checkDeleteVideoRequest(deleteVideoRequest) && esClient && !isEmptyObject(esClient)) {
-			if ((await checkUserTokenService(adminUid, adminToken)).success) {
-				const adminUUID = await getUserUuid(adminUid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
-				if (!adminUUID) {
-					logging('ERROR', '删除一个视频失败，adminUUID 不存在', undefined, { adminUid })
-					return { success: false, message: '删除一个视频失败，adminUUID 不存在' }
-				}
-
-				const videoId = deleteVideoRequest.videoId
-				const nowDate = new Date().getTime()
-
-				const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
-				type Video = InferSchemaType<typeof videoSchemaInstance>
-				const deleteWhere: QueryType<Video> = {
-					videoId,
-				}
-
-				const { indexName: esIndexName } = VideoDocument
-				const conditions = {
-					kvid: videoId,
-				}
-
-				const { collectionName: removedVideoCollectionName, schemaInstance: removedVideoSchemaInstance } = RemovedVideoSchema
-				type RemovedVideo = InferSchemaType<typeof removedVideoSchemaInstance>
-
-				// 启动事务
-				const session = await mongoose.startSession()
-				session.startTransaction()
-
-				const option = { session }
-				try {
-					const getVideoByKvidRequest: GetVideoByKvidRequestDto = {
-						videoId,
-					}
-					const videoResult = await getVideoByKvidService(getVideoByKvidRequest)
-					const videoData = videoResult.video
-					if (videoResult.success && videoData) {
-						const removedVideoData: RemovedVideo = {
-							...videoData as unknown as Video, // TODO: Mongoose issue: #12420
-							pendingReview: false, // 已删除的视频就不需要审核了...
-							_operatorUUID_: adminUUID,
-							_operatorUid_: adminUid,
-							editDateTime: nowDate,
-						}
-						const saveRemovedVideo = await insertData2MongoDB<RemovedVideo>(removedVideoData, removedVideoSchemaInstance, removedVideoCollectionName, option)
-						if (saveRemovedVideo.success) {
-							const deleteResult = await deleteOneDataFromMongoDB<Video>(deleteWhere, videoSchemaInstance, videoCollectionName, option)
-							const deleteFromElasticsearchResult = await deleteDataFromElasticsearchCluster(esClient, esIndexName, conditions)
-							if (deleteResult.success && deleteFromElasticsearchResult) {
-								await session.commitTransaction()
-								session.endSession()
-								return { success: true, message: '删除视频成功' }
-							} else {
-								if (session.inTransaction()) {
-									await session.abortTransaction()
-								}
-								session.endSession()
-								logging('ERROR', '删除一个视频失败，删除视频失败')
-								return { success: false, message: '删除一个视频失败，删除视频失败' }
-							}
-						} else {
-							if (session.inTransaction()) {
-								await session.abortTransaction()
-							}
-							session.endSession()
-							logging('ERROR', '删除一个视频失败，保存副本失败')
-							return { success: false, message: '删除一个视频失败，保存副本失败' }
-						}
-					} else {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						logging('ERROR', '删除一个视频失败，查询视频数据失败')
-						return { success: false, message: '删除一个视频失败，查询视频数据失败' }
-					}
-				} catch (error) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					logging('ERROR', '删除一个视频时出错，获取视频失败！')
-					return { success: false, message: '删除一个视频时出错，获取视频失败' }
-				}
-			} else {
-				logging('ERROR', '删除一个视频失败，非法用户！')
-				return { success: false, message: '删除一个视频失败，非法用户！' }
-			}
-		} else {
+		if (!checkDeleteVideoRequest(deleteVideoRequest) || !esClient || isEmptyObject(esClient)) {
 			logging('ERROR', '删除一个视频失败，参数不合法')
 			return { success: false, message: '删除一个视频失败，参数不合法' }
 		}
+		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+			return { success: false, message: '删除一个视频失败，用户校验未通过' }
+		}
+		const adminUuid = await getUserUuid(adminUid)
+		if (!adminUuid) {
+			return { success: false, message: '删除一个视频失败，管理员不存在' }
+		}
+		// 管理员权限继续由 deleteVideoByKvidController 的 RBAC 检查保证。
+		return await archiveAndDeleteVideo(deleteVideoRequest.videoId, adminUid, adminUuid, esClient, false)
 	} catch (error) {
 		logging('ERROR', '删除一个视频时出错，未知错误：', error)
 		return { success: false, message: '删除一个视频时出错，未知错误' }
+	}
+}
+
+/**
+ * 删除当前登录用户自己上传的视频，不接受客户端提供的上传者身份。
+ * @param deleteVideoRequest 要删除的视频
+ * @param uploaderUuid 当前登录用户 UUID
+ * @param uploaderToken 当前登录用户 token
+ * @param esClient Elasticsearch 客户端
+ * @returns 删除结果
+ */
+export const deleteSelfVideoService = async (deleteVideoRequest: DeleteVideoRequestDto, uploaderUuid: string, uploaderToken: string, esClient: Client): Promise<DeleteVideoResponseDto> => {
+	try {
+		if (!checkDeleteVideoRequest(deleteVideoRequest) || !esClient || isEmptyObject(esClient)) {
+			return { success: false, message: '删除视频失败，参数不合法或搜索引擎未连接' }
+		}
+		if (!uploaderUuid || !uploaderToken || !(await checkUserTokenByUuidService(uploaderUuid, uploaderToken)).success) {
+			return { success: false, message: '删除视频失败，用户校验未通过' }
+		}
+		const uploaderUid = await getUserUid(uploaderUuid)
+		if (!Number.isSafeInteger(uploaderUid) || uploaderUid < 0) {
+			return { success: false, message: '删除视频失败，用户不存在' }
+		}
+		return await archiveAndDeleteVideo(deleteVideoRequest.videoId, uploaderUid, uploaderUuid, esClient, true)
+	} catch (error) {
+		logging('ERROR', '删除自己的视频失败', error, { videoId: deleteVideoRequest.videoId })
+		return { success: false, message: '删除视频失败' }
+	}
+}
+
+/**
+ * 在同一事务中读取完整原始记录、归档并删除；作者入口的读写都限定上传者。
+ * 不复用公开详情接口，避免展示字段裁剪造成归档缺失 UUID、来源等内部数据。
+ */
+const archiveAndDeleteVideo = async (videoId: number, operatorUid: number, operatorUuid: string, esClient: Client, ownerOnly: boolean): Promise<DeleteVideoResponseDto> => {
+	let session: ClientSession | undefined
+	try {
+		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+		type Video = InferSchemaType<typeof videoSchemaInstance>
+		const where: QueryType<Video> = {
+			videoId,
+			...(ownerOnly ? { uploaderUUID: operatorUuid } : {}),
+		}
+		const { collectionName: removedCollectionName, schemaInstance: removedSchemaInstance } = RemovedVideoSchema
+		type RemovedVideo = InferSchemaType<typeof removedSchemaInstance>
+
+		session = await createAndStartSession()
+		const options = { session }
+		const videoResult = await selectDataFromMongoDB<Video>(where, {}, videoSchemaInstance, videoCollectionName, options)
+		if (!videoResult.success || videoResult.result?.length !== 1) {
+			return { success: false, message: '删除视频失败，未找到视频或无权删除' }
+		}
+		const removedVideoData: RemovedVideo = {
+			...videoResult.result[0],
+			pendingReview: false,
+			_operatorUUID_: operatorUuid,
+			_operatorUid_: operatorUid,
+			editDateTime: Date.now(),
+		}
+		const archiveResult = await insertData2MongoDB<RemovedVideo>(removedVideoData, removedSchemaInstance, removedCollectionName, options)
+		if (!archiveResult.success) {
+			return { success: false, message: '删除视频失败，保存副本失败' }
+		}
+		const deleteResult = await deleteOneDataFromMongoDB<Video>(where, videoSchemaInstance, videoCollectionName, options)
+		if (!deleteResult.success || deleteResult.result?.deletedCount !== 1) {
+			return { success: false, message: '删除视频失败，视频未被删除' }
+		}
+		const searchDeleted = await deleteDataFromElasticsearchCluster(esClient, VideoDocument.indexName, { kvid: videoId })
+		if (!searchDeleted) {
+			return { success: false, message: '删除视频失败，搜索引擎更新失败' }
+		}
+		await commitAndEndSession(session)
+		return { success: true, message: '删除视频成功' }
+	} catch (error) {
+		logging('ERROR', '归档并删除视频失败', error, { videoId, operatorUid })
+		return { success: false, message: '删除视频失败' }
+	} finally {
+		if (session) {
+			try {
+				await abortAndEndSession(session)
+			} catch (error) {
+				logging('ERROR', '删除视频后清理事务失败', error, { videoId })
+			}
+		}
 	}
 }
 
@@ -1534,7 +1546,7 @@ const checkSearchVideoByVideoTagIdRequest = (searchVideoByVideoTagIdRequest: Sea
  * @returns 检查结果，合法返回 true，不合法返回 false
  */
 const checkDeleteVideoRequest = (deleteVideoRequest: DeleteVideoRequestDto): boolean => {
-	return (!!deleteVideoRequest.videoId && typeof deleteVideoRequest.videoId === 'number' && deleteVideoRequest.videoId >= 0)
+	return (Number.isSafeInteger(deleteVideoRequest?.videoId) && deleteVideoRequest.videoId > 0)
 }
 
 /**

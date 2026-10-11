@@ -42,7 +42,7 @@ import {
 	getUserBootstrapDataByHintController,
 } from '../controller/UserController.js'
 import { adminDeleteVideoCommentController, cancelVideoCommentDownvoteController, cancelVideoCommentUpvoteController, deleteSelfVideoCommentController, emitVideoCommentController, emitVideoCommentDownvoteController, emitVideoCommentUpvoteController, getVideoCommentListByKvidController } from '../controller/VideoCommentController.js'
-import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, editVideoController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, uploadVideoController, uploaderGetVideoByKvidController } from '../controller/VideoController.js'
+import { approvePendingReviewVideoController, checkVideoExistController, deleteVideoByKvidController, deleteSelfVideoController, editVideoController, getPendingReviewVideoController, getThumbVideoController, getVideoByKvidController, getVideoByUidController, getVideoCoverUploadSignedUrlController, getVideoFileTusEndpointController, searchVideoByKeywordController, searchVideoByVideoTagIdController, uploadVideoController, uploaderGetVideoByKvidController } from '../controller/VideoController.js'
 import { createVideoTagController, getVideoTagByTagIdController, searchVideoTagController } from '../controller/VideoTagController.js'
 import { emitVideoUpvoteController, cancelVideoUpvoteController, emitVideoDownvoteController, cancelVideoDownvoteController } from '../controller/VideoVoteController.js'
 import { adminGetUserRolesByUidController, adminUpdateUserRoleController, createRbacApiPathController, createRbacRoleController, deleteRbacApiPathController, deleteRbacRoleController, getRbacApiPathController, getRbacRoleController, updateApiPathPermissionsForRoleController } from '../controller/RbacController.js'
@@ -468,6 +468,7 @@ router.get('/video/cover/preUpload', getVideoCoverUploadSignedUrlController) // 
 // cookie: uid, token
 
 router.delete('/video/delete', deleteVideoByKvidController) // 根据视频 ID 删除视频 // WARN: 仅限管理员
+router.delete('/video/deleteSelf', deleteSelfVideoController) // 删除当前登录用户自己上传的视频
 // https://localhost:30000/video/delete
 // cookie: uid, token
 // {
