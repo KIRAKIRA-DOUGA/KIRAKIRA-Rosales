@@ -23,6 +23,21 @@ import { isValidPageNumber } from '../common/ValidTool.js'
  * @returns 发送消息的结果
  */
 export const sendMessageService = async (sendMessageRequest: SendMessageRequestDto, senderUuid: string, token: string): Promise<SendMessageResponseDto> => {
+	// 同一会话的并发写入可能发生事务冲突；必须重跑整个事务，不能复用已中止的 session。
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await sendMessageAttempt(sendMessageRequest, senderUuid, token)
+		} catch (error) {
+			if (attempt >= 7 || !isRetryableImWriteError(error)) {
+				logging('ERROR', '发送消息失败，事务重试失败', error, { senderUuid })
+				return { success: false, message: '发送消息失败，请稍后重试' }
+			}
+			await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+		}
+	}
+}
+
+const sendMessageAttempt = async (sendMessageRequest: SendMessageRequestDto, senderUuid: string, token: string): Promise<SendMessageResponseDto> => {
 	try {
 		// 验证请求参数
 		if (!checkSendMessageRequest(sendMessageRequest)) {
@@ -70,15 +85,6 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 		// 检查接收者是否关注了发送者（如果B关注了A，那么A可以无限发消息给B）
 		const isFollowing = await checkUserIsFollowing(receiverUuid, senderUuid)
 
-		// 如果接收者没有关注发送者，检查是否已经发送过3条或更多消息但对方未回复
-		if (!isFollowing) {
-			const hasUnreplied = await checkHasUnrepliedMessage(senderUuid, receiverUuid)
-			if (hasUnreplied) {
-				logging('ERROR', '发送消息失败，对方未回复你的消息，且对方未关注你（最多可发送3条消息）', undefined, { sendMessageRequest, senderUuid, senderUid, receiverUid, receiverUuid, isFollowing })
-				return { success: false, message: '发送消息失败，对方未回复你的消息，且对方未关注你（最多可发送3条消息）' }
-			}
-		}
-
 		// 检查接收者的私信隐私设置
 		const imPrivacyCheck = await checkReceiverImPrivacy(receiverUuid, senderUuid, isFollowing)
 		if (!imPrivacyCheck.allow) {
@@ -119,6 +125,11 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 
 			const conversation = conversationResult.conversation
 			const conversationId = conversation.conversationId
+			// 限额检查与消息写入使用同一事务快照。会话写冲突重试后重新检查，避免并发超额。
+			if (!isFollowing && await checkHasUnrepliedMessage(senderUuid, receiverUuid, session)) {
+				await abortAndEndSession(session)
+				return { success: false, message: '发送消息失败，对方未回复你的消息，且对方未关注你（最多可发送3条消息）' }
+			}
 
 			// 创建消息
 			const now = new Date().getTime()
@@ -196,6 +207,7 @@ export const sendMessageService = async (sendMessageRequest: SendMessageRequestD
 			throw error
 		}
 	} catch (error) {
+		if (isRetryableImWriteError(error)) throw error
 		logging('ERROR', '发送消息失败，未知错误', error, { sendMessageRequest, senderUuid })
 		return { success: false, message: '发送消息失败，未知错误' }
 	}
@@ -1312,7 +1324,7 @@ const generateConversationId = (user1Uid: number, user2Uid: number): string => {
  * @param receiverUuid 接收者的UUID
  * @returns 如果发送者已发送3条或更多消息但接收者从未回复过，返回true（不允许继续发送）；如果接收者曾经回复过，返回false（允许继续无限发送）
  */
-const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string): Promise<boolean> => {
+const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string, session: ClientSession): Promise<boolean> => {
 	try {
 		const senderUid = await getUserUid(senderUuid)
 		const receiverUid = await getUserUid(receiverUuid)
@@ -1322,57 +1334,33 @@ const checkHasUnrepliedMessage = async (senderUuid: string, receiverUuid: string
 		const conversationId = generateConversationId(senderUid, receiverUid)
 		const { collectionName: messageCollectionName, schemaInstance: messageSchemaInstance } = ImMessageSchema
 
-		const senderCountPipeline: PipelineStage[] = [
-			{
-				$match: {
-					conversationId,
-					senderUuid,
-					receiverUuid,
-				},
-			},
-			{
-				$count: 'totalCount',
-			},
-		]
-		const senderCountResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(
+		const senderCountResult = await countDocumentsFromMongoDB(
+			{ conversationId, senderUuid, receiverUuid },
 			messageSchemaInstance,
 			messageCollectionName,
-			senderCountPipeline,
+			{ session },
 		)
 		if (!senderCountResult.success) {
 			return true
 		}
-		const senderMessageCount = senderCountResult.result?.[0]?.totalCount ?? 0
+		const senderMessageCount = senderCountResult.result ?? 0
 		if (senderMessageCount < 3) {
 			return false
 		}
 
-		const receiverReplyPipeline: PipelineStage[] = [
-			{
-				$match: {
-					conversationId,
-					senderUuid: receiverUuid,
-					receiverUuid: senderUuid,
-				},
-			},
-			{
-				$limit: 1,
-			},
-			{
-				$count: 'totalCount',
-			},
-		]
-		const receiverReplyResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(
+		const receiverReplyResult = await countDocumentsFromMongoDB(
+			{ conversationId, senderUuid: receiverUuid, receiverUuid: senderUuid },
 			messageSchemaInstance,
 			messageCollectionName,
-			receiverReplyPipeline,
+			{ session },
 		)
 		if (!receiverReplyResult.success) {
 			return true
 		}
-		const receiverReplyCount = receiverReplyResult.result?.[0]?.totalCount ? receiverReplyResult.result[0].totalCount : 0
+		const receiverReplyCount = receiverReplyResult.result ?? 0
 		return receiverReplyCount === 0
 	} catch (error) {
+		if (isRetryableImWriteError(error)) throw error
 		logging('ERROR', '检查是否有未回复消息失败', error, { senderUuid, receiverUuid })
 		return true
 	}
@@ -1478,34 +1466,28 @@ const getOrCreateConversation = async (currentUserUuid: string, otherUserUid: nu
 			}
 			return { success: true, conversation: conversationData }
 		} catch (error) {
-			if (isMongoDuplicateKeyError(error)) {
-				const retryExisting = await selectDataFromMongoDB<Conversation>(where, select, conversationSchemaInstance, conversationCollectionName, session ? { session } : undefined)
-				if (retryExisting.success && retryExisting.result && retryExisting.result.length > 0) {
-					return { success: true, conversation: retryExisting.result[0] }
-				}
-			}
 			throw error
 		}
 	} catch (error) {
+		if (isRetryableImWriteError(error)) throw error
 		logging('ERROR', '获取或创建会话失败', error, { currentUserUuid, otherUserUid })
 		return { success: false }
 	}
 }
 
 /**
- * 判断 MongoDB 错误是否为唯一索引冲突
+ * 识别被 dbPool 包装的 MongoDB 唯一索引冲突或临时事务冲突
  * @param error 捕获到的错误
- * @returns 是唯一索引冲突返回 true，否则 false
+ * @returns 是否可以中止并重跑整个发送事务
  */
-const isMongoDuplicateKeyError = (error: unknown): boolean => {
-	const hasDuplicateKeyCode = (value: unknown): boolean => {
-		if (!value || typeof value !== 'object') {
-			return false
-		}
-		const candidate = value as { code?: number; error?: { code?: number } }
-		return candidate.code === 11000 || candidate.error?.code === 11000
+const isRetryableImWriteError = (error: unknown): boolean => {
+	let current = error
+	for (let depth = 0; depth < 10 && current && typeof current === 'object'; depth++) {
+		const candidate = current as { code?: number; errorLabels?: string[]; error?: unknown; cause?: unknown }
+		if ([11000, 112, 244, 251].includes(candidate.code) || candidate.errorLabels?.includes('TransientTransactionError')) return true
+		current = candidate.error ?? candidate.cause
 	}
-	return hasDuplicateKeyCode(error) || (typeof error === 'object' && error !== null && hasDuplicateKeyCode((error as { error?: unknown }).error))
+	return false
 }
 
 /**
@@ -1579,8 +1561,8 @@ const countUnreadMessagesForReceiver = async (
  */
 const checkSendMessageRequest = (request: SendMessageRequestDto): boolean => {
 	return (
-		request.receiverUid !== undefined &&
-		request.receiverUid !== null &&
+		typeof request.receiverUid === 'number' &&
+		Number.isSafeInteger(request.receiverUid) &&
 		request.receiverUid > 0 &&
 		request.messageType !== undefined &&
 		Object.values(IM_MESSAGE_TYPE).includes(request.messageType) &&
@@ -1613,7 +1595,11 @@ const checkMarkMessageReadRequest = (request: MarkMessageReadRequestDto): boolea
 		request.conversationId !== undefined &&
 		request.conversationId !== null &&
 		typeof request.conversationId === 'string' &&
-		request.conversationId.length > 0
+		request.conversationId.length > 0 &&
+		(request.messageIds === undefined || (
+			Array.isArray(request.messageIds) &&
+			request.messageIds.every(messageId => typeof messageId === 'string' && messageId.trim().length > 0)
+		))
 	)
 }
 
