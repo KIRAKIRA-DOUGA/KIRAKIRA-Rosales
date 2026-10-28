@@ -49,6 +49,16 @@ export type UpdateResultType = {
 }
 
 /**
+ * countDocuments 统计数量的结果
+ */
+export type CountDocumentsResultType = {
+	success: boolean;
+	message: string;
+	error?: unknown;
+	result?: number;
+}
+
+/**
  * MongoDB 可用的查询条件
  */
 type MongoDBConditionsType<T> = {
@@ -78,7 +88,12 @@ type MongoDBConditionsType<T> = {
 // 数据库 Query，相当于 SQL 中的 WHERE
 export type QueryType<T> = {
 	[K in keyof T]?: T[K] extends Types.DocumentArray<unknown> ? MongoDBConditionsType<T> : T[K] | MongoDBConditionsType<T>;
-} & Record< string, boolean | string | number | MongoDBConditionsType<T> >
+} & {
+	$and?: QueryType<T>[];
+	$or?: QueryType<T>[];
+	$not?: QueryType<T>;
+	_id?: Types.ObjectId | string;
+}
 
 // 数据库 Update，相当于 SQL UPDATE 中的 SET
 export type UpdateType<T> = {
