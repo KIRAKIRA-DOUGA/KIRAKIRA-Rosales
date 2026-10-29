@@ -128,7 +128,7 @@ export type AddToFavoritesRequestDto = {
 	favoritesListId: number;
 	/** 内容的类型 - 非空 */
 	category: BrowsingHistoryCategory;
-	/** 内容的唯一 ID - 非空 */
+	/** 内容的唯一 ID；video 必须是安全正整数的十进制字符串，不允许前导零、空白或后缀。 */
 	id: string;
 }
 
@@ -150,7 +150,7 @@ export type RemoveFromFavoritesRequestDto = {
 	favoritesListId: number;
 	/** 内容的类型 - 非空 */
 	category: BrowsingHistoryCategory;
-	/** 内容的唯一 ID - 非空 */
+	/** 内容的唯一 ID；video 使用无前导零的安全正整数字符串。 */
 	id: string;
 }
 
@@ -207,7 +207,7 @@ export type GetFavoritesDetailResponseDto = {
 export type CheckFavoritesContentRequestDto = {
 	/** 内容的类型 - 非空 */
 	category: BrowsingHistoryCategory;
-	/** 内容的唯一 ID - 非空 */
+	/** 内容的唯一 ID；video 使用无前导零的安全正整数字符串。 */
 	id: string;
 }
 
@@ -277,13 +277,13 @@ export type DeleteFavoritesResponseDto = {
 export type ReorderFavoritesDetailRequestDto = {
 	/** 收藏夹唯一 ID - 非空 */
 	favoritesListId: number;
-	/** 要调整排序的内容项列表，按新的顺序排列 */
+	/** 要移动的内容项；未指定项保持相对顺序，同目标位置按请求顺序排列，不允许重复项。 */
 	items: {
 		/** 内容的类型 - 非空 */
 		category: BrowsingHistoryCategory;
 		/** 内容的唯一 ID - 非空 */
 		id: string;
-		/** 新的排序顺序 - 非空 */
+		/** 目标位置，从 1 开始的正整数；超出列表长度时移至末尾。 */
 		sortOrder: number;
 	}[];
 }

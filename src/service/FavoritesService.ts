@@ -203,11 +203,6 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 			return { success: false, message: '获取指定用户收藏夹列表失败，目标用户不存在' }
 		}
 
-		// 如果是查看自己的收藏夹，直接返回所有收藏夹
-		if (viewerAuth.status === 'authenticated' && targetUid === viewerAuth.uid) {
-			return await getFavoritesService(viewerAuth.uuid, token as string)
-		}
-
 		const viewerUid = viewerAuth.status === 'authenticated' ? viewerAuth.uid : undefined
 		const viewerUuid = viewerAuth.status === 'authenticated' ? viewerAuth.uuid : undefined
 
@@ -233,6 +228,10 @@ export const getFavoritesByUidService = async (getFavoritesByUidRequest: GetFavo
 		if (!getFavoritesResult.success || !favorites) {
 			logging('ERROR', '获取指定用户收藏夹列表失败，查询收藏夹数据失败', undefined, { getFavoritesByUidRequest, uuid, viewerUid, targetUid })
 			return { success: false, message: '获取指定用户收藏夹列表失败，查询收藏夹数据失败' }
+		}
+		// 查看自己时跳过可见性检查，但仍只返回该 UID 创建的收藏夹。
+		if (viewerUid === targetUid) {
+			return { success: true, message: '获取指定用户收藏夹列表成功', result: favorites }
 		}
 
 		// 检查查看者是否是任何收藏夹的维护者
@@ -355,77 +354,53 @@ export const addToFavoritesService = async (addToFavoritesRequest: AddToFavorite
 
 		const { collectionName, schemaInstance } = FavoritesDetailSchema
 		type FavoritesDetailType = InferSchemaType<typeof schemaInstance>
-		const now = new Date().getTime()
-
-		// 检查是否已经存在
-		const checkWhere: QueryType<FavoritesDetailType> = {
-			favoritesListId: addToFavoritesRequest.favoritesListId,
-			category: addToFavoritesRequest.category,
-			id: addToFavoritesRequest.id,
-		}
-		const checkSelect: SelectType<FavoritesDetailType> = {
-			favoritesListId: 1,
-		}
-		const checkResult = await selectDataFromMongoDB<FavoritesDetailType>(checkWhere, checkSelect, schemaInstance, collectionName)
-		if (checkResult.success && checkResult.result && checkResult.result.length > 0) {
-			return { success: false, message: '添加内容到收藏夹失败，该内容已存在于收藏夹中' }
-		}
-
-		// 检查收藏夹内的内容数量是否达到上限（5000个）
-		const favoritesDetailsCountPipeline: PipelineStage[] = [
-			{
-				$match: {
-					favoritesListId: addToFavoritesRequest.favoritesListId,
-				},
-			},
-			{
-				$count: 'totalCount',
-			},
-		]
-		const favoritesDetailsCountResult = await selectDataByAggregateFromMongoDB<{ totalCount: number }>(schemaInstance, collectionName, favoritesDetailsCountPipeline)
-		const favoritesDetailsCount = favoritesDetailsCountResult.result?.[0]?.totalCount ?? 0
-		if (favoritesDetailsCount >= 5000) {
-			logging('ERROR', '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）', undefined, { addToFavoritesRequest, uuid, uid })
-			return { success: false, message: '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）' }
-		}
-
-		// 获取当前收藏夹中的最大 sortOrder
-		const maxSortOrderResult = await selectDataFromMongoDB<FavoritesDetailType>(
-			{ favoritesListId: addToFavoritesRequest.favoritesListId },
-			{ sortOrder: 1 },
-			schemaInstance,
-			collectionName,
-			undefined,
-			{ sortOrder: -1 },
-			{ page: 1, pageSize: 1 },
-		)
-		const maxSortOrderDocument = maxSortOrderResult.result?.[0]
-		const newSortOrder = maxSortOrderDocument ? maxSortOrderDocument.sortOrder + 1 : 1
-
-		const favoritesDetailData: FavoritesDetailType = {
-			favoritesListId: addToFavoritesRequest.favoritesListId,
-			operator: uid,
-			category: addToFavoritesRequest.category,
-			id: addToFavoritesRequest.id,
-			addedDateTime: now,
-			sortOrder: newSortOrder,
-			editDateTime: now,
-		}
-
+		const detailModel: mongoose.Model<FavoritesDetailType> = mongoose.models[collectionName] || mongoose.model<FavoritesDetailType>(collectionName, schemaInstance)
+		const favoritesModel: mongoose.Model<InferSchemaType<typeof FavoritesSchema.schemaInstance>> = mongoose.models[FavoritesSchema.collectionName]
+			|| mongoose.model(FavoritesSchema.collectionName, FavoritesSchema.schemaInstance)
+		await detailModel.init()
+		const session = await mongoose.startSession()
 		try {
-			const insertResult = await insertData2MongoDB<FavoritesDetailType>(favoritesDetailData, schemaInstance, collectionName)
-			if (insertResult.success && insertResult.result && insertResult.result.length > 0) {
+			// 先写同一收藏夹的版本号，让并发添加发生写冲突并重试整个事务。
+			// 仅在事务内 count + insert 不会让不同明细之间互斥，仍可能突破容量上限。
+			return await session.withTransaction(async (): Promise<AddToFavoritesResponseDto> => {
+				const lockResult = await favoritesModel.updateOne({
+					favoritesId: addToFavoritesRequest.favoritesListId,
+					$or: [{ creator: uid }, { editor: uid }],
+				}, { $inc: { __v: 1 } }, { session })
+				if (lockResult.matchedCount !== 1) {
+					return { success: false, message: '添加内容到收藏夹失败，没有权限操作该收藏夹' }
+				}
+
+				const { favoritesListId, category, id } = addToFavoritesRequest
+				if (await detailModel.exists({ favoritesListId, category, id }).session(session)) {
+					return { success: false, message: '添加内容到收藏夹失败，该内容已存在于收藏夹中' }
+				}
+				if (await detailModel.countDocuments({ favoritesListId }).session(session) >= 5000) {
+					return { success: false, message: '添加内容到收藏夹失败，收藏夹内内容数量已达上限（5000个）' }
+				}
+
+				const lastItem = await detailModel.findOne({ favoritesListId })
+					.select('sortOrder').sort({ sortOrder: -1 }).session(session).lean()
+				const now = Date.now()
+				await detailModel.create([{
+					favoritesListId,
+					operator: uid,
+					category,
+					id,
+					addedDateTime: now,
+					sortOrder: lastItem ? lastItem.sortOrder + 1 : 1,
+					editDateTime: now,
+				}], { session })
 				return { success: true, message: '添加内容到收藏夹成功' }
-			} else {
-				logging('ERROR', '添加内容到收藏夹失败，数据存储失败', undefined, { addToFavoritesRequest, uuid, uid })
-				return { success: false, message: '添加内容到收藏夹失败，数据存储失败' }
-			}
+			}, { readPreference: 'primary' })
 		} catch (error) {
 			if (isMongoDuplicateKeyError(error)) {
 				return { success: false, message: '添加内容到收藏夹失败，该内容已存在于收藏夹中' }
 			}
 			logging('ERROR', '添加内容到收藏夹失败，数据存储时出错：', error, { addToFavoritesRequest, uuid, uid })
 			return { success: false, message: '添加内容到收藏夹失败，数据存储时出错' }
+		} finally {
+			await session.endSession()
 		}
 	} catch (error) {
 		logging('ERROR', '添加内容到收藏夹失败，未知原因：', error, { addToFavoritesRequest, uuid })
@@ -579,12 +554,8 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 		}
 		const sortOrder = getFavoritesDetailRequest.sortOrder ?? 1
 
-		let skip = 0
-		let pageSize: number | undefined = undefined
-		if (getFavoritesDetailRequest.pagination.page > 0 && getFavoritesDetailRequest.pagination.pageSize > 0) {
-			skip = (getFavoritesDetailRequest.pagination.page - 1) * getFavoritesDetailRequest.pagination.pageSize
-			pageSize = getFavoritesDetailRequest.pagination.pageSize
-		}
+		const { page, pageSize } = getFavoritesDetailRequest.pagination
+		const skip = (page - 1) * pageSize
 
 		const favoritesDetailCountPipeline: PipelineStage[] = [
 			{ $match: where },
@@ -594,7 +565,7 @@ export const getFavoritesDetailService = async (getFavoritesDetailRequest: GetFa
 			{ $match: where },
 			{ $sort: { sortOrder } },
 			{ $skip: skip },
-			...(pageSize ? [{ $limit: pageSize }] : []),
+			{ $limit: pageSize },
 			{
 				$project: {
 					favoritesListId: 1,
@@ -937,66 +908,40 @@ export const reorderFavoritesDetailService = async (reorderFavoritesDetailReques
 			}
 
 			const existing = existingResult.result ?? []
-			if (existing.length === 0) {
-				await commitAndEndSession(session)
-				return { success: true, message: '调整收藏夹内部排序成功（列表为空）' }
-			}
-
-			// 2) 将请求中的目标排序写入内存模型（不落库），其他项保持原排序
-			type WorkingItem = {
-				category: string
-				id: string
-				currentOrder: number
-				desiredOrder: number
-				addedDateTime?: number
-			}
-			const keyOf = (c: string, id: string) => `${c}__${id}`
-			const workingMap = new Map<string, WorkingItem>()
-			let maxExistingOrder = 0
-			for (const item of existing) {
-				maxExistingOrder = Math.max(maxExistingOrder, item.sortOrder ?? 0)
-				workingMap.set(
-					keyOf(String(item.category), String(item.id)),
-					{
-						category: String(item.category),
-						id: String(item.id),
-						currentOrder: item.sortOrder ?? 0,
-						desiredOrder: item.sortOrder ?? 0,
-						addedDateTime: item.addedDateTime,
-					},
-				)
-			}
-
-			for (const item of reorderFavoritesDetailRequest.items) {
-				const key = keyOf(item.category, item.id)
-				const target = workingMap.get(key)
-				if (!target) {
+			// 2) 先移出请求涉及的内容，再按目标位置插回；其余内容保持相对顺序。
+			const keyOf = (category: string, id: string) => JSON.stringify([category, id])
+			const existingItems = existing.map(item => ({
+				category: item.category,
+				id: item.id,
+				currentOrder: item.sortOrder,
+				addedDateTime: item.addedDateTime,
+			})).sort((a, b) => a.currentOrder - b.currentOrder || a.addedDateTime - b.addedDateTime || keyOf(a.category, a.id).localeCompare(keyOf(b.category, b.id)))
+			const existingMap = new Map(existingItems.map(item => [keyOf(item.category, item.id), item]))
+			const moves = reorderFavoritesDetailRequest.items.map((item, index) => ({ ...item, index }))
+			for (const item of moves) {
+				if (!existingMap.has(keyOf(item.category, item.id))) {
 					await abortAndEndSession(session)
-					logging('ERROR', '调整收藏夹内部排序失败，存在不存在的收藏项', undefined, { reorderFavoritesDetailRequest, uuid, uid, item })
 					return { success: false, message: '调整收藏夹内部排序失败，存在不存在的收藏项' }
 				}
-
-				const desired = Math.max(1, item.sortOrder || 1)
-				// 如果是当前最大，则置为最大+1；否则先按用户期望排序，稍后统一重排
-				target.desiredOrder = desired > maxExistingOrder ? maxExistingOrder + 1 : desired
-				maxExistingOrder = Math.max(maxExistingOrder, target.desiredOrder)
-				workingMap.set(key, target)
 			}
 
-			// 3) 在内存中计算严格的 1..N 顺序，先按 desired，再按原顺序/时间稳定排序
-			const workingList = Array.from(workingMap.values())
-			workingList.sort((a, b) => {
-				if (a.desiredOrder !== b.desiredOrder) return a.desiredOrder - b.desiredOrder
-				if (a.currentOrder !== b.currentOrder) return a.currentOrder - b.currentOrder
-				return (a.addedDateTime ?? 0) - (b.addedDateTime ?? 0)
-			})
+			const movedKeys = new Set(moves.map(item => keyOf(item.category, item.id)))
+			const workingList = existingItems.filter(item => !movedKeys.has(keyOf(item.category, item.id)))
+			moves.sort((a, b) => a.sortOrder - b.sortOrder || a.index - b.index)
+			let lastInsertionIndex = -1
+			for (const move of moves) {
+				// 超出长度时放在末尾；目标位置相同时，按请求中的先后顺序放置。
+				const insertionIndex = Math.max(lastInsertionIndex + 1, Math.min(move.sortOrder - 1, workingList.length))
+				workingList.splice(insertionIndex, 0, existingMap.get(keyOf(move.category, move.id))!)
+				lastInsertionIndex = insertionIndex
+			}
 
 			const finalOrders = new Map<string, number>()
 			for (let i = 0; i < workingList.length; i++) {
 				finalOrders.set(keyOf(workingList[i].category, workingList[i].id), i + 1)
 			}
 
-			// 4) 统一落库（严格 1..N），避免并发累加导致溢出
+			// 3) 将最终顺序统一写回为 1..N。
 			const pendingUpdates: { where: QueryType<FavoritesDetailType>; update: UpdateType<FavoritesDetailType> }[] = []
 			for (const item of workingList) {
 				const finalOrder = finalOrders.get(keyOf(item.category, item.id))!
@@ -1424,7 +1369,7 @@ const resolveOptionalViewerAuth = async (
  * @returns 合法返回 true，否则 false
  */
 const isValidFavoritesId = (id: number | undefined | null): boolean => {
-	return typeof id === 'number' && id > 0
+	return typeof id === 'number' && Number.isSafeInteger(id) && id > 0
 }
 
 /**
@@ -1532,7 +1477,7 @@ const checkAddToFavoritesRequest = (addToFavoritesRequest: AddToFavoritesRequest
 	return (
 		isValidFavoritesId(addToFavoritesRequest.favoritesListId)
 		&& isSupportedFavoritesCategory(addToFavoritesRequest.category)
-		&& !!addToFavoritesRequest.id
+		&& isValidFavoritesContentId(addToFavoritesRequest.category, addToFavoritesRequest.id)
 	)
 }
 
@@ -1542,7 +1487,9 @@ const checkAddToFavoritesRequest = (addToFavoritesRequest: AddToFavoritesRequest
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkRemoveFromFavoritesRequest = (removeFromFavoritesRequest: RemoveFromFavoritesRequestDto): boolean => {
-	return (isValidFavoritesId(removeFromFavoritesRequest.favoritesListId) && !!removeFromFavoritesRequest.category && !!removeFromFavoritesRequest.id && removeFromFavoritesRequest.id.length > 0)
+	return isValidFavoritesId(removeFromFavoritesRequest.favoritesListId)
+		&& isSupportedFavoritesCategory(removeFromFavoritesRequest.category)
+		&& isValidFavoritesContentId(removeFromFavoritesRequest.category, removeFromFavoritesRequest.id)
 }
 
 /**
@@ -1554,7 +1501,10 @@ const checkGetFavoritesDetailRequest = (getFavoritesDetailRequest: GetFavoritesD
 	if (!isValidFavoritesId(getFavoritesDetailRequest.favoritesListId)) {
 		return false
 	}
-	if (getFavoritesDetailRequest.pagination.page <= 0 || getFavoritesDetailRequest.pagination.pageSize <= 0) {
+	const { page, pageSize } = getFavoritesDetailRequest.pagination
+	if (!Number.isSafeInteger(page) || page <= 0
+		|| !Number.isSafeInteger(pageSize) || pageSize <= 0 || pageSize > 100
+		|| !Number.isSafeInteger((page - 1) * pageSize)) {
 		return false
 	}
 	// category 可选；传入时必须是 video | photo | comment（含可读的 photo）
@@ -1570,7 +1520,17 @@ const checkGetFavoritesDetailRequest = (getFavoritesDetailRequest: GetFavoritesD
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkCheckFavoritesContentRequest = (checkFavoritesContentRequest: CheckFavoritesContentRequestDto): boolean => {
-	return isSupportedFavoritesCategory(checkFavoritesContentRequest.category) && !!checkFavoritesContentRequest.id && checkFavoritesContentRequest.id.length > 0
+	return isSupportedFavoritesCategory(checkFavoritesContentRequest.category)
+		&& isValidFavoritesContentId(checkFavoritesContentRequest.category, checkFavoritesContentRequest.id)
+}
+
+/** 视频 ID 必须与数据库计数和唯一索引使用的十进制字符串完全一致。 */
+const isValidFavoritesContentId = (category: BrowsingHistoryCategory, id: unknown): id is string => {
+	if (typeof id !== 'string' || id.length === 0) return false
+	if (category === 'video') {
+		return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id))
+	}
+	return true
 }
 
 /**
@@ -1699,10 +1659,10 @@ const checkFavoritesContentExists = async (category: BrowsingHistoryCategory, id
 	}
 
 	if (category === 'video') {
-		const videoId = parseInteger(id)
-		if (!videoId || videoId <= 0) {
+		if (!isValidFavoritesContentId(category, id)) {
 			return { success: false, message: '添加内容到收藏夹失败，视频 ID 不合法' }
 		}
+		const videoId = Number(id)
 		const checkVideoExistResult = await checkVideoExistByKvidService({ videoId })
 		if (!checkVideoExistResult.success || !checkVideoExistResult.exist) {
 			return { success: false, message: '添加内容到收藏夹失败，视频不存在' }
@@ -1781,13 +1741,19 @@ const checkReorderFavoritesDetailRequest = (reorderFavoritesDetailRequest: Reord
 	if (!isValidFavoritesId(reorderFavoritesDetailRequest.favoritesListId)) {
 		return false
 	}
-	if (!reorderFavoritesDetailRequest.items || reorderFavoritesDetailRequest.items.length === 0) {
+	if (!Array.isArray(reorderFavoritesDetailRequest.items) || reorderFavoritesDetailRequest.items.length === 0) {
 		return false
 	}
+	const keys = new Set<string>()
 	for (const item of reorderFavoritesDetailRequest.items) {
-		if (!item.category || !item.id || item.sortOrder === undefined || item.sortOrder === null) {
+		if (!item || !isSupportedFavoritesCategory(item.category)
+			|| !isValidFavoritesContentId(item.category, item.id)
+			|| !Number.isSafeInteger(item.sortOrder) || item.sortOrder <= 0) {
 			return false
 		}
+		const key = JSON.stringify([item.category, item.id])
+		if (keys.has(key)) return false
+		keys.add(key)
 	}
 	return true
 }

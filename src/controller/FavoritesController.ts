@@ -136,7 +136,7 @@ export const getFavoritesDetailController = async (ctx: koaCtx, next: koaNext) =
 		category: category || undefined,
 		sortOrder: sortOrder === 1 || sortOrder === -1 ? sortOrder : 1,
 		pagination: {
-			page: parseInteger(page || '1') ?? 1,
+			page: page === undefined ? 1 : Number(page),
 			pageSize: finalPageSize ?? 50,
 		},
 	}
