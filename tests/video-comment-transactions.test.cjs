@@ -4,7 +4,7 @@ const { setImmediate: tick } = require('node:timers/promises');
 const { loadService } = require('./helpers/load-service.cjs');
 const copy = value => JSON.parse(JSON.stringify(value));
 const commentId = '0123456789abcdef01234567';
-const matches = (row, where) => Object.entries(where).every(([key, value]) => typeof value?.test === 'function' ? value.test(row[key]) : row[key] === value);
+const matches = (row, where) => Object.entries(where).every(([key, value]) => value?.$regex ? value.$regex.test(row[key]) : row[key] === value);
 const schemas = Object.fromEntries([
 	['VideoCommentSchema', 'comments'], ['VideoCommentUpvoteSchema', 'up'], ['VideoCommentDownvoteSchema', 'down'],
 ].map(([key, collectionName]) => [key, { collectionName, schemaInstance: {} }]));
@@ -15,50 +15,98 @@ const schemas = Object.fromEntries([
 function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 	let state = { comments: [{ _id: commentId, videoId: 1, upvoteCount: initialCount, downvoteCount: initialDown.length, text: 'unchanged' }], up: copy(initialUp), down: copy(initialDown) };
 	let version = 0, owner, nextId = 0;
-	const controls = { retries: 0, sessions: 0, ended: 0, failCounter: false, options: [] };
+	const controls = { retries: 0, sessions: 0, ended: 0, failCounter: false, options: [], failure: undefined, retriedErrors: [] };
 	const getRows = (name, session) => {
 		assert.ok(session?.data, 'every operation must participate in the transaction');
 		return session.data[name];
 	};
-	const query = operation => {
-		let session;
+	const checkOptions = options => {
+		assert.equal(Object.hasOwn(options ?? {}, 'preserveError'), false, 'wrapper-only option must not reach Mongoose');
+		assert.equal(options?.readPreference, 'primary');
+		getRows('comments', options?.session);
+	};
+	const maybeFail = operation => {
+		if (controls.failure?.operation === operation) {
+			const error = controls.failure.error;
+			controls.failure = undefined;
+			throw error;
+		}
+	};
+	const document = row => row ? { ...copy(row), toObject: () => copy(row) } : null;
+	const query = (operation, initialOptions) => {
+		let options = initialOptions, skip = 0, limit;
 		return {
-			session(value) { session = value; return this; },
-			lean() { return Promise.resolve().then(() => operation(session)); },
-			then(resolve, reject) { return Promise.resolve().then(() => operation(session)).then(resolve, reject); },
+			session(value) { options = { ...options, session: value }; return this; },
+			setOptions(value) { options = { ...options, ...value }; return this; },
+			sort() { return this; },
+			skip(value) { skip = value; return this; },
+			limit(value) { limit = value; return this; },
+			then(resolve, reject) { return Promise.resolve().then(() => {
+				checkOptions(options);
+				const result = operation(options.session);
+				return Array.isArray(result) ? result.slice(skip, limit === undefined ? undefined : skip + limit) : result;
+			}).then(resolve, reject); },
 		};
 	};
-	const models = Object.fromEntries(['comments', 'up', 'down'].map(name => [name, {
-		findOneAndUpdate(where, update, { session }) {
-			return { lean: async () => {
-				if ((owner && owner !== session) || session.version !== version) {
-					const error = new Error('simulated WriteConflict'); error.transient = true; throw error;
+	const models = Object.fromEntries(['comments', 'up', 'down'].map(name => {
+		class Model {
+			constructor(data) { this.data = copy(data); }
+			async save(options) {
+				checkOptions(options); maybeFail('save');
+				const row = { ...this.data, _id: `new-${++nextId}` };
+				getRows(name, options.session).push(row);
+				return document(row);
+			}
+			static async createIndexes() {}
+			static findOneAndUpdate(where, update, options) {
+				return query(session => {
+					maybeFail('findOneAndUpdate');
+					assert.equal(options.upsert, false);
+					assert.equal(options.new, true);
+					if (name === 'comments' && update.$inc) {
+						if ((owner && owner !== session) || session.version !== version) {
+							const error = new Error('simulated WriteConflict');
+							error.hasErrorLabel = label => label === 'TransientTransactionError';
+							throw error;
+						}
+						owner = session;
+					}
+					if (name === 'comments' && update.$set) {
+						maybeFail('counter');
+						if (controls.failCounter) throw new Error('counter write unavailable');
+					}
+					const row = getRows(name, session).find(row => matches(row, where));
+					if (!row) return null;
+					for (const [key, delta] of Object.entries(update.$inc ?? {})) row[key] = (row[key] || 0) + delta;
+					Object.assign(row, update.$set);
+					return document(row);
+				}, options);
+			}
+			static find(where, _select, options) {
+				return query(session => {
+					maybeFail('find');
+					return getRows(name, session).filter(row => matches(row, where)).map(document);
+				}, options);
+			}
+			static async updateMany(where, update, options) {
+				checkOptions(options); maybeFail('updateMany');
+				const rows = getRows(name, options.session).filter(row => matches(row, where));
+				let modifiedCount = 0;
+				for (const row of rows) {
+					if (Object.entries(update.$set).some(([key, value]) => row[key] !== value)) modifiedCount++;
+					Object.assign(row, update.$set);
 				}
-				owner = session;
-				const row = getRows(name, session).find(row => matches(row, where));
-				if (!row) return null;
-				for (const [key, delta] of Object.entries(update.$inc)) row[key] = (row[key] || 0) + delta;
-				return copy(row);
-			} };
-		},
-		findOne(where) { return query(session => {
-			const row = getRows(name, session).find(row => matches(row, where));
-			return row ? copy(row) : null;
-		}); },
-		async updateMany(where, update, { session }) {
-			for (const row of getRows(name, session).filter(row => matches(row, where))) Object.assign(row, update.$set);
-			return { acknowledged: true };
-		},
-		async updateOne(where, update, { session }) {
-			if (name === 'comments' && controls.failCounter) throw new Error('counter write unavailable');
-			Object.assign(getRows(name, session).find(row => matches(row, where)), update.$set);
-			return { acknowledged: true };
-		},
-		async create(rows, { session }) {
-			getRows(name, session).push(...rows.map(row => ({ ...copy(row), _id: `new-${++nextId}` })));
-		},
-		countDocuments(where) { return query(session => getRows(name, session).filter(row => matches(row, where)).length); },
-	}]));
+				return { acknowledged: true, matchedCount: rows.length, modifiedCount };
+			}
+			static countDocuments(where, options) {
+				return query(session => {
+					maybeFail('countDocuments');
+					return getRows(name, session).filter(row => matches(row, where)).length;
+				}, options);
+			}
+		}
+		return [name, Model];
+	}));
 	const mongoose = { models, async startSession() {
 		controls.sessions++;
 		return {
@@ -71,8 +119,9 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 						state = this.data; version++;
 						return result;
 					} catch (error) {
-						if (!error.transient) throw error;
+						if (!error.hasErrorLabel?.('TransientTransactionError')) throw error;
 						controls.retries++;
+						controls.retriedErrors.push(error);
 					} finally {
 						if (owner === this) owner = undefined;
 						this.data = undefined;
@@ -84,8 +133,14 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 			async endSession() { controls.ended++; },
 		};
 	} };
+	const pool = loadService('src/dbPool/DbClusterPool.ts', {
+		mongoose, mongodb: {}, './schema/SequenceSchema.js': {}, './schema/UserSchema.js': {}, '../service/loggingService.js': { logging() {} },
+	});
+	const sessions = loadService('src/common/MongoDBSessionTool.ts', { mongoose });
 	const { mutateCommentVote } = loadService('src/service/CommentVoteMutation.ts', {
-		mongoose, '../dbPool/schema/VideoCommentSchema.js': schemas,
+		'../dbPool/DbClusterPool.js': pool,
+		'../common/MongoDBSessionTool.js': sessions,
+		'../dbPool/schema/VideoCommentSchema.js': schemas,
 	});
 	return { controls, state: () => state, mutate: (direction, active, uid = 1, videoId = 1, id = commentId) => mutateCommentVote(videoId, id, uid, `uuid-${uid}`, direction, active) };
 }
@@ -160,6 +215,34 @@ test('a wrong video/comment pairing aborts before any vote is stored', async () 
 	const f = fixture();
 	await assert.rejects(f.mutate('upvote', true, 1, 99), /不存在/);
 	assert.equal(f.state().up.length, 0);
+});
+
+test('real database wrappers preserve transient error labels and retry every transaction operation', async () => {
+	for (const operation of ['findOneAndUpdate', 'find', 'save', 'updateMany', 'countDocuments', 'counter']) {
+		const f = fixture();
+		const error = new Error(`transient ${operation}`);
+		error.hasErrorLabel = label => label === 'TransientTransactionError';
+		f.controls.failure = { operation, error };
+		assert.equal(await f.mutate('upvote', true), true, operation);
+		assert.equal(f.controls.retries, 1, operation);
+		assert.equal(f.controls.retriedErrors[0], error, 'the actual driver error must survive the common wrapper');
+		assert.equal(f.state().up.filter(row => !row.invalidFlag).length, 1, operation);
+		assert.equal(f.state().comments[0].upvoteCount, 1, operation);
+		assert.equal(f.controls.sessions, f.controls.ended, operation);
+	}
+});
+
+test('non-transient database failures roll back through the real wrappers without losing the original error', async () => {
+	for (const operation of ['findOneAndUpdate', 'find', 'save', 'updateMany', 'countDocuments', 'counter']) {
+		const f = fixture([vote('old')], [], 1);
+		const before = copy(f.state());
+		const error = new Error(`permanent ${operation}`);
+		f.controls.failure = { operation, error };
+		await assert.rejects(f.mutate('downvote', true), received => received === error, operation);
+		assert.deepEqual(f.state(), before, operation);
+		assert.equal(f.controls.retries, 0, operation);
+		assert.equal(f.controls.sessions, f.controls.ended, operation);
+	}
 });
 
 test('all four public comment vote handlers use the shared transaction and reject invalid requests', async () => {

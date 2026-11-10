@@ -250,12 +250,12 @@ export const userLogoutService = async (uuid: string, token: string): Promise<{ 
 	}
 	try {
 		const { collectionName, schemaInstance } = UserAuthSchema
-		const model: Model<InferSchemaType<typeof schemaInstance>> = mongoose.models[collectionName] || mongoose.model(collectionName, schemaInstance)
-		await model.updateOne({ UUID: uuid, token }, { $set: {
+		// 未匹配表示凭据已经失效，仍视为登出成功；真实数据库错误由共通层抛出。
+		await findOneAndUpdateData4MongoDB({ UUID: uuid, token }, {
 			token: generateSecureRandomString(64),
 			userDataBootstrapHint: generateSecureRandomString(64),
 			editDateTime: Date.now(),
-		} })
+		}, schemaInstance, collectionName, undefined, false)
 		return { success: true, message: '登出成功' }
 	} catch (error) {
 		logging('ERROR', '登出失败，无法撤销用户凭据', error)

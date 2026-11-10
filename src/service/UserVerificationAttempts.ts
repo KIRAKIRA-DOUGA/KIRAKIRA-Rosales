@@ -1,14 +1,15 @@
-import mongoose, { Schema, Model } from 'mongoose'
+import type { Schema } from 'mongoose'
+import { findOneAndUpdateWithOperators4MongoDB } from '../dbPool/DbClusterPool.js'
 
 /** Claim an attempt before checking the code. The condition and increment are one database operation. */
 const claimAttempt = async (schema: Schema, collectionName: string, where: object, count: object, maxAttempts: number, update: object): Promise<boolean> => {
-	const model: Model<unknown> = mongoose.models[collectionName] || mongoose.model(collectionName, schema)
-	const result = await model.findOneAndUpdate(
+	const result = await findOneAndUpdateWithOperators4MongoDB(
 		{ ...where, $expr: { $lt: [count, maxAttempts] } },
 		[{ $set: update }],
-		{ new: true, upsert: false },
+		schema,
+		collectionName,
 	)
-	return result !== null
+	return result.success && !!result.result
 }
 
 export const claimEmailVerificationAttempt = async (schema: Schema, collectionName: string, where: object, now: number, maxAttempts: number): Promise<boolean> => {

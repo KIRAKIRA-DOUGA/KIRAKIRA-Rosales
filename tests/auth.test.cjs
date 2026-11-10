@@ -44,25 +44,15 @@ function fixture() {
 	}
 	const session = { startTransaction() {}, inTransaction: () => true };
 	const mongoose = { models: {}, startSession: async () => session };
-	for (const name of Object.keys(schemas)) {
-		mongoose.models[name] = {
-			async findOneAndUpdate(filter, pipeline, options) {
-				assert.equal(options.upsert, false);
-				const document = (data[name] || []).find(item => matches(item, filter));
-				if (!document) return null;
-				const next = Object.fromEntries(Object.entries(pipeline[0].$set).map(([key, value]) => [key, expression(value, document)]));
-				Object.assign(document, next);
-				return { ...document };
-			},
-			async updateOne(filter, update) {
-				const document = (data[name] || []).find(item => matches(item, filter));
-				if (document) Object.assign(document, update.$set);
-				return { acknowledged: true, modifiedCount: document ? 1 : 0 };
-			},
-		};
-	}
-	const attempts = loadService('src/service/UserVerificationAttempts.ts', { mongoose }, { Date: Clock });
 	const database = {
+		async findOneAndUpdateWithOperators4MongoDB(filter, pipeline, _schema, collection) {
+			assert.ok(Array.isArray(pipeline), 'attempt update must reach the shared helper as a pipeline');
+			const document = (data[collection] || []).find(item => matches(item, filter));
+			if (!document) return { success: false };
+			const next = Object.fromEntries(Object.entries(pipeline[0].$set).map(([key, value]) => [key, expression(value, document)]));
+			Object.assign(document, next);
+			return { success: true, result: { ...document } };
+		},
 		async selectDataFromMongoDB(where, _select, _schema, collection, options) {
 			queries++;
 			const rows = collection === 'UserAuthSchema' && secondaryAccount && options?.readPreference !== 'primary' ? [secondaryAccount] : (data[collection] || []);
@@ -76,6 +66,7 @@ function fixture() {
 			return { success: true, result: { ...document } };
 		},
 	};
+	const attempts = loadService('src/service/UserVerificationAttempts.ts', { '../dbPool/DbClusterPool.js': database }, { Date: Clock });
 	const dependencies = {
 		'./UserVerificationAttempts.js': attempts,
 		mongoose,
@@ -199,18 +190,19 @@ test('TOTP concurrent guesses stop at five and resume after the cooldown', async
 test('logout revokes both credentials, and a stale token cannot revoke the replacement', async () => {
 	const f = fixture();
 	assert.equal((await f.service.userLogoutService('fixture-uuid', 'old-token')).success, true);
+	assert.equal(f.updates[0].upsert, false);
 	assert.notEqual(f.account.token, 'old-token');
 	assert.notEqual(f.account.userDataBootstrapHint, 'old-hint');
 	assert.equal((await f.service.checkUserTokenByUuidService('fixture-uuid', 'old-token')).success, false);
 	assert.equal(await f.service.checkUserBootstrapHintByUid(42, 'old-hint'), false);
 	const replacement = f.account.token;
-	await f.service.userLogoutService('fixture-uuid', 'old-token');
+	assert.equal((await f.service.userLogoutService('fixture-uuid', 'old-token')).success, true);
 	assert.equal(f.account.token, replacement);
 });
 
 test('logout does not report success if credential revocation fails', async () => {
 	const f = fixture();
-	f.mongoose.models.UserAuthSchema.updateOne = async () => { throw new Error('storage unavailable'); };
+	f.dependencies['../dbPool/DbClusterPool.js'].findOneAndUpdateData4MongoDB = async () => { throw new Error('storage unavailable'); };
 	assert.equal((await f.service.userLogoutService('fixture-uuid', 'old-token')).success, false);
 	assert.equal(f.account.token, 'old-token');
 });
