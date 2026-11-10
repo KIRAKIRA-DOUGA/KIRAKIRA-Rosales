@@ -69,7 +69,10 @@ export function logging(logLevel: LogLevel, message: string, error?: Error, meta
 						editDateTime: now,
 					}
 
-					insertData2MongoDB(log, logSchemaInstance, LogCollectionName) // 不用 'await', 随缘存
+					void insertData2MongoDB(log, logSchemaInstance, LogCollectionName).catch(error => {
+						// 日志持久化失败不能递归写日志，也不能影响业务进程。
+						console.error('ERROR', '日志持久化失败：', error)
+					})
 				}
 				break
 			}

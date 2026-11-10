@@ -20,6 +20,7 @@ import {
 	updateOrCreateUserSettingsService,
 	updateUserEmailService,
 	userLoginService,
+	userLogoutService,
 	userRegistrationService,
 	getUserUuid,
 	createUserTotpAuthenticatorService,
@@ -462,7 +463,12 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
-	// TODO 理论上这里还可以做一些操作，比如说记录用户登出事件...
+	const result = await userLogoutService(ctx.cookies.get('uuid'), ctx.cookies.get('token'))
+	if (!result.success) {
+		ctx.body = result as UserLogoutResponseDto
+		await next()
+		return
+	}
 
 	ctx.cookies.set('token', '', logoutStrictCookieOption)
 	ctx.cookies.set('email', '', logoutStrictCookieOption)
@@ -471,7 +477,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.cookies.set('uuid', '', logoutStrictCookieOption)
 	ctx.cookies.set('user-data-bootstrap-hint', '', logoutLaxCookieOption)
 
-	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
+	ctx.body = result as UserLogoutResponseDto
 
 	await next()
 }

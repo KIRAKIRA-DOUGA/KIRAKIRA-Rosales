@@ -268,7 +268,7 @@ export const getFeedContentController = async (ctx: koaCtx, next: koaNext) => {
 	const finalPageSize = limitPageSize(pageSize)
 
 	const getFeedContentRequest: GetFeedContentRequestDto = {
-		feedGroupUuid: uuid ?? "",
+		feedGroupUuid: (ctx.query.feedGroupUuid as string) ?? "",
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,
 			pageSize: finalPageSize ?? 50,

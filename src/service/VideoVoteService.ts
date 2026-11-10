@@ -50,7 +50,11 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 			}
 			const existingVoteResult = await selectDataFromMongoDB<VideoUpvote>(existingVoteWhere, existingVoteSelect, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 
-			if (!existingVoteResult?.result || existingVoteResult.result?.length !== 1) {
+			if (!existingVoteResult.success || !existingVoteResult.result) {
+				throw new Error('无法查询视频投票记录')
+			}
+
+			if (existingVoteResult.result.length === 0) {
 				// 没有记录，先对是否点踩进行查询
 				if (await checkUserHasDownvoted(videoId, uuid)) {
 					// 用户已点踩，取消点踩并进行点赞
@@ -62,23 +66,23 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 						logging('ERROR', '视频点赞失败，但取消点踩失败', undefined, { emitVideoUpvoteRequest, uuid })
 						return { success: false, message: '视频点赞失败，但取消点踩失败' }
 					}
-
-					const videoUpvote: VideoUpvote = {
-						videoId,
-						UUID,
-						uid,
-						upvoteTime: nowDate,
-						invalidFlag: false,
-						editDateTime: nowDate,
-					}
-
-					const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
-					if (!insertResult || !insertResult.success) {
-						logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
-						return { success: false, message: '视频点赞失败，存储数据失败' }
-					}
-					return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
 				}
+
+				const videoUpvote: VideoUpvote = {
+					videoId,
+					UUID,
+					uid,
+					upvoteTime: nowDate,
+					invalidFlag: false,
+					editDateTime: nowDate,
+				}
+
+				const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+				if (!insertResult || !insertResult.success) {
+					logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
+					return { success: false, message: '视频点赞失败，存储数据失败' }
+				}
+				return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
 			}
 
 			if (existingVoteResult.result[0].invalidFlag) {
@@ -208,7 +212,11 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 		}
 		const existingVoteResult = await selectDataFromMongoDB<VideoDownvote>(existingVoteWhere, existingVoteSelect, correctVideoDownvoteSchema, videoDownvoteCollectionName)
 
-		if (!existingVoteResult?.result || existingVoteResult.result?.length !== 1) {
+		if (!existingVoteResult.success || !existingVoteResult.result) {
+			throw new Error('无法查询视频投票记录')
+		}
+
+		if (existingVoteResult.result.length === 0) {
 			// 没有记录，先对是否点赞进行查询
 			if (await checkUserHasUpvoted(videoId, uuid)) {
 				// 用户已点赞，取消点赞并进行点踩
@@ -220,23 +228,23 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 					logging('ERROR', '视频点踩失败，但取消点赞失败', undefined, { emitVideoDownvoteRequest, uuid })
 					return { success: false, message: '视频点踩失败，但取消点赞失败' }
 				}
-
-				const videoDownvote: VideoDownvote = {
-					videoId,
-					UUID,
-					uid,
-					downvoteTime: nowDate,
-					invalidFlag: false,
-					editDateTime: nowDate,
-				}
-
-				const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName)
-				if (!insertResult || !insertResult.success) {
-					logging('ERROR', '视频点踩失败，插入数据失败', undefined, { emitVideoDownvoteRequest, uuid })
-					return { success: false, message: '视频点踩失败，存储数据失败' }
-				}
-				return { success: true, message: '视频点踩成功', videoDownvoteCount: await getVideoDownvoteCount(videoId) }
 			}
+
+			const videoDownvote: VideoDownvote = {
+				videoId,
+				UUID,
+				uid,
+				downvoteTime: nowDate,
+				invalidFlag: false,
+				editDateTime: nowDate,
+			}
+
+			const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+			if (!insertResult || !insertResult.success) {
+				logging('ERROR', '视频点踩失败，插入数据失败', undefined, { emitVideoDownvoteRequest, uuid })
+				return { success: false, message: '视频点踩失败，存储数据失败' }
+			}
+			return { success: true, message: '视频点踩成功', videoDownvoteCount: await getVideoDownvoteCount(videoId) }
 		}
 
 		if (existingVoteResult.result[0].invalidFlag) {

@@ -252,7 +252,7 @@ export const approvePendingReviewVideoController = async (ctx: koaCtx, next: koa
 		videoId: data.videoId ?? -1,
 	}
 
-	ctx.body = await approvePendingReviewVideoService(approvePendingReviewVideoRequest, uid, token)
+	ctx.body = await approvePendingReviewVideoService(approvePendingReviewVideoRequest, uid, token, ctx.elasticsearchClient)
 	await next()
 }
 

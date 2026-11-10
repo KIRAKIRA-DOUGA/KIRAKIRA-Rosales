@@ -1,3 +1,4 @@
+import { claimEmailVerificationAttempt, claimTotpVerificationAttempt } from './UserVerificationAttempts.js'
 import mongoose, { InferSchemaType, PipelineStage, ClientSession, Model } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isInvalidEmail, sendMail } from '../common/EmailTool.js'
@@ -242,6 +243,26 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 	}
 }
 
+/** 撤销当前账户凭据；过期 token 不能再次撤销已轮换的凭据。 */
+export const userLogoutService = async (uuid: string, token: string): Promise<{ success: boolean, message: string }> => {
+	if (typeof uuid !== 'string' || !uuid || typeof token !== 'string' || !token) {
+		return { success: true, message: '登出成功' }
+	}
+	try {
+		const { collectionName, schemaInstance } = UserAuthSchema
+		const model: Model<InferSchemaType<typeof schemaInstance>> = mongoose.models[collectionName] || mongoose.model(collectionName, schemaInstance)
+		await model.updateOne({ UUID: uuid, token }, { $set: {
+			token: generateSecureRandomString(64),
+			userDataBootstrapHint: generateSecureRandomString(64),
+			editDateTime: Date.now(),
+		} })
+		return { success: true, message: '登出成功' }
+	} catch (error) {
+		logging('ERROR', '登出失败，无法撤销用户凭据', error)
+		return { success: false, message: '登出失败，无法撤销用户凭据，请重试' }
+	}
+}
+
 /**
  * 用户登录
  * @param userLoginRequest 用户登录时需要传入的信息（用户名，密码）
@@ -274,7 +295,7 @@ export const userLoginService = async (userLoginRequest: UserLoginRequestDto): P
 		}
 
 		// 2. 获取用户安全信息
-		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, schemaInstance, collectionName)
+		const userAuthResult = await selectDataFromMongoDB<UserAuth>(userLoginWhere, userLoginSelect, schemaInstance, collectionName, { readPreference: 'primary' })
 		if (!userAuthResult?.result || userAuthResult.result?.length !== 1) {
 			const warningMessage = '用户登录失败：用户未注册或信息异常'
 			logging('warn', warningMessage, undefined, { email })
@@ -1253,12 +1274,14 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 			verificationCreatedDate: 1,
 			totalCreateTimesToday: 1,
 			totalVerifierTimesToday: 1,
+			lastVerifierAttemptDate: 1,
 		}
 		const getGeneral2FAEmailVerificationCodeResult = await selectDataFromMongoDB<General2FAEmailVerificationCode>(getGeneral2FAEmailVerificationCodeHistoryWhere, getGeneral2FAEmailVerificationCodeHistorySelect, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName, { session })
 
 		const now = new Date().getTime()
 		let isVerificationCodeCreatedDateToday = false
 		let totalCreateTimesToday = 0
+		let verifierAttemptsToday = 0
 
 		if (
 			getGeneral2FAEmailVerificationCodeResult.success
@@ -1266,16 +1289,18 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 			&& getGeneral2FAEmailVerificationCodeResult.result[0].verificationCreatedDate !== undefined && getGeneral2FAEmailVerificationCodeResult.result[0].verificationCreatedDate !== null
 			&& getGeneral2FAEmailVerificationCodeResult.result[0].totalCreateTimesToday !== undefined && getGeneral2FAEmailVerificationCodeResult.result[0].totalCreateTimesToday !== null
 		) {
-			const { verificationCreatedDate, totalVerifierTimesToday } = getGeneral2FAEmailVerificationCodeResult.result[0]
+			const { verificationCreatedDate, totalVerifierTimesToday, lastVerifierAttemptDate } = getGeneral2FAEmailVerificationCodeResult.result[0]
 			totalCreateTimesToday = getGeneral2FAEmailVerificationCodeResult.result[0].totalCreateTimesToday
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 默认每天最多允许连续验证验证码直到成功验证的次数，默认 5。请注意：在验证通过后应重置次数。
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CREATE_ATTEMPTS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_CREATE_ATTEMPTS, 5) || 5 // 默认每天最多允许连续发送验证码直到成功验证的次数，默认 5。请注意：在验证通过后应重置次数。
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS, 55) || 55 // 默认冷却时间 55 秒，这里没使用 60 秒是为了给前端留出时间差
 
 			isVerificationCodeCreatedDateToday = isToday(verificationCreatedDate)
+			const isLastVerificationAttemptToday = isToday(lastVerifierAttemptDate ?? verificationCreatedDate)
+			verifierAttemptsToday = isLastVerificationAttemptToday ? totalVerifierTimesToday : 0
 			if (
 				totalVerifierTimesToday === undefined || totalVerifierTimesToday === null
-				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
+				|| (isLastVerificationAttemptToday && totalVerifierTimesToday >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
 			) {
 				const errorMessage = '发送通用 2FA 邮箱验证码失败，已达今日验证上限，请明日再试'
 				logging('ERROR', errorMessage, undefined, { uuid })
@@ -1328,7 +1353,8 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 			verificationCode,
 			verificationCreatedDate: now,
 			totalCreateTimesToday: isVerificationCodeCreatedDateToday && totalCreateTimesToday !== undefined && totalCreateTimesToday !== null ? totalCreateTimesToday + 1 : 1,
-			totalVerifierTimesToday: 0,
+			totalVerifierTimesToday: verifierAttemptsToday,
+			lastVerifierAttemptDate: now,
 			used: false,
 			createdDateTime: now,
 			createdBy: uuid,
@@ -1446,7 +1472,7 @@ export class General2FAEmailVerifier {
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
-			const { verificationCode, verificationCreatedDate, totalVerifierTimesToday } = verifyResult.result[0]
+			const { verificationCode, verificationCreatedDate } = verifyResult.result[0]
 			const now = new Date().getTime()
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS, 1800000) || 1800000 // 默认验证码超时为 30 分钟
 			const GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS = parseInteger(process.env.GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 默认每天最多允许连续验证验证码直到成功验证的次数，默认 5。请注意：在验证通过后应手动重置次数。
@@ -1460,31 +1486,15 @@ export class General2FAEmailVerifier {
 				return { success: false, isTimeout: true, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
-			const isVerificationCodeCreatedDateToday = isToday(verificationCreatedDate)
-			if (
-				totalVerifierTimesToday === undefined || totalVerifierTimesToday === null
-				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
-			) {
-				const errorMessage = '通用 2FA 邮箱验证码验证失败，已达今日验证上限，请明日再试'
-				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
-				return { success: false, isTimeout: false, isMaxVerifierTimesToday: true, message: errorMessage }
-			}
-
-			// 尝试增加尝试次数，‘惩罚’ 需尽力而为，不需要使用事务
-			try {
-				const accumulatedVerificationFailuresTimesUpdate: UpdateType<General2FAEmailVerificationCode> = {
-					totalVerifierTimesToday: isVerificationCodeCreatedDateToday ? 1 : totalVerifierTimesToday + 1
-				}
-				const accumulatedVerificationFailuresTimesResult = await findOneAndUpdateData4MongoDB<General2FAEmailVerificationCode>(verifyWhere, accumulatedVerificationFailuresTimesUpdate, general2FAEmailVerificationCodeSchemaInstance, general2FAEmailVerificationCodeCollectionName)
-				if (!accumulatedVerificationFailuresTimesResult.success) {
-					const errorMessage = '通用 2FA 邮箱验证码验证失败，增加尝试次数失败'
-					logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
-					return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
-				}
-			} catch (error) {
-				const errorMessage = '通用 2FA 邮箱验证码验证失败，增加尝试次数时出错'
-				logging('ERROR', errorMessage, error, { uuid: this.#uuid })
-				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
+			const claimedAttempt = await claimEmailVerificationAttempt(
+				general2FAEmailVerificationCodeSchemaInstance,
+				general2FAEmailVerificationCodeCollectionName,
+				{ ...verifyWhere, verificationCreatedDate, verificationCode },
+				now,
+				GENERAL_2FA_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS,
+			)
+			if (!claimedAttempt) {
+				return { success: false, isTimeout: false, isMaxVerifierTimesToday: true, message: '通用 2FA 邮箱验证码验证失败，已达今日验证上限或验证码已更新' }
 			}
 
 			if (!verificationCode || verificationCode !== this.#verificationCode) {
@@ -1610,12 +1620,14 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 			verificationCreatedDate: 1,
 			totalCreateTimesToday: 1,
 			totalVerifierTimesToday: 1,
+			lastVerifierAttemptDate: 1,
 		}
 		const getGeneralEmailVerificationCodeResult = await selectDataFromMongoDB<GeneralEmailVerificationCode>(getGeneralEmailVerificationCodeHistoryWhere, getGeneralEmailVerificationCodeHistorySelect, generalEmailVerificationCodeSchemaInstance, generalEmailVerificationCodeCollectionName, { session })
 
 		const now = new Date().getTime()
 		let isVerificationCodeCreatedDateToday = false
 		let totalCreateTimesToday = 0
+		let verifierAttemptsToday = 0
 
 		if (
 			getGeneralEmailVerificationCodeResult.success
@@ -1623,16 +1635,18 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 			&& getGeneralEmailVerificationCodeResult.result[0].verificationCreatedDate !== undefined && getGeneralEmailVerificationCodeResult.result[0].verificationCreatedDate !== null
 			&& getGeneralEmailVerificationCodeResult.result[0].totalCreateTimesToday !== undefined && getGeneralEmailVerificationCodeResult.result[0].totalCreateTimesToday !== null
 		) {
-			const { verificationCreatedDate, totalVerifierTimesToday } = getGeneralEmailVerificationCodeResult.result[0]
+			const { verificationCreatedDate, totalVerifierTimesToday, lastVerifierAttemptDate } = getGeneralEmailVerificationCodeResult.result[0]
 			totalCreateTimesToday = getGeneralEmailVerificationCodeResult.result[0].totalCreateTimesToday
-			const GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS = parseInteger(process.env.GENERALEMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 默认每天最多允许连续验证验证码直到成功验证的次数，默认 5。请注意：在验证通过后应重置次数。
+			const GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS = parseInteger(process.env.GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 默认每天最多允许连续验证验证码直到成功验证的次数，默认 5。请注意：在验证通过后应重置次数。
 			const GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_CREATE_ATTEMPTS = parseInteger(process.env.GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_CREATE_ATTEMPTS, 3) || 3 // 默认每天最多允许连续发送验证码直到成功验证的次数，默认 3。请注意：在验证通过后应重置次数。
 			const GENERAL_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS = parseInteger(process.env.GENERAL_EMAIL_VERIFICATION_CODE_COOLINGDOWN_SECONDS, 55) || 55 // 默认冷却时间 55 秒，这里没使用 60 秒是为了给前端留出时间差
 
 			isVerificationCodeCreatedDateToday = isToday(verificationCreatedDate)
+			const isLastVerificationAttemptToday = isToday(lastVerifierAttemptDate ?? verificationCreatedDate)
+			verifierAttemptsToday = isLastVerificationAttemptToday ? totalVerifierTimesToday : 0
 			if (
 				totalVerifierTimesToday === undefined || totalVerifierTimesToday === null
-				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
+				|| (isLastVerificationAttemptToday && totalVerifierTimesToday >= GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
 			) {
 				const errorMessage = '发送通用邮箱验证码失败，已达今日验证上限，请明日再试'
 				logging('ERROR', errorMessage, undefined, { uuid })
@@ -1685,7 +1699,8 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 			verificationCode,
 			verificationCreatedDate: now,
 			totalCreateTimesToday: isVerificationCodeCreatedDateToday && totalCreateTimesToday !== undefined && totalCreateTimesToday !== null ? totalCreateTimesToday + 1 : 1,
-			totalVerifierTimesToday: 0,
+			totalVerifierTimesToday: verifierAttemptsToday,
+			lastVerifierAttemptDate: now,
 			used: false,
 			createdDateTime: now,
 			createdBy: uuid,
@@ -1807,7 +1822,7 @@ export class GeneralEmailVerifier {
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
-			const { verificationCode, verificationCreatedDate, totalVerifierTimesToday } = verifyResult.result[0]
+			const { verificationCode, verificationCreatedDate } = verifyResult.result[0]
 			const now = new Date().getTime()
 			const GENERAL_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS = parseInteger(process.env.GENERAL_EMAIL_VERIFICATION_CODE_TIMEOUT_MILLISECONDS, 1800000) || 1800000 // 默认验证码超时为 30 分钟
 			const GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS = parseInteger(process.env.GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS, 5) || 5 // 默认每天最多允许连续验证验证码直到成功验证的次数，默认 5。请注意：在验证通过后应手动重置次数。
@@ -1821,31 +1836,15 @@ export class GeneralEmailVerifier {
 				return { success: false, isTimeout: true, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
-			const isVerificationCodeCreatedDateToday = isToday(verificationCreatedDate)
-			if (
-				totalVerifierTimesToday === undefined || totalVerifierTimesToday === null
-				|| (isVerificationCodeCreatedDateToday && totalVerifierTimesToday >= GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS)
-			) {
-				const errorMessage = '通用邮箱验证码验证失败，已达今日验证上限，请明日再试'
-				logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
-				return { success: false, isTimeout: false, isMaxVerifierTimesToday: true, message: errorMessage }
-			}
-
-			// 尝试增加尝试次数，‘惩罚’ 需尽力而为，不需要使用事务
-			try {
-				const accumulatedVerificationFailuresTimesUpdate: UpdateType<GeneralEmailVerificationCode> = {
-					totalVerifierTimesToday: isVerificationCodeCreatedDateToday ? 1 : totalVerifierTimesToday + 1
-				}
-				const accumulatedVerificationFailuresTimesResult = await findOneAndUpdateData4MongoDB<GeneralEmailVerificationCode>(verifyWhere, accumulatedVerificationFailuresTimesUpdate, generalEmailVerificationCodeSchemaInstance, generalEmailVerificationCodeCollectionName)
-				if (!accumulatedVerificationFailuresTimesResult.success) {
-					const errorMessage = '通用邮箱验证码验证失败，增加尝试次数失败'
-					logging('ERROR', errorMessage, undefined, { uuid: this.#uuid })
-					return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
-				}
-			} catch (error) {
-				const errorMessage = '通用邮箱验证码验证失败，增加尝试次数时出错'
-				logging('ERROR', errorMessage, error, { uuid: this.#uuid })
-				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
+			const claimedAttempt = await claimEmailVerificationAttempt(
+				generalEmailVerificationCodeSchemaInstance,
+				generalEmailVerificationCodeCollectionName,
+				{ ...verifyWhere, verificationCreatedDate, verificationCode },
+				now,
+				GENERAL_EMAIL_VERIFICATION_CODE_DAILY_MAX_VERIFIER_ATTEMPTS,
+			)
+			if (!claimedAttempt) {
+				return { success: false, isTimeout: false, isMaxVerifierTimesToday: true, message: '通用邮箱验证码验证失败，已达今日验证上限或验证码已更新' }
 			}
 
 			if (!verificationCode || verificationCode !== this.#verificationCode) {
@@ -2046,28 +2045,15 @@ export class General2FATotpVerifier {
 				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
-			const { attempts, secret: totpSecret, backupCodeHash: listOfBackupCodeHash, recoveryCodeHash, lastAttemptTime } = selectResult.result[0]
-			const isTimeout = (now - lastAttemptTime) >= lockTime
-			const isMaxAttemptsReachedWithinTime = selectResult.result[0].attempts >= maxAttempts && isTimeout // 在限定时间内达到最大尝试次数
-
-			// 限制用户的验证频率
-			if (isMaxAttemptsReachedWithinTime) {
-				const warningMessage = '验证 TOTP 2FA 失败，已达最大尝试次数，请稍后再试';
-				logging('WARN', warningMessage);
-				return { success: false, message: warningMessage, isMaxAttemptsReachedWithinTime, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp };
-			}
-
-			const updateTotpAttemptsTimesUpdate: UpdateType<UserTotpAuthenticator> = {
-				attempts: isTimeout ? 1 : attempts + 1,
-				lastAttemptTime: now,
-			}
-
-			// 更新尝试次数和最后尝试时间。‘惩罚’ 需尽力而为，不需要使用事务
-			const updateTotpAttemptsTimesResult = await findOneAndUpdateData4MongoDB<UserTotpAuthenticator>(userTotpAuthenticatorWhere, updateTotpAttemptsTimesUpdate, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName)
-			if (!updateTotpAttemptsTimesResult.success) {
-				const errorMessage = '验证 TOTP 2FA 失败，更新尝试次数失败'
-				logging('ERROR', errorMessage)
-				return { success: false, message: errorMessage, isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
+			const { secret: totpSecret, backupCodeHash: listOfBackupCodeHash, recoveryCodeHash } = selectResult.result[0]
+			const claimedAttempt = await claimTotpVerificationAttempt(
+				userTotpAuthenticatorSchemaInstance,
+				userTotpAuthenticatorCollectionName,
+				userTotpAuthenticatorWhere,
+				now, maxAttempts, lockTime,
+			)
+			if (!claimedAttempt) {
+				return { success: false, message: '验证 TOTP 2FA 失败，已达最大尝试次数，请稍后再试', isMaxAttemptsReachedWithinTime: true, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
 			this.#session = await createAndStartSession()
@@ -2720,7 +2706,8 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 		type UserAuth = InferSchemaType<typeof schemaInstance>
 
 		const changePasswordWhere: QueryType<UserAuth> = {
-			UUID: cookieUuid
+			UUID: cookieUuid,
+			token: cookieToken,
 		}
 		const changePasswordSelect: SelectType<UserAuth> = {
 			passwordHashHash: 1,
@@ -2759,11 +2746,13 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 
 		const changePasswordUpdate: UpdateType<UserAuth> = {
 			passwordHashHash: newPasswordHashHash,
+			token: generateSecureRandomString(64),
+			userDataBootstrapHint: generateSecureRandomString(64),
 			passwordUpdateDateTime: now,
 			editDateTime: now,
 		}
 
-		const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
+		const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session }, false)
 		if (!updateResult.success) {
 			const errorMessage = '修改密码时出错，更新密码失败'
 			logging('ERROR', errorMessage, undefined, { uuid: cookieUuid })
@@ -2824,11 +2813,13 @@ export const forgotPasswordService = async (forgotPasswordRequest: ForgotPasswor
 		}
 		const changePasswordUpdate: UpdateType<UserAuth> = {
 			passwordHashHash: newPasswordHashHash,
+			token: generateSecureRandomString(64),
+			userDataBootstrapHint: generateSecureRandomString(64),
 			editDateTime: now,
 		}
 
 		try {
-			const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session })
+			const updateResult = await findOneAndUpdateData4MongoDB(changePasswordWhere, changePasswordUpdate, schemaInstance, collectionName, { session }, false)
 
 			if (!updateResult.success) {
 				await abortAndEndSession(session)
@@ -3476,7 +3467,7 @@ export const getUserUid = async (uuid: string): Promise<number | undefined> => {
  */
 const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 	try {
-		if (uid !== null && !Number.isNaN(uid) && uid !== undefined && token) {
+		if (Number.isSafeInteger(uid) && uid >= 0 && typeof token === 'string' && token.length > 0) {
 			const { collectionName, schemaInstance } = UserAuthSchema
 			type UserAuth = InferSchemaType<typeof schemaInstance>
 			const userTokenWhere: QueryType<UserAuth> = {
@@ -3487,7 +3478,7 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
 				uid: 1,
 			}
 			try {
-				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName, { readPreference: 'primary' })
 				if (userInfo && userInfo.success) {
 					if (userInfo.result?.length === 1) {
 						return true
@@ -3521,7 +3512,7 @@ const checkUserToken = async (uid: number, token: string): Promise<boolean> => {
  */
 const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolean> => {
 	try {
-		if (UUID !== null && !Number.isNaN(UUID) && UUID !== undefined && token) {
+		if (typeof UUID === 'string' && UUID.length > 0 && typeof token === 'string' && token.length > 0) {
 			const { collectionName, schemaInstance } = UserAuthSchema
 			type UserAuth = InferSchemaType<typeof schemaInstance>
 			const userTokenWhere: QueryType<UserAuth> = {
@@ -3532,7 +3523,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 				uid: 1,
 			}
 			try {
-				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName)
+				const userInfo = await selectDataFromMongoDB<UserAuth>(userTokenWhere, userTokenSelect, schemaInstance, collectionName, { readPreference: 'primary' })
 				if (userInfo && userInfo.success) {
 					if (userInfo.result?.length === 1) {
 						return true
@@ -3566,7 +3557,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
  */
 export const checkUserBootstrapHintByUid = async (uid: number, userDataBootstrapHint: string): Promise<boolean> => {
 	try {
-		if (uid === null || Number.isNaN(uid) || uid === undefined || !userDataBootstrapHint) {
+		if (!Number.isSafeInteger(uid) || uid < 0 || typeof userDataBootstrapHint !== 'string' || userDataBootstrapHint.length === 0) {
 			logging('ERROR', `用户数据初始化提示标识时出错，必要的参数 uid 或 userDataBootstrapHint 为空: uid: ${uid}`, undefined, { uid })
 			return false
 		}
@@ -3581,7 +3572,7 @@ export const checkUserBootstrapHintByUid = async (uid: number, userDataBootstrap
 			uid: 1,
 		}
 		try {
-			const userAuthInfo = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName)
+			const userAuthInfo = await selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, schemaInstance, collectionName, { readPreference: 'primary' })
 			if (!userAuthInfo || !userAuthInfo.success) {
 				logging('ERROR', `用户数据初始化提示标识时未查询到用户信息，用户 uid: ${uid}，错误描述：${userAuthInfo?.message}，错误信息：${userAuthInfo?.error}`, undefined, { uid })
 				return false

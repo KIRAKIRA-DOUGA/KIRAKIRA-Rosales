@@ -94,11 +94,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 
 		const connectionOptions = {
 			readPreference: ReadPreferenceMode.secondaryPreferred, // 默认的读偏好为优先从副本中读取，在某些情况下会覆盖这个设置，比如说使用事务时会优先从主读取。
-		}
-
-		if (databaseProtocol === 'mongodb+srv' && !databaseTlsCa) {
-			connectionOptions['tlsAllowInvalidCertificates'] = true
-			logging('WARN', "Your MongoDB connection protocol is 'mongodb+srv', but can not find any TLS credentials. Communications with the database may be eavesdropped!", undefined, undefined, { recordingLogs: false })
+			tlsAllowInvalidCertificates: false,
 		}
 
 		if (databaseTlsCa && databaseTlsCert && databaseTlsKey) {
@@ -106,7 +102,6 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			connectionOptions['ca'] = databaseTlsCa
 			connectionOptions['cert'] = databaseTlsCert
 			connectionOptions['key'] = databaseTlsKey
-			connectionOptions['tlsAllowInvalidCertificates'] = false
 		}
 
 		try {
@@ -152,7 +147,9 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 		} else {
 			mongoModel = mongoose.model<T>(collectionName, schema)
 		}
-		mongoModel.createIndexes()
+		void mongoModel.createIndexes().catch(error => {
+			logging('ERROR', '创建数据库索引失败：', error, undefined, { recordingLogs: false })
+		})
 		const model = new mongoModel(data)
 		try {
 			const result = await model.save(options) as unknown as T & { _id: string }

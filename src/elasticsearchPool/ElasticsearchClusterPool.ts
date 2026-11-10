@@ -42,7 +42,7 @@ export const connectElasticSearchCluster = async (): Promise<Client> => {
 				password: ELASTICSEARCH_ADMIN_PASSWORD,
 			},
 			tls: {
-				rejectUnauthorized: false, // 这将忽略 SSL 证书验证
+				rejectUnauthorized: true,
 			},
 		})
 

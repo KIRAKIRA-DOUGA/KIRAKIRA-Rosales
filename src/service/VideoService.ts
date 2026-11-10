@@ -9,8 +9,7 @@ import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, 
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
-import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
-import { EsSchema2TsType } from '../elasticsearchPool/ElasticsearchClusterPoolTypes.js'
+import { deleteDataFromElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
@@ -30,7 +29,7 @@ import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
  */
 export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uid: number, token: string, esClient?: Client): Promise<UploadVideoResponseDto> => {
 	try {
-		if (checkUploadVideoRequest(uploadVideoRequest) && esClient && !isEmptyObject(esClient)) {
+		if (checkUploadVideoRequest(uploadVideoRequest)) {
 			if (!(await checkUserTokenService(uid, token)).success) {
 				logging('ERROR', '上传视频失败，用户校验未通过')
 				return { success: false, message: '上传视频失败，用户校验未通过' }
@@ -89,23 +88,10 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					editDateTime: nowDate,
 				}
 
-				// 准备上传到 Elasticsearch 的数据
-				const { indexName: esIndexName, schema: videoEsSchema } = VideoDocument
-				const videoEsData: EsSchema2TsType<typeof videoEsSchema> = {
-					title,
-					description,
-					kvid: videoId,
-					videoCategory,
-					videoTagList,
-				}
-
 				try {
-					const insert2MongoDBPromise = insertData2MongoDB<Video>(video, schemaInstance, collectionName, { session })
-					const refreshFlag = true
-					const insert2ElasticsearchPromise = insertData2ElasticsearchCluster(esClient, esIndexName, videoEsSchema, videoEsData, refreshFlag)
-					const [insert2MongoDBResult, insert2ElasticsearchResult] = await Promise.all([insert2MongoDBPromise, insert2ElasticsearchPromise])
-
-					if (insert2MongoDBResult.success && insert2ElasticsearchResult.success) {
+					// 待审核视频只保存到数据库，审核通过后才写入搜索索引。
+					const insert2MongoDBResult = await insertData2MongoDB<Video>(video, schemaInstance, collectionName, { session })
+					if (insert2MongoDBResult.success) {
 						await session.commitTransaction()
 						session.endSession()
 						return { success: true, videoId, message: '视频上传成功' }
@@ -176,6 +162,7 @@ export const getThumbVideoService = async (uid?: number, uuid?: string, userData
 		)
 
 		const getThumbVideoPipeline: PipelineStage[] = [
+			{ $match: { pendingReview: false } },
 			{
 				$lookup: {
 					from: 'user-infos',
@@ -249,6 +236,7 @@ export const checkVideoExistByKvidService = async (checkVideoExistRequestDto: Ch
 			type Video = InferSchemaType<typeof schemaInstance>
 			const where: QueryType<Video> = {
 				videoId: checkVideoExistRequestDto.videoId,
+				pendingReview: false,
 			}
 			const select: SelectType<Video> = {
 				videoId: 1,
@@ -376,6 +364,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 			{
 				$match: {
 					videoId, // 通过 videoId 过滤视频
+					pendingReview: false,
 				},
 			},
 			{
@@ -574,6 +563,7 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
 		type Video = InferSchemaType<typeof schemaInstance>
 		const where: QueryType<Video> = {
 			uploaderId: uid,
+			pendingReview: false,
 		}
 		const select: SelectType<Video> = {
 			videoId: 1,
@@ -632,12 +622,11 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 			try {
 				const esSearchResult = await searchDataFromElasticsearchCluster(client, esIndexName, videoEsSchema, esQuery)
 				if (esSearchResult.success) {
-					const videoResult = esSearchResult?.result
+					const videoResult = [...new Map((esSearchResult.result ?? []).map(video => [video.kvid, video])).values()]
 					if (videoResult && videoResult?.length > 0) {
 						try {
-							const videos: SearchVideoByKeywordResponseDto['videos'] = await Promise.all(videoResult.map(async video => {
+							const candidates = await Promise.all(videoResult.map(async video => {
 								const esVideoId = video.kvid
-								const esVideoTitle = video.title
 								const uploadVideoRequest: GetVideoByKvidRequestDto = {
 									videoId: esVideoId,
 								}
@@ -655,19 +644,15 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 										duration: videoResult.duration,
 										description: videoResult.description,
 									}
-								} else {
-									return {
-										videoId: esVideoId,
-										title: esVideoTitle,
-									}
 								}
+								return undefined
 							}))
-							const videosCount = videos?.length
+							const videos: SearchVideoByKeywordResponseDto['videos'] = candidates.filter(video => video !== undefined)
+							const videosCount = videos.length
 							if (videos && videosCount !== undefined && videosCount !== null && videosCount > 0) {
 								return { success: true, message: '使用关键字搜索视频成功', videosCount, videos }
 							} else {
-								logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索成功，但在 MongoDB 中没有找到匹配的视频')
-								return { success: false, message: '使用关键字搜索视频失败，搜索到视频了，但是视频信息没有存储在在数据库中', videosCount: 0, videos: [] }
+								return { success: true, message: '使用关键字搜索视频成功，但没有已公开的视频', videosCount: 0, videos: [] }
 							}
 						} catch (error) {
 							logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索成功，但在 MongoDB 中搜索出现异常')
@@ -796,6 +781,7 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
 			type Video = InferSchemaType<typeof videoSchemaInstance>
 			type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
 			const where: QueryType<Video> = {
+				pendingReview: false,
 				videoTagList: {
 					$all: searchVideoByVideoTagIdRequest.tagId.map(tagId => ({ $elemMatch: { tagId } })),
 				},
@@ -1002,9 +988,10 @@ export const getPendingReviewVideoService = async (adminUid: number, adminToken:
 		const { collectionName: userInfoCollectionName, schemaInstance: userInfoSchemaInstance } = UserInfoSchema
 		type Video = InferSchemaType<typeof videoSchemaInstance>
 		type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
-		const where: QueryType<Video> = {}
+		const where: QueryType<Video> = { pendingReview: true }
 		const select: SelectType<Video> = {
 			videoId: 1,
+			videoPart: 1,
 			title: 1,
 			image: 1,
 			uploadDate: 1,
@@ -1076,7 +1063,7 @@ export const getPendingReviewVideoService = async (adminUid: number, adminToken:
  * @param adminToken 管理员 token
  * @returns 通过一个待审核视频的请求响应
  */
-export const approvePendingReviewVideoService = async (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto, adminUid: number, adminToken: string): Promise<ApprovePendingReviewVideoResponseDto> => {
+export const approvePendingReviewVideoService = async (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto, adminUid: number, adminToken: string, esClient?: Client): Promise<ApprovePendingReviewVideoResponseDto> => {
 	try {
 		if (!checkApprovePendingReviewVideoRequest(approvePendingReviewVideoRequest)) {
 			logging('ERROR', '通过一个待审核视频失败，参数校验失败')
@@ -1096,12 +1083,23 @@ export const approvePendingReviewVideoService = async (approvePendingReviewVideo
 				videoId,
 			}
 
-			const updatePendingReviewVideoData: UpdateType<Video> = {
-				pendingReview: false,
-			}
-			const updatePendingReviewVideoResult = await findOneAndUpdateData4MongoDB<Video>(updatePendingReviewVideoWhere, updatePendingReviewVideoData, videoSchemaInstance, videoCollectionName)
+			if (!esClient) return { success: false, message: '通过待审核视频失败，搜索服务不可用，请重试' }
+			const selected = await selectDataFromMongoDB<Video>(updatePendingReviewVideoWhere, {}, videoSchemaInstance, videoCollectionName)
+			const video = selected.result?.[0]
+			if (!selected.success || !video) return { success: false, message: '通过待审核视频失败，视频不存在' }
 
-			if (!updatePendingReviewVideoResult.success) {
+			// 先索引，再公开。索引/更新失败时仍可重试；稳定 ID 避免重复创建索引文档。
+			// 即使数据库更新失败留下旧索引，公开搜索也会再次检查数据库审核状态。
+			const { indexName } = VideoDocument
+			const document = {
+				title: video.title, description: video.description, kvid: video.videoId,
+				videoCategory: video.videoCategory, videoTagList: video.videoTagList,
+			}
+			await esClient.index({ index: indexName, id: String(videoId), document, refresh: true })
+			const updatePendingReviewVideoData: UpdateType<Video> = { pendingReview: false }
+			const updatePendingReviewVideoResult = await findOneAndUpdateData4MongoDB<Video>(updatePendingReviewVideoWhere, updatePendingReviewVideoData, videoSchemaInstance, videoCollectionName, undefined, false)
+
+			if (!updatePendingReviewVideoResult.success || !updatePendingReviewVideoResult.result) {
 				logging('ERROR', '通过一个待审核视频失败，更新失败')
 				return { success: false, message: '通过一个待审核视频失败，更新失败' }
 			}
