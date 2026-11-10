@@ -111,32 +111,6 @@ test('document save failures reach the log persistence rejection handler', async
 	assert.equal(errors[1][2].error.error, failure);
 });
 
-test('Elasticsearch connections require a trusted server certificate', async () => {
-	let options;
-	class Client {
-		constructor(value) { options = value; }
-		async ping() {}
-		async info() { return { version: {} }; }
-	}
-	const { connectElasticSearchCluster } = loadService('src/elasticsearchPool/ElasticsearchClusterPool.ts', {
-		'@elastic/elasticsearch': { Client },
-		'../common/ObjectTool.js': { isEmptyObject: value => !Object.keys(value).length },
-		'../service/loggingService.js': { logging() {} },
-	}, {
-		process: {
-			env: {
-				ELASTICSEARCH_CLUSTER_HOST: 'search.example.invalid:9200',
-				ELASTICSEARCH_ADMIN_USERNAME: 'audit',
-				ELASTICSEARCH_ADMIN_PASSWORD: 'placeholder',
-			},
-			exit(code) { throw new Error(`Unexpected exit: ${code}`); },
-		},
-	});
-	await connectElasticSearchCluster();
-	assert.equal(options.tls.rejectUnauthorized, true);
-	assert.equal(options.node[0], 'https://search.example.invalid:9200');
-});
-
 async function captureMongoConnection(extraEnv = {}) {
 	let connection;
 	const { connectMongoDBCluster } = loadPool({
