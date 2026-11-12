@@ -10,7 +10,7 @@ export const mutateCommentVote = async (videoId: number, commentId: string, uid:
 	// Match all old spellings while writing only the canonical lowercase representation.
 	const storedCommentId = new RegExp(`^${commentId}$`, 'i')
 	// Preserve MongoDB errors for driver retries of transient write conflicts and uncertain
-	// commits. All retries and operations share the same ten-second deadline.
+	// commits. All retries and operations share the same bounded deadline.
 	return withMongoDBTransaction(async session => {
 		const options = { session, preserveError: true }
 		// Every vote operation writes this document first. A competing transaction must
@@ -53,5 +53,5 @@ export const mutateCommentVote = async (videoId: number, commentId: string, uid:
 		const updated = await findOneAndUpdateData4MongoDB({ _id: commentId }, { upvoteCount: upvotes.result, downvoteCount: downvotes.result }, VideoCommentSchema.schemaInstance, VideoCommentSchema.collectionName, options, false)
 		if (!updated.success || !updated.result) throw new Error('无法更新评论投票计数')
 		return active ? !previous : !!previous
-	}, { readPreference: 'primary', readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, timeoutMS: 10000 })
+	}, { readPreference: 'primary', readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, timeoutMS: 60000 })
 }

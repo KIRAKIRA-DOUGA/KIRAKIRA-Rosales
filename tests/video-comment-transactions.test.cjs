@@ -155,7 +155,7 @@ test('concurrent comment upvotes retry the transaction and store exactly one act
 	assert.equal(f.state().comments[0].upvoteCount, 1);
 	assert.ok(f.controls.retries > 0);
 	assert.equal(f.controls.sessions, f.controls.ended);
-	assert.ok(f.controls.options.every(o => o.timeoutMS === 10000 && o.readPreference === 'primary'));
+	assert.ok(f.controls.options.every(o => o.timeoutMS === 60000 && o.readPreference === 'primary'));
 });
 
 test('concurrent cancellation of legacy duplicate votes repairs the counter without going negative', async () => {
