@@ -1,4 +1,4 @@
-import { logging } from "../service/loggingService.js"
+import { logging } from '../service/loggingService.js'
 
 /**
  * 获取正确的 Cookie Domain 设置

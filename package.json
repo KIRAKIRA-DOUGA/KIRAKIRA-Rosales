@@ -6,9 +6,11 @@
 	"type": "module",
 	"author": "KIRAKIRA Project Team",
 	"private": true,
+	"license": "AGPL-3.0",
 	"scripts": {
 		"test": "node --test tests/*.test.cjs",
 		"typecheck": "tsc --noEmit",
+		"lint": "eslint src --max-warnings 0",
 		"start": "rimraf .kirakira && tsc --noEmitOnError --sourceMap --outDir .kirakira && npm run copy-assets-dev && node ./.kirakira/app.js",
 		"dev": "npm start",
 		"serve": "npm start",

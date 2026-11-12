@@ -66,7 +66,7 @@ export type RetryableDbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> = D
 
 /** 移除共通层专用选项，并确保事务始终从主节点读取。 */
 const getMongoDBQueryOptions = <T, P>(options?: RetryableDbPoolOptions<T, P>) => {
-	if (!options) return undefined
+	if (!options) { return undefined }
 	const { preserveError: _preserveError, ...queryOptions } = options
 	return options.session ? { ...queryOptions, readPreference: 'primary' as const } : queryOptions
 }
@@ -105,16 +105,16 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 		const protocol = databaseProtocol === 'mongodb+srv' ? 'mongodb+srv' : 'mongodb'
 		const mongoURL = `${protocol}://${databaseUsername}:${databasePassword}@${databaseHost}/${databaseName}?authSource=admin`
 
-		const connectionOptions = {
+		const connectionOptions: mongoose.ConnectOptions = {
 			readPreference: ReadPreferenceMode.secondaryPreferred, // 默认的读偏好为优先从副本中读取，在某些情况下会覆盖这个设置，比如说使用事务时会优先从主读取。
 			tlsAllowInvalidCertificates: false,
 		}
 
 		if (databaseTlsCa && databaseTlsCert && databaseTlsKey) {
-			connectionOptions['tls'] = true
-			connectionOptions['ca'] = databaseTlsCa
-			connectionOptions['cert'] = databaseTlsCert
-			connectionOptions['key'] = databaseTlsKey
+			connectionOptions.tls = true
+			connectionOptions.ca = databaseTlsCa
+			connectionOptions.cert = databaseTlsCert
+			connectionOptions.key = databaseTlsKey
 		}
 
 		try {
@@ -165,15 +165,17 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 		})
 		const model = new mongoModel(data)
 		try {
+			// 兼容旧共通接口的字符串 _id 声明；实际返回 Mongoose 文档，需单独迁移接口类型。
+			// eslint-disable-next-line no-restricted-syntax
 			const result = await model.save(getMongoDBQueryOptions(options)) as unknown as T & { _id: string }
 			return { success: true, message: '数据插入成功', result: [result] }
 		} catch (error) {
-			if (options?.preserveError) throw error
+			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据插入失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据插入失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) throw error
+		if (options?.preserveError) { throw error }
 		logging('ERROR', 'insertData2MongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据插入失败，insertData2MongoDB 中发生错误：', error }
 	}
@@ -315,12 +317,12 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 			}
 			return { success: true, message: '数据查询成功', result }
 		} catch (error) {
-			if (options?.preserveError) throw error
+			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据查询失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据查询失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) throw error
+		if (options?.preserveError) { throw error }
 		logging('ERROR', 'selectDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
 	}
@@ -396,12 +398,12 @@ export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: 
 				return { success: false, message: '尝试更新数据，但更新失败，可能是未匹配到数据', result: { acknowledged, matchedCount, modifiedCount } }
 			}
 		} catch (error) {
-			if (options?.preserveError) throw error
+			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据更新失败：', error, { where, update }, { recordingLogs: false })
 			throw { success: false, message: '数据更新失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) throw error
+		if (options?.preserveError) { throw error }
 		logging('ERROR', '数据更新失败，未知错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据更新失败，updateData4MongoDB 中发生错误：', error }
 	}
@@ -441,12 +443,12 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 				return { success: false, message: '数据更新失败，没有找到返回结果' }
 			}
 		} catch (error) {
-			if (options?.preserveError) throw error
+			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据更新失败：', error, { where, update }, { recordingLogs: false })
 			throw { success: false, message: '数据更新失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) throw error
+		if (options?.preserveError) { throw error }
 		logging('ERROR', '数据更新失败，未知错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据更新失败，findOneAndUpdateData4MongoDB 中发生错误：', error }
 	}
@@ -463,10 +465,10 @@ export const findOneAndUpdateWithOperators4MongoDB = async <T, P = DbPoolOptions
 		const updated = await mongoModel.findOneAndUpdate(where, update, {
 			...getMongoDBQueryOptions(options), new: true, upsert: false,
 		})
-		if (!updated) return { success: false, message: '未匹配到可更新的记录' }
+		if (!updated) { return { success: false, message: '未匹配到可更新的记录' } }
 		return { success: true, message: '数据原子更新成功', result: updated.toObject() as T }
 	} catch (error) {
-		if (options?.preserveError) throw error
+		if (options?.preserveError) { throw error }
 		logging('ERROR', '原子更新数据失败', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据原子更新失败', error }
 	}
@@ -479,7 +481,7 @@ export const countDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where
 		const count = await mongoModel.countDocuments(where, getMongoDBQueryOptions(options))
 		return { success: true, message: '数据计数成功', result: count }
 	} catch (error) {
-		if (options?.preserveError) throw error
+		if (options?.preserveError) { throw error }
 		logging('ERROR', '统计数据失败', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据计数失败', error }
 	}
@@ -526,7 +528,7 @@ export const getNextSequenceValuePool = async (sequenceId: string, sequenceDefau
 					{ new: true, ...options },
 				)
 			}
-			if (sequenceDocument.sequenceValue !== undefined && !sequenceDocument.sequenceValue !== null) {
+			if (sequenceDocument.sequenceValue !== undefined) {
 				return { success: true, message: '自增 ID 查询成功', result: sequenceDocument.sequenceValue as number }
 			} else {
 				logging('ERROR', '自增 ID 查询结果为空：', undefined, undefined, { recordingLogs: false })
@@ -594,10 +596,10 @@ export const findOneAndPlusByMongodbId = async <T extends Record<string, unknown
  */
 export const isQueryResultsEmpty = (result: DbPoolResultsType<unknown>): boolean => {
 	try {
-		return !result || !result.success || !result.result || !Array.isArray(result.result) || result.result.length < 0;
+		return !result || !result.success || !result.result || !Array.isArray(result.result) || result.result.length < 0
 	} catch (error) {
-		logging('ERROR', '检查查询结果是否为空数组时发生错误', error, {  }, );
-		return true;
+		logging('ERROR', '检查查询结果是否为空数组时发生错误', error, { })
+		return true
 	}
 }
 
@@ -609,9 +611,9 @@ export const isQueryResultsEmpty = (result: DbPoolResultsType<unknown>): boolean
  */
 export const isQueryResultEmpty = (result: DbPoolResultType<unknown>): boolean => {
 	try {
-		return !result || !result.success || !result.result || !(typeof result.result === 'object') || Object.keys(result.result).length === 0;
+		return !result || !result.success || !result.result || !(typeof result.result === 'object') || Object.keys(result.result).length === 0
 	} catch (error) {
-		logging('ERROR', '检查查询结果是否为空对象时发生错误', error, {  }, );
-		return true;
+		logging('ERROR', '检查查询结果是否为空对象时发生错误', error, { })
+		return true
 	}
 }

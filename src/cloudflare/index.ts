@@ -101,10 +101,10 @@ export const createCloudflareImageUploadSignedUrl = async (fileName?: string, ex
 			return undefined
 		}
 
-		const formData = new FormData();
-		formData.append('expiry', getCloudflareRFC3339ExpiryDateTime(expiresIn)); // 生成的日期格式为：2024-03-17T13:47:28Z
-		if (fileName) formData.append('id', fileName);
-		if (metaData) formData.append('metaData', JSON.stringify(metaData));
+		const formData = new FormData()
+		formData.append('expiry', getCloudflareRFC3339ExpiryDateTime(expiresIn)) // 生成的日期格式为：2024-03-17T13:47:28Z
+		if (fileName) { formData.append('id', fileName) }
+		if (metaData) { formData.append('metaData', JSON.stringify(metaData)) }
 
 		try {
 			const imageUploadSignedUrlResponse = await fetch(imagesEndpointUrl, {

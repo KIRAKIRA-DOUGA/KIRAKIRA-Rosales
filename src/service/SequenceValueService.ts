@@ -1,6 +1,6 @@
 import { ClientSession } from 'mongoose'
 import { getNextSequenceValuePool } from '../dbPool/DbClusterPool.js'
-import { logging } from './loggingService.js';
+import { logging } from './loggingService.js'
 
 // NOTE 自增序列默认会跳过的值
 const __DEFAULT_SEQUENCE_EJECT__: number[] = [9, 42, 233, 404, 2233, 10388, 10492, 114514]
@@ -77,7 +77,7 @@ export const getNextSequenceValueEjectService = async (sequenceId: string, eject
 			}
 		} while (eject && eject.includes(nextSequenceValue))
 		return { success: true, sequenceId, sequenceValue: nextSequenceValue, message: '获取自增序列成功' }
-	} catch (error) {
+	} catch (_error) {
 		logging('ERROR', '循环获取自增 ID 时出现异常')
 		return { success: false, sequenceId, message: '循环获取自增 ID 的程序执行时出现异常' }
 	}

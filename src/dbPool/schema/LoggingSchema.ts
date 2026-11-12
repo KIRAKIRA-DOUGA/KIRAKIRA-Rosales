@@ -1,4 +1,4 @@
-import { Schema } from 'mongoose';
+import { Schema } from 'mongoose'
 
 /**
  * 日志数据
@@ -10,7 +10,7 @@ class LogSchemaFactory {
 		/** 日志信息 - 非空 */
 		message: { type: String, required: true },
 		/** 错误的元数据 - 默认：{} */
-		meta: { type: Schema.Types.Mixed, default: {}, },
+		meta: { type: Schema.Types.Mixed, default: {} },
 		/** 错误堆栈字符串 */
 		errorStackString: { type: String },
 		/** ISO 格式的日志记录时间 */

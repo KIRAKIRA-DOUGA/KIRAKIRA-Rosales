@@ -281,7 +281,7 @@ class UserTotpAuthenticatorSchemaFactory {
 	// 构造器
 	constructor() {
 		// 添加 UUID 和 secret 组合的唯一索引
-		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true });
+		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true })
 	}
 }
 export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()

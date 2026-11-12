@@ -1,6 +1,6 @@
-import { InferSchemaType } from "mongoose";
-import { LogSchema } from "../dbPool/schema/LoggingSchema.js";
-import { insertData2MongoDB } from "../dbPool/DbClusterPool.js";
+import { InferSchemaType } from 'mongoose'
+import { LogSchema } from '../dbPool/schema/LoggingSchema.js'
+import { insertData2MongoDB } from '../dbPool/DbClusterPool.js'
 
 /** 输出的日志等级 */
 type LogLevel = 'error' | 'warn' | 'info' | 'ERROR' | 'WARN' | 'INFO';
@@ -12,7 +12,7 @@ type LoggingOptions = {
 /** 日志记录选项的默认值 */
 const defaultLoggingOptions = {
 	/** 默认持久存储数据 */
-	recordingLogs: true
+	recordingLogs: true,
 }
 
 /**
@@ -77,13 +77,18 @@ export function logging(logLevel: LogLevel, message: string, error?: Error, meta
 				break
 			}
 			case 'warn': {
-				if (['warn', 'info'].includes(envLogLevel)) return
+				if (['warn', 'info'].includes(envLogLevel)) { return }
 				console.warn('WARN', `[${nowISOString}] ${message}`, meta || '')
 				break
 			}
 			case 'info': {
-				if (['info'].includes(envLogLevel)) return
+				if (['info'].includes(envLogLevel)) { return }
 				console.info('INFO', `[${nowISOString}] ${message}`, meta || '')
+				break
+			}
+
+			default: {
+				// 未匹配的值沿用原逻辑，不执行分支。
 				break
 			}
 		}
@@ -125,26 +130,26 @@ function formatErrorStack(error: unknown, options: FormatErrorStackOptions = {})
 			return error.message.slice(0, maxChars)
 		}
 
-		let lines = error.stack.split("\n")
+		let lines = error.stack.split('\n')
 
 		// 第一行：Error: message（必须保留）
 		const header = lines.shift()!
 
 		if (skipNodeModules) {
 			lines = lines.filter(
-				line => !line.includes("node_modules") && !line.includes("node:internal")
+				line => !line.includes('node_modules') && !line.includes('node:internal'),
 			)
 		}
 
 		// ① 限制行数
 		const limitedLines = lines.slice(0, maxLines)
 
-		let result = [header, ...limitedLines].join("\n")
+		let result = [header, ...limitedLines].join('\n')
 
 		// ② 限制总字符数（最后兜底）
 		if (result.length > maxChars) {
 			result =
-				result.slice(0, maxChars - 15) + "\n… [truncated]"
+				`${result.slice(0, maxChars - 15)}\n… [truncated]`
 		}
 
 		return result

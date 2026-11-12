@@ -1,6 +1,6 @@
 import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
 import { GetUserInfoByUidRequestDto } from '../controller/UserControllerDto.js'
-import { AdminDeleteVideoCommentRequestDto, AdminDeleteVideoCommentResponseDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, DeleteSelfVideoCommentRequestDto, DeleteSelfVideoCommentResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, GetVideoCommentDownvotePropsDto, GetVideoCommentDownvoteResultDto, GetVideoCommentUpvotePropsDto, GetVideoCommentUpvoteResultDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
+import { AdminDeleteVideoCommentRequestDto, AdminDeleteVideoCommentResponseDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, DeleteSelfVideoCommentRequestDto, DeleteSelfVideoCommentResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB, deleteOneDataFromMongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { RemovedVideoCommentSchema, VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
@@ -203,7 +203,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 					category: 'regex',
 				},
 			],
-			{ uid, uuid, token }
+			{ uid, uuid, token },
 		)
 
 		// 获取视频的评论总数的 pipeline
@@ -211,14 +211,14 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			// 1. 查询评论信息
 			{
 				$match: {
-					videoId // 通过 videoId 筛选评论
+					videoId, // 通过 videoId 筛选评论
 				},
 			},
 			...blockListFilter.filter,
 			// 2. 统计总数量
 			{
 				$count: 'totalCount', // 统计总文档数
-			}
+			},
 		]
 
 		// 获取视频评论的 pipeline
@@ -226,7 +226,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			// 1. 查询评论信息
 			{
 				$match: {
-					videoId // 通过 videoId 筛选评论
+					videoId, // 通过 videoId 筛选评论
 				},
 			},
 			...blockListFilter.filter,
@@ -246,7 +246,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 				},
 			},
 			// 3. 按楼层升序排序
-			{ $sort: { 'commentIndex': 1 } },
+			{ $sort: { commentIndex: 1 } },
 			// 4. 分页查询
 			{ $skip: skip }, // 跳过指定数量的文档
 			...(pageSize ? [{ $limit: pageSize }] : []), // 限制返回的文档数量
@@ -322,7 +322,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 						userNickname: '$user_info_data.userNickname', // 用户昵称
 						avatar: '$user_info_data.avatar', // 用户头像的链接
 						signature: '$user_info_data.signature', // 用户的个性签名
-						gender: '$user_info_data.gender' // 用户的性别
+						gender: '$user_info_data.gender', // 用户的性别
 					},
 					...blockListFilter.additionalFields, // 黑名单过滤器的额外字段
 				},
@@ -457,9 +457,9 @@ const changeCommentVoteService = async (request: { videoId: number; id: string }
 		if (!request || !Number.isSafeInteger(request.videoId) || request.videoId < 1 || typeof request.id !== 'string' || !/^[a-f\d]{24}$/i.test(request.id)) {
 			return { success: false, message: '评论投票失败，参数异常' }
 		}
-		if (!(await checkUserTokenService(uid, token)).success) return { success: false, message: '评论投票失败，用户校验未通过' }
+		if (!(await checkUserTokenService(uid, token)).success) { return { success: false, message: '评论投票失败，用户校验未通过' } }
 		const UUID = await getUserUuid(uid)
-		if (!UUID) return { success: false, message: '评论投票失败，UUID 不存在' }
+		if (!UUID) { return { success: false, message: '评论投票失败，UUID 不存在' } }
 		const changed = await mutateCommentVote(request.videoId, request.id, uid, UUID, direction, active)
 		return { success: changed, message: changed ? '评论投票更新成功' : '评论投票状态未改变' }
 	} catch (error) {
@@ -727,30 +727,6 @@ const checkEmitVideoCommentRequest = (emitVideoCommentRequest: EmitVideoCommentR
 	return (
 		emitVideoCommentRequest.text && emitVideoCommentRequest.text.length < 20000 // 视频评论正文不为空，且不长于 20000 字
 		&& emitVideoCommentRequest.videoId !== undefined && emitVideoCommentRequest.videoId !== null // 视频评论不能缺少视频 ID
-	)
-}
-
-/**
- * 校验获取某个用户对某个视频的评论的点赞情况的参数
- * @param getVideoCommentUpvoteProps 获取某个用户对某个视频的评论的点赞情况的参数
- * @returns 校验结果，合法返回 true，不合法返回 false
- */
-const checkGetVideoCommentUpvoteProps = (getVideoCommentUpvoteProps: GetVideoCommentUpvotePropsDto): boolean => {
-	return (
-		getVideoCommentUpvoteProps.videoId !== undefined && getVideoCommentUpvoteProps.videoId !== null
-		&& getVideoCommentUpvoteProps.uid !== undefined && getVideoCommentUpvoteProps.uid !== null
-	)
-}
-
-/**
- * 校验获取某个用户对某个视频的评论的点踩情况的参数
- * @param getVideoCommentDownvoteProps 获取某个用户对某个视频的评论的点踩情况的参数
- * @returns 校验结果，合法返回 true，不合法返回 false
- */
-const checkGetVideoCommentDownvoteProps = (getVideoCommentDownvoteProps: GetVideoCommentDownvotePropsDto): boolean => {
-	return (
-		getVideoCommentDownvoteProps.videoId !== undefined && getVideoCommentDownvoteProps.videoId !== null
-		&& getVideoCommentDownvoteProps.uid !== undefined && getVideoCommentDownvoteProps.uid !== null
 	)
 }
 

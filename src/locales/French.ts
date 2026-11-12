@@ -3,41 +3,41 @@
 
 export default {
 	SendRegistrationVerificationCode: {
-		mailTitle: "KIRAKIRA - Enregistrer le code de vérification",
-		mailHeading: "Votre code de vérification d'inscription est",
-		mailText: "Bienvenue sur KIRAKIRA. Vous pouvez utiliser ce code de vérification pour enregistrer votre compte.\nLe code de vérification est valide pendant 30 minutes. Veuillez vous assurer de ne pas divulguer votre code de vérification à d'autres.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+		mailTitle: 'KIRAKIRA - Enregistrer le code de vérification',
+		mailHeading: 'Votre code de vérification d\'inscription est',
+		mailText: 'Bienvenue sur KIRAKIRA. Vous pouvez utiliser ce code de vérification pour enregistrer votre compte.\nLe code de vérification est valide pendant 30 minutes. Veuillez vous assurer de ne pas divulguer votre code de vérification à d\'autres.\nPour ne plus recevoir de notifications, veuillez contacter l\'équipe d\'assistance de KIRAKIRA.',
 	},
 	SendChangeEmailVerificationCode: {
-		mailTitle: "KIRAKIRA - Changer le code de vérification d'email",
-		mailHeading: "Votre code de vérification de courriel de changement est",
-		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+		mailTitle: 'KIRAKIRA - Changer le code de vérification d\'email',
+		mailHeading: 'Votre code de vérification de courriel de changement est',
+		mailText: 'Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d\'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l\'équipe d\'assistance de KIRAKIRA.',
 	},
 	SendChangePasswordVerificationCode: {
-		mailTitle: "KIRAKIRA - Changer le code de vérification du mot de passe",
-		mailHeading: "Votre code de vérification de mot de passe de changement est",
-		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+		mailTitle: 'KIRAKIRA - Changer le code de vérification du mot de passe',
+		mailHeading: 'Votre code de vérification de mot de passe de changement est',
+		mailText: 'Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d\'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l\'équipe d\'assistance de KIRAKIRA.',
 	},
 	SendResetPasswordVerificationCode: {
-		mailTitle: "KIRAKIRA - Réinitialiser le code de vérification du mot de passe",
-		mailHeading: "Le code de vérification de votre mot de passe de réinitialisation est",
-		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+		mailTitle: 'KIRAKIRA - Réinitialiser le code de vérification du mot de passe',
+		mailHeading: 'Le code de vérification de votre mot de passe de réinitialisation est',
+		mailText: 'Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d\'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l\'équipe d\'assistance de KIRAKIRA.',
 	},
 	SendLoginVerificationCode: {
-		mailTitle: "KIRAKIRA - Code de vérification de connexion",
-		mailHeading: "Votre code de vérification de connexion est",
-		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+		mailTitle: 'KIRAKIRA - Code de vérification de connexion',
+		mailHeading: 'Votre code de vérification de connexion est',
+		mailText: 'Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d\'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l\'équipe d\'assistance de KIRAKIRA.',
 	},
 	SendDisableUserEmail2FAVerificationCode: {
-		mailTitle: "KIRAKIRA - Désactiver le code de vérification 2FA par e-mail",
-		mailHeading: "Votre code de vérification est",
-		mailText: "Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l'équipe d'assistance de KIRAKIRA.",
+		mailTitle: 'KIRAKIRA - Désactiver le code de vérification 2FA par e-mail',
+		mailHeading: 'Votre code de vérification est',
+		mailText: 'Le code de vérification est valable 30 minutes. Veuillez ne pas le divulguer à d\'autres personnes.\nPour ne plus recevoir de notifications, veuillez contacter l\'équipe d\'assistance de KIRAKIRA.',
 	},
 	SendGeneral2FAEmailVerificationCode: {
-		mailTitle: "KIRAKIRA - Code de vérification",
-		mailHeading: "Votre code de vérification est",
+		mailTitle: 'KIRAKIRA - Code de vérification',
+		mailHeading: 'Votre code de vérification est',
 	},
 	SendGeneralEmailVerificationCode: {
-		mailTitle: "KIRAKIRA - Code de vérification",
-		mailHeading: "Votre code de vérification est",
+		mailTitle: 'KIRAKIRA - Code de vérification',
+		mailHeading: 'Votre code de vérification est',
 	},
 }

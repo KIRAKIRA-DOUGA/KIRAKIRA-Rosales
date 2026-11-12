@@ -1,7 +1,7 @@
-import { GetStgEnvBackEndSecretResponse } from "../controller/ConsoleSecretControllerDto.js";
-import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { checkUserTokenByUuidService } from "./UserService.js";
-import { logging } from "./loggingService.js";
+import { GetStgEnvBackEndSecretResponse } from '../controller/ConsoleSecretControllerDto.js'
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager'
+import { checkUserTokenByUuidService } from './UserService.js'
+import { logging } from './loggingService.js'
 
 let client: SecretsManagerClient
 
@@ -15,7 +15,7 @@ const AWS_SECRET_NAME = process.env.AWS_SECRET_NAME
 if (!!SERVER_ENV && ['dev', 'prod'].includes(SERVER_ENV)) {
 	try {
 		if (!AWS_SECRET_REGION || !AWS_SECRET_ACCESS_KEY || !AWS_SECRET_ACCESS_SECRET) {
-			logging("ERROR", "缺少 AWS 认证信息，请检查环境变量 AWS_SECRET_REGION、AWS_SECRET_ACCESS_KEY 和 AWS_SECRET_ACCESS_SECRET")
+			logging('ERROR', '缺少 AWS 认证信息，请检查环境变量 AWS_SECRET_REGION、AWS_SECRET_ACCESS_KEY 和 AWS_SECRET_ACCESS_SECRET')
 			process.exit()
 		}
 
@@ -28,7 +28,7 @@ if (!!SERVER_ENV && ['dev', 'prod'].includes(SERVER_ENV)) {
 			},
 		})
 		console.info('\nCreated an AWS Secrets Manager Client base on the environment variables you provided!\n')
-	} catch(error) {
+	} catch (error) {
 		logging('ERROR', '创建 AWS Secrets Manager 客户端失败：', error)
 		process.exit()
 	}
@@ -65,17 +65,17 @@ export async function getStgEnvBackEndSecretService(uuid: string, token: string)
 		}
 
 		try {
-			const command = new GetSecretValueCommand({ SecretId: AWS_SECRET_NAME });
-			const response = await client.send(command);
+			const command = new GetSecretValueCommand({ SecretId: AWS_SECRET_NAME })
+			const response = await client.send(command)
 
 			try {
-				const secerts: Record<string, string> = JSON.parse(response.SecretString);
+				const secerts: Record<string, string> = JSON.parse(response.SecretString)
 				return { success: true, message: '获取预生产环境后端环境变量机密成功', result: { envs: secerts } }
-			} catch(error) {
+			} catch (error) {
 				logging('ERROR', '获取预生产环境后端环境变量机密时出错，解析 JSON 失败：', error)
 				return { success: false, message: '获取预生产环境后端环境变量机密时出错，解析 JSON 失败', result: {} }
 			}
-		} catch(error) {
+		} catch (error) {
 			logging('ERROR', '获取预生产环境后端环境变量机密时出错，获取数据失败：', error)
 			return { success: false, message: '获取预生产环境后端环境变量机密时出错，获取数据失败', result: {} }
 		}

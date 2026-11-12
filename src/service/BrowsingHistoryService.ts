@@ -67,7 +67,7 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 			if (insert2MongoDResult.success && result) {
 				return { success: true, message: '更新或创建用户浏览历史成功', result: result as CreateOrUpdateBrowsingHistoryResponseDto['result'] }
 			}
-		} catch (error) {
+		} catch (_error) {
 			logging('ERROR', '更新或创建用户浏览历史时出错，插入数据时出错')
 			return { success: false, message: '更新或创建用户浏览历史时出错，插入数据时出错' }
 		}
@@ -168,7 +168,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 						logging('ERROR', '获取用户浏览历史时出错，未获取到数据')
 						return { success: false, message: '获取用户浏览历史时出错，未获取到数据' }
 					}
-				} catch (error) {
+				} catch (_error) {
 					logging('ERROR', '获取用户浏览历史时出错，获取用户浏览历史数据失败')
 					return { success: false, message: '获取用户浏览历史时出错，获取用户浏览历史数据失败' }
 				}
@@ -193,7 +193,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
  */
 const checkCreateOrUpdateBrowsingHistoryRequest = (createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto): boolean => {
 	return (
-		!! createOrUpdateBrowsingHistoryRequest.uuid
+		!!createOrUpdateBrowsingHistoryRequest.uuid
 		&& (createOrUpdateBrowsingHistoryRequest.category === 'video' || createOrUpdateBrowsingHistoryRequest.category === 'photo' || createOrUpdateBrowsingHistoryRequest.category === 'comment')
 		&& !!createOrUpdateBrowsingHistoryRequest.id
 	)

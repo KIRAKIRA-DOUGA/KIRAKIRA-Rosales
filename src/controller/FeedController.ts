@@ -1,8 +1,8 @@
-import { limitPageSize, parseInteger } from "../common/ValidTool.js";
-import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowerListService, getFollowingListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService } from "../service/FeedService.js";
-import { isPassRbacCheck } from "../service/RbacService.js";
-import { koaCtx, koaNext } from "../type/koaTypes.js";
-import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from "./FeedControllerDto.js";
+import { limitPageSize, parseInteger } from '../common/ValidTool.js'
+import { addNewUid2FeedGroupService, administratorApproveFeedGroupInfoChangeService, administratorDeleteFeedGroupService, createFeedGroupService, createOrEditFeedGroupInfoService, deleteFeedGroupService, followingUploaderService, getFeedContentService, getFeedGroupCoverUploadSignedUrlService, getFeedGroupListService, getFollowerListService, getFollowingListService, getFollowStatsService, removeUidFromFeedGroupService, unfollowingUploaderService } from '../service/FeedService.js'
+import { isPassRbacCheck } from '../service/RbacService.js'
+import { koaCtx, koaNext } from '../type/koaTypes.js'
+import { AddNewUid2FeedGroupRequestDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorDeleteFeedGroupRequestDto, CreateFeedGroupRequestDto, CreateOrEditFeedGroupInfoRequestDto, DeleteFeedGroupRequestDto, FollowingUploaderRequestDto, GetFeedContentRequestDto, GetFollowListRequestDto, GetFollowStatsRequestDto, RemoveUidFromFeedGroupRequestDto, UnfollowingUploaderRequestDto } from './FeedControllerDto.js'
 
 /**
  * 用户关注一个创作者
@@ -27,7 +27,7 @@ export const followingUploaderController = async (ctx: koaCtx, next: koaNext) =>
 	}
 
 	const feedingUploaderRequest: FollowingUploaderRequestDto = {
-		followingUid: data.followingUid ?? -1
+		followingUid: data.followingUid ?? -1,
 	}
 
 	const feedingUploaderResult = await followingUploaderService(feedingUploaderRequest, uuid, token)
@@ -47,7 +47,7 @@ export const unfollowingUploaderController = async (ctx: koaCtx, next: koaNext) 
 	const data = ctx.request.body as Partial<UnfollowingUploaderRequestDto>
 
 	const unfeedingUploaderRequest: UnfollowingUploaderRequestDto = {
-		unfollowingUid: data.unfollowingUid ?? -1
+		unfollowingUid: data.unfollowingUid ?? -1,
 	}
 
 	const feedingUploaderResult = await unfollowingUploaderService(unfeedingUploaderRequest, uuid, token)
@@ -72,9 +72,9 @@ export const createFeedGroupController = async (ctx: koaCtx, next: koaNext) => {
 	}
 
 	const createFeedGroupRequest: CreateFeedGroupRequestDto = {
-		feedGroupName: data.feedGroupName ?? "",
+		feedGroupName: data.feedGroupName ?? '',
 		withUidList: data.withUidList ?? [],
-		withCustomCoverUrl: data.withCustomCoverUrl ?? "",
+		withCustomCoverUrl: data.withCustomCoverUrl ?? '',
 	}
 
 	const feedingUploaderResult = await createFeedGroupService(createFeedGroupRequest, uuid, token)
@@ -99,7 +99,7 @@ export const addNewUid2FeedGroupController = async (ctx: koaCtx, next: koaNext) 
 	}
 
 	const addNewUser2FeedGroupRequest: AddNewUid2FeedGroupRequestDto = {
-		feedGroupUuid: data.feedGroupUuid ?? "",
+		feedGroupUuid: data.feedGroupUuid ?? '',
 		uidList: data.uidList ?? [],
 	}
 
@@ -120,7 +120,7 @@ export const removeUidFromFeedGroupController = async (ctx: koaCtx, next: koaNex
 	const data = ctx.request.body as Partial<RemoveUidFromFeedGroupRequestDto>
 
 	const removeUidFromFeedGroupRequest: RemoveUidFromFeedGroupRequestDto = {
-		feedGroupUuid: data.feedGroupUuid ?? "",
+		feedGroupUuid: data.feedGroupUuid ?? '',
 		uidList: data.uidList ?? [],
 	}
 
@@ -141,7 +141,7 @@ export const deleteFeedGroupController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<DeleteFeedGroupRequestDto>
 
 	const deleteFeedGroupRequest: DeleteFeedGroupRequestDto = {
-		feedGroupUuid: data.feedGroupUuid ?? "",
+		feedGroupUuid: data.feedGroupUuid ?? '',
 	}
 
 	const feedingUploaderResult = await deleteFeedGroupService(deleteFeedGroupRequest, uuid, token)
@@ -180,9 +180,9 @@ export const createOrEditFeedGroupInfoController = async (ctx: koaCtx, next: koa
 	}
 
 	const createOrEditFeedGroupInfoRequest: CreateOrEditFeedGroupInfoRequestDto = {
-		feedGroupUuid: data.feedGroupUuid ?? "",
-		feedGroupName: data.feedGroupName ?? "",
-		feedGroupCustomCoverUrl: data.feedGroupCustomCoverUrl ?? "",
+		feedGroupUuid: data.feedGroupUuid ?? '',
+		feedGroupName: data.feedGroupName ?? '',
+		feedGroupCustomCoverUrl: data.feedGroupCustomCoverUrl ?? '',
 	}
 
 	ctx.body = await createOrEditFeedGroupInfoService(createOrEditFeedGroupInfoRequest, uuid, token)
@@ -207,7 +207,7 @@ export const administratorApproveFeedGroupInfoChangeController = async (ctx: koa
 	}
 
 	const administratorApproveFeedGroupInfoChangeRequest: AdministratorApproveFeedGroupInfoChangeRequestDto = {
-		feedGroupUuid: data.feedGroupUuid ?? "",
+		feedGroupUuid: data.feedGroupUuid ?? '',
 	}
 
 	ctx.body = await administratorApproveFeedGroupInfoChangeService(administratorApproveFeedGroupInfoChangeRequest, uuid, token)
@@ -232,7 +232,7 @@ export const administratorDeleteFeedGroupController = async (ctx: koaCtx, next: 
 	}
 
 	const administratorDeleteFeedGroupRequest: AdministratorDeleteFeedGroupRequestDto = {
-		feedGroupUuid: data.feedGroupUuid ?? "",
+		feedGroupUuid: data.feedGroupUuid ?? '',
 	}
 
 	ctx.body = await administratorDeleteFeedGroupService(administratorDeleteFeedGroupRequest, uuid, token)
@@ -268,7 +268,7 @@ export const getFeedContentController = async (ctx: koaCtx, next: koaNext) => {
 	const finalPageSize = limitPageSize(pageSize)
 
 	const getFeedContentRequest: GetFeedContentRequestDto = {
-		feedGroupUuid: (ctx.query.feedGroupUuid as string) ?? "",
+		feedGroupUuid: (ctx.query.feedGroupUuid as string) ?? '',
 		pagination: {
 			page: parseInteger(page || '1') ?? 1,
 			pageSize: finalPageSize ?? 50,
