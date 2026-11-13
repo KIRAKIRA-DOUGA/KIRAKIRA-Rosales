@@ -45,7 +45,7 @@ export const createVideoTagService = async (createVideoTagRequest: CreateVideoTa
 						logging('ERROR', '创建视频 TAG 时出错，获取到的 TAG 自增编号为空')
 						return { success: false, message: '创建视频 TAG 时出错，生成的 TAG 编号为空' }
 					}
-				} catch (error) {
+				} catch (_error) {
 					logging('ERROR', '创建视频 TAG 时出错，获取 TAG 自增编号时出错')
 					return { success: false, message: '创建视频 TAG 时出错，获取 TAG 编号时出错' }
 				}
@@ -85,7 +85,7 @@ export const searchVideoTagService = async (searchVideoTagRequest: SearchVideoTa
 
 			try {
 				const searchVideoTagResult = await selectDataFromMongoDB<VideoTag>(where, select, schemaInstance, collectionName)
-				const result = searchVideoTagResult?.result as unknown as SearchVideoTagResponseDto['result']
+				const result = searchVideoTagResult?.result as SearchVideoTagResponseDto['result']
 				if (searchVideoTagResult.success) {
 					if (result?.length > 0) {
 						return { success: true, message: '搜索视频 TAG 成功', result }
@@ -131,7 +131,7 @@ export const getVideoTagByTagIdService = async (getVideoTagByTagIdRequest: GetVi
 
 			try {
 				const searchVideoTagResult = await selectDataFromMongoDB<VideoTag>(where, select, schemaInstance, collectionName)
-				const result = searchVideoTagResult?.result as unknown as SearchVideoTagResponseDto['result']
+				const result = searchVideoTagResult?.result as SearchVideoTagResponseDto['result']
 				if (searchVideoTagResult.success) {
 					if (result?.length > 0) {
 						return { success: true, message: '获取视频 TAG 成功', result }

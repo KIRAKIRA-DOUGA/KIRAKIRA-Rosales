@@ -1,4 +1,4 @@
-import { logging } from "../service/loggingService.js"
+import { logging } from '../service/loggingService.js'
 
 /**
  *
@@ -68,7 +68,7 @@ export const removeDuplicateObjectsInDeepArrayStrong = <T>(inputArray: NestedArr
 			logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray, required data "inputArray" is empty')
 			return []
 		}
-	} catch (error) {
+	} catch (_error) {
 		logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray')
 		return []
 	}
@@ -133,7 +133,7 @@ export const removeDuplicateObjectsInDeepArrayAndDeepObjectStrong = <T>(inputArr
 			logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray, required data "inputArray" is empty')
 			return []
 		}
-	} catch (error) {
+	} catch (_error) {
 		logging('ERROR', 'something error in function removeDuplicateObjectsStrongInDeepArray')
 		return []
 	}
@@ -153,8 +153,8 @@ export const mergeAndDeduplicateObjectArrays = <T>(arr1: T[], arr2: T[]): T[] =>
 		// 检查数组是否为空
 		if (arr1 || arr2) {
 			// 处理空数组情况
-			if (arr1 === undefined || arr1 === null) return arr2
-			if (arr2 === undefined || arr2 === null) return arr1
+			if (arr1 === undefined || arr1 === null) { return arr2 }
+			if (arr2 === undefined || arr2 === null) { return arr1 }
 
 			// 合并数组并去重
 			const mergedArray: T[] = [...arr1, ...arr2]
@@ -172,7 +172,7 @@ export const mergeAndDeduplicateObjectArrays = <T>(arr1: T[], arr2: T[]): T[] =>
 			logging('ERROR', 'something error in function mergeAndDeduplicateObjectArrays, required data "inputArray(arr1 and arr2)" is empty')
 			return []
 		}
-	} catch (error) {
+	} catch (_error) {
 		logging('ERROR', 'something error in function mergeAndDeduplicateObjectArrays')
 		return []
 	}

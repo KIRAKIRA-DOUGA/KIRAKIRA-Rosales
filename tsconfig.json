@@ -9,7 +9,7 @@
 		"allowSyntheticDefaultImports": true,
 		"module": "NodeNext",
 
-		"strict":false,
+		"strict": false,
 		// "strict": true, // 好吧，严格模式
 		// ... rest
 	},

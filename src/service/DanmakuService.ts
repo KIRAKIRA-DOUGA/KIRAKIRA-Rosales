@@ -1,11 +1,10 @@
 import { InferSchemaType, PipelineStage } from 'mongoose'
 import { EmitDanmakuRequestDto, EmitDanmakuResponseDto, GetDanmakuByKvidDto, GetDanmakuByKvidRequestDto, GetDanmakuByKvidResponseDto } from '../controller/DanmakuControllerDto.js'
-import { insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
-import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
+import { insertData2MongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { DanmakuSchema } from '../dbPool/schema/DanmakuSchema.js'
-import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUserUuid } from './UserService.js'
-import { buildBlockListMongooseFilter, checkIsBlockedByOtherUserService } from './BlockService.js'
-import { checkVideoBlockedByKvidService, getVideoByKvidService } from './VideoService.js'
+import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
+import { buildBlockListMongooseFilter } from './BlockService.js'
+import { checkVideoBlockedByKvidService } from './VideoService.js'
 import { logging } from './loggingService.js'
 
 /**
@@ -69,7 +68,6 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 			logging('ERROR', '弹幕发送失败，无法存储到 MongoDB', error, { emitDanmakuRequest, uuid })
 			return { success: false, message: '弹幕发送失败，存储弹幕数据失败' }
 		}
-
 	} catch (error) {
 		logging('ERROR', '弹幕发送失败，错误信息：', error, { emitDanmakuRequest, uuid })
 		return { success: false, message: '弹幕发送失败，未知原因' }
@@ -81,7 +79,7 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
  * @param getDanmakuByKvidRequest 请求弹幕列表的查询参数
  * @returns 视频的弹幕列表
  */
-export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto, uuid?: string, token?: string): Promise<GetDanmakuByKvidResponseDto> => {
+export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto, uid?: number, uuid?: string, userDataBootstrapHint?: string): Promise<GetDanmakuByKvidResponseDto> => {
 	try {
 		if (!checkGetDanmakuByKvidRequest(getDanmakuByKvidRequest)) {
 			logging('ERROR', '获取弹幕列表失败，数据校验失败', undefined, getDanmakuByKvidRequest)
@@ -112,15 +110,14 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 						category: 'regex',
 					},
 				],
-				uuid,
-				token
+				{ uid, uuid, userDataBootstrapHint },
 			)
 
 			const getDanmakuPipeline: PipelineStage[] = [
 				{
 					$match: {
 						videoId,
-					}
+					},
 				},
 				...blockListFilter.filter,
 				{
@@ -141,8 +138,8 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 						enableRainbow: 1,
 						editDateTime: 1,
 						...blockListFilter.additionalFields, // 黑名单过滤器的额外字段
-					}
-				}
+					},
+				},
 			]
 
 			const danmakuResult = await selectDataByAggregateFromMongoDB<Danmaku>(schemaInstance, collectionName, getDanmakuPipeline)

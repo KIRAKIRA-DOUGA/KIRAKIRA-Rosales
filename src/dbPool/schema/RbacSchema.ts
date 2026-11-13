@@ -2,7 +2,7 @@ import { Schema } from 'mongoose'
 
 /**
  * KIRAKIRA RBAC
- * 
+ *
  * KIRAKIRA RBAC 原子化权限控制的最小单位是 API 路径。
  * * 一个用户可以拥有多个角色
  * * 一个角色可以对应多位用户
@@ -45,7 +45,7 @@ export const RbacApiSchema = new RbacApiSchemaFactory()
 
 /**
  * RBAC 角色
- * 
+ *
  * 一个用户可以拥有多个角色
  * 一个角色可以对应多位用户
  * 一个角色可以拥有对多个 API 的访问权限

@@ -17,7 +17,13 @@ class UserAuthSchemaFactory {
 		/** 被两次 Bcrypt Hash 的密码 - 非空 */
 		passwordHashHash: { type: String, required: true },
 		/** 用户的身分令牌 - 非空 */
-		token: { type: String, required: true },
+		token: { type: String, required: true, unique: true },
+		/**
+		 * 用户数据初始化提示标识。
+		 * 会被设为 lax 级别的 cookie 存储，用于在获取一些不涉及隐私的数据时的用户凭证。
+		 * （例如 SSR 时获取主题配色，验证该用户是否曾经在改设别登录，获取首屏视频/搜索推荐等） - 非空
+		 */
+		userDataBootstrapHint: { type: String, required: true },
 		/** 密码最后更新的时间戳 - 非空 */
 		passwordUpdateDateTime: { type: Number, required: true },
 		/** 密码提示 */
@@ -180,7 +186,7 @@ class UserSettingsSchemaFactory {
 		unitSystemType: { type: String },
 		/** 是否进入了开发者模式 - 布尔 */
 		devMode: { type: Boolean },
-		/** 实验性：启用动态背景 - 布尔 */
+		/** 实验性：启用动态背景 - 布尔 */ // DELETE ME: 已废弃
 		showCssDoodle: { type: Boolean },
 		/** 实验性：启用直角模式 - 布尔 */
 		sharpAppearanceMode: { type: Boolean },
@@ -275,7 +281,7 @@ class UserTotpAuthenticatorSchemaFactory {
 	// 构造器
 	constructor() {
 		// 添加 UUID 和 secret 组合的唯一索引
-		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true });
+		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true })
 	}
 }
 export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()
@@ -324,6 +330,8 @@ class General2FAEmailVerificationCodeSchemaFactory {
 		totalCreateTimesToday: { type: Number, required: true },
 		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
 		totalVerifierTimesToday: { type: Number, required: true },
+		/** Last verification attempt; optional for records created before attempt tracking. */
+		lastVerifierAttemptDate: { type: Number },
 		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
 		used: { type: Boolean, required: true },
 		/** 系统专用字段-创建时间 - 非空 */
@@ -362,6 +370,8 @@ class GeneralEmailVerificationCodeSchemaFactory {
 		totalCreateTimesToday: { type: Number, required: true },
 		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
 		totalVerifierTimesToday: { type: Number, required: true },
+		/** Last verification attempt; optional for records created before attempt tracking. */
+		lastVerifierAttemptDate: { type: Number },
 		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
 		used: { type: Boolean, required: true },
 		/** 系统专用字段-创建时间 - 非空 */

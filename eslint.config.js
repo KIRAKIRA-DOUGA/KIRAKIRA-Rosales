@@ -1,18 +1,19 @@
-
 import js from '@eslint/js'
 import tseslint from '@typescript-eslint/eslint-plugin'
 import tsparser from '@typescript-eslint/parser'
 
 export default [
 	// 基础推荐配置
-	js.configs.recommended,
+	{ ...js.configs.recommended, files: ['src/**/*.ts'] },
 
-	// 全局配置
+	// TypeScript 源码配置
 	{
+		files: ['src/**/*.ts'],
 		languageOptions: {
 			ecmaVersion: 'latest',
 			sourceType: 'module',
 			parser: tsparser,
+			parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
 			globals: {
 				// 浏览器环境
 				window: 'readonly',
@@ -41,13 +42,13 @@ export default [
 				flatTernaryExpressions: true,
 			}],
 			'linebreak-style': ['error', 'unix'],
-			quotes: ['warn', 'single'],
-			semi: ['warn', 'never'],
+			quotes: ['error', 'single'],
+			semi: ['error', 'never'],
 
 			// 数组和对象格式
 			'array-bracket-spacing': ['error', 'never'],
 			'brace-style': ['error', '1tbs', { allowSingleLine: true }],
-			'comma-dangle': ['warn', 'always-multiline'],
+			'comma-dangle': ['error', 'always-multiline'],
 			'comma-spacing': ['error', { before: false, after: true }],
 			'comma-style': ['error', 'last'],
 			'object-curly-spacing': ['error', 'always'],
@@ -60,9 +61,11 @@ export default [
 			'no-floating-decimal': 'error',
 			'no-mixed-spaces-and-tabs': ['error', false],
 			'no-var': 'error',
+			'no-undef': 'off', // 由 tsc 检查，避免将 TypeScript 类型误判为未定义变量
+			curly: ['error', 'all'],
 			'no-unused-vars': 'off', // 由 TS 规则处理
 			'no-tabs': 'off',
-			'no-empty': ['error', { allowEmptyCatch: true }],
+			'no-empty': 'error',
 			'no-constant-condition': ['error', { checkLoops: false }],
 			eqeqeq: 'error',
 			'prefer-const': 'error',
@@ -82,7 +85,10 @@ export default [
 			'dot-notation': ['error'],
 			'guard-for-in': 'error',
 			'no-extra-label': 'error',
-			'require-await': 'error',
+			'require-await': 'off',
+			'@typescript-eslint/require-await': 'error',
+			'no-redeclare': 'off',
+			'@typescript-eslint/no-redeclare': ['error', { ignoreDeclarationMerge: true }],
 			yoda: 'error',
 
 			// 空格和格式
@@ -123,7 +129,7 @@ export default [
 			'template-curly-spacing': 'error',
 			'multiline-ternary': 'off',
 			'operator-linebreak': 'off',
-			'no-trailing-spaces': ['error', { skipBlankLines: true }],
+			'no-trailing-spaces': 'error',
 			'one-var': 'off',
 			'arrow-parens': ['error', 'as-needed'],
 			camelcase: 'off',
@@ -143,7 +149,7 @@ export default [
 			'@typescript-eslint/no-inferrable-types': 'off',
 			'@typescript-eslint/no-non-null-assertion': 'off',
 			'@typescript-eslint/triple-slash-reference': 'off',
-			'@typescript-eslint/ban-ts-comment': 'off',
+			'@typescript-eslint/ban-ts-comment': ['error', { 'ts-expect-error': 'allow-with-description', minimumDescriptionLength: 10 }],
 			'@typescript-eslint/ban-types': 'off',
 			'@typescript-eslint/no-namespace': 'off',
 			'@typescript-eslint/consistent-type-assertions': ['error', {
@@ -152,18 +158,21 @@ export default [
 			'@typescript-eslint/no-duplicate-enum-values': 'error',
 			'@typescript-eslint/no-empty-interface': 'error',
 			'@typescript-eslint/no-explicit-any': 'error',
+			'no-restricted-syntax': ['error', {
+				selector: 'TSAsExpression > TSAsExpression.expression',
+				message: '不要使用双重类型断言掩盖类型问题；请校验输入或收窄类型。',
+			}],
 		},
 	},
 
 	// 忽略文件
 	{
 		ignores: [
-			'.kirakira/**/*.js',
-			'.kirakira/**/*.ts',
-			'dist/**/*.js',
-			'dist/**/*.ts',
+			'.kirakira/**',
+			'dist/**',
+			'local/**',
 			'node_modules/**',
-			'docs/***',
+			'docs/**',
 		],
 	},
 ]

@@ -1,15 +1,15 @@
-import { InferSchemaType, PipelineStage, Query } from "mongoose";
-import { AdminGetUserRolesByUidRequestDto, AdminGetUserRolesByUidResponseDto, AdminUpdateUserRoleRequestDto, AdminUpdateUserRoleResponseDto, CheckUserRbacParams, CheckUserRbacResult, CreateRbacApiPathRequestDto, CreateRbacApiPathResponseDto, CreateRbacRoleRequestDto, CreateRbacRoleResponseDto, DeleteRbacApiPathRequestDto, DeleteRbacApiPathResponseDto, DeleteRbacRoleRequestDto, DeleteRbacRoleResponseDto, GetRbacApiPathRequestDto, GetRbacApiPathResponseDto, GetRbacRoleRequestDto, GetRbacRoleResponseDto, UpdateApiPathPermissionsForRoleRequestDto, UpdateApiPathPermissionsForRoleResponseDto } from "../controller/RbacControllerDto.js";
-import { checkUserTokenByUuidService, getUserUuid } from "./UserService.js";
-import { deleteDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from "../dbPool/DbClusterPool.js";
-import { UserAuthSchema, UserInfoSchema } from "../dbPool/schema/UserSchema.js";
-import { RbacApiSchema, RbacRoleSchema } from "../dbPool/schema/RbacSchema.js";
+import { InferSchemaType, PipelineStage } from 'mongoose'
+import { AdminGetUserRolesByUidRequestDto, AdminGetUserRolesByUidResponseDto, AdminUpdateUserRoleRequestDto, AdminUpdateUserRoleResponseDto, CheckUserRbacParams, CheckUserRbacResult, CreateRbacApiPathRequestDto, CreateRbacApiPathResponseDto, CreateRbacRoleRequestDto, CreateRbacRoleResponseDto, DeleteRbacApiPathRequestDto, DeleteRbacApiPathResponseDto, DeleteRbacRoleRequestDto, DeleteRbacRoleResponseDto, GetRbacApiPathRequestDto, GetRbacApiPathResponseDto, GetRbacRoleRequestDto, GetRbacRoleResponseDto, UpdateApiPathPermissionsForRoleRequestDto, UpdateApiPathPermissionsForRoleResponseDto } from '../controller/RbacControllerDto.js'
+import { checkUserTokenByUuidService, getUserUuid } from './UserService.js'
+import { deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { UserAuthSchema, UserInfoSchema } from '../dbPool/schema/UserSchema.js'
+import { RbacApiSchema, RbacRoleSchema } from '../dbPool/schema/RbacSchema.js'
 import { v4 as uuidV4 } from 'uuid'
-import { QueryType, SelectType, UpdateType } from "../dbPool/DbClusterPoolTypes.js";
-import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
-import { koaCtx } from "../type/koaTypes.js";
-import { clearUndefinedItemInObject, isEmptyObject } from "../common/ObjectTool.js";
-import { logging } from "./loggingService.js";
+import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
+import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js'
+import { koaCtx } from '../type/koaTypes.js'
+import { clearUndefinedItemInObject, isEmptyObject } from '../common/ObjectTool.js'
+import { logging } from './loggingService.js'
 
 /**
  * 通过 RBAC 检查用户的权限
@@ -21,12 +21,12 @@ export const checkUserByRbac = async (params: CheckUserRbacParams): Promise<Chec
 		const apiPath = params.apiPath
 		let uuid: string | undefined = undefined
 		let uid: number | undefined = undefined
-		if ('uuid' in params) uuid = params.uuid
-		if ('uid' in params) uid = params.uid
+		if ('uuid' in params) { uuid = params.uuid }
+		if ('uid' in params) { uid = params.uid }
 
 		if (!uuid && uid === undefined) {
 			logging('ERROR', '用户执行 RBAC 鉴权时失败，未提供 UUID 或 UID')
-			return { status: 500, message: `用户执行 RBAC 鉴权时失败，未提供 UUID 或 UID` }
+			return { status: 500, message: '用户执行 RBAC 鉴权时失败，未提供 UUID 或 UID' }
 		}
 
 		const match = { UUID: uuid, uid }
@@ -40,24 +40,24 @@ export const checkUserByRbac = async (params: CheckUserRbacParams): Promise<Chec
 			// 关联 roles 集合
 			{
 				$lookup: {
-					from: "rbac-roles",
-					localField: "roles",
-					foreignField: "roleName",
-					as: "rolesData"
-				}
+					from: 'rbac-roles',
+					localField: 'roles',
+					foreignField: 'roleName',
+					as: 'rolesData',
+				},
 			},
 			// 展开 rolesData 数组（多个角色）
-			{ $unwind: "$rolesData" },
+			{ $unwind: '$rolesData' },
 			// 展开 apiPathNamePermissions 数组（多个权限）
-			{ $unwind: "$rolesData.apiPathPermissions" },
+			{ $unwind: '$rolesData.apiPathPermissions' },
 			// 过滤出匹配的 API 路径
 			{
 				$match: {
-					"rolesData.apiPathPermissions": apiPath
-				}
+					'rolesData.apiPathPermissions': apiPath,
+				},
 			},
 			// 只返回有权限的数据
-			{ $project: { UUID: 1 } }
+			{ $project: { UUID: 1 } },
 		]
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
@@ -137,7 +137,7 @@ export const createRbacApiPathService = async (createRbacApiPathRequest: CreateR
 			creatorUuid: uuid,
 			lastEditorUuid: uuid,
 			createDateTime: now,
-			editDateTime: now
+			editDateTime: now,
 		}
 
 		const insertResult = await insertData2MongoDB<RbacApi>(rbacApiData, rbacApiSchemaInstance, rbacApiCollectionName)
@@ -161,8 +161,8 @@ export const createRbacApiPathService = async (createRbacApiPathRequest: CreateR
 				lastEditorUuid: insertResultData.lastEditorUuid,
 				createDateTime: insertResultData.createDateTime,
 				editDateTime: insertResultData.editDateTime,
-				isAssignedOnce: false
-			}
+				isAssignedOnce: false,
+			},
 		}
 	} catch (error) {
 		logging('ERROR', '创建 RBAC API 路径时出错，未知错误：', error)
@@ -191,11 +191,11 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 
 		const { apiPath } = deleteRbacApiPathRequest
 
-		const { collectionName: rbacRoleCollectionName, schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
-		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
+		const { collectionName: rbacRoleCollectionName, schemaInstance: _rbacRoleSchemaInstance } = RbacRoleSchema
+		type RbacRole = InferSchemaType<typeof _rbacRoleSchemaInstance>
 
 		const chackApiPathUnassignedWhere: QueryType<RbacRole> = {
-			apiPathPermissions: { $in: [apiPath] }
+			apiPathPermissions: { $in: [apiPath] },
 		}
 		const chackApiPathUnassignedSelect: SelectType<RbacRole> = {
 			roleName: 1,
@@ -203,7 +203,7 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 
 		const session = await createAndStartSession()
 
-		const chackApiPathUnassignedResult = await selectDataFromMongoDB<RbacRole>(chackApiPathUnassignedWhere, chackApiPathUnassignedSelect, rbacRoleSchemaInstance, rbacRoleCollectionName, { session })
+		const chackApiPathUnassignedResult = await selectDataFromMongoDB<RbacRole>(chackApiPathUnassignedWhere, chackApiPathUnassignedSelect, _rbacRoleSchemaInstance, rbacRoleCollectionName, { session })
 
 		if (chackApiPathUnassignedResult.result?.length > 0) {
 			await abortAndEndSession(session)
@@ -218,7 +218,7 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 			apiPath,
 		}
 
-		const deleteRbacApiResult = await deleteDataFromMongoDB(deleteRbacApiWhere, rbacApiSchemaInstance, rbacApiCollectionName, { session })
+		const deleteRbacApiResult = await deleteOneDataFromMongoDB(deleteRbacApiWhere, rbacApiSchemaInstance, rbacApiCollectionName, { session })
 
 		if (!deleteRbacApiResult.success) {
 			await abortAndEndSession(session)
@@ -267,8 +267,8 @@ export const getRbacApiPathService = async (getRbacApiPathRequest: GetRbacApiPat
 			...(!isEmptyObject(clearedSearch) ? [{
 				$match: {
 					$and: Object.entries(clearedSearch).map(([key, value]) => ({
-						[key]: { $regex: value, $options: "i" } // 生成模糊查询
-					}))
+						[key]: { $regex: value, $options: 'i' }, // 生成模糊查询
+					})),
 				},
 			}] : []),
 			{
@@ -280,27 +280,27 @@ export const getRbacApiPathService = async (getRbacApiPathRequest: GetRbacApiPat
 			...(!isEmptyObject(clearedSearch) ? [{
 				$match: {
 					$and: Object.entries(clearedSearch).map(([key, value]) => ({
-						[key]: { $regex: value, $options: "i" } // 生成模糊查询
-					}))
+						[key]: { $regex: value, $options: 'i' }, // 生成模糊查询
+					})),
 				},
 			}] : []),
 			{
 				$lookup: {
-					from: "rbac-roles",
-					localField: "apiPath",
-					foreignField: "apiPathPermissions",
-					as: "matchedDocs"
-				}
+					from: 'rbac-roles',
+					localField: 'apiPath',
+					foreignField: 'apiPathPermissions',
+					as: 'matchedDocs',
+				},
 			},
 			{
 				$addFields: {
-					isAssignedOnce: { $gt: [{ $size: "$matchedDocs" }, 0] } // 如果 matchedDocs 有数据，则为 true
-				}
+					isAssignedOnce: { $gt: [{ $size: '$matchedDocs' }, 0] }, // 如果 matchedDocs 有数据，则为 true
+				},
 			},
 			{
 				$project: {
-					matchedDocs: 0 // 删除 matchedDocs 字段，保持 A 集合的原始结构
-				}
+					matchedDocs: 0, // 删除 matchedDocs 字段，保持 A 集合的原始结构
+				},
 			},
 			{ $skip: skip }, // 跳过指定数量的文档
 			{ $limit: pageSize }, // 限制返回的文档数量
@@ -312,13 +312,13 @@ export const getRbacApiPathService = async (getRbacApiPathRequest: GetRbacApiPat
 		const rbacApiPathCountPromise = selectDataByAggregateFromMongoDB(rbacApiSchemaInstance, rbacApiCollectionName, countRbacApiPathPipeline)
 		const rbacApiPathDataPromise = selectDataByAggregateFromMongoDB<RbacApi & { isAssignedOnce: boolean }>(rbacApiSchemaInstance, rbacApiCollectionName, getRbacApiPathPipeline)
 
-		const [ rbacApiPathCountResult, rbacApiPathDataResult ] = await Promise.all([rbacApiPathCountPromise, rbacApiPathDataPromise])
+		const [rbacApiPathCountResult, rbacApiPathDataResult] = await Promise.all([rbacApiPathCountPromise, rbacApiPathDataPromise])
 		const count = rbacApiPathCountResult.result?.[0]?.totalCount
 		const result = rbacApiPathDataResult.result
 
 		if (!rbacApiPathCountResult.success || !rbacApiPathDataResult.success
 			|| typeof count !== 'number' || count < 0
-			|| ( Array.isArray(result) && !result )
+			|| (Array.isArray(result) && !result)
 		) {
 			logging('ERROR', '获取 RBAC API 路径失败，获取数据失败')
 			return { success: false, message: '获取 RBAC API 路径失败，获取数据失败' }
@@ -358,8 +358,8 @@ export const createRbacRoleService = async (createRbacRoleRequest: CreateRbacRol
 		const roleUuid = uuidV4()
 		const now = new Date().getTime()
 
-		const { collectionName: rbacRoleCollectionName, schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
-		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
+		const { collectionName: rbacRoleCollectionName, schemaInstance: _rbacRoleSchemaInstance } = RbacRoleSchema
+		type RbacRole = InferSchemaType<typeof _rbacRoleSchemaInstance>
 
 		const rbacRoleData: RbacRole = {
 			roleUuid,
@@ -371,10 +371,10 @@ export const createRbacRoleService = async (createRbacRoleRequest: CreateRbacRol
 			creatorUuid: uuid,
 			lastEditorUuid: uuid,
 			createDateTime: now,
-			editDateTime: now
+			editDateTime: now,
 		}
 
-		const insertResult = await insertData2MongoDB<RbacRole>(rbacRoleData, rbacRoleSchemaInstance, rbacRoleCollectionName)
+		const insertResult = await insertData2MongoDB<RbacRole>(rbacRoleData, _rbacRoleSchemaInstance, rbacRoleCollectionName)
 		const insertResultData = insertResult?.result?.[0]
 
 		if (!insertResult.success || !insertResultData) {
@@ -410,14 +410,14 @@ export const deleteRbacRoleService = async (deleteRbacRoleRequest: DeleteRbacRol
 
 		const { roleName } = deleteRbacRoleRequest
 
-		const { collectionName: rbacRoleCollectionName, schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
-		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
+		const { collectionName: rbacRoleCollectionName, schemaInstance: _rbacRoleSchemaInstance } = RbacRoleSchema
+		type RbacRole = InferSchemaType<typeof _rbacRoleSchemaInstance>
 
 		const deleteRbacRoleWhere: QueryType<RbacRole> = {
 			roleName,
 		}
 
-		const deleteResult = await deleteDataFromMongoDB(deleteRbacRoleWhere, rbacRoleSchemaInstance, rbacRoleCollectionName)
+		const deleteResult = await deleteOneDataFromMongoDB(deleteRbacRoleWhere, _rbacRoleSchemaInstance, rbacRoleCollectionName)
 
 		if (!deleteResult.success) {
 			logging('ERROR', '删除 RBAC 角色失败，数据插入失败')
@@ -464,8 +464,8 @@ export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestD
 			...(!isEmptyObject(clearedSearch) ? [{
 				$match: {
 					$and: Object.entries(clearedSearch).map(([key, value]) => ({
-						[key]: { $regex: value, $options: "i" } // 生成模糊查询
-					}))
+						[key]: { $regex: value, $options: 'i' }, // 生成模糊查询
+					})),
 				},
 			}] : []),
 			{
@@ -477,40 +477,40 @@ export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestD
 			...(!isEmptyObject(clearedSearch) ? [{
 				$match: {
 					$and: Object.entries(clearedSearch).map(([key, value]) => ({
-						[key]: { $regex: value, $options: "i" } // 生成模糊查询
-					}))
+						[key]: { $regex: value, $options: 'i' }, // 生成模糊查询
+					})),
 				},
 			}] : []),
 			{
 				$lookup: {
-					from: "rbac-api-lists",
-					localField: "apiPathPermissions",
-					foreignField: "apiPath",
-					as: "apiPathList"
-				}
+					from: 'rbac-api-lists',
+					localField: 'apiPathPermissions',
+					foreignField: 'apiPath',
+					as: 'apiPathList',
+				},
 			},
 			{
 				$addFields: {
-					apiPathList: "$apiPathList"
-				}
+					apiPathList: '$apiPathList',
+				},
 			},
 			{ $skip: skip }, // 跳过指定数量的文档
 			{ $limit: pageSize }, // 限制返回的文档数量
 		]
 
-		const { collectionName: rbacRoleCollectionName, schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
-		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
+		const { collectionName: rbacRoleCollectionName, schemaInstance: _rbacRoleSchemaInstance } = RbacRoleSchema
+		type RbacRole = InferSchemaType<typeof _rbacRoleSchemaInstance>
 
-		const rbacRoleCountPromise = selectDataByAggregateFromMongoDB(rbacRoleSchemaInstance, rbacRoleCollectionName, countRbacRolePipeline)
-		const rbacRoleDataPromise = selectDataByAggregateFromMongoDB<RbacRole & { apiPathList: GetRbacRoleResponseDto['result'][number]['apiPathList'] }>(rbacRoleSchemaInstance, rbacRoleCollectionName, getRbacRolePipeline)
+		const rbacRoleCountPromise = selectDataByAggregateFromMongoDB(_rbacRoleSchemaInstance, rbacRoleCollectionName, countRbacRolePipeline)
+		const rbacRoleDataPromise = selectDataByAggregateFromMongoDB<RbacRole & { apiPathList: GetRbacRoleResponseDto['result'][number]['apiPathList'] }>(_rbacRoleSchemaInstance, rbacRoleCollectionName, getRbacRolePipeline)
 
-		const [ rbacRoleCountResult, rbacRoleDataResult ] = await Promise.all([rbacRoleCountPromise, rbacRoleDataPromise])
+		const [rbacRoleCountResult, rbacRoleDataResult] = await Promise.all([rbacRoleCountPromise, rbacRoleDataPromise])
 		const count = rbacRoleCountResult.result?.[0]?.totalCount
 		const result = rbacRoleDataResult.result
 
 		if (!rbacRoleCountResult.success || !rbacRoleDataResult.success
 			|| typeof count !== 'number' || count < 0
-			|| ( Array.isArray(result) && !result )
+			|| (Array.isArray(result) && !result)
 		) {
 			logging('ERROR', '获取 RBAC 角色失败，获取数据失败')
 			return { success: false, message: '获取 RBAC 角色失败，获取数据失败' }
@@ -521,7 +521,6 @@ export const getRbacRoleService = async (getRbacRoleRequest: GetRbacRoleRequestD
 		} else {
 			return { success: true, message: '查询 RBAC API 路径成功', count, result }
 		}
-
 	} catch (error) {
 		logging('ERROR', '获取 RBAC 角色时出错，未知错误', error)
 		return { success: false, message: '获取 RBAC 角色时出错，未知错误' }
@@ -577,8 +576,8 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 			return { success: false, message: '为角色更新 API 路径权限失败，检查 API 路径未通过，可能是因为将一个不存在的路径添加到角色中' }
 		}
 
-		const { collectionName: rbacRoleCollectionName, schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
-		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
+		const { collectionName: rbacRoleCollectionName, schemaInstance: _rbacRoleSchemaInstance } = RbacRoleSchema
+		type RbacRole = InferSchemaType<typeof _rbacRoleSchemaInstance>
 
 		const updateApiPathPermissions4RoleWhere: QueryType<RbacRole> = {
 			roleName,
@@ -591,7 +590,7 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 			editDateTime: now,
 		}
 
-		const updateApiPathPermissions4Role = await findOneAndUpdateData4MongoDB<RbacRole>(updateApiPathPermissions4RoleWhere, updateApiPathPermissions4RoleData, rbacRoleSchemaInstance, rbacRoleCollectionName)
+		const updateApiPathPermissions4Role = await findOneAndUpdateData4MongoDB<RbacRole>(updateApiPathPermissions4RoleWhere, updateApiPathPermissions4RoleData, _rbacRoleSchemaInstance, rbacRoleCollectionName)
 
 		if (!updateApiPathPermissions4Role.success) {
 			await abortAndEndSession(session)
@@ -638,8 +637,8 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 			return { success: false, message: '管理员更新用户角色失败，未找到用户 UUID' }
 		}
 
-		const { collectionName: rbacRoleCollectionName, schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
-		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
+		const { collectionName: rbacRoleCollectionName, schemaInstance: _rbacRoleSchemaInstance } = RbacRoleSchema
+		type RbacRole = InferSchemaType<typeof _rbacRoleSchemaInstance>
 
 		const checkNewRoelsCountWhere: QueryType<RbacRole> = {
 			roleName: { $in: uniqueNewRoels },
@@ -651,7 +650,7 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 
 		const session = await createAndStartSession()
 
-		const checkNewRoelsCountResult = await selectDataFromMongoDB<RbacRole>(checkNewRoelsCountWhere, checkNewRoelsCountSelect, rbacRoleSchemaInstance, rbacRoleCollectionName, { session })
+		const checkNewRoelsCountResult = await selectDataFromMongoDB<RbacRole>(checkNewRoelsCountWhere, checkNewRoelsCountSelect, _rbacRoleSchemaInstance, rbacRoleCollectionName, { session })
 
 		if (!checkNewRoelsCountResult.success) {
 			await abortAndEndSession(session)
@@ -719,23 +718,23 @@ export const adminGetUserRolesByUidService = async (adminGetUserRolesByUidReques
 			{
 				$match: {
 					uid,
-				}
+				},
 			},
 			{
 				$lookup: {
-					from: "rbac-roles",
-					localField: "roles",
-					foreignField: "roleName",
-					as: "userRole"
-				}
+					from: 'rbac-roles',
+					localField: 'roles',
+					foreignField: 'roleName',
+					as: 'userRole',
+				},
 			},
 			{
 				$lookup: {
-					from: "user-infos",
-					localField: "UUID",
-					foreignField: "UUID",
-					as: "userInfo"
-				}
+					from: 'user-infos',
+					localField: 'UUID',
+					foreignField: 'UUID',
+					as: 'userInfo',
+				},
 			},
 			{
 				$unwind: '$userInfo',
@@ -748,18 +747,18 @@ export const adminGetUserRolesByUidService = async (adminGetUserRolesByUidReques
 					userNickname: '$userInfo.userNickname',
 					avatar: '$userInfo.avatar',
 					roles: '$userRole',
-				}
+				},
 			},
 		]
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
 
-		const { schemaInstance: userInfoSchemaInstance } = UserInfoSchema
-		type UserInfo = InferSchemaType<typeof userInfoSchemaInstance>
+		const { schemaInstance: _userInfoSchemaInstance } = UserInfoSchema
+		type UserInfo = InferSchemaType<typeof _userInfoSchemaInstance>
 
-		const { schemaInstance: rbacRoleSchemaInstance } = RbacRoleSchema
-		type RbacRole = InferSchemaType<typeof rbacRoleSchemaInstance>
+		const { schemaInstance: _rbacRoleSchemaInstance } = RbacRoleSchema
+		type RbacRole = InferSchemaType<typeof _rbacRoleSchemaInstance>
 
 
 		const adminGerUserRolesResult = await selectDataByAggregateFromMongoDB<{
@@ -802,7 +801,7 @@ const checkCreateRbacApiPathRequest = (createRbacApiPathRequest: CreateRbacApiPa
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkDeleteRbacApiPathRequest = (deleteRbacApiPathRequest: DeleteRbacApiPathRequestDto): boolean => {
-	return ( !!deleteRbacApiPathRequest.apiPath )
+	return (!!deleteRbacApiPathRequest.apiPath)
 }
 
 
@@ -811,7 +810,7 @@ const checkDeleteRbacApiPathRequest = (deleteRbacApiPathRequest: DeleteRbacApiPa
  * @param getRbacApiPathRequest 获取 RBAC API 路径的请求载荷
  * @returns 合法返回 true, 不合法返回 false
  */
-const checkGetRbacApiPathRequest = (getRbacApiPathRequest: GetRbacApiPathRequestDto): boolean => {
+const checkGetRbacApiPathRequest = (_getRbacApiPathRequest: GetRbacApiPathRequestDto): boolean => {
 	return true // 没有什么好校验的
 }
 
@@ -833,7 +832,7 @@ const checkCreateRbacRoleRequest = (createRbacRoleRequest: CreateRbacRoleRequest
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkDeleteRbacRoleRequest = (deleteRbacRoleRequest: DeleteRbacRoleRequestDto): boolean => {
-	return ( !!deleteRbacRoleRequest.roleName )
+	return (!!deleteRbacRoleRequest.roleName)
 }
 
 /**
@@ -841,7 +840,7 @@ const checkDeleteRbacRoleRequest = (deleteRbacRoleRequest: DeleteRbacRoleRequest
  * @param getRbacRoleRequest 获取 RBAC 角色的请求载荷
  * @returns 合法返回 true, 不合法返回 false
  */
-const checkGetRbacRoleRequest = (getRbacRoleRequest: GetRbacRoleRequestDto): boolean => {
+const checkGetRbacRoleRequest = (_getRbacRoleRequest: GetRbacRoleRequestDto): boolean => {
 	return true // 没什么好检查的
 }
 
@@ -877,5 +876,5 @@ const checkAdminUpdateUserRoleRequest = (adminUpdateUserRoleRequest: AdminUpdate
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkAdminGetUserRolesByUidRequest = (adminGetUserRolesByUidRequest: AdminGetUserRolesByUidRequestDto): boolean => {
-	return ( adminGetUserRolesByUidRequest.uid !== undefined && adminGetUserRolesByUidRequest.uid !== null )
+	return (adminGetUserRolesByUidRequest.uid !== undefined && adminGetUserRolesByUidRequest.uid !== null)
 }

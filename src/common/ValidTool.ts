@@ -3,7 +3,7 @@
  * @param fieldValue 验证内容
  * @returns 是否符合规范，符合规范返回true，否则返回false
  */
-export const validateNameField = (fieldValue) => {
+export const validateNameField = fieldValue => {
 	const value = String(fieldValue ?? '')
 	const pattern = /^(?![\s-_])(?!.*[\s-_]{2})[a-zA-Z0-9-\uAC00-\uD7AF\u3040-\u30FF\u4E00-\u9FAF\u00C0-\u1EF9_\s]+(?<![\s-_])$/
 	const trimmedValue = value.trim()
@@ -25,7 +25,7 @@ export const validateNameField = (fieldValue) => {
  */
 export const limitSize = (field: string, max: number): number => {
 	const MAX_SIZE = max
-	const raw = field as any
+	const raw = field
 	let n = Number(raw)
 	if (!Number.isFinite(n) || Number.isNaN(n)) {
 		n = Number.parseInt(String(raw), 10)
@@ -47,7 +47,7 @@ export const limitPageSize = (pageSize: string): number => {
 	const MAX_PAGE_SIZE = 100
 	const MIN_PAGE_SIZE = 1
 
-	const raw = pageSize as any
+	const raw = pageSize
 	let n = Number(raw)
 	if (!Number.isFinite(n) || Number.isNaN(n)) {
 		n = Number.parseInt(String(raw), 10)
@@ -77,18 +77,18 @@ export const parseInteger = (raw: unknown, fallback?: number): number => {
 	}
 
 	if (typeof raw === 'number') {
-		if (!Number.isFinite(raw) || Number.isNaN(raw)) return fallback === undefined ? NaN : fallback
+		if (!Number.isFinite(raw) || Number.isNaN(raw)) { return fallback === undefined ? NaN : fallback }
 		return Math.trunc(raw)
 	}
 
 	const s = String(raw).trim()
-	if (s.length === 0) return fallback === undefined ? NaN : fallback
+	if (s.length === 0) { return fallback === undefined ? NaN : fallback }
 
 	// 匹配可能带符号的整数字串前缀（例如 "123abc" -> 123, "  -12 " -> -12）
 	const m = s.match(/^([+-]?\d+)/)
-	if (!m) return fallback === undefined ? NaN : fallback
+	if (!m) { return fallback === undefined ? NaN : fallback }
 
 	const n = Number(m[1])
-	if (!Number.isFinite(n) || Number.isNaN(n)) return fallback === undefined ? NaN : fallback
+	if (!Number.isFinite(n) || Number.isNaN(n)) { return fallback === undefined ? NaN : fallback }
 	return Math.trunc(n)
 }
