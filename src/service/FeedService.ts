@@ -1,17 +1,17 @@
-import { InferSchemaType, PipelineStage } from "mongoose";
-import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowListRequestDto, GetFollowListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto, UserInfoForFollowList } from "../controller/FeedControllerDto.js";
-import { FeedGroupSchema, FollowingSchema, UnfollowingSchema } from "../dbPool/schema/FeedSchema.js";
-import { UserSettingsSchema } from "../dbPool/schema/UserSchema.js";
-import { checkUserExistsByUuidService, checkUserTokenByUuidService, getUserUuid } from "./UserService.js";
-import { QueryType, SelectType, UpdateType } from "../dbPool/DbClusterPoolTypes.js";
-import { deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from "../dbPool/DbClusterPool.js";
-import { abortAndEndSession, commitAndEndSession, createAndStartSession } from "../common/MongoDBSessionTool.js";
-import { CheckUserExistsByUuidRequestDto } from "../controller/UserControllerDto.js";
+import { ClientSession, InferSchemaType, PipelineStage } from 'mongoose'
+import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowListRequestDto, GetFollowListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto } from '../controller/FeedControllerDto.js'
+import { FeedGroupSchema, FollowingSchema, UnfollowingSchema } from '../dbPool/schema/FeedSchema.js'
+import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
+import { checkUserExistsByUuidService, checkUserTokenByUuidService, getUserUuid } from './UserService.js'
+import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
+import { deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js'
+import { CheckUserExistsByUuidRequestDto } from '../controller/UserControllerDto.js'
 import { v4 as uuidV4 } from 'uuid'
-import { generateSecureRandomString } from "../common/RandomTool.js";
-import { createCloudflareImageUploadSignedUrl } from "../cloudflare/index.js";
-import { VideoSchema } from "../dbPool/schema/VideoSchema.js";
-import { logging } from "./loggingService.js";
+import { generateSecureRandomString } from '../common/RandomTool.js'
+import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
+import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
+import { logging } from './loggingService.js'
 
 /**
  * 用户关注一个创作者
@@ -222,7 +222,7 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
 			}
 
 			let isCorrectUuidList = true
-			uidList.forEach(async uid => {
+			for (const uid of uidList) {
 				const uuid = await getUserUuid(uid) as string
 				const checkUserExistsByUuidRequest: CheckUserExistsByUuidRequestDto = {
 					uuid,
@@ -233,7 +233,7 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
 				}
 
 				uuidList.push(uuid)
-			})
+			}
 
 			if (!isCorrectUuidList) {
 				logging('ERROR', '创建动态分组失败，UUID 列表不合法。')
@@ -280,6 +280,7 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
  * @returns 向一个动态分组中添加新的 UID 的请求响应
  */
 export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: AddNewUid2FeedGroupRequestDto, uuid: string, token: string): Promise<AddNewUid2FeedGroupResponseDto> => {
+	let session: ClientSession | undefined
 	try {
 		if (!checkAddNewUser2FeedGroupRequest(addNewUser2FeedGroupRequest)) {
 			logging('ERROR', '向一个动态分组中添加新的 UID 失败，参数不合法。')
@@ -301,7 +302,7 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 			}
 
 			let isCorrectUuidList = true
-			uidList.forEach(async uid => {
+			for (const uid of uidList) {
 				const uuid = await getUserUuid(uid) as string
 				const checkUserExistsByUuidRequest: CheckUserExistsByUuidRequestDto = {
 					uuid,
@@ -312,7 +313,7 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 				}
 
 				uuidList.push(uuid)
-			})
+			}
 
 			if (!isCorrectUuidList) {
 				logging('ERROR', '向一个动态分组中添加新的 UID 失败，UUID 列表不合法。')
@@ -332,13 +333,12 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 			feedGroupCreatorUuid: uuid, // 确保修改的是自己创建的动态分组
 		}
 
-		const session = await createAndStartSession()
+		session = await createAndStartSession()
 
 		const getFeedGroupDataResult = await selectDataFromMongoDB<FeedGroup>(feedGroupWhere, getFeedGroupSelect, feedGroupSchemaInstance, feedGroupCollectionName, { session })
 		const getFeedGroupData = getFeedGroupDataResult.result?.[0]
 
-		if (!getFeedGroupDataResult.success || !getFeedGroupData.feedGroupUuid) {
-			await abortAndEndSession(session)
+		if (!getFeedGroupDataResult.success || !getFeedGroupData?.feedGroupUuid) {
 			logging('ERROR', '向一个动态分组中添加新的 UID 失败，更新的动态列表不存在或者不是由当前用户创建')
 			return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 失败，更新的动态列表不存在或者不是由当前用户创建' }
 		}
@@ -346,7 +346,6 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 		const newUuidList = [...new Set<string>(uuidList.concat(getFeedGroupData.uuidList ?? []))]
 
 		if (newUuidList.length > 10000) {
-			await abortAndEndSession(session)
 			logging('ERROR', '向一个动态分组中添加新的 UID 失败，动态分组中用户太多了')
 			return { success: false, tooManyUidInOnce: false, isOverload: true, message: '向一个动态分组中添加新的 UID 失败，动态分组中用户太多了' }
 		}
@@ -358,19 +357,31 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 		}
 
 		const findOneAndUpdateFeedGroupDataResult = await findOneAndUpdateData4MongoDB<FeedGroup>(feedGroupWhere, updateFeedGroupData, feedGroupSchemaInstance, feedGroupCollectionName, { session })
-		const findOneAndUpdateFeedGroupData = findOneAndUpdateFeedGroupDataResult.result?.[0]
+		const findOneAndUpdateFeedGroupData = findOneAndUpdateFeedGroupDataResult.result
 
 		if (!findOneAndUpdateFeedGroupDataResult.success || !findOneAndUpdateFeedGroupData) {
-			await abortAndEndSession(session)
 			logging('ERROR', '向一个动态分组中添加新的 UID 失败，更新失败')
 			return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 失败，更新失败' }
 		}
 
-		await commitAndEndSession(session)
+		await session.commitTransaction()
 		return { success: true, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 成功', feedGroupResult: findOneAndUpdateFeedGroupData }
 	} catch (error) {
 		logging('ERROR', '向一个动态分组中添加新的 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 时出错：未知原因。' }
+	} finally {
+		if (session) {
+			try {
+				if (session.inTransaction()) { await session.abortTransaction() }
+			} catch (error) {
+				logging('ERROR', '添加动态分组成员后回滚事务失败', error)
+			}
+			try {
+				await session.endSession()
+			} catch (error) {
+				logging('ERROR', '添加动态分组成员后结束事务会话失败', error)
+			}
+		}
 	}
 }
 
@@ -382,6 +393,7 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
  * @returns 从一个动态分组中移除 UID 的请求响应
  */
 export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupRequest: RemoveUidFromFeedGroupRequestDto, uuid: string, token: string): Promise<RemoveUidFromFeedGroupResponseDto> => {
+	let session: ClientSession | undefined
 	try {
 		if (!checkRemoveUidFromFeedGroupRequest(removeUidFromFeedGroupRequest)) {
 			logging('ERROR', '从一个动态分组中移除 UID 失败，参数不合法。')
@@ -403,7 +415,7 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 			}
 
 			let isCorrectUuidList = true
-			uidList.forEach(async uid => {
+			for (const uid of uidList) {
 				const uuid = await getUserUuid(uid) as string
 				const checkUserExistsByUuidRequest: CheckUserExistsByUuidRequestDto = {
 					uuid,
@@ -414,7 +426,7 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 				}
 
 				uuidList.push(uuid)
-			})
+			}
 
 			if (!isCorrectUuidList) {
 				logging('ERROR', '从一个动态分组中移除 UID 失败，UUID 列表不合法。')
@@ -434,13 +446,12 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 			feedGroupCreatorUuid: uuid, // 确保修改的是自己创建的动态分组
 		}
 
-		const session = await createAndStartSession()
+		session = await createAndStartSession()
 
 		const getFeedGroupDataResult = await selectDataFromMongoDB<FeedGroup>(feedGroupWhere, getFeedGroupSelect, feedGroupSchemaInstance, feedGroupCollectionName, { session })
 		const getFeedGroupData = getFeedGroupDataResult.result?.[0]
 
-		if (!getFeedGroupDataResult.success || !getFeedGroupData.feedGroupUuid) {
-			await abortAndEndSession(session)
+		if (!getFeedGroupDataResult.success || !getFeedGroupData?.feedGroupUuid) {
 			logging('ERROR', '从一个动态分组中移除 UID 失败，更新的动态列表不存在或者不是由当前用户创建')
 			return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 失败，更新的动态列表不存在或者不是由当前用户创建' }
 		}
@@ -455,19 +466,31 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 		}
 
 		const findOneAndUpdateFeedGroupDataResult = await findOneAndUpdateData4MongoDB<FeedGroup>(feedGroupWhere, updateFeedGroupData, feedGroupSchemaInstance, feedGroupCollectionName, { session })
-		const findOneAndUpdateFeedGroupData = findOneAndUpdateFeedGroupDataResult.result?.[0]
+		const findOneAndUpdateFeedGroupData = findOneAndUpdateFeedGroupDataResult.result
 
 		if (!findOneAndUpdateFeedGroupDataResult.success || !findOneAndUpdateFeedGroupData) {
-			await abortAndEndSession(session)
 			logging('ERROR', '从一个动态分组中移除 UID 失败，更新失败')
 			return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 失败，更新失败' }
 		}
 
-		await commitAndEndSession(session)
+		await session.commitTransaction()
 		return { success: true, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 成功', feedGroupResult: findOneAndUpdateFeedGroupData }
 	} catch (error) {
 		logging('ERROR', '从一个动态分组中移除 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 时出错：未知原因。' }
+	} finally {
+		if (session) {
+			try {
+				if (session.inTransaction()) { await session.abortTransaction() }
+			} catch (error) {
+				logging('ERROR', '移除动态分组成员后回滚事务失败', error)
+			}
+			try {
+				await session.endSession()
+			} catch (error) {
+				logging('ERROR', '移除动态分组成员后结束事务会话失败', error)
+			}
+		}
 	}
 }
 
@@ -587,7 +610,7 @@ export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfo
 			return { success: false, message: '创建或更新动态分组信息失败，更新失败' }
 		}
 
-		return { success: false, message: '创建或更新动态分组信息成功', feedGroupResult: findOneAndUpdateFeedGroupDataResult.result }
+		return { success: true, message: '创建或更新动态分组信息成功', feedGroupResult: findOneAndUpdateFeedGroupDataResult.result }
 	} catch (error) {
 		logging('ERROR', '创建或更新动态分组信息时出错：未知原因', error)
 		return { success: false, message: '创建或更新动态分组信息时出错：未知原因' }
@@ -742,7 +765,7 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 			return { success: false, message: '获取动态内容失败，参数不合法', isLonely: false }
 		}
 
-		if (!(await checkUserTokenByUuidService(uuid, uuid)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '获取动态内容失败，非法用户')
 			return { success: false, message: '获取动态内容失败，非法用户', isLonely: false }
 		}
@@ -756,6 +779,7 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 
 			const getFeedGroupUuidListWhere: QueryType<FeedGroup> = {
 				feedGroupUuid,
+				feedGroupCreatorUuid: uuid,
 			}
 
 			const getFeedGroupUuidListSelect: SelectType<FeedGroup> = {
@@ -765,17 +789,17 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 			const getFeedGroupUserListResult = await selectDataFromMongoDB<FeedGroup>(getFeedGroupUuidListWhere, getFeedGroupUuidListSelect, feedGroupSchemaInstance, feedGroupCollectionName)
 			const uuidListResult = getFeedGroupUserListResult.result?.[0]?.uuidList
 
-			if (!getFeedGroupUserListResult.success) {
+			if (!getFeedGroupUserListResult.success || !Array.isArray(uuidListResult)) {
 				logging('ERROR', '获取动态内容失败，查询动态分组中的用户失败')
 				return { success: false, message: '获取动态内容失败，查询动态分组中的用户失败', isLonely: { noUserInFeedGroup: true } }
 			}
 
-			if (Array.isArray(uuidListResult) && uuidList.length <= 0) {
+			if (uuidListResult.length <= 0) {
 				logging('WARN', '你选择动态分组中没有用户')
 				return { success: true, message: '你选择动态分组中没有用户', isLonely: { noUserInFeedGroup: true }, result: { count: 0, content: [] } }
 			}
 
-			uuidList.push(uuidListResult)
+			uuidList.push(...uuidListResult)
 		} else {
 			const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
 			type Following = InferSchemaType<typeof followingSchemaInstance>
@@ -791,17 +815,17 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 			const getFollowingUserListResult = await selectDataFromMongoDB<Following>(getFollowingUuidListWhere, getFollowingUuidListSelect, followingSchemaInstance, followingCollectionName)
 			const uuidListResult = getFollowingUserListResult.result?.map(followingResult => followingResult.followingUuid)
 
-			if (!getFollowingUserListResult.success) {
+			if (!getFollowingUserListResult.success || !Array.isArray(uuidListResult)) {
 				logging('ERROR', '获取动态内容失败，查询用户关注的用户失败')
 				return { success: false, message: '获取动态内容失败，查询用户关注的用户失败', isLonely: { noFollowing: true } }
 			}
 
-			if (Array.isArray(uuidListResult) && uuidList.length <= 0) {
+			if (uuidListResult.length <= 0) {
 				logging('WARN', '你没有关注任何用户')
 				return { success: true, message: '你没有关注任何用户', isLonely: { noFollowing: true }, result: { count: 0, content: [] } }
 			}
 
-			uuidList.push(uuidListResult)
+			uuidList.push(...uuidListResult)
 		}
 
 		// 根据 uuid 匹配视频的基础 pipeline
@@ -809,6 +833,7 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 			{
 				$match: {
 					uploaderUUID: { $in: uuidList },
+					pendingReview: false,
 				},
 			},
 		]
@@ -817,7 +842,7 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 		const countFeedContentBasePipeline: PipelineStage[] = [
 			{
 				$count: 'totalCount', // 统计总文档数
-			}
+			},
 		]
 
 		let skip = 0
@@ -860,8 +885,8 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 					editDateTime: 1,
 					uploader: '$uploader_info.username', // 上传者的名字
 					uploaderNickname: '$uploader_info.userNickname', // 上传者的昵称
-				}
-			}
+				},
+			},
 		]
 
 		const countFeedContentPipeline = feedContentMatchPipeline.concat(countFeedContentBasePipeline)
@@ -873,13 +898,13 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
 		const feedContentCountPromise = selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, countFeedContentPipeline)
 		const feedContentDataPromise = selectDataByAggregateFromMongoDB<ThumbVideo>(videoSchemaInstance, videoCollectionName, getFeedContentPipeline)
 
-		const [ feedContentCountResult, feedContentDataResult ] = await Promise.all([feedContentCountPromise, feedContentDataPromise])
-		const count = feedContentCountResult.result?.[0]?.totalCount
+		const [feedContentCountResult, feedContentDataResult] = await Promise.all([feedContentCountPromise, feedContentDataPromise])
+		const count = feedContentCountResult.result?.[0]?.totalCount ?? 0
 		const content = feedContentDataResult.result
 
-		if ( !feedContentCountResult.success || !feedContentDataResult.success
+		if (!feedContentCountResult.success || !feedContentDataResult.success
 			|| typeof count !== 'number' || count < 0
-			|| ( Array.isArray(content) && !content )
+			|| !Array.isArray(content)
 		) {
 			logging('ERROR', '获取动态内容失败，查询视频数据失败')
 			return { success: false, message: '获取动态内容失败，查询视频数据失败', isLonely: false }
@@ -907,7 +932,7 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
  * @param token 查看者的 token（可选）
  * @returns 获取用户关注数和粉丝数的请求响应
  */
- export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStatsRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowStatsResponseDto> => {
+export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStatsRequestDto, _uuid: string | undefined, _token: string | undefined): Promise<GetFollowStatsResponseDto> => {
 	try {
 		if (!checkGetFollowStatsRequest(getFollowStatsRequest)) {
 			logging('ERROR', '获取关注统计失败：参数不合法')
@@ -973,7 +998,7 @@ export const getFeedContentService = async (getFeedContentRequest: GetFeedConten
  * @param token 查看者的 token（可选）
  * @returns 获取用户关注列表的请求响应
  */
-export const getFollowingListService = async (getFollowingListRequest: GetFollowListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowListResponseDto> => {
+export const getFollowingListService = async (getFollowingListRequest: GetFollowListRequestDto, uuid: string | undefined, _token: string | undefined): Promise<GetFollowListResponseDto> => {
 	try {
 		if (!checkGetFollowListRequest(getFollowingListRequest)) {
 			logging('ERROR', '获取关注列表失败：参数不合法')
@@ -1028,7 +1053,7 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 					preserveNullAndEmptyArrays: true,
 				},
 			},
-			{ $sort: { followingCreateTime: -1 }},
+			{ $sort: { followingCreateTime: -1 } },
 			{ $skip: skip }, // 跳过指定数量的文档
 			{ $limit: pageSize }, // 限制返回的文档数量
 		]
@@ -1075,7 +1100,7 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
  * @param token 查看者的 token（可选）
  * @returns 获取用户粉丝列表的请求响应
  */
-export const getFollowerListService = async (getFollowerListRequest: GetFollowListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowListResponseDto> => {
+export const getFollowerListService = async (getFollowerListRequest: GetFollowListRequestDto, uuid: string | undefined, _token: string | undefined): Promise<GetFollowListResponseDto> => {
 	try {
 		if (!checkGetFollowListRequest(getFollowerListRequest)) {
 			logging('ERROR', '获取粉丝列表失败：参数不合法')
@@ -1131,7 +1156,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollowLi
 					preserveNullAndEmptyArrays: true,
 				},
 			},
-			{ $sort: { followingCreateTime: -1 }},
+			{ $sort: { followingCreateTime: -1 } },
 			{ $skip: skip }, // 跳过指定数量的文档
 			{ $limit: pageSize }, // 限制返回的文档数量
 		]
@@ -1178,7 +1203,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollowLi
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkFollowingUploaderRequest = (followingUploaderRequest: FollowingUploaderRequestDto): boolean => {
-	return ( followingUploaderRequest.followingUid !== undefined && followingUploaderRequest.followingUid !== null && followingUploaderRequest.followingUid > 0 )
+	return (followingUploaderRequest.followingUid !== undefined && followingUploaderRequest.followingUid !== null && followingUploaderRequest.followingUid > 0)
 }
 
 /**
@@ -1187,7 +1212,7 @@ const checkFollowingUploaderRequest = (followingUploaderRequest: FollowingUpload
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkUnfollowingUploaderRequest = (unfollowingUploaderRequest: UnfollowingUploaderRequestDto): boolean => {
-	return ( unfollowingUploaderRequest.unfollowingUid !== undefined && unfollowingUploaderRequest.unfollowingUid !== null && unfollowingUploaderRequest.unfollowingUid > 0 )
+	return (unfollowingUploaderRequest.unfollowingUid !== undefined && unfollowingUploaderRequest.unfollowingUid !== null && unfollowingUploaderRequest.unfollowingUid > 0)
 }
 
 /**
@@ -1196,7 +1221,11 @@ const checkUnfollowingUploaderRequest = (unfollowingUploaderRequest: Unfollowing
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkCreateFeedGroupRequest = (createFeedGroupRequest: CreateFeedGroupRequestDto): boolean => {
-	return ( !!createFeedGroupRequest.feedGroupName )
+	return (
+		typeof createFeedGroupRequest.feedGroupName === 'string' && !!createFeedGroupRequest.feedGroupName
+		&& (createFeedGroupRequest.withUidList === undefined || (Array.isArray(createFeedGroupRequest.withUidList)
+			&& createFeedGroupRequest.withUidList.every(uid => Number.isSafeInteger(uid) && uid > 0)))
+	)
 }
 
 /**
@@ -1206,8 +1235,8 @@ const checkCreateFeedGroupRequest = (createFeedGroupRequest: CreateFeedGroupRequ
  */
 const checkAddNewUser2FeedGroupRequest = (addNewUser2FeedGroupRequest: AddNewUid2FeedGroupRequestDto): boolean => {
 	return (
-		!!addNewUser2FeedGroupRequest.feedGroupUuid
-		&& !!addNewUser2FeedGroupRequest.uidList && addNewUser2FeedGroupRequest.uidList.every(uid => uid !== undefined && uid !== null && uid > 0)
+		typeof addNewUser2FeedGroupRequest.feedGroupUuid === 'string' && !!addNewUser2FeedGroupRequest.feedGroupUuid
+		&& Array.isArray(addNewUser2FeedGroupRequest.uidList) && addNewUser2FeedGroupRequest.uidList.every(uid => Number.isSafeInteger(uid) && uid > 0)
 	)
 }
 
@@ -1218,8 +1247,8 @@ const checkAddNewUser2FeedGroupRequest = (addNewUser2FeedGroupRequest: AddNewUid
  */
 const checkRemoveUidFromFeedGroupRequest = (removeUidFromFeedGroupRequest: RemoveUidFromFeedGroupRequestDto): boolean => {
 	return (
-		!!removeUidFromFeedGroupRequest.feedGroupUuid
-		&& !!removeUidFromFeedGroupRequest.uidList && removeUidFromFeedGroupRequest.uidList.every(uid => uid !== undefined && uid !== null && uid > 0)
+		typeof removeUidFromFeedGroupRequest.feedGroupUuid === 'string' && !!removeUidFromFeedGroupRequest.feedGroupUuid
+		&& Array.isArray(removeUidFromFeedGroupRequest.uidList) && removeUidFromFeedGroupRequest.uidList.every(uid => Number.isSafeInteger(uid) && uid > 0)
 	)
 }
 
@@ -1229,7 +1258,7 @@ const checkRemoveUidFromFeedGroupRequest = (removeUidFromFeedGroupRequest: Remov
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkDeleteFeedGroupRequest = (deleteFeedGroupRequest: DeleteFeedGroupRequestDto): boolean => {
-	return ( !!deleteFeedGroupRequest.feedGroupUuid )
+	return (!!deleteFeedGroupRequest.feedGroupUuid)
 }
 
 /**
@@ -1238,7 +1267,7 @@ const checkDeleteFeedGroupRequest = (deleteFeedGroupRequest: DeleteFeedGroupRequ
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkCreateOrEditFeedGroupInfoRequest = (createOrEditFeedGroupInfoRequest: CreateOrEditFeedGroupInfoRequestDto): boolean => {
-	return ( !!createOrEditFeedGroupInfoRequest.feedGroupUuid )
+	return (!!createOrEditFeedGroupInfoRequest.feedGroupUuid)
 }
 
 /**
@@ -1247,7 +1276,7 @@ const checkCreateOrEditFeedGroupInfoRequest = (createOrEditFeedGroupInfoRequest:
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkAdministratorApproveFeedGroupInfoChangeRequest = (administratorApproveFeedGroupInfoChangeRequest: AdministratorApproveFeedGroupInfoChangeRequestDto): boolean => {
-	return ( !!administratorApproveFeedGroupInfoChangeRequest.feedGroupUuid )
+	return (!!administratorApproveFeedGroupInfoChangeRequest.feedGroupUuid)
 }
 
 /**
@@ -1256,7 +1285,7 @@ const checkAdministratorApproveFeedGroupInfoChangeRequest = (administratorApprov
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkAdministratorDeleteFeedGroupRequest = (administratorDeleteFeedGroupRequest: AdministratorDeleteFeedGroupRequestDto): boolean => {
-	return ( !!administratorDeleteFeedGroupRequest.feedGroupUuid )
+	return (!!administratorDeleteFeedGroupRequest.feedGroupUuid)
 }
 
 /**
@@ -1266,9 +1295,10 @@ const checkAdministratorDeleteFeedGroupRequest = (administratorDeleteFeedGroupRe
  */
 const checkGetFeedContentRequest = (getFeedContentRequest: GetFeedContentRequestDto): boolean => {
 	return (
-		!!getFeedContentRequest.pagination
+		(getFeedContentRequest.feedGroupUuid === undefined || typeof getFeedContentRequest.feedGroupUuid === 'string')
+		&& !!getFeedContentRequest.pagination
 		&& getFeedContentRequest.pagination.page >= 0 && getFeedContentRequest.pagination.pageSize > 0 && getFeedContentRequest.pagination.pageSize <= 200
-	);
+	)
 }
 
 /**
@@ -1361,7 +1391,7 @@ const checkFeedPrivacyPermission = async (targetUuid: string, viewerUuid: string
 				followerUuid: viewerUuid,
 				followingUuid: targetUuid,
 			}
-			const followingSelect: any = {
+			const followingSelect: SelectType<Following> = {
 				_id: 1,
 			}
 			const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)

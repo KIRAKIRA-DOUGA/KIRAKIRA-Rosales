@@ -1,4 +1,4 @@
-import { type VideoTag } from "./VideoTagControllerDto.js";
+import { type VideoTag } from './VideoTagControllerDto.js'
 
 /**
  * 屏蔽用户的请求载荷

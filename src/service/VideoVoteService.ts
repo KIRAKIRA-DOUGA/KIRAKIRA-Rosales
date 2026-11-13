@@ -14,26 +14,26 @@ import { insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB, selectDa
  * @returns 用户给视频点赞的请求响应
  */
 export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRequestDto, uuid: string | undefined, token: string | undefined): Promise<VideoUpvoteResponseDto> => {
-    try {
-			if (!checkVideoVoteRequest(emitVideoUpvoteRequest)) {
-				logging('ERROR', '视频点赞失败，参数异常')
-				return { success: false, message: '视频点赞失败，参数异常' }
-			}
+	try {
+		if (!checkVideoVoteRequest(emitVideoUpvoteRequest)) {
+			logging('ERROR', '视频点赞失败，参数异常')
+			return { success: false, message: '视频点赞失败，参数异常' }
+		}
 
-			if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-				logging('ERROR', '视频点赞失败，用户校验未通过')
-				return { success: false, message: '视频点赞失败，用户校验未通过' }
-			}
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '视频点赞失败，用户校验未通过')
+			return { success: false, message: '视频点赞失败，用户校验未通过' }
+		}
 
-			const { videoId } = emitVideoUpvoteRequest
+		const { videoId } = emitVideoUpvoteRequest
 
-			const uid = await getUserUid(uuid)
-			if (uid === undefined || uid === null || uid < 1) {
-				logging('ERROR', '视频点赞失败，获取用户 UID 失败', undefined, { emitVideoUpvoteRequest, uuid })
-				return { success: false, message: '视频点赞失败，获取用户 UID 失败' }
-			}
+		const uid = await getUserUid(uuid)
+		if (uid === undefined || uid === null || uid < 1) {
+			logging('ERROR', '视频点赞失败，获取用户 UID 失败', undefined, { emitVideoUpvoteRequest, uuid })
+			return { success: false, message: '视频点赞失败，获取用户 UID 失败' }
+		}
 
-			const { collectionName: videoUpvoteCollectionName, schemaInstance: correctVideoUpvoteSchema } = VideoUpvoteSchema
+		const { collectionName: videoUpvoteCollectionName, schemaInstance: correctVideoUpvoteSchema } = VideoUpvoteSchema
 
 			type VideoUpvote = InferSchemaType<typeof correctVideoUpvoteSchema>
 			const UUID = uuid
@@ -41,7 +41,7 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 
 			const existingVoteWhere: QueryType<VideoUpvote> = {
 				videoId,
-				UUID
+				UUID,
 			}
 			const existingVoteSelect: SelectType<VideoUpvote> = {
 				videoId: 1,
@@ -50,7 +50,11 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 			}
 			const existingVoteResult = await selectDataFromMongoDB<VideoUpvote>(existingVoteWhere, existingVoteSelect, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 
-			if (!existingVoteResult?.result || existingVoteResult.result?.length !== 1) {
+			if (!existingVoteResult.success || !existingVoteResult.result) {
+				throw new Error('无法查询视频投票记录')
+			}
+
+			if (existingVoteResult.result.length === 0) {
 				// 没有记录，先对是否点踩进行查询
 				if (await checkUserHasDownvoted(videoId, uuid)) {
 					// 用户已点踩，取消点踩并进行点赞
@@ -62,27 +66,27 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 						logging('ERROR', '视频点赞失败，但取消点踩失败', undefined, { emitVideoUpvoteRequest, uuid })
 						return { success: false, message: '视频点赞失败，但取消点踩失败' }
 					}
-
-					const videoUpvote: VideoUpvote = {
-						videoId,
-						UUID,
-						uid,
-						upvoteTime: nowDate,
-						invalidFlag: false,
-						editDateTime: nowDate,
-					}
-
-					const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
-					if (!insertResult || !insertResult.success) {
-						logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
-						return { success: false, message: '视频点赞失败，存储数据失败' }
-					}
-					return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
 				}
+
+				const videoUpvote: VideoUpvote = {
+					videoId,
+					UUID,
+					uid,
+					upvoteTime: nowDate,
+					invalidFlag: false,
+					editDateTime: nowDate,
+				}
+
+				const insertResult = await insertData2MongoDB(videoUpvote, correctVideoUpvoteSchema, videoUpvoteCollectionName)
+				if (!insertResult || !insertResult.success) {
+					logging('ERROR', '视频点赞失败，插入数据失败', undefined, { emitVideoUpvoteRequest, uuid })
+					return { success: false, message: '视频点赞失败，存储数据失败' }
+				}
+				return { success: true, message: '视频点赞成功', videoUpvoteCount: await getVideoUpvoteCount(videoId) }
 			}
 
 			if (existingVoteResult.result[0].invalidFlag) {
-				const updateWhere: QueryType<VideoUpvote> = { _id: existingVoteResult.result[0]['_id'] }
+				const updateWhere: QueryType<VideoUpvote> = { _id: existingVoteResult.result[0]._id }
 				const updateData: UpdateType<VideoUpvote> = { invalidFlag: false, editDateTime: nowDate, upvoteTime: nowDate, uid }
 				const updateResult = await updateData4MongoDB(updateWhere, updateData, correctVideoUpvoteSchema, videoUpvoteCollectionName)
 				if (!updateResult || !updateResult.success) {
@@ -93,11 +97,10 @@ export const emitVideoUpvoteService = async (emitVideoUpvoteRequest: VideoVoteRe
 			}
 			// 已有记录，且有效，提示用户已点赞
 			return { success: false, message: '视频点赞失败，用户已点赞' }
-
-		} catch (error) {
-			logging('ERROR', '视频点赞失败，未知错误：', error, { emitVideoUpvoteRequest, uuid })
-			return { success: false, message: '视频点赞失败，未知错误' }
-		}
+	} catch (error) {
+		logging('ERROR', '视频点赞失败，未知错误：', error, { emitVideoUpvoteRequest, uuid })
+		return { success: false, message: '视频点赞失败，未知错误' }
+	}
 }
 
 /**
@@ -199,7 +202,7 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 
 		const existingVoteWhere: QueryType<VideoDownvote> = {
 			videoId,
-			UUID
+			UUID,
 		}
 		const existingVoteSelect: SelectType<VideoDownvote> = {
 			videoId: 1,
@@ -208,7 +211,11 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 		}
 		const existingVoteResult = await selectDataFromMongoDB<VideoDownvote>(existingVoteWhere, existingVoteSelect, correctVideoDownvoteSchema, videoDownvoteCollectionName)
 
-		if (!existingVoteResult?.result || existingVoteResult.result?.length !== 1) {
+		if (!existingVoteResult.success || !existingVoteResult.result) {
+			throw new Error('无法查询视频投票记录')
+		}
+
+		if (existingVoteResult.result.length === 0) {
 			// 没有记录，先对是否点赞进行查询
 			if (await checkUserHasUpvoted(videoId, uuid)) {
 				// 用户已点赞，取消点赞并进行点踩
@@ -220,23 +227,23 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 					logging('ERROR', '视频点踩失败，但取消点赞失败', undefined, { emitVideoDownvoteRequest, uuid })
 					return { success: false, message: '视频点踩失败，但取消点赞失败' }
 				}
-
-				const videoDownvote: VideoDownvote = {
-					videoId,
-					UUID,
-					uid,
-					downvoteTime: nowDate,
-					invalidFlag: false,
-					editDateTime: nowDate,
-				}
-
-				const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName)
-				if (!insertResult || !insertResult.success) {
-					logging('ERROR', '视频点踩失败，插入数据失败', undefined, { emitVideoDownvoteRequest, uuid })
-					return { success: false, message: '视频点踩失败，存储数据失败' }
-				}
-				return { success: true, message: '视频点踩成功', videoDownvoteCount: await getVideoDownvoteCount(videoId) }
 			}
+
+			const videoDownvote: VideoDownvote = {
+				videoId,
+				UUID,
+				uid,
+				downvoteTime: nowDate,
+				invalidFlag: false,
+				editDateTime: nowDate,
+			}
+
+			const insertResult = await insertData2MongoDB(videoDownvote, correctVideoDownvoteSchema, videoDownvoteCollectionName)
+			if (!insertResult || !insertResult.success) {
+				logging('ERROR', '视频点踩失败，插入数据失败', undefined, { emitVideoDownvoteRequest, uuid })
+				return { success: false, message: '视频点踩失败，存储数据失败' }
+			}
+			return { success: true, message: '视频点踩成功', videoDownvoteCount: await getVideoDownvoteCount(videoId) }
 		}
 
 		if (existingVoteResult.result[0].invalidFlag) {
@@ -251,7 +258,6 @@ export const emitVideoDownvoteService = async (emitVideoDownvoteRequest: VideoVo
 		}
 		// 已有记录，且有效，提示用户已点踩
 		return { success: false, message: '视频点踩失败，用户已点踩' }
-
 	} catch (error) {
 		logging('ERROR', '视频点踩失败，未知错误：', error, { emitVideoDownvoteRequest, uuid })
 		return { success: false, message: '视频点踩失败，未知错误' }
@@ -341,11 +347,11 @@ export const getVideoUpvoteCount = async (videoId: number): Promise<number> => {
 				$match: {
 					videoId,
 					invalidFlag: false,
-				}
+				},
 			},
 			{
-				$count: 'totalCount'
-			}
+				$count: 'totalCount',
+			},
 		]
 
 		try {
@@ -385,11 +391,11 @@ export const getVideoDownvoteCount = async (videoId: number): Promise<number> =>
 				$match: {
 					videoId,
 					invalidFlag: false,
-				}
+				},
 			},
 			{
-				$count: 'totalCount'
-			}
+				$count: 'totalCount',
+			},
 		]
 
 		try {

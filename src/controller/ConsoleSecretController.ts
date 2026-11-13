@@ -1,6 +1,6 @@
-import { getStgEnvBackEndSecretService } from "../service/ConsoleSecretService.js"
-import { isPassRbacCheck } from "../service/RbacService.js"
-import { koaCtx, koaNext } from "../type/koaTypes.js"
+import { getStgEnvBackEndSecretService } from '../service/ConsoleSecretService.js'
+import { isPassRbacCheck } from '../service/RbacService.js'
+import { koaCtx, koaNext } from '../type/koaTypes.js'
 
 /**
  * 获取预生产环境后端环境变量机密

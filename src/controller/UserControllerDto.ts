@@ -270,7 +270,7 @@ export type GetSelfUserInfoByUuidResponseDto = {
 			/** 用户数据初始化提示标识。 */
 			userDataBootstrapHint?: string;
 		}
-		& UpdateOrCreateUserInfoResponseDto["result"]
+		& UpdateOrCreateUserInfoResponseDto['result']
 	);
 }
 
@@ -796,7 +796,7 @@ export type GetBlockedUserResponseDto = {
 	message?: string;
 	/** 请求响应，被封禁的用户 */
 	result?: (
-		GetUserInfoByUidResponseDto["result"] & {
+		GetUserInfoByUidResponseDto['result'] & {
 			uid: number;
 			UUID: string;
 		}
@@ -836,7 +836,7 @@ export type AdminGetUserInfoResponseDto = {
 	message?: string;
 	/** 请求响应 */
 	result?: (
-		GetSelfUserInfoByUuidResponseDto["result"] & {
+		GetSelfUserInfoByUuidResponseDto['result'] & {
 			uid: number;
 			UUID: string;
 			avatar: string;

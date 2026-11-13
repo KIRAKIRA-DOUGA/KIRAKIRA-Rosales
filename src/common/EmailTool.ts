@@ -1,6 +1,6 @@
 import { SMTPClient } from 'emailjs'
 import { parseInteger } from './ValidTool.js'
-import { logging } from '../service/loggingService.js';
+import { logging } from '../service/loggingService.js'
 
 /**
  * 邮件正文数据， text 和 html 二者至少一个不能为空

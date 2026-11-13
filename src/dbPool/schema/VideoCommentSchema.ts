@@ -69,6 +69,8 @@ class VideoCommentSchemaFactory {
 		upvoteCount: { type: Number, default: 0, required: true },
 		/** 评论点踩数 - 非空 */ /** 默认：0 —— 没有反对票！ */
 		downvoteCount: { type: Number, default: 0, required: true },
+		/** 投票事务的写入冲突点，旧文档通过 $inc 自动初始化。 */
+		voteRevision: { type: Number },
 		/** 评论楼层数 - 非空 */
 		commentIndex: { type: Number, required: true },
 		/** 子评论 */

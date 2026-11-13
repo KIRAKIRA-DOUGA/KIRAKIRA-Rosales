@@ -455,5 +455,5 @@ docker buildx build --platform linux/amd64,linux/arm64 -t <username>/<repo-name>
 > 生产环境及容器镜像环境也不要忘记配置环境变量！
 
 ## 六、开源与安全
-* 本项目遵守 BSD-3-Clause license 开源协议。
+* 本项目采用 [GNU Affero General Public License v3.0 only（AGPL-3.0）](../LICENSE)。
 * 一般问题请创建 Issue，涉及隐私或报告安全问题请前往 [Discord 频道](https://discord.gg/maveEWn6VP)。

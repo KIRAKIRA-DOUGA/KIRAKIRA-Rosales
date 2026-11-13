@@ -194,7 +194,7 @@ export const updateApiPathPermissionsForRoleController = async (ctx: koaCtx, nex
 
 	const updateApiPathPermissionsForRoleRequest: UpdateApiPathPermissionsForRoleRequestDto = {
 		roleName: data.roleName ?? '',
-    apiPathPermissions: data.apiPathPermissions ?? []
+		apiPathPermissions: data.apiPathPermissions ?? [],
 	}
 	const updateApiPathPermissionsForRoleResponse = await updateApiPathPermissionsForRoleService(updateApiPathPermissionsForRoleRequest, uuid, token)
 	ctx.body = updateApiPathPermissionsForRoleResponse
@@ -220,21 +220,21 @@ export const adminUpdateUserRoleController = async (ctx: koaCtx, next: koaNext) 
 	let adminUpdateUserRoleRequest: AdminUpdateUserRoleRequestDto = {
 		uuid: undefined as never,
 		uid: undefined as never,
-		newRoles: []
-	};
+		newRoles: [],
+	}
 
 	if ('uuid' in data && data.uuid) {
 		adminUpdateUserRoleRequest = {
 			uuid: data.uuid ?? '',
 			uid: undefined as never, // 触发类型校验
-			newRoles: data.newRoles ?? []
-		};
+			newRoles: data.newRoles ?? [],
+		}
 	} else if ('uid' in data && data.uid !== undefined && data.uid !== null) {
 		adminUpdateUserRoleRequest = {
 			uid: data.uid ?? 0,
 			uuid: undefined as never, // 触发类型校验
-			newRoles: data.newRoles ?? []
-		};
+			newRoles: data.newRoles ?? [],
+		}
 	}
 
 	const adminUpdateUserRoleResponseDto = await adminUpdateUserRoleService(adminUpdateUserRoleRequest, adminUuid, adminToken)

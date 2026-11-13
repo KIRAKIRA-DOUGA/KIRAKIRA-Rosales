@@ -11,7 +11,7 @@ class FollowingSchemaFactory {
 		/** 被关注者 UUID - 非空 */
 		followingUuid: { type: String, required: true },
 		/** 关注类型 - 非空 - 可选值：'normal', 'auto', 'event', 'eventAutoBatch' */
-		followingType: { type: String, enum: ['normal', 'auto', 'event', 'eventAutoBatch'],  required: true },
+		followingType: { type: String, enum: ['normal', 'auto', 'event', 'eventAutoBatch'], required: true },
 		/** 是否是特别关心 - 非空 */
 		isFavorite: { type: Boolean, required: true },
 		/** 系统专用字段-最后编辑时间 - 非空 */

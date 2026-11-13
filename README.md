@@ -110,4 +110,4 @@ npm run build
 关于如何在容器中部署，请参阅 [开发文档](https://github.com/KIRAKIRA-DOUGA/KIRAKIRA-Rosales/tree/develop/docs)。
 
 ## License
-BSD-3-Clause license
+[GNU Affero General Public License v3.0 only (AGPL-3.0)](LICENSE).

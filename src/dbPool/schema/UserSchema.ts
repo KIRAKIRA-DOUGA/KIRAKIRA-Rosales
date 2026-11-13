@@ -281,7 +281,7 @@ class UserTotpAuthenticatorSchemaFactory {
 	// 构造器
 	constructor() {
 		// 添加 UUID 和 secret 组合的唯一索引
-		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true });
+		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true })
 	}
 }
 export const UserTotpAuthenticatorSchema = new UserTotpAuthenticatorSchemaFactory()
@@ -330,6 +330,8 @@ class General2FAEmailVerificationCodeSchemaFactory {
 		totalCreateTimesToday: { type: Number, required: true },
 		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
 		totalVerifierTimesToday: { type: Number, required: true },
+		/** Last verification attempt; optional for records created before attempt tracking. */
+		lastVerifierAttemptDate: { type: Number },
 		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
 		used: { type: Boolean, required: true },
 		/** 系统专用字段-创建时间 - 非空 */
@@ -368,6 +370,8 @@ class GeneralEmailVerificationCodeSchemaFactory {
 		totalCreateTimesToday: { type: Number, required: true },
 		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
 		totalVerifierTimesToday: { type: Number, required: true },
+		/** Last verification attempt; optional for records created before attempt tracking. */
+		lastVerifierAttemptDate: { type: Number },
 		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
 		used: { type: Boolean, required: true },
 		/** 系统专用字段-创建时间 - 非空 */

@@ -1,8 +1,8 @@
 import { Client } from '@elastic/elasticsearch'
 import { isEmptyObject } from '../common/ObjectTool.js'
 import { EsResultType, EsSchema2TsType } from './ElasticsearchClusterPoolTypes.js'
-import type { estypes } from '@elastic/elasticsearch';
-import { logging } from '../service/loggingService.js';
+import type { estypes } from '@elastic/elasticsearch'
+import { logging } from '../service/loggingService.js'
 
 type QueryDslQueryContainer = estypes.QueryDslQueryContainer;
 /**
@@ -125,7 +125,7 @@ export const deleteDataFromElasticsearchCluster = async (client: Client, indexNa
  * @param refreshFlag 在插入数据后是否立即刷新搜索（在高并发场景下不建议立即刷新搜索）
  * @returns 插入数据的结果，如果成功则返回 {success: true}，否则 {success: false}
  */
-export const insertData2ElasticsearchCluster = async <T>(client: Client, indexName: string, schema: T, data: EsSchema2TsType<T>, refreshFlag: boolean = false): Promise< EsResultType< EsSchema2TsType<T> > > => {
+export const insertData2ElasticsearchCluster = async <T>(client: Client, indexName: string, schema: T, data: EsSchema2TsType<T>, refreshFlag: boolean = false): Promise<EsResultType<string>> => {
 	try {
 		if (!isEmptyObject(schema as object) && !isEmptyObject(data) && indexName && client && !isEmptyObject(client)) {
 			try {
@@ -139,16 +139,16 @@ export const insertData2ElasticsearchCluster = async <T>(client: Client, indexNa
 						try {
 							const refreshResult = await client.indices.refresh({ index: indexName })
 							if (refreshResult) {
-								return { success: true, message: '向 Elasticsearch 插入数据成功，手动刷新搜索成功', result: [indexResult.result] as unknown as EsSchema2TsType<T>[] }
+								return { success: true, message: '向 Elasticsearch 插入数据成功，手动刷新搜索成功', result: [indexResult.result] }
 							} else {
-								return { success: true, message: '向 Elasticsearch 插入数据成功，但刷新搜索的结果为空', result: [indexResult.result] as unknown as EsSchema2TsType<T>[] }
+								return { success: true, message: '向 Elasticsearch 插入数据成功，但刷新搜索的结果为空', result: [indexResult.result] }
 							}
 						} catch (error) {
 							logging('WARN', '向 Elasticsearch 插入数据成功，但刷新搜索时出错', error, undefined, { recordingLogs: false })
-							return { success: true, message: '向 Elasticsearch 插入数据成功，但刷新搜索时出错', result: [indexResult.result] as unknown as EsSchema2TsType<T>[] }
+							return { success: true, message: '向 Elasticsearch 插入数据成功，但刷新搜索时出错', result: [indexResult.result] }
 						}
 					} else {
-						return { success: true, message: '向 Elasticsearch 插入数据成功，请等待自动刷新', result: [indexResult.result] as unknown as EsSchema2TsType<T>[] }
+						return { success: true, message: '向 Elasticsearch 插入数据成功，请等待自动刷新', result: [indexResult.result] }
 					}
 				} else {
 					logging('ERROR', '向 Elasticsearch 插入数据时出错，索引（v.）数据的返回结果异常', undefined, undefined, { recordingLogs: false })

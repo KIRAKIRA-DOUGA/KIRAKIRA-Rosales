@@ -20,8 +20,9 @@ import {
 	updateOrCreateUserSettingsService,
 	updateUserEmailService,
 	userLoginService,
+	userLogoutService,
 	userRegistrationService,
-	getUserUuid,
+
 	createUserTotpAuthenticatorService,
 	confirmUserTotpAuthenticatorService,
 	deleteTotpAuthenticatorByTotpVerificationCodeService,
@@ -68,7 +69,7 @@ import {
 	UserExistsCheckByUIDRequestDto,
 	UserLoginRequestDto,
 	UserLogoutResponseDto,
-	UserRegistrationRequestDto
+	UserRegistrationRequestDto,
 } from './UserControllerDto.js'
 
 const strictCookieOption = {
@@ -147,7 +148,7 @@ export const userLoginController = async (ctx: koaCtx, next: koaNext) => {
 		email: data?.email,
 		passwordHash: data?.passwordHash,
 		clientOtp: data?.clientOtp,
-		verificationCode: data?.verificationCode
+		verificationCode: data?.verificationCode,
 	}
 	const userLoginResult = await userLoginService(userLoginRequest)
 
@@ -255,8 +256,8 @@ export const checkUserHave2FAByEmailController = async (ctx: koaCtx, next: koaNe
 	const checkUserHave2FARequest: CheckUserHave2FARequestDto = {
 		email,
 	}
-	const result = await checkUserHave2FAByEmailService(checkUserHave2FARequest);
-	ctx.body = result;
+	const result = await checkUserHave2FAByEmailService(checkUserHave2FARequest)
+	ctx.body = result
 	await next()
 }
 
@@ -269,8 +270,8 @@ export const checkUserHave2FAByEmailController = async (ctx: koaCtx, next: koaNe
 export const checkUserHave2FAByUUIDController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	const result = await checkUserHave2FAByUUIDService(uuid, token);
-	ctx.body = result;
+	const result = await checkUserHave2FAByUUIDService(uuid, token)
+	ctx.body = result
 	await next()
 }
 
@@ -462,7 +463,12 @@ export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
-	// TODO 理论上这里还可以做一些操作，比如说记录用户登出事件...
+	const result = await userLogoutService(ctx.cookies.get('uuid'), ctx.cookies.get('token'))
+	if (!result.success) {
+		ctx.body = result as UserLogoutResponseDto
+		await next()
+		return
+	}
 
 	ctx.cookies.set('token', '', logoutStrictCookieOption)
 	ctx.cookies.set('email', '', logoutStrictCookieOption)
@@ -471,7 +477,7 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
 	ctx.cookies.set('uuid', '', logoutStrictCookieOption)
 	ctx.cookies.set('user-data-bootstrap-hint', '', logoutLaxCookieOption)
 
-	ctx.body = { success: true, message: '登出成功' } as UserLogoutResponseDto
+	ctx.body = result as UserLogoutResponseDto
 
 	await next()
 }
@@ -836,7 +842,7 @@ export const adminEditUserInfoController = async (ctx: koaCtx, next: koaNext) =>
 			userBirthday: data?.userInfo.userBirthday,
 			gender: data?.userInfo.gender,
 			isUpdatedAfterReview: data?.userInfo.isUpdatedAfterReview,
-		}
+		},
 	}
 	ctx.body = await adminEditUserInfoService(editUserInfoRequest, adminUUID, adminToken)
 	await next()
