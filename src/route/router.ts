@@ -1,7 +1,7 @@
 import Router from '@koa/router'
 import { createOrUpdateUserBrowsingHistoryController, getUserBrowsingHistoryWithFilterController } from '../controller/BrowsingHistoryController.js'
 import { emitDanmakuController, getDanmakuListByKvidController } from '../controller/DanmakuController.js'
-import { createFavoritesController, getFavoritesController } from '../controller/FavoritesController.js'
+import { createFavoritesController, getFavoritesController, getFavoritesByUidController, addToFavoritesController, removeFromFavoritesController, getFavoritesDetailController, updateFavoritesController, deleteFavoritesController, reorderFavoritesDetailController, addEditorToFavoritesController, removeEditorFromFavoritesController, getFavoritesCoverUploadSignedUrlController, checkFavoritesContentController } from '../controller/FavoritesController.js'
 import { helloWorld } from '../controller/HelloWorld.js'
 import {
 	adminClearUserInfoController,
@@ -665,6 +665,102 @@ router.post('/favorites/create', createFavoritesController) // 创建收藏夹
 router.get('/favorites', getFavoritesController) // 获取当前登录用户的收藏夹列表
 // https://localhost:30000/favorites
 // cookie: uid, token
+
+router.get('/favorites/byUid', getFavoritesByUidController) // 获取指定用户的收藏夹列表（公开可匿名；私有/仅关注者需登录）
+// https://localhost:9999/favorites/byUid?uid=123
+// cookie: uuid, token
+// query:
+// uid (必填)
+
+router.post('/favorites/add', addToFavoritesController) // 添加内容到收藏夹
+// https://localhost:9999/favorites/add
+// cookie: uuid, token
+// {
+// 	"favoritesListId": 1,
+// 	"category": "video",
+// 	"id": "13"
+// }
+
+router.delete('/favorites/remove', removeFromFavoritesController) // 从收藏夹移除内容
+// https://localhost:9999/favorites/remove
+// cookie: uuid, token
+// {
+// 	"favoritesListId": 1,
+// 	"category": "video",
+// 	"id": "13"
+// }
+
+router.get('/favorites/detail', getFavoritesDetailController) // 获取收藏夹内容列表（公开可匿名；私有/仅关注者需登录；content 嵌套标题/封面/正文）
+// https://localhost:9999/favorites/detail?favoritesListId=1&sortOrder=1&page=1&pageSize=30
+// 可选 category=video|photo|comment：只返回该类媒体；不传则混排全部
+// 返回 result[].content：video 含 title/image；comment 含 text；photo 为预留（仅 category/id，available=false；可读不可写）
+// cookie: uuid, token
+// query:
+// favoritesListId (必填)
+// sortOrder (可选，1 正序，-1 倒序，默认 1)
+// page (可选，默认 1)
+// pageSize (可选，默认 50，最大 100)
+
+router.get('/favorites/check', checkFavoritesContentController) // 检查当前用户是否已收藏某内容，以及收藏在哪些收藏夹中
+// https://localhost:9999/favorites/check?category=video&id=13
+// cookie: uuid, token
+// query:
+// category (必填，video | comment；photo 为预留类型，当前暂不支持)
+// id (必填)
+
+router.post('/favorites/update', updateFavoritesController) // 更新收藏夹信息
+// https://localhost:9999/favorites/update
+// cookie: uuid, token
+// {
+// 	"favoritesId": 1,
+// 	"favoritesTitle": "新标题",
+// 	"favoritesBio": "新简介",
+// 	"favoritesCover": "新封面",
+// 	"favoritesVisibility": 1
+// }
+
+router.delete('/favorites/delete', deleteFavoritesController) // 删除收藏夹
+// https://localhost:9999/favorites/delete
+// cookie: uuid, token
+// {
+// 	"favoritesId": 1
+// }
+
+router.post('/favorites/reorder', reorderFavoritesDetailController) // 调整收藏夹内部排序
+// https://localhost:9999/favorites/reorder
+// cookie: uuid, token
+// {
+// 	"favoritesListId": 1,
+// 	"items": [
+// 		{
+// 			"category": "video",
+// 			"id": "13",
+// 			"sortOrder": 1
+// 		}
+// 	]
+// }
+
+router.post('/favorites/addEditor', addEditorToFavoritesController) // 添加维护者到收藏夹
+// https://localhost:9999/favorites/addEditor
+// cookie: uuid, token
+// {
+// 	"favoritesId": 1,
+// 	"editorUid": 123
+// }
+
+router.delete('/favorites/removeEditor', removeEditorFromFavoritesController) // 移除收藏夹维护者
+// https://localhost:9999/favorites/removeEditor
+// cookie: uuid, token
+// {
+// 	"favoritesId": 1,
+// 	"editorUid": 123
+// }
+
+router.get('/favorites/cover/preUpload', getFavoritesCoverUploadSignedUrlController) // 获取用于上传收藏夹封面图的预签名 URL
+// https://localhost:9999/favorites/cover/preUpload?favoritesId=1
+// cookie: uid, token
+// query:
+// favoritesId (必填)
 
 
 
