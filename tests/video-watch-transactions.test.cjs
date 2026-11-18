@@ -3,8 +3,7 @@ const assert = require('node:assert/strict');
 const { MongoServerError } = require('mongodb');
 const { loadService } = require('./helpers/load-service.cjs');
 
-process.env.TZ = 'Asia/Shanghai';
-const beforeMidnight = Date.parse('2025-06-20T15:59:59.999Z');
+const beforeMidnight = new Date(2025, 5, 20, 23, 59, 59, 999).getTime();
 const videoId = 8;
 const schema = collectionName => ({ collectionName, schemaInstance: {} });
 const sameDay = (record, key) =>
@@ -109,10 +108,12 @@ test('video details count the first signed-in view per server-local day', async 
 	assert.equal(watchRecords[0].watchDate, '2025-06-20');
 	assert.equal(watchRecords[0].watchDateTime, firstWatchTime);
 
-	controls.now++;
+	const afterMidnight = beforeMidnight + 1;
+	controls.now = afterMidnight;
 	assert.equal((await view()).video.watchedCount, 102);
 	assert.equal(count(), 102);
 	assert.equal(watchRecords[1].watchDate, '2025-06-21');
+	assert.equal(watchRecords[1].watchDateTime, afterMidnight);
 	assert.deepEqual(controls.errors, []);
 });
 
