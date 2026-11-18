@@ -5,7 +5,7 @@ import { isEmptyObject } from '../common/ObjectTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
 import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
-import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndPlusByMongodbId, insertIfNotExist, isQueryResultsEmpty } from '../dbPool/DbClusterPool.js'
+import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, findOneAndUpdateWithOperators4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB, insertIfNotExist } from '../dbPool/DbClusterPool.js'
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
@@ -19,7 +19,8 @@ import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOt
 import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
-import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
+import { getTodayDateString } from '../common/DateTool.js'
+import { withMongoDBTransaction } from '../common/MongoDBSessionTool.js'
 
 /**
  * 上传视频
@@ -448,10 +449,9 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 
 				// 5. 记录视频播放量（一人一天看一个视频不管看多少次都只加一次播放量）
-				const watchCountIncremented = await recordVideoWatchAndIncrementCount(videoId, selectorUuid)
-				if (watchCountIncremented) {
-					// 如果成功增加播放量，更新返回的视频信息中的播放量
-					video.watchedCount = (video.watchedCount || 0) + 1
+				const watchedCount = await recordVideoWatchAndIncrementCount(videoId, selectorUuid)
+				if (watchedCount !== undefined) {
+					video.watchedCount = watchedCount
 				}
 
 				// 6. 存储浏览历史记录
@@ -1122,92 +1122,85 @@ export const approvePendingReviewVideoService = async (approvePendingReviewVideo
  * 记录用户今天观看该视频，并增加视频播放量
  * @param videoId 视频 ID
  * @param uuid 用户 UUID
- * @returns 返回是否成功增加播放量（如果今天已经观看过，返回 false，表示没有增加播放量）
+ * @returns 数据库中的播放量，记录失败时返回 undefined
  */
-const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string): Promise<boolean> => {
+const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string): Promise<number | undefined> => {
 	try {
 		if (!videoId || !uuid) {
 			logging('ERROR', '记录视频播放失败：参数异常', undefined, { videoId, uuid })
-			return false
+			return undefined
 		}
 
+		const watchTime = new Date()
 		const uid = await getUserUid(uuid)
-		if (uid === undefined || uid === null || uid < 1) {
+		if (!uid || uid < 1) {
 			logging('ERROR', '记录视频播放失败：获取用户 UID 失败', undefined, { uuid })
-			return false
+			return undefined
 		}
 
-		// 获取今天的开始和结束时间戳
-		const { todayBeginTimestamp, todayEndTimestamp } = getTodayBeginTimestampAndEndTimestamp()
-		const now = new Date().getTime()
+		const watchDate = getTodayDateString(watchTime)
+		const watchDateTime = watchTime.getTime()
+		const { collectionName: watchRecordCollectionName, schemaInstance: watchRecordSchemaInstance } = VideoWatchRecordSchema
+		type VideoWatchRecord = InferSchemaType<typeof watchRecordSchemaInstance>
+		// 保留旧版日期键以复用已计数记录。故障版本只写时间戳，未增加播放量。
+		const watchRecordWhere = { UUID: uuid, videoId, watchDate } satisfies QueryType<VideoWatchRecord>
+		const watchRecordData: VideoWatchRecord = {
+			...watchRecordWhere,
+			uid,
+			watchDateTime,
+			editDateTime: watchDateTime,
+			editBy: uuid,
+			createDateTime: watchDateTime,
+			createBy: uuid,
+		}
+
+		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
+		type Video = InferSchemaType<typeof videoSchemaInstance>
+		const videoWhere: QueryType<Video> = { videoId, pendingReview: false }
+		const recordWatch = () => withMongoDBTransaction(async session => {
+			const options = { session, preserveError: true }
+			const watchRecord = await insertIfNotExist<VideoWatchRecord>(
+				watchRecordWhere, watchRecordData, watchRecordSchemaInstance, watchRecordCollectionName, options,
+			)
+			if (watchRecord.success) {
+				const updated = await findOneAndUpdateWithOperators4MongoDB<Video>(
+					videoWhere, { $inc: { watchedCount: 1 } }, videoSchemaInstance, videoCollectionName, options,
+				)
+				if (!updated.success || typeof updated.result?.watchedCount !== 'number') {
+					throw new Error('未能增加已发布视频的播放量')
+				}
+				return updated.result.watchedCount
+			}
+
+			if (!watchRecord.result?.acknowledged || watchRecord.result.matchedCount !== 1) {
+				throw new Error('未确认插入或匹配到观看记录')
+			}
+
+			// 同日重复打开也从主节点读取播放量，避免返回此前查询到的旧值。
+			const current = await selectDataFromMongoDB<Video>(
+				videoWhere, { watchedCount: 1, _id: 0 }, videoSchemaInstance, videoCollectionName, options,
+			)
+			return current.result?.[0]?.watchedCount
+		}, {
+			readPreference: 'primary',
+			readConcern: { level: 'snapshot' },
+			writeConcern: { w: 'majority' },
+			timeoutMS: 60000,
+		})
 
 		try {
-			// 1. 记录观看记录（幂等），仅在首次观看时插入
-			const { collectionName: watchRecordCollectionName, schemaInstance: watchRecordSchemaInstance } = VideoWatchRecordSchema
-			type VideoWatchRecord = InferSchemaType<typeof watchRecordSchemaInstance>
-			const watchRecordWhere: QueryType<VideoWatchRecord> = {
-				UUID: uuid,
-				uid,
-				videoId,
-				watchDateTime: {
-					$gte: todayBeginTimestamp,
-					$lte: todayEndTimestamp,
-				},
-			}
-			const watchRecordData: VideoWatchRecord = {
-				UUID: uuid,
-				uid,
-				videoId,
-				watchDateTime: now,
-				editDateTime: now,
-				editBy: uuid,
-				createDateTime: now,
-				createBy: uuid,
-			}
-
-			const upsertWatchRecordResult = await insertIfNotExist<VideoWatchRecord>(watchRecordWhere, watchRecordData, watchRecordSchemaInstance, watchRecordCollectionName)
-
-			// 若已存在当日观看记录，不再递增播放量
-			if (!upsertWatchRecordResult.success) {
-				logging('ERROR', '记录视频播放失败：本日已经存在记录，或插入观看记录失败', undefined, { videoId, uuid, now, todayBeginTimestamp, todayEndTimestamp })
-				return false
-			}
-
-			// 2. 增加视频播放量
-			const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
-			type Video = InferSchemaType<typeof videoSchemaInstance>
-
-			const selectVideoMongoDBObjectIdWhere: QueryType<Video> = { videoId }
-			const selectVideoMongoDBObjectIdSelect: SelectType<Video> = { videoId: 1, _id: 0 }
-
-			const videoMongoDBObjectIdResult = await selectDataFromMongoDB< Video, SelectType<Video> >(
-				selectVideoMongoDBObjectIdWhere,
-				selectVideoMongoDBObjectIdSelect,
-				videoSchemaInstance,
-				videoCollectionName,
-			)
-
-			if (isQueryResultsEmpty(videoMongoDBObjectIdResult) || !('_id' in videoMongoDBObjectIdResult.result[0]) || !videoMongoDBObjectIdResult.result[0]._id || typeof videoMongoDBObjectIdResult.result[0]._id !== 'string') {
-				logging('ERROR', '记录视频播放失败：未找到对应视频', undefined, { videoId, uuid })
-				return false
-			}
-
-			// 使用找到的 _id 来增加播放量
-			const updateVideoResult = await findOneAndPlusByMongodbId<Video, 'watchedCount'>(videoMongoDBObjectIdResult.result[0]._id, 'watchedCount', videoSchemaInstance, videoCollectionName, 1)
-
-			if (!updateVideoResult.success || updateVideoResult.result === undefined) {
-				logging('ERROR', '记录视频播放失败：增加播放量失败', undefined, { videoId, uuid })
-				return false
-			}
-
-			return true
+			return await recordWatch()
 		} catch (error) {
-			logging('ERROR', '记录视频播放失败：执行失败', error, { videoId, uuid })
-			return false
+			if (!(error instanceof mongoose.mongo.MongoServerError) || error.code !== 11000 ||
+				error.keyPattern?.UUID !== 1 || error.keyPattern?.videoId !== 1 || error.keyPattern?.watchDate !== 1) {
+				throw error
+			}
+			// 并发 upsert 可能遇到驱动不会重试的唯一键冲突；重新开启事务读取已提交的记录。
+			return await recordWatch()
 		}
 	} catch (error) {
-		logging('ERROR', '记录视频播放失败：未知错误', error, { videoId, uuid })
-		return false
+		logging('ERROR', '记录视频播放失败', error, { videoId, uuid })
+		return undefined
 	}
 }
 

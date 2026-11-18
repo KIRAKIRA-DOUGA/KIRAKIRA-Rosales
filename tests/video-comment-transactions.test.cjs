@@ -134,7 +134,8 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 		};
 	} };
 	const pool = loadService('src/dbPool/DbClusterPool.ts', {
-		mongoose, mongodb: {}, './schema/SequenceSchema.js': {}, './schema/UserSchema.js': {}, '../service/loggingService.js': { logging() {} },
+		mongoose, mongodb: {}, './schema/SequenceSchema.js': {}, './schema/UserSchema.js': {},
+		'./schema/VideoWatchRecordSchema.js': {}, '../service/loggingService.js': { logging() {} },
 	});
 	const sessions = loadService('src/common/MongoDBSessionTool.ts', { mongoose });
 	const { mutateCommentVote } = loadService('src/service/CommentVoteMutation.ts', {

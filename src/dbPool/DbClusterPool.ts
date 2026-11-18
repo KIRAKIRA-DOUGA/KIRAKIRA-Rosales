@@ -3,6 +3,7 @@ import mongoose, { AnyKeys, ClientSession, FilterQuery, InferSchemaType, Model, 
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
+import { VideoWatchRecordSchema } from './schema/VideoWatchRecordSchema.js'
 import { logging } from '../service/loggingService.js'
 
 /**
@@ -126,6 +127,8 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
 			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
 			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
+			// secondaryPreferred 会禁用 Mongoose 的自动索引，启动时显式创建并等待唯一索引。
+			await mongoose.model(VideoWatchRecordSchema.collectionName, VideoWatchRecordSchema.schemaInstance).createIndexes()
 
 			console.info('MongoDB Cluster Connect successfully!\n')
 		} catch (error) {
@@ -187,44 +190,28 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
  * @param insertData - 要插入的数据
  * @param schema - MongoDB Schema 对象
  * @param collectionName - 数据即将插入的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
- * @param options - 设置项（注意：设置项将会传递给 mongoose 的 updateMany 函数，并且无法设置 upsert 无效，该参数将永远为 true）
- * @returns
+ * @param options 数据库选项，事务内可用 preserveError 保留驱动错误以支持重试
+ * @returns success 仅在 MongoDB 确认插入新记录时为 true；已存在时返回匹配信息
  */
-export const insertIfNotExist = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, insertData: T, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise<UpdateResultType> => {
+export const insertIfNotExist = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, insertData: T, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P>): Promise<UpdateResultType> => {
 	try {
-		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
-		if (options?.session) {
-			options.readPreference = 'primary'
+		const mongoModel: Model<T> = mongoose.models[collectionName] ?? mongoose.model<T>(collectionName, schema)
+		const { acknowledged, matchedCount, modifiedCount, upsertedCount } = await mongoModel.updateOne(
+			where, { $setOnInsert: insertData }, { ...getMongoDBQueryOptions(options), upsert: true },
+		)
+		const result = { acknowledged, matchedCount, modifiedCount }
+		if (acknowledged && upsertedCount === 1) {
+			return { success: true, message: '记录不存在则插入 - 数据插入成功', result }
 		}
-
-		let mongoModel: Model<T>
-		// 检查模型是否已存在
-		if (mongoose.models[collectionName]) {
-			mongoModel = mongoose.models[collectionName]
-		} else {
-			mongoModel = mongoose.model<T>(collectionName, schema)
-		}
-		try {
-			const insertIfNotExistResult = await mongoModel.updateOne(where, { $setOnInsert: insertData }, { ...options, upsert: true })
-			const acknowledged = insertIfNotExistResult.acknowledged
-			const matchedCount = insertIfNotExistResult.matchedCount
-			const modifiedCount = insertIfNotExistResult.modifiedCount
-			if (acknowledged && matchedCount === 1 && modifiedCount === 1) {
-				return { success: true, message: '记录不存在则插入 - 数据插入成功', result: { acknowledged, matchedCount, modifiedCount } }
-			} else {
-				const warningMessage = '记录不存在则插入 - 尝试插入数据，但未匹配到数据，可能是因为数据已存在'
-				logging('WARN', warningMessage, undefined, { where, insertData }, { recordingLogs: false })
-				return { success: false, message: warningMessage, result: { acknowledged, matchedCount, modifiedCount } }
-			}
-		} catch (error) {
-			const errorMessage = '记录不存在则插入 - 数据插入失败'
-			logging('ERROR', errorMessage, error, { where, insertData }, { recordingLogs: false })
-			throw { success: false, message: errorMessage, error }
-		}
+		const message = acknowledged && matchedCount === 1 ? '记录已存在' : '未确认插入记录'
+		return { success: false, message, result }
 	} catch (error) {
-		const errorMessage = '记录不存在则插入 - 数据插入失败，未知错误'
-		logging('ERROR', errorMessage, error, undefined, { recordingLogs: false })
-		throw { success: false, message: errorMessage, error }
+		if (options?.preserveError) {
+			throw error
+		}
+		const message = '记录不存在则插入 - 数据插入失败'
+		logging('ERROR', message, error, undefined, { recordingLogs: false })
+		throw { success: false, message, error }
 	}
 }
 

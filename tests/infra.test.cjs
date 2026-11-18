@@ -26,6 +26,9 @@ function loadPool(mongoose, env = {}, logging = () => {}) {
 			UserInfoSchema: { collectionName: 'users', schemaInstance: {} },
 			UserTotpAuthenticatorSchema: { collectionName: 'totp', schemaInstance: {} },
 		},
+		'./schema/VideoWatchRecordSchema.js': {
+			VideoWatchRecordSchema: { collectionName: 'video-watch-record', schemaInstance: {} },
+		},
 		'../service/loggingService.js': { logging },
 	}, { process: { env, exit(code) { throw new Error(`Unexpected exit: ${code}`); } } });
 }
@@ -111,11 +114,13 @@ test('document save failures reach the log persistence rejection handler', async
 	assert.equal(errors[1][2].error.error, failure);
 });
 
-async function captureMongoConnection(extraEnv = {}) {
+async function captureMongoConnection(extraEnv = {}, createWatchIndexes = async () => {}) {
 	let connection;
 	const { connectMongoDBCluster } = loadPool({
 		set() {},
-		model() {},
+		model(name) {
+			if (name === 'video-watch-record') return { createIndexes: createWatchIndexes };
+		},
 		async connect(uri, options) { connection = { uri, options }; },
 	}, {
 		MONGODB_PROTOCOL: 'mongodb+srv',
@@ -128,6 +133,25 @@ async function captureMongoConnection(extraEnv = {}) {
 	await connectMongoDBCluster();
 	return connection;
 }
+
+test('MongoDB startup waits for the watch indexes to be created explicitly', async () => {
+	let releaseIndexes;
+	const indexes = new Promise(resolve => { releaseIndexes = resolve; });
+	let creatingIndexes = false;
+	let connected = false;
+	const connection = captureMongoConnection({}, () => {
+		creatingIndexes = true;
+		return indexes;
+	}).then(() => { connected = true; });
+	try {
+		await nextTurn();
+		assert.equal(creatingIndexes, true);
+		assert.equal(connected, false);
+	} finally {
+		releaseIndexes();
+		await connection;
+	}
+});
 
 test('MongoDB SRV without custom CA retains TLS certificate validation', async () => {
 	const { uri, options } = await captureMongoConnection();

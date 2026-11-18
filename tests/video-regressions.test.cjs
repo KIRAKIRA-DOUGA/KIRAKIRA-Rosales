@@ -34,6 +34,7 @@ function videoFixture() {
 			] }),
 		},
 		'./BrowsingHistoryService.js': {}, './VideoVoteService.js': {}, '../common/DateTool.js': {},
+		'../common/MongoDBSessionTool.js': {},
 		'./SequenceValueService.js': { getNextSequenceValueEjectService: async () => ({ success: true, sequenceValue: 3 }) },
 		'./UserService.js': { checkUserTokenService: async () => ({ success: true }), checkUserTokenByUuidService: async () => ({ success: false }), getUserUuid: async () => 'uuid' },
 		'./BlockService.js': { buildBlockListMongooseFilter: async () => ({ filter: [], additionalFields: {} }) },

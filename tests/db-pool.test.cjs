@@ -8,7 +8,9 @@ const schema = {};
 const where = { owner: 'user-1' };
 const flatUpdate = { count: 2 };
 
-function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0 } = {}) {
+function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0,
+	upsert = { acknowledged: true, matchedCount: 0, modifiedCount: 0, upsertedCount: 1 },
+} = {}) {
 	const calls = [];
 	const record = (method, args, options) => {
 		calls.push({ method, args, options });
@@ -40,6 +42,10 @@ function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0 }
 			record('updateMany', [filter, update], options);
 			return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
 		}
+		static async updateOne(filter, update, options) {
+			record('updateOne', [filter, update], options);
+			return upsert;
+		}
 		static async findOneAndUpdate(filter, update, options) {
 			record('findOneAndUpdate', [filter, update], options);
 			return updated === null ? null : { toObject: () => updated };
@@ -54,6 +60,7 @@ function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0 }
 		mongoose: { models: { [collection]: Model } },
 		'./schema/SequenceSchema.js': { SequenceValueSchema: {} },
 		'./schema/UserSchema.js': { UserInfoSchema: {}, UserTotpAuthenticatorSchema: {} },
+		'./schema/VideoWatchRecordSchema.js': {},
 		'../service/loggingService.js': { logging() {} },
 	});
 	return { pool, calls };
@@ -61,12 +68,30 @@ function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0 }
 
 const operations = [
 	{ name: 'insertData2MongoDB', legacy: true, invoke: (pool, options) => pool.insertData2MongoDB({ owner: 'user-1' }, schema, collection, options) },
+	{ name: 'insertIfNotExist', legacy: false, invoke: (pool, options) => pool.insertIfNotExist(where, { owner: 'user-1' }, schema, collection, options) },
 	{ name: 'selectDataFromMongoDB', legacy: true, invoke: (pool, options) => pool.selectDataFromMongoDB(where, { owner: 1 }, schema, collection, options) },
 	{ name: 'updateData4MongoDB', legacy: true, invoke: (pool, options) => pool.updateData4MongoDB(where, flatUpdate, schema, collection, options) },
 	{ name: 'findOneAndUpdateData4MongoDB', legacy: true, invoke: (pool, options) => pool.findOneAndUpdateData4MongoDB(where, flatUpdate, schema, collection, options) },
 	{ name: 'findOneAndUpdateWithOperators4MongoDB', legacy: false, invoke: (pool, options) => pool.findOneAndUpdateWithOperators4MongoDB(where, { $inc: { count: 1 } }, schema, collection, options) },
 	{ name: 'countDataFromMongoDB', legacy: false, invoke: (pool, options) => pool.countDataFromMongoDB(where, schema, collection, options) },
 ];
+
+test('conditional insert counts only acknowledged upserts and leaves existing rows untouched', async () => {
+	for (const [acknowledged, matchedCount, modifiedCount, upsertedCount, inserted] of [
+		[true, 0, 0, 1, true],
+		[true, 1, 0, 0, false],
+		[true, 1, 1, 0, false],
+		[false, 0, 0, 0, false],
+	]) {
+		const { pool, calls } = fixture({ upsert: { acknowledged, matchedCount, modifiedCount, upsertedCount } });
+		const result = await pool.insertIfNotExist(where, flatUpdate, schema, collection);
+		assert.equal(result.success, inserted);
+		assert.equal(calls[0].method, 'updateOne');
+		assert.equal(calls[0].args[0], where);
+		assert.equal(calls[0].args[1].$setOnInsert, flatUpdate);
+		assert.equal(calls[0].options.upsert, true);
+	}
+});
 
 test('atomic updates forward operators and aggregation pipelines without wrapping them in $set', async () => {
 	for (const update of [
