@@ -9,10 +9,10 @@ const schema = collectionName => ({ collectionName, schemaInstance: {} });
 const sameDay = (record, key) =>
 	record.UUID === key.UUID && record.videoId === key.videoId && record.watchDate === key.watchDate;
 
-function watchFixture(records = []) {
+function watchFixture() {
 	const video = { videoId, watchedCount: 100, uploaderInfo: { uid: 10 } };
 	const controls = { now: beforeMidnight, published: true, updateFailure: null, conflicts: 0, errors: [] };
-	const watchRecords = records.slice();
+	const watchRecords = [];
 	const matchesPublishedVideo = where => controls.published && where.videoId === videoId && where.pendingReview === false;
 	const getTransaction = options => {
 		assert.ok(options?.session, 'operation must use the watch transaction');
@@ -143,17 +143,13 @@ test('a failed counter write discards the staged watch so a retry counts exactly
 	assert.equal(count(), 101);
 });
 
-test('dated legacy records deduplicate while timestamp-only records can be counted once', async () => {
-	const { view, watchRecords, count } = watchFixture([
-		{ UUID: 'viewer', uid: 1, videoId, watchDate: '2025-06-20' },
-		{ UUID: 'other', uid: 2, videoId, watchDateTime: beforeMidnight - 1 },
-		{ UUID: 'other', uid: 2, videoId, watchDateTime: beforeMidnight - 2 },
-	]);
-	assert.equal((await view()).video.watchedCount, 100);
-	assert.equal((await view('other')).video.watchedCount, 101);
-	assert.equal((await view('other')).video.watchedCount, 101);
-	assert.equal(watchRecords.length, 4);
-	assert.equal(count(), 101);
+test('another signed-in viewer counts separately for the same video and date', async () => {
+	const { view, watchRecords, count } = watchFixture();
+	assert.equal((await view()).video.watchedCount, 101);
+	assert.equal((await view('other')).video.watchedCount, 102);
+	assert.equal((await view('other')).video.watchedCount, 102);
+	assert.equal(watchRecords.length, 2);
+	assert.equal(count(), 102);
 });
 
 test('anonymous and unpublished video details do not count watches', async () => {

@@ -1142,7 +1142,6 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 		const watchDateTime = watchTime.getTime()
 		const { collectionName: watchRecordCollectionName, schemaInstance: watchRecordSchemaInstance } = VideoWatchRecordSchema
 		type VideoWatchRecord = InferSchemaType<typeof watchRecordSchemaInstance>
-		// 保留旧版日期键以复用已计数记录。故障版本只写时间戳，未增加播放量。
 		const watchRecordWhere = { UUID: uuid, videoId, watchDate } satisfies QueryType<VideoWatchRecord>
 		const watchRecordData: VideoWatchRecord = {
 			...watchRecordWhere,

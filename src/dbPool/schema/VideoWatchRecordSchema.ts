@@ -12,7 +12,7 @@ export class VideoWatchRecordSchemaFactory {
 		uid: { type: Number, required: true, index: true },
 		/** 视频 ID (KVID) - 非空 */
 		videoId: { type: Number, required: true, index: true },
-		/** 服务器本地观看日期（YYYY-MM-DD，新记录必填） */
+		/** 服务器本地观看日期（YYYY-MM-DD）- 非空 */
 		watchDate: { type: String, required: true },
 		/** 观看时间（毫秒时间戳）- 非空 */
 		watchDateTime: { type: Number, required: true, index: true },
@@ -32,12 +32,7 @@ export class VideoWatchRecordSchemaFactory {
 
 	// 构造器
 	constructor() {
-		// 仅有时间戳的旧记录可能在同一用户和视频下有多条，索引只约束带日期的记录。
-		this.schemaInstance.index({ UUID: 1, videoId: 1, watchDate: 1 }, {
-			name: 'video_watch_daily_unique',
-			unique: true,
-			partialFilterExpression: { watchDate: { $type: 'string' } },
-		})
+		this.schemaInstance.index({ UUID: 1, videoId: 1, watchDate: 1 }, { unique: true })
 	}
 }
 export const VideoWatchRecordSchema = new VideoWatchRecordSchemaFactory()
