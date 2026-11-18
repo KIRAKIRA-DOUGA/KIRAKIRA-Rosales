@@ -12,7 +12,7 @@ These instructions apply to the entire repository unless a more specific `AGENTS
 
 ## Commit Messages
 
-- 代码注释和 Git 提交信息使用中文，遵循仓库既有风格；具体格式和注释要求见本节及下方 Comments and Documentation。
+- Write AI repository guidelines in English. Write code comments and Git commit messages in Chinese, following the repository's existing style; see this section and Comments and Documentation below for specific requirements.
 
 - Every new commit message must start with an appropriate gitmoji emoji, followed by a space and a concise Chinese description.
 - Use the format `<gitmoji> <Chinese description>`, for example: `🐛 修复评论投票并发超时` or `📝 添加仓库开发规范`.
@@ -75,7 +75,7 @@ export const getVideoUpvoteCountService = async (videoId: number): Promise<Video
 
 ## Architecture and Agent Boundaries
 
-- 新增共通函数前必须先询问，并得到用户明确同意；不得擅自新增或通过换名规避。
+- Before adding a shared function, ask the user and obtain explicit approval. Do not add shared functions without approval or evade this requirement by renaming them.
 
 - Before editing, read surrounding code and comparable established, human-written implementations. Consult Git history when recent generated code obscures the original conventions. Do not reproduce a known bug or unsafe pattern just to resemble older code.
 - Keep controllers focused on request/response handling and established authorization checks, services on business logic, and database access in the shared database layer. Preserve existing response DTOs, error conventions, and public interfaces.
