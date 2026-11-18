@@ -1,6 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { setImmediate: tick } = require('node:timers/promises');
 const { loadService } = require('./helpers/load-service.cjs');
 const copy = value => JSON.parse(JSON.stringify(value));
 const commentId = '0123456789abcdef01234567';
@@ -9,15 +8,15 @@ const schemas = Object.fromEntries([
 	['VideoCommentSchema', 'comments'], ['VideoCommentUpvoteSchema', 'up'], ['VideoCommentDownvoteSchema', 'down'],
 ].map(([key, collectionName]) => [key, { collectionName, schemaInstance: {} }]));
 
-/** Model a snapshot transaction with first-writer conflicts, retries, and rollback.
- * No MongoDB service or network is used. The actual helper controls every database operation.
- */
+/** 模拟快照事务、首次写入冲突和回滚，通过实际数据库封装执行操作，不连接 MongoDB。 */
 function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 	let state = { comments: [{ _id: commentId, videoId: 1, upvoteCount: initialCount, downvoteCount: initialDown.length, text: 'unchanged' }], up: copy(initialUp), down: copy(initialDown) };
 	let version = 0, owner, nextId = 0;
-	const controls = { retries: 0, sessions: 0, ended: 0, failCounter: false, options: [], failure: undefined, retriedErrors: [] };
+	const controls = { sessions: 0, started: 0, committed: 0, aborted: 0, ended: 0, failCounter: false, options: [], failure: undefined, operations: [], sessionList: [], logs: [], startError: undefined, commitError: undefined, abortError: undefined, endError: undefined };
 	const getRows = (name, session) => {
-		assert.ok(session?.data, 'every operation must participate in the transaction');
+		assert.ok(session?.data, '所有操作必须参与事务');
+		assert.ok(controls.sessionList.includes(session), '必须使用本次创建的 session');
+		controls.operations.push({ name, session });
 		return session.data[name];
 	};
 	const checkOptions = options => {
@@ -110,36 +109,46 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 	const mongoose = { models, async startSession() {
 		controls.sessions++;
 		return {
-			async withTransaction(callback, options) {
+			startTransaction(options) {
+				controls.started++;
 				controls.options.push(copy(options));
-				for (let attempt = 0; attempt < 30; attempt++) {
-					this.data = copy(state); this.version = version;
-					try {
-						const result = await callback();
-						state = this.data; version++;
-						return result;
-					} catch (error) {
-						if (!error.hasErrorLabel?.('TransientTransactionError')) throw error;
-						controls.retries++;
-						controls.retriedErrors.push(error);
-					} finally {
-						if (owner === this) owner = undefined;
-						this.data = undefined;
-					}
-					await tick();
-				}
-				throw new Error('retry budget exhausted');
+				controls.sessionList.push(this);
+				if (controls.startError) throw controls.startError;
+				this.data = copy(state); this.version = version; this.active = true;
 			},
-			async endSession() { controls.ended++; },
+			inTransaction() { return this.active === true; },
+			async commitTransaction() {
+				controls.committed++;
+				assert.ok(this.active);
+				// 模拟驱动在提交失败后退出活动事务状态，包括提交结果不确定的情况。
+				this.active = false;
+				if (controls.commitError) throw controls.commitError;
+				state = this.data; version++;
+				if (owner === this) owner = undefined;
+				this.data = undefined;
+			},
+			async abortTransaction() {
+				controls.aborted++;
+				this.active = false;
+				this.data = undefined;
+				if (owner === this) owner = undefined;
+				if (controls.abortError) throw controls.abortError;
+			},
+			async endSession() {
+				controls.ended++;
+				this.data = undefined;
+				if (owner === this) owner = undefined;
+				if (controls.endError) throw controls.endError;
+			},
 		};
 	} };
 	const pool = loadService('src/dbPool/DbClusterPool.ts', {
 		mongoose, mongodb: {}, './schema/SequenceSchema.js': {}, './schema/UserSchema.js': {}, '../service/loggingService.js': { logging() {} },
 	});
-	const sessions = loadService('src/common/MongoDBSessionTool.ts', { mongoose });
 	const { mutateCommentVote } = loadService('src/service/CommentVoteMutation.ts', {
 		'../dbPool/DbClusterPool.js': pool,
-		'../common/MongoDBSessionTool.js': sessions,
+		mongoose,
+		'./loggingService.js': { logging: (...args) => controls.logs.push(args) },
 		'../dbPool/schema/VideoCommentSchema.js': schemas,
 	});
 	return { controls, state: () => state, mutate: (direction, active, uid = 1, videoId = 1, id = commentId) => mutateCommentVote(videoId, id, uid, `uuid-${uid}`, direction, active) };
@@ -147,31 +156,39 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 
 const vote = id => ({ _id: id, videoId: 1, commentId, uid: 1, UUID: 'uuid-1', invalidFlag: false, deleteFlag: false });
 
-test('concurrent comment upvotes retry the transaction and store exactly one active vote', async () => {
+test('并发点赞只允许一个事务成功，冲突直接抛出且不重跑', async () => {
 	const f = fixture();
-	const results = await Promise.all([f.mutate('upvote', true), f.mutate('upvote', true)]);
-	assert.equal(results.filter(Boolean).length, 1);
+	const results = await Promise.allSettled([f.mutate('upvote', true), f.mutate('upvote', true)]);
+	assert.equal(results.filter(result => result.status === 'fulfilled' && result.value).length, 1);
+	const rejected = results.filter(result => result.status === 'rejected');
+	assert.equal(rejected.length, 1);
+	assert.equal(rejected[0].reason.hasErrorLabel('TransientTransactionError'), true);
 	assert.equal(f.state().up.filter(v => !v.invalidFlag).length, 1);
 	assert.equal(f.state().comments[0].upvoteCount, 1);
-	assert.ok(f.controls.retries > 0);
+	assert.equal(f.controls.started, 2);
+	assert.equal(f.controls.committed, 1);
+	assert.equal(f.controls.aborted, 1);
 	assert.equal(f.controls.sessions, f.controls.ended);
-	assert.ok(f.controls.options.every(o => o.timeoutMS === 60000 && o.readPreference === 'primary'));
+	assert.ok(f.controls.options.every(o => o.readPreference === 'primary' && o.readConcern.level === 'snapshot' && o.writeConcern.w === 'majority'));
+	assert.ok(f.controls.options.every(o => !Object.hasOwn(o, 'timeoutMS')));
 });
 
-test('concurrent cancellation of legacy duplicate votes repairs the counter without going negative', async () => {
+test('并发取消历史重复票据时仅一个事务成功并修复计数', async () => {
 	const f = fixture([vote('old-1'), vote('old-2')], [], 9);
-	await Promise.all([f.mutate('upvote', false), f.mutate('upvote', false)]);
+	const results = await Promise.allSettled([f.mutate('upvote', false), f.mutate('upvote', false)]);
+	assert.equal(results.filter(result => result.status === 'rejected').length, 1);
+	assert.equal(f.controls.started, 2);
+	assert.equal(f.controls.committed, 1);
+	assert.equal(f.controls.ended, 2);
 	assert.equal(f.state().up.filter(v => !v.invalidFlag).length, 0);
 	assert.equal(f.state().comments[0].upvoteCount, 0);
 	assert.equal(f.state().comments[0].text, 'unchanged');
 });
 
-test('ObjectId case variants share the same vote and cancel historical mixed-case records', async () => {
+test('大小写不同的评论 ID 共用票据并能取消历史混合大小写记录', async () => {
 	const f = fixture();
-	await Promise.all([
-		f.mutate('upvote', true),
-		f.mutate('upvote', true, 1, 1, commentId.toUpperCase()),
-	]);
+	assert.equal(await f.mutate('upvote', true), true);
+	assert.equal(await f.mutate('upvote', true, 1, 1, commentId.toUpperCase()), false);
 	assert.equal(f.state().up.filter(v => !v.invalidFlag).length, 1);
 	assert.equal(f.state().up[0].commentId, commentId);
 	assert.equal(f.state().comments[0].upvoteCount, 1);
@@ -184,13 +201,14 @@ test('ObjectId case variants share the same vote and cancel historical mixed-cas
 	assert.equal(legacy.state().comments[0].upvoteCount, 0);
 });
 
-test('opposite comment votes switch atomically and concurrent switches never leave both directions active', async () => {
+test('切换投票方向保持原子性，并发冲突不会同时启用两个方向', async () => {
 	const f = fixture();
 	await f.mutate('upvote', true);
 	await f.mutate('downvote', true);
 	assert.equal(f.state().comments[0].upvoteCount, 0);
 	assert.equal(f.state().comments[0].downvoteCount, 1);
-	await Promise.all([f.mutate('upvote', true), f.mutate('downvote', true)]);
+	const results = await Promise.allSettled([f.mutate('upvote', true), f.mutate('downvote', true)]);
+	assert.equal(results.filter(result => result.status === 'rejected').length, 1);
 	const row = f.state().comments[0];
 	assert.equal(row.upvoteCount + row.downvoteCount, 1);
 	assert.equal(f.state().up.filter(v => !v.invalidFlag).length + f.state().down.filter(v => !v.invalidFlag).length, 1);
@@ -217,17 +235,18 @@ test('a wrong video/comment pairing aborts before any vote is stored', async () 
 	assert.equal(f.state().up.length, 0);
 });
 
-test('real database wrappers preserve transient error labels and retry every transaction operation', async () => {
+test('每个数据库操作的临时冲突均保留原始错误且不重跑事务', async () => {
 	for (const operation of ['findOneAndUpdate', 'find', 'save', 'updateMany', 'countDocuments', 'counter']) {
 		const f = fixture();
 		const error = new Error(`transient ${operation}`);
 		error.hasErrorLabel = label => label === 'TransientTransactionError';
 		f.controls.failure = { operation, error };
-		assert.equal(await f.mutate('upvote', true), true, operation);
-		assert.equal(f.controls.retries, 1, operation);
-		assert.equal(f.controls.retriedErrors[0], error, 'the actual driver error must survive the common wrapper');
-		assert.equal(f.state().up.filter(row => !row.invalidFlag).length, 1, operation);
-		assert.equal(f.state().comments[0].upvoteCount, 1, operation);
+		const before = copy(f.state());
+		await assert.rejects(f.mutate('upvote', true), received => received === error, operation);
+		assert.equal(f.controls.started, 1, operation);
+		assert.equal(f.controls.committed, 0, operation);
+		assert.equal(f.controls.aborted, 1, operation);
+		assert.deepEqual(f.state(), before, operation);
 		assert.equal(f.controls.sessions, f.controls.ended, operation);
 	}
 });
@@ -240,7 +259,9 @@ test('non-transient database failures roll back through the real wrappers withou
 		f.controls.failure = { operation, error };
 		await assert.rejects(f.mutate('downvote', true), received => received === error, operation);
 		assert.deepEqual(f.state(), before, operation);
-		assert.equal(f.controls.retries, 0, operation);
+		assert.equal(f.controls.started, 1, operation);
+		assert.equal(f.controls.committed, 0, operation);
+		assert.equal(f.controls.aborted, 1, operation);
 		assert.equal(f.controls.sessions, f.controls.ended, operation);
 	}
 });
@@ -263,4 +284,80 @@ test('all four public comment vote handlers use the shared transaction and rejec
 	assert.deepEqual(calls.map(args => args.slice(-2)), [['upvote', true], ['upvote', false], ['downvote', true], ['downvote', false]]);
 	assert.equal((await service.emitVideoCommentUpvoteService({ videoId: 1, id: {} }, 1, 'token')).success, false);
 	assert.equal(calls.length, 4);
+});
+
+test('票据与计数使用同一个 session 并且只提交一次', async () => {
+	const f = fixture();
+	assert.equal(await f.mutate('upvote', true), true);
+	assert.equal(f.controls.sessions, 1);
+	assert.equal(f.controls.started, 1);
+	assert.equal(f.controls.committed, 1);
+	assert.equal(f.controls.aborted, 0);
+	assert.equal(f.controls.ended, 1);
+	assert.deepEqual([...new Set(f.controls.operations.map(operation => operation.name))].sort(), ['comments', 'down', 'up']);
+	assert.ok(f.controls.operations.every(operation => operation.session === f.controls.sessionList[0]));
+	assert.equal(f.state().up.length, 1);
+	assert.equal(f.state().comments[0].upvoteCount, 1);
+});
+
+test('提交结果不确定时保留原始错误且不再次提交或执行事务', async () => {
+	const f = fixture();
+	const error = new Error('提交结果不确定');
+	error.hasErrorLabel = label => label === 'UnknownTransactionCommitResult';
+	f.controls.commitError = error;
+	await assert.rejects(f.mutate('upvote', true), received => received === error);
+	assert.equal(f.controls.started, 1);
+	assert.equal(f.controls.committed, 1);
+	assert.equal(f.controls.aborted, 0);
+	assert.equal(f.controls.ended, 1);
+});
+
+test('事务启动失败仍关闭 session 并保留原始错误', async () => {
+	const f = fixture();
+	const error = new Error('启动失败');
+	f.controls.startError = error;
+	await assert.rejects(f.mutate('upvote', true), received => received === error);
+	assert.equal(f.controls.started, 1);
+	assert.equal(f.controls.committed, 0);
+	assert.equal(f.controls.aborted, 0);
+	assert.equal(f.controls.ended, 1);
+	assert.equal(f.controls.operations.length, 0);
+});
+
+test('回滚和关闭同时失败时不覆盖业务错误', async () => {
+	const f = fixture();
+	const before = copy(f.state());
+	const error = new Error('计数更新失败');
+	f.controls.failure = { operation: 'counter', error };
+	f.controls.abortError = new Error('回滚失败');
+	f.controls.endError = new Error('关闭失败');
+	await assert.rejects(f.mutate('upvote', true), received => received === error);
+	assert.equal(f.controls.aborted, 1);
+	assert.equal(f.controls.ended, 1);
+	assert.equal(f.controls.logs.length, 2);
+	assert.deepEqual(f.state(), before);
+});
+
+test('关闭失败不覆盖不确定的提交错误', async () => {
+	const f = fixture();
+	const error = new Error('提交结果不确定');
+	error.hasErrorLabel = label => label === 'UnknownTransactionCommitResult';
+	f.controls.commitError = error;
+	f.controls.endError = new Error('关闭失败');
+	await assert.rejects(f.mutate('upvote', true), received => received === error);
+	assert.equal(f.controls.committed, 1);
+	assert.equal(f.controls.ended, 1);
+	assert.equal(f.controls.logs.length, 1);
+});
+
+test('提交成功后的关闭错误向上抛出且不再次提交', async () => {
+	const f = fixture();
+	const error = new Error('关闭失败');
+	f.controls.endError = error;
+	await assert.rejects(f.mutate('upvote', true), received => received === error);
+	assert.equal(f.controls.committed, 1);
+	assert.equal(f.controls.aborted, 0);
+	assert.equal(f.controls.ended, 1);
+	assert.equal(f.state().up.length, 1);
+	assert.equal(f.state().comments[0].upvoteCount, 1);
 });
