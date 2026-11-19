@@ -11,7 +11,10 @@ const sameDay = (record, key) =>
 
 function watchFixture() {
 	const video = { videoId, watchedCount: 100, uploaderInfo: { uid: 10 } };
-	const controls = { now: beforeMidnight, published: true, updateFailure: null, conflicts: 0, errors: [] };
+	const controls = {
+		now: beforeMidnight, published: true, updateFailure: null, closeFailure: null,
+		conflicts: 0, sessions: 0, ended: 0, errors: [],
+	};
 	const watchRecords = [];
 	const matchesPublishedVideo = where => controls.published && where.videoId === videoId && where.pendingReview === false;
 	const getTransaction = options => {
@@ -47,28 +50,39 @@ function watchFixture() {
 		},
 	};
 	let committedCount = video.watchedCount;
-	const sessionTool = {
-		async withMongoDBTransaction(callback, options) {
-			assert.equal(options.readPreference, 'primary');
-			const session = { records: watchRecords.slice(), count: committedCount };
-			const result = await callback(session);
-			if (session.inserted) {
-				// A competing snapshot can have missed a key that another request committed.
-				if (watchRecords.some(record => sameDay(record, session.inserted))) {
-					controls.conflicts++;
-					throw new MongoServerError({ code: 11000, keyPattern: { UUID: 1, videoId: 1, watchDate: 1 } });
-				}
-				watchRecords.push(session.inserted);
-				committedCount = session.count;
-			}
-			return result;
+	const mongoose = {
+		mongo: { MongoServerError },
+		async startSession() {
+			controls.sessions++;
+			return {
+				async withTransaction(callback, options) {
+					assert.equal(options.readPreference, 'primary');
+					this.records = watchRecords.slice();
+					this.count = committedCount;
+					this.inserted = undefined;
+					const result = await callback();
+					if (this.inserted) {
+						// 并发快照可能没读到另一个请求已提交的当日唯一键。
+						if (watchRecords.some(record => sameDay(record, this.inserted))) {
+							controls.conflicts++;
+							throw new MongoServerError({ code: 11000, keyPattern: { UUID: 1, videoId: 1, watchDate: 1 } });
+						}
+						watchRecords.push(this.inserted);
+						committedCount = this.count;
+					}
+					return result;
+				},
+				async endSession() {
+					controls.ended++;
+					if (controls.closeFailure) throw controls.closeFailure;
+				},
+			};
 		},
 	};
 	const { getVideoByKvidService } = loadService('src/service/VideoService.ts', {
-		mongoose: { mongo: { MongoServerError } },
+		mongoose,
 		'../cloudflare/index.js': {},
 		'../common/DateTool.js': loadService('src/common/DateTool.ts'),
-		'../common/MongoDBSessionTool.js': sessionTool,
 		'../common/ObjectTool.js': {},
 		'../common/RandomTool.js': {},
 		'../dbPool/DbClusterPool.js': db,
@@ -115,6 +129,7 @@ test('video details count the first signed-in view per server-local day', async 
 	assert.equal(watchRecords[1].watchDate, '2025-06-21');
 	assert.equal(watchRecords[1].watchDateTime, afterMidnight);
 	assert.deepEqual(controls.errors, []);
+	assert.equal(controls.sessions, controls.ended);
 });
 
 test('concurrent video details recover from a daily key collision and return the committed count', async () => {
@@ -125,6 +140,7 @@ test('concurrent video details recover from a daily key collision and return the
 	assert.deepEqual(controls.errors, []);
 	assert.equal(watchRecords.length, 1);
 	assert.equal(count(), 101);
+	assert.equal(controls.sessions, controls.ended);
 });
 
 test('a failed counter write discards the staged watch so a retry counts exactly once', async () => {
@@ -141,6 +157,26 @@ test('a failed counter write discards the staged watch so a retry counts exactly
 	assert.equal((await view()).video.watchedCount, 101);
 	assert.equal(watchRecords.length, 1);
 	assert.equal(count(), 101);
+	assert.equal(controls.sessions, controls.ended);
+});
+
+test('session close failures preserve the committed count and the original write error', async () => {
+	const { view, controls, watchRecords, count } = watchFixture();
+	const closeFailure = new Error('session cleanup failed');
+	controls.closeFailure = closeFailure;
+	assert.equal((await view()).video.watchedCount, 101);
+	assert.equal(watchRecords.length, 1);
+	assert.equal(count(), 101);
+	assert.deepEqual(controls.errors, [closeFailure]);
+
+	controls.now = beforeMidnight + 1;
+	const writeFailure = new Error('counter write failed');
+	controls.updateFailure = writeFailure;
+	assert.equal((await view()).video.watchedCount, 100);
+	assert.equal(count(), 101);
+	assert.equal(watchRecords.length, 1);
+	assert.deepEqual(controls.errors, [closeFailure, closeFailure, writeFailure]);
+	assert.equal(controls.sessions, controls.ended);
 });
 
 test('another signed-in viewer counts separately for the same video and date', async () => {

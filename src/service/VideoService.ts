@@ -20,7 +20,6 @@ import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
 import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
 import { getTodayDateString } from '../common/DateTool.js'
-import { withMongoDBTransaction } from '../common/MongoDBSessionTool.js'
 
 /**
  * 上传视频
@@ -1156,7 +1155,9 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
 		type Video = InferSchemaType<typeof videoSchemaInstance>
 		const videoWhere: QueryType<Video> = { videoId, pendingReview: false }
-		const recordWatch = () => withMongoDBTransaction(async session => {
+		// 播放量保留并发事务重试；由驱动启动事务，避免复用已开启的事务。
+		const session = await mongoose.startSession()
+		const recordWatch = () => session.withTransaction(async () => {
 			const options = { session, preserveError: true }
 			const watchRecord = await insertIfNotExist<VideoWatchRecord>(
 				watchRecordWhere, watchRecordData, watchRecordSchemaInstance, watchRecordCollectionName, options,
@@ -1196,6 +1197,8 @@ const recordVideoWatchAndIncrementCount = async (videoId: number, uuid: string):
 			}
 			// 并发 upsert 可能遇到驱动不会重试的唯一键冲突；重新开启事务读取已提交的记录。
 			return await recordWatch()
+		} finally {
+			await session.endSession().catch(error => logging('ERROR', '关闭视频播放记录会话失败', error, undefined, { recordingLogs: false }))
 		}
 	} catch (error) {
 		logging('ERROR', '记录视频播放失败', error, { videoId, uuid })
