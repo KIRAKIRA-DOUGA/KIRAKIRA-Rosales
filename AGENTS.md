@@ -2,6 +2,10 @@
 
 These instructions apply to the entire repository unless a more specific `AGENTS.md` provides additional guidance.
 
+## Guiding Principle
+
+Correctness is a prerequisite. When writing new code, modifying existing code, or reviewing code written by humans or AI agents, your top priority must be to minimize the cognitive load on human reviewers.
+
 ## Project Documentation
 
 - Read the relevant sections of [docs/README.md](docs/README.md) before proposing or implementing changes. Use its development guide as the reference for the project structure and request/data-access flow.
@@ -29,6 +33,8 @@ These instructions apply to the entire repository unless a more specific `AGENTS
 - Before implementing a feature or changing behavior, explain the proposed implementation to the user. Read-only investigation may happen first so the proposal is grounded in the existing code.
 - Provide a concise, numbered plan covering the implementation steps and how the result will be verified. Identify the main modules or files involved and the existing helpers or patterns that will be reused.
 - State the expected impact: user-visible behavior, affected interfaces and callers, data or schema changes, dependencies or configuration, and relevant compatibility, performance, or deployment risks. Explicitly note material uncertainties; do not claim that an impact has been verified before checking it.
+- When a change requires a decision about continued support for older data formats, code paths, or callers, follow the user's explicit choice. If the user has not chosen, briefly explain the impact and ask whether to keep compatibility code or handle the transition at deployment by migrating existing data or upgrading affected callers. The user prefers the deployment-time option by default because supporting multiple behaviors over time increases the effort needed to review and maintain the code.
+- Builds and deployments usually run from `develop` and `production`. When a change requires a data migration, list the steps and script paths in the description of the PR used to deploy to each affected environment, even if the feature PR already documents them. If a release PR does not exist yet, add the runnable migration script to the repository and record the pending steps for that environment. Include those steps and the script path in the release PR description when it is opened.
 - Scale the detail to the task. Small changes need only a short plan and impact statement; larger changes require enough detail for the user to understand the scope and tradeoffs.
 - If investigation changes the approach or reveals a materially larger impact, update the user before implementing the revised approach.
 - This is a communication requirement, not an additional approval gate for already authorized implementation work. Honor any explicit request to wait for approval, and always follow the separate push-confirmation requirement above.
@@ -91,6 +97,7 @@ export const getVideoUpvoteCountService = async (videoId: number): Promise<Video
 - Avoid speculative abstractions, redundant wrappers, duplicate business logic, excessive nesting, and dead code. Prefer clear control flow and meaningful names over clever or compressed expressions.
 - Do not use `any`, double type assertions, type-check suppression, or swallowed exceptions to hide a correctness problem. Validate external inputs, narrow types, and handle or propagate errors explicitly. Preserve error information required by transaction retries.
 - Release sessions and other resources on every exit path. Await work whose completion affects correctness; detached work must have explicit error handling and a justified lifecycle.
+- Avoid timers by default when writing or reviewing code. This applies to one-shot delays, periodic polling, and scheduled jobs regardless of the API or library. Prefer reacting to a state change or awaiting an operation's completion. When a requirement depends on time, explain why a timer is needed and account for relevant risks such as late, missed, or overlapping runs.
 - The architecture and maintainability rules above are defaults, not an extra approval gate. A small, necessary exception within the authorized task is allowed after explaining the concrete reason, scope, and tradeoff to the user. Keep it local and mention it in the completion summary. This does not waive the required commit-message format or authorize unrelated work.
 
 ## Verification
