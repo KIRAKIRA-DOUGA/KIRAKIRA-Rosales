@@ -111,7 +111,7 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 		return {
 			startTransaction(options) {
 				controls.started++;
-				controls.options.push(copy(options));
+				controls.options.push(options && copy(options));
 				controls.sessionList.push(this);
 				if (controls.startError) throw controls.startError;
 				this.data = copy(state); this.version = version; this.active = true;
@@ -136,6 +136,7 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 			},
 			async endSession() {
 				controls.ended++;
+				this.hasEnded = true;
 				this.data = undefined;
 				if (owner === this) owner = undefined;
 				if (controls.endError) throw controls.endError;
@@ -145,13 +146,15 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 	const pool = loadService('src/dbPool/DbClusterPool.ts', {
 		mongoose, mongodb: {}, './schema/SequenceSchema.js': {}, './schema/UserSchema.js': {}, '../service/loggingService.js': { logging() {} },
 	});
+	const logger = { logging: (...args) => controls.logs.push(args) };
+	const sessionTools = loadService('src/common/MongoDBSessionTool.ts', { mongoose, '../service/loggingService.js': logger });
 	const { mutateCommentVote } = loadService('src/service/CommentVoteMutation.ts', {
 		'../dbPool/DbClusterPool.js': pool,
-		mongoose,
-		'./loggingService.js': { logging: (...args) => controls.logs.push(args) },
+		'../common/MongoDBSessionTool.js': sessionTools,
+		'./loggingService.js': logger,
 		'../dbPool/schema/VideoCommentSchema.js': schemas,
 	});
-	return { controls, state: () => state, mutate: (direction, active, uid = 1, videoId = 1, id = commentId) => mutateCommentVote(videoId, id, uid, `uuid-${uid}`, direction, active) };
+	return { controls, sessionTools, state: () => state, mutate: (direction, active, uid = 1, videoId = 1, id = commentId) => mutateCommentVote(videoId, id, uid, `uuid-${uid}`, direction, active) };
 }
 
 const vote = id => ({ _id: id, videoId: 1, commentId, uid: 1, UUID: 'uuid-1', invalidFlag: false, deleteFlag: false });
@@ -173,7 +176,7 @@ test('并发点赞只允许一个事务成功，冲突直接抛出且不重跑',
 	assert.ok(f.controls.options.every(o => !Object.hasOwn(o, 'timeoutMS')));
 });
 
-test('并发取消历史重复票据时仅一个事务成功并修复计数', async () => {
+test('并发取消重复的点赞记录时仅一个事务成功并修复计数', async () => {
 	const f = fixture([vote('old-1'), vote('old-2')], [], 9);
 	const results = await Promise.allSettled([f.mutate('upvote', false), f.mutate('upvote', false)]);
 	assert.equal(results.filter(result => result.status === 'rejected').length, 1);
@@ -185,7 +188,7 @@ test('并发取消历史重复票据时仅一个事务成功并修复计数', as
 	assert.equal(f.state().comments[0].text, 'unchanged');
 });
 
-test('大小写不同的评论 ID 共用票据并能取消历史混合大小写记录', async () => {
+test('大小写不同的评论 ID 共用点赞记录，也能取消历史混合大小写记录', async () => {
 	const f = fixture();
 	assert.equal(await f.mutate('upvote', true), true);
 	assert.equal(await f.mutate('upvote', true, 1, 1, commentId.toUpperCase()), false);
@@ -286,7 +289,15 @@ test('all four public comment vote handlers use the shared transaction and rejec
 	assert.equal(calls.length, 4);
 });
 
-test('票据与计数使用同一个 session 并且只提交一次', async () => {
+test('共通函数无参开启事务时沿用连接的设置', async () => {
+	const f = fixture();
+	const session = await f.sessionTools.createAndStartSession();
+	assert.deepEqual(f.controls.options, [undefined]);
+	assert.equal(await f.sessionTools.commitAndEndSession(session), true);
+	assert.equal(f.controls.ended, 1);
+});
+
+test('点赞记录和评论计数使用同一个 session 并且只提交一次', async () => {
 	const f = fixture();
 	assert.equal(await f.mutate('upvote', true), true);
 	assert.equal(f.controls.sessions, 1);
@@ -309,6 +320,16 @@ test('提交结果不确定时保留原始错误且不再次提交或执行事�
 	assert.equal(f.controls.started, 1);
 	assert.equal(f.controls.committed, 1);
 	assert.equal(f.controls.aborted, 0);
+	assert.equal(f.controls.ended, 1);
+});
+
+test('提交失败时仍在进行的事务会回滚并关闭会话', async () => {
+	const f = fixture();
+	const session = await f.sessionTools.createAndStartSession();
+	const error = new Error('提交命令未能发出');
+	session.commitTransaction = async () => { throw error; };
+	await assert.rejects(f.sessionTools.commitAndEndSession(session), received => received === error);
+	assert.equal(f.controls.aborted, 1);
 	assert.equal(f.controls.ended, 1);
 });
 
@@ -350,11 +371,13 @@ test('关闭失败不覆盖不确定的提交错误', async () => {
 	assert.equal(f.controls.logs.length, 1);
 });
 
-test('提交成功后的关闭错误向上抛出且不再次提交', async () => {
+test('数据库已确认点赞成功时单独记录关闭错误，并返回点赞成功', async () => {
 	const f = fixture();
 	const error = new Error('关闭失败');
 	f.controls.endError = error;
-	await assert.rejects(f.mutate('upvote', true), received => received === error);
+	assert.equal(await f.mutate('upvote', true), true);
+	assert.equal(f.controls.logs.length, 1);
+	assert.equal(f.controls.logs[0][2], error);
 	assert.equal(f.controls.committed, 1);
 	assert.equal(f.controls.aborted, 0);
 	assert.equal(f.controls.ended, 1);
