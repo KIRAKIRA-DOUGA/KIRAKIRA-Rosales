@@ -3,13 +3,12 @@ import { logging } from '../service/loggingService.js'
 
 /**
  * 创建会话并启动事务
- * @param options 事务的读写设置，省略时沿用连接的设置
  * @returns 已启动事务的会话
  */
-export const createAndStartSession = async (options?: mongoose.mongo.TransactionOptions): Promise<ClientSession> => {
+export const createAndStartSession = async (): Promise<ClientSession> => {
 	const session = await mongoose.startSession()
 	try {
-		session.startTransaction(options)
+		session.startTransaction()
 		return session
 	} catch (error) {
 		await session.endSession().catch(closeError => logging('ERROR', '事务启动失败后关闭 MongoDB 会话出错', closeError, undefined, { recordingLogs: false }))

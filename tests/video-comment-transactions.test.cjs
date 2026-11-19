@@ -21,7 +21,7 @@ function fixture(initialUp = [], initialDown = [], initialCount = 0) {
 	};
 	const checkOptions = options => {
 		assert.equal(Object.hasOwn(options ?? {}, 'preserveError'), false, 'wrapper-only option must not reach Mongoose');
-		assert.equal(options?.readPreference, 'primary');
+		assert.equal(options?.readPreference, 'primary', '共通 CRUD 应让事务操作使用主节点');
 		getRows('comments', options?.session);
 	};
 	const maybeFail = operation => {
@@ -172,8 +172,7 @@ test('并发点赞只允许一个事务成功，冲突直接抛出且不重跑',
 	assert.equal(f.controls.committed, 1);
 	assert.equal(f.controls.aborted, 1);
 	assert.equal(f.controls.sessions, f.controls.ended);
-	assert.ok(f.controls.options.every(o => o.readPreference === 'primary' && o.readConcern.level === 'snapshot' && o.writeConcern.w === 'majority'));
-	assert.ok(f.controls.options.every(o => !Object.hasOwn(o, 'timeoutMS')));
+	assert.deepEqual(f.controls.options, [undefined, undefined]);
 });
 
 test('并发取消重复的点赞记录时仅一个事务成功并修复计数', async () => {

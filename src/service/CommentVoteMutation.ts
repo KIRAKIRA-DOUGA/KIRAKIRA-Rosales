@@ -18,11 +18,7 @@ export const mutateCommentVote = async (videoId: number, commentId: string, uid:
 	commentId = commentId.toLowerCase()
 	// 历史记录中的评论 ID 大小写不统一。查询时兼容两种写法，新记录统一用小写。
 	const storedCommentId = new RegExp(`^${commentId}$`, 'i')
-	const session = await createAndStartSession({
-		readPreference: 'primary',
-		readConcern: { level: 'snapshot' },
-		writeConcern: { w: 'majority' },
-	})
+	const session = await createAndStartSession()
 	let changed: boolean
 	try {
 		const options = { session, preserveError: true }
