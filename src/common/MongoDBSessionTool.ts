@@ -1,63 +1,61 @@
 import mongoose, { ClientSession } from 'mongoose'
+import { logging } from '../service/loggingService.js'
 
 /**
- * Run a retryable MongoDB transaction and always close its session.
- * Callback operations must use this session and preserve original MongoDB errors,
- * allowing the driver to retry transient conflicts and uncertain commits.
- */
-export const withMongoDBTransaction = async <T>(callback: (session: ClientSession) => Promise<T>, options?: Parameters<ClientSession['withTransaction']>[1]): Promise<T> => {
-	const session = await mongoose.startSession()
-	try {
-		return await session.withTransaction(() => callback(session), options)
-	} finally {
-		await session.endSession()
-	}
-}
-
-/**
- * 创建并启动事务
- * @returns 一个已经启动的事务
- * @throws error 创建或启动事务失败
+ * 创建会话并启动事务
+ * @returns 已启动事务的会话
  */
 export const createAndStartSession = async (): Promise<ClientSession> => {
+	const session = await mongoose.startSession()
 	try {
-		const session = await mongoose.startSession()
 		session.startTransaction()
 		return session
 	} catch (error) {
-		throw new Error('启动 MongoDB Session 失败', error)
+		await session.endSession().catch(closeError => logging('ERROR', '事务启动失败后关闭 MongoDB 会话出错', closeError, undefined, { recordingLogs: false }))
+		throw error
 	}
 }
 
 /**
- * 回滚并结束事务
- * @param session 事务 session
- * @returns 成功回滚并结束事务返回 true，否则返回 false
+ * 回滚仍在进行的事务并关闭会话
+ * @param session 事务会话
+ * @returns 是否实际回滚了事务
  */
 export const abortAndEndSession = async (session: ClientSession): Promise<boolean> => {
-	if (!session) {
+	if (!session || session.hasEnded) {
 		return false
 	}
 
-	if (!session.inTransaction()) {
-		return false
+	try {
+		if (!session.inTransaction()) {
+			return false
+		}
+		await session.abortTransaction()
+		return true
+	} finally {
+		await session.endSession().catch(error => logging('ERROR', '回滚后关闭 MongoDB 会话出错', error, undefined, { recordingLogs: false }))
 	}
-
-	await session.abortTransaction()
-	session.endSession()
-	return true
 }
 
 /**
- * 提交并结束事务
- * @param session 事务 session
- * @returns 成功提交并结束事务返回 true，否则返回 false
+ * 提交事务并关闭会话
+ * @param session 事务会话
+ * @returns 提交成功返回 true，未提供会话返回 false。提交失败时抛出原始错误。
  */
 export const commitAndEndSession = async (session: ClientSession): Promise<boolean> => {
 	if (!session) {
 		return false
 	}
 
-	await session.commitTransaction()
-	session.endSession()
+	try {
+		await session.commitTransaction()
+	} catch (error) {
+		// 提交出错时驱动可能已结束事务。只回滚仍在进行的事务，保留原始提交错误。
+		await abortAndEndSession(session).catch(abortError => logging('ERROR', '提交失败后回滚 MongoDB 事务出错', abortError, undefined, { recordingLogs: false }))
+		throw error
+	}
+
+	// 数据库已确认提交。关闭会话的错误单独记录。
+	await session.endSession().catch(error => logging('ERROR', '提交后关闭 MongoDB 会话出错', error, undefined, { recordingLogs: false }))
+	return true
 }

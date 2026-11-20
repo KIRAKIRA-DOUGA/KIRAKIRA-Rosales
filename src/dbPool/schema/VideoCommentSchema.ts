@@ -69,8 +69,10 @@ class VideoCommentSchemaFactory {
 		upvoteCount: { type: Number, default: 0, required: true },
 		/** 评论点踩数 - 非空 */ /** 默认：0 —— 没有反对票！ */
 		downvoteCount: { type: Number, default: 0, required: true },
-		/** 投票事务的写入冲突点，旧文档通过 $inc 自动初始化。 */
+		/** 计数每次增减时递增，防止重新统计覆盖较新的增减。 */
 		voteRevision: { type: Number },
+		/** 这条评论上次开始校准计数的时间，用于跨实例限频。 */
+		voteRecountAt: { type: Number },
 		/** 评论楼层数 - 非空 */
 		commentIndex: { type: Number, required: true },
 		/** 子评论 */
@@ -107,60 +109,18 @@ class RemovedVideoCommentSchemaFactory {
 }
 export const RemovedVideoCommentSchema = new RemovedVideoCommentSchemaFactory()
 
-/**
- * 视频评论点赞
- */
-class VideoCommentUpvoteSchemaFactory {
-	/** MongoDB Schema */
+/** 每个用户在一条评论上的当前点赞或点踩状态。取消后删除记录。 */
+class VideoCommentVoteSchemaFactory {
 	schema = {
-		/** KVID 视频 ID - 非空 */
-		videoId: { type: Number, required: true },
-		/** 评论的ID - 非空 */
 		commentId: { type: String, required: true },
-		/** 评论点赞者的 UUID - 非空 */
-		UUID: { type: String, required: true },
-		/** 评论点赞者的 UID - 非空 */
 		uid: { type: Number, required: true },
-		/** 评论点赞无效化标识（用户取消点赞） */
-		invalidFlag: { type: Boolean, required: true },
-		/** 系统专用字段-删除标识 - 非空 */
-		deleteFlag: { type: Boolean, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'video-comment-upvote'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-export const VideoCommentUpvoteSchema = new VideoCommentUpvoteSchemaFactory()
-
-
-/**
- * 视频评论点踩
- */
-class VideoCommentDownvoteSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** KVID 视频 ID - 非空 */
-		videoId: { type: Number, required: true },
-		/** 评论的ID - 非空 */
-		commentId: { type: String, required: true },
-		/** 评论点踩者的 UUID - 非空 */
 		UUID: { type: String, required: true },
-		/** 评论点踩者的用户的 UID - 非空 */
-		uid: { type: Number, required: true },
-		/** 评论点踩无效化标识（用户取消点踩） */
-		invalidFlag: { type: Boolean, required: true },
-		/** 系统专用字段-删除标识 - 非空 */
-		deleteFlag: { type: Boolean, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
+		direction: { type: String, enum: ['upvote', 'downvote'], required: true },
 	}
-	/** MongoDB 集合名 */
-	collectionName = 'video-comment-downvote'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
+	collectionName = 'video-comment-votes'
+	schemaInstance = new Schema(this.schema, { collection: this.collectionName })
+		.index({ commentId: 1, uid: 1 }, { unique: true })
+		.index({ commentId: 1, direction: 1 })
+		.index({ UUID: 1, commentId: 1 })
 }
-
-export const VideoCommentDownvoteSchema = new VideoCommentDownvoteSchemaFactory()
+export const VideoCommentVoteSchema = new VideoCommentVoteSchemaFactory()

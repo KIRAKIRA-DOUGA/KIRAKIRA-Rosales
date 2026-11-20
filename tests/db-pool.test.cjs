@@ -53,6 +53,7 @@ function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0 }
 		mongodb: { ReadPreferenceMode },
 		mongoose: { models: { [collection]: Model } },
 		'./schema/SequenceSchema.js': { SequenceValueSchema: {} },
+		'./schema/VideoCommentSchema.js': { VideoCommentVoteSchema: {} },
 		'./schema/UserSchema.js': { UserInfoSchema: {}, UserTotpAuthenticatorSchema: {} },
 		'../service/loggingService.js': { logging() {} },
 	});
@@ -112,6 +113,24 @@ test('atomic updates report no match as failure without fabricating a record', a
 	assert.equal(result.result, undefined);
 	assert.equal(calls.length, 1);
 	assert.equal(calls[0].options.upsert, false);
+});
+
+test('原子设置可取旧记录，首次插入没有旧记录也成功', async () => {
+	for (const old of [null, { direction: 'downvote' }]) {
+		const { pool, calls } = fixture({ updated: old });
+		const result = await pool.findOneAndUpdateData4MongoDB(where, { direction: 'upvote' }, schema, collection, { returnDocument: 'before' });
+		assert.equal(result.success, true);
+		assert.deepEqual(result.result, old ?? undefined);
+		assert.equal(calls[0].options.new, false);
+		assert.equal(calls[0].options.upsert, true);
+	}
+});
+
+test('校准计数的上限与主节点读偏好均传给数据库', async () => {
+	const { pool, calls } = fixture();
+	await pool.countDataFromMongoDB(where, schema, collection, { readPreference: 'primary', limit: 201 });
+	assert.equal(calls[0].options.limit, 201);
+	assert.equal(calls[0].options.readPreference, 'primary');
 });
 
 test('document counts return zero as a successful result', async () => {

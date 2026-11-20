@@ -1,57 +1,174 @@
-import { withMongoDBTransaction } from '../common/MongoDBSessionTool.js'
-import { countDataFromMongoDB, findOneAndUpdateData4MongoDB, findOneAndUpdateWithOperators4MongoDB, insertData2MongoDB, selectDataFromMongoDB, updateData4MongoDB } from '../dbPool/DbClusterPool.js'
-import { VideoCommentSchema, VideoCommentUpvoteSchema, VideoCommentDownvoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
+import { InferSchemaType } from 'mongoose'
+import { countDataFromMongoDB, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, findOneAndUpdateWithOperators4MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
+import { VideoCommentSchema, VideoCommentVoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
+import { logging } from './loggingService.js'
 
-/** Change a vote and its counters together, including legacy duplicate vote records. */
-export const mutateCommentVote = async (videoId: number, commentId: string, uid: number, UUID: string, direction: 'upvote' | 'downvote', active: boolean): Promise<boolean> => {
-	if (!/^[a-f\d]{24}$/i.test(commentId)) { throw new Error('视频评论 ID 无效') }
-	commentId = commentId.toLowerCase()
-	// MongoDB ObjectIds are case-insensitive, but historical vote records stored strings.
-	// Match all old spellings while writing only the canonical lowercase representation.
-	const storedCommentId = new RegExp(`^${commentId}$`, 'i')
-	// Preserve MongoDB errors for driver retries of transient write conflicts and uncertain
-	// commits. All retries and operations share the same bounded deadline.
-	return withMongoDBTransaction(async session => {
-		const options = { session, preserveError: true }
-		// Every vote operation writes this document first. A competing transaction must
-		// retry from a fresh snapshot before checking or inserting the user's vote.
-		const comment = await findOneAndUpdateWithOperators4MongoDB(
-			{ _id: commentId, videoId }, { $inc: { voteRevision: 1 } }, VideoCommentSchema.schemaInstance, VideoCommentSchema.collectionName, options,
+type Direction = 'upvote' | 'downvote'
+type Counts = { upvoteCount: number; downvoteCount: number }
+type Comment = InferSchemaType<typeof VideoCommentSchema.schemaInstance>
+type CountBatch = { upvoteDelta: number; downvoteDelta: number; started: boolean; done: Promise<void> }
+type CommentVoteActivity = { writingVotes: number; batch?: CountBatch; comment: Comment; recountUpvotes: boolean; recountDownvotes: boolean }
+
+const comments = VideoCommentSchema
+const votes = VideoCommentVoteSchema
+const activityByComment = new Map<string, CommentVoteActivity>()
+const maxRecount = 200
+const recountInterval = 30_000
+const checkpoints = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
+
+function crossedCheckpoint(total: number, delta: number) {
+	if (total > maxRecount || delta === 0) {
+		return false
+	}
+	if (total < 0) {
+		return true
+	}
+	const before = total - delta
+	return checkpoints.some(point => delta > 0 ? before < point && point <= total : total <= point && point < before)
+}
+
+async function recountWhenIdle(commentId: string, activity: CommentVoteActivity) {
+	if (activity.writingVotes || activity.batch) {
+		return
+	}
+	activityByComment.delete(commentId)
+	const { comment, recountUpvotes, recountDownvotes } = activity
+	const now = Date.now()
+	if ((!recountUpvotes && !recountDownvotes) || now - (comment.voteRecountAt ?? 0) < recountInterval) {
+		return
+	}
+	try {
+		await reconcileCounts(commentId, comment, recountUpvotes, recountDownvotes)
+	} catch (error) {
+		logging('ERROR', '校准评论赞踩计数失败', error, { commentId })
+	}
+}
+
+async function reconcileCounts(commentId: string, comment: Comment, recountUpvotes: boolean, recountDownvotes: boolean) {
+	// 数据库时钟决定校准间隔，各实例的时钟偏差不会导致重复统计。
+	const revision = comment.voteRevision ?? null
+	const serverTime = { $toLong: '$$NOW' }
+	const claim = await findOneAndUpdateWithOperators4MongoDB(
+		{ _id: commentId, voteRevision: revision, $expr: { $lte: [{ $ifNull: ['$voteRecountAt', 0] }, { $subtract: [serverTime, recountInterval] }] } },
+		[{ $set: { voteRecountAt: serverTime } }], comments.schemaInstance, comments.collectionName,
+	)
+	if (!claim.result) {
+		return
+	}
+
+	const correction: Partial<Counts> = {}
+	for (const direction of ['upvote', 'downvote'] as const) {
+		if (direction === 'upvote' ? !recountUpvotes : !recountDownvotes) {
+			continue
+		}
+		const count = await countDataFromMongoDB({ commentId, direction }, votes.schemaInstance, votes.collectionName, { readPreference: 'primary', limit: maxRecount + 1 })
+		const field = direction === 'upvote' ? 'upvoteCount' : 'downvoteCount'
+		if (count.result !== undefined && count.result !== comment[field]) {
+			correction[field] = count.result
+		}
+	}
+	// 统计期间发生的增减优先。版本也能识别数字先升后降、碰巧回到原值的情况。
+	if (Object.keys(correction).length && !activityByComment.has(commentId)) {
+		await findOneAndUpdateWithOperators4MongoDB(
+			{ _id: commentId, voteRevision: revision, voteRecountAt: claim.result.voteRecountAt }, { $set: correction }, comments.schemaInstance, comments.collectionName,
 		)
-		if (!comment.success || !comment.result) { throw new Error('视频评论不存在') }
+	}
+}
 
-		const target = direction === 'upvote' ? VideoCommentUpvoteSchema : VideoCommentDownvoteSchema
-		const opposite = direction === 'upvote' ? VideoCommentDownvoteSchema : VideoCommentUpvoteSchema
-		const userWhere = { videoId, commentId: { $regex: storedCommentId }, uid }
-		const activeWhere = { ...userWhere, invalidFlag: false, deleteFlag: false }
-		const selected = await selectDataFromMongoDB(activeWhere, {}, target.schemaInstance, target.collectionName, options, undefined, { page: 1, pageSize: 1 })
-		if (!selected.success || !selected.result) { throw new Error('无法查询评论投票记录') }
-		const previous = selected.result[0]
-		const now = Date.now()
-		const retired = await updateData4MongoDB(activeWhere, { invalidFlag: true, editDateTime: now }, target.schemaInstance, target.collectionName, options)
-		// No matching vote is normal; an unacknowledged write is not.
-		if (!retired.result?.acknowledged) { throw new Error('无法取消评论投票') }
-		if (active) {
-			const retiredOpposite = await updateData4MongoDB(activeWhere, { invalidFlag: true, editDateTime: now }, opposite.schemaInstance, opposite.collectionName, options)
-			if (!retiredOpposite.result?.acknowledged) { throw new Error('无法取消反向评论投票') }
-			if (previous) {
-				// Reuse one record and retire older duplicates without requiring an index migration.
-				const reused = await findOneAndUpdateData4MongoDB({ _id: previous._id }, { commentId, invalidFlag: false, editDateTime: now }, target.schemaInstance, target.collectionName, options, false)
-				if (!reused.success || !reused.result) { throw new Error('无法恢复评论投票') }
-			} else {
-				const inserted = await insertData2MongoDB({ videoId, commentId, uid, UUID, invalidFlag: false, deleteFlag: false, editDateTime: now }, target.schemaInstance, target.collectionName, options)
-				if (!inserted.success) { throw new Error('无法创建评论投票') }
+function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvoteDelta: number, downvoteDelta: number) {
+	const previous = activity.batch
+	if (previous && !previous.started) {
+		previous.upvoteDelta += upvoteDelta
+		previous.downvoteDelta += downvoteDelta
+		return previous.done
+	}
+
+	// 正在写入时到达的增减共用下一次写入和完成通知。每批独立完成，持续有流量也能及时响应。
+	const batch: CountBatch = { upvoteDelta, downvoteDelta, started: false, done: Promise.resolve() }
+	activity.batch = batch
+	batch.done = (previous?.done ?? Promise.resolve()).then(async () => {
+		batch.started = true
+		try {
+			const { upvoteDelta: up, downvoteDelta: down } = batch
+			if (up === 0 && down === 0) {
+				return
+			}
+			const updated = await findOneAndUpdateWithOperators4MongoDB(
+				{ _id: commentId }, { $inc: { upvoteCount: up, downvoteCount: down, voteRevision: 1 } }, comments.schemaInstance, comments.collectionName,
+			)
+			if (updated.result) {
+				const comment = updated.result
+				activity.comment = comment
+				activity.recountUpvotes = comment.upvoteCount <= maxRecount && (activity.recountUpvotes || crossedCheckpoint(comment.upvoteCount, up))
+				activity.recountDownvotes = comment.downvoteCount <= maxRecount && (activity.recountDownvotes || crossedCheckpoint(comment.downvoteCount, down))
+			}
+		} catch (error) {
+			// 用户的记录已保存。重复应用增减量可能多算，留到下次触及阈值时按记录校准。
+			logging('ERROR', '更新评论赞踩计数失败', error, { commentId })
+		} finally {
+			if (activity.batch === batch) {
+				activity.batch = undefined
+				await recountWhenIdle(commentId, activity)
 			}
 		}
+	})
+	return batch.done
+}
 
-		const validVotes = { videoId, commentId: { $regex: storedCommentId }, invalidFlag: false, deleteFlag: false }
-		// Cancellation can retire several old duplicates; recounting also repairs counters
-		// left inconsistent by an earlier partial failure.
-		const upvotes = await countDataFromMongoDB(validVotes, VideoCommentUpvoteSchema.schemaInstance, VideoCommentUpvoteSchema.collectionName, options)
-		const downvotes = await countDataFromMongoDB(validVotes, VideoCommentDownvoteSchema.schemaInstance, VideoCommentDownvoteSchema.collectionName, options)
-		if (!upvotes.success || !downvotes.success || upvotes.result === undefined || downvotes.result === undefined) { throw new Error('无法统计评论投票') }
-		const updated = await findOneAndUpdateData4MongoDB({ _id: commentId }, { upvoteCount: upvotes.result, downvoteCount: downvotes.result }, VideoCommentSchema.schemaInstance, VideoCommentSchema.collectionName, options, false)
-		if (!updated.success || !updated.result) { throw new Error('无法更新评论投票计数') }
-		return active ? !previous : !!previous
-	}, { readPreference: 'primary', readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, timeoutMS: 60000 })
+/**
+ * 原子设置一个用户对一条评论的点赞或点踩状态，并更新评论上缓存的数量。
+ * @param videoId 视频 ID
+ * @param commentId 评论 ID
+ * @param uid 用户 UID
+ * @param UUID 用户 UUID
+ * @param direction 点赞或点踩
+ * @param active 是否设置该状态，取消只移除指定方向
+ * @returns 用户的状态是否发生了变化
+ */
+export const mutateCommentVote = async (videoId: number, commentId: string, uid: number, UUID: string, direction: Direction, active: boolean): Promise<boolean> => {
+	if (!/^[a-f\d]{24}$/i.test(commentId)) {
+		throw new Error('视频评论 ID 无效')
+	}
+	commentId = commentId.toLowerCase()
+	const selected = await selectDataFromMongoDB(
+		{ _id: commentId, videoId }, { upvoteCount: 1, downvoteCount: 1, voteRevision: 1, voteRecountAt: 1 },
+		comments.schemaInstance, comments.collectionName, { readPreference: 'primary' },
+	)
+	const comment = selected.result?.[0]
+	if (!comment) {
+		throw new Error('视频评论不存在')
+	}
+
+	const activity: CommentVoteActivity = activityByComment.get(commentId) ?? { writingVotes: 0, recountUpvotes: false, recountDownvotes: false, comment }
+	activityByComment.set(commentId, activity)
+	activity.writingVotes++
+	let updatedCounts: Promise<void>
+	try {
+		let before: string | undefined
+		if (active) {
+			// 用唯一键定位记录，同时取得修改前的方向。并发切换时，每次只计算自己实际造成的变化。
+			const previous = await findOneAndUpdateData4MongoDB(
+				{ commentId, uid }, { direction, UUID }, votes.schemaInstance, votes.collectionName, { returnDocument: 'before' },
+			)
+			before = previous.result?.direction
+		} else {
+			const deleted = await deleteOneDataFromMongoDB({ commentId, uid, direction }, votes.schemaInstance, votes.collectionName)
+			before = deleted.result?.deletedCount ? direction : undefined
+		}
+		const after = active ? direction : undefined
+		if (before === after) {
+			// 上次可能只写成功了个人记录。重复请求可在当前阈值校准，仍受同一频率上限约束。
+			activity.recountUpvotes ||= direction === 'upvote' && checkpoints.includes(activity.comment.upvoteCount)
+			activity.recountDownvotes ||= direction === 'downvote' && checkpoints.includes(activity.comment.downvoteCount)
+			return false
+		}
+		updatedCounts = queueCountUpdate(commentId, activity,
+			Number(after === 'upvote') - Number(before === 'upvote'),
+			Number(after === 'downvote') - Number(before === 'downvote'))
+	} finally {
+		activity.writingVotes--
+		await recountWhenIdle(commentId, activity)
+	}
+	await updatedCounts
+	return true
 }

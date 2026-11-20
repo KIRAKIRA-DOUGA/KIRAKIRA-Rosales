@@ -2,15 +2,22 @@
 
 These instructions apply to the entire repository unless a more specific `AGENTS.md` provides additional guidance.
 
+## Guiding Principle
+
+Correctness is a prerequisite. When writing new code, modifying existing code, or reviewing code written by humans or AI agents, your top priority must be to minimize the cognitive load on human reviewers.
+
 ## Project Documentation
 
 - Read the relevant sections of [docs/README.md](docs/README.md) before proposing or implementing changes. Use its development guide as the reference for the project structure and request/data-access flow.
+- For data migrations and release PRs, read the [data migration guide](docs/data-migrations.md). Add new migrations there and update the affected entry when its script, deployment steps, or recovery instructions change.
 - For setup and configuration, consult its installation section together with `.env.template` and the current `package.json` scripts. For API work, consult its routing and request/response sections together with `src/route/router.ts` and the relevant controller DTOs.
 - For persistence or search work, consult its MongoDB and Elasticsearch sections and the corresponding shared helpers. For build changes, consult its build/deployment section and the current build configuration.
 - Documentation examples are illustrative and may contain outdated names, formatting, or incomplete snippets. Verify them against current code. Follow the explicit rules in this file for formatting, helper reuse, and push approval; do not reproduce an example's mistakes or execute deployment/push commands merely because they appear in the documentation.
 - Include the relevant documentation and any discrepancies in the implementation plan when they affect the approach. If an authorized change makes documented behavior or setup inaccurate, update the affected documentation with the change.
 
 ## Commit Messages
+
+- Write AI repository guidelines in English. Write code comments and Git commit messages in Chinese, following the repository's existing style; see this section and Comments and Documentation below for specific requirements.
 
 - Every new commit message must start with an appropriate gitmoji emoji, followed by a space and a concise Chinese description.
 - Use the format `<gitmoji> <Chinese description>`, for example: `🐛 修复评论投票并发超时` or `📝 添加仓库开发规范`.
@@ -27,6 +34,8 @@ These instructions apply to the entire repository unless a more specific `AGENTS
 - Before implementing a feature or changing behavior, explain the proposed implementation to the user. Read-only investigation may happen first so the proposal is grounded in the existing code.
 - Provide a concise, numbered plan covering the implementation steps and how the result will be verified. Identify the main modules or files involved and the existing helpers or patterns that will be reused.
 - State the expected impact: user-visible behavior, affected interfaces and callers, data or schema changes, dependencies or configuration, and relevant compatibility, performance, or deployment risks. Explicitly note material uncertainties; do not claim that an impact has been verified before checking it.
+- When a change requires a decision about continued support for older data formats, code paths, or callers, follow the user's explicit choice. If the user has not chosen, briefly explain the impact and ask whether to keep compatibility code or handle the transition at deployment by migrating existing data or upgrading affected callers. The user prefers the deployment-time option by default because supporting multiple behaviors over time increases the effort needed to review and maintain the code.
+- Builds and deployments usually run from `develop` and `production`. When a change requires a data migration, list the steps and script paths in the description of the PR used to deploy to each affected environment, even if the feature PR already documents them. If a release PR does not exist yet, add the runnable migration script to the repository and record the pending steps for that environment. Include those steps and the script path in the release PR description when it is opened.
 - Scale the detail to the task. Small changes need only a short plan and impact statement; larger changes require enough detail for the user to understand the scope and tradeoffs.
 - If investigation changes the approach or reveals a materially larger impact, update the user before implementing the revised approach.
 - This is a communication requirement, not an additional approval gate for already authorized implementation work. Honor any explicit request to wait for approval, and always follow the separate push-confirmation requirement above.
@@ -73,6 +82,8 @@ export const getVideoUpvoteCountService = async (videoId: number): Promise<Video
 
 ## Architecture and Agent Boundaries
 
+- Before adding a shared function, ask the user and obtain explicit approval. Do not add shared functions without approval or evade this requirement by renaming them.
+
 - Before editing, read surrounding code and comparable established, human-written implementations. Consult Git history when recent generated code obscures the original conventions. Do not reproduce a known bug or unsafe pattern just to resemble older code.
 - Keep controllers focused on request/response handling and established authorization checks, services on business logic, and database access in the shared database layer. Preserve existing response DTOs, error conventions, and public interfaces.
 - Follow the directory responsibilities described in `docs/README.md`: routes in `src/route`, controller DTOs in `src/controller`, reusable utilities in `src/common`, MongoDB schemas in `src/dbPool/schema`, shared types in `src/type`, and translated text in `src/locales`.
@@ -81,10 +92,13 @@ export const getVideoUpvoteCountService = async (videoId: number): Promise<Video
 - Follow the documented schema pattern: keep `schema`, `collectionName`, and `schemaInstance` together; derive MongoDB types with `InferSchemaType`; construct typed filters, projections, and updates using the shared `QueryType`, `SelectType`, and `UpdateType` definitions.
 - Reuse the initialized MongoDB connection and obtain Elasticsearch clients through `ctx.elasticsearchClient`, passing them to services as needed. Keep search document schemas and index names together and use `EsSchema2TsType` for document data. Do not create a new connection per request. Account for replica-read freshness and the cost of immediate search-index refreshes when explaining expected impact.
 - Business code should use shared database and logging helpers. If a helper lacks a required capability, extend the shared layer narrowly rather than bypassing it with direct model operations or duplicating access logic.
+- Prefer the existing MongoDB session lifecycle helpers in `src/common/MongoDBSessionTool.ts` and shared CRUD helpers in `src/dbPool/DbClusterPool.ts`. Start the transaction with `createAndStartSession()` and pass the same `{ session }` to every operation that belongs to it. Explicitly commit on success, abort an active transaction on failure, and close the session on every exit path.
+- Do not use `session.withTransaction()` by default or call it on a session with an active transaction. Treat transaction and commit retries as separate behavior decisions; explain the need and obtain the user's approval before introducing automatic retries or a new transaction wrapper.
 - Keep changes focused on the requested behavior. By default, do not perform unrelated refactoring, add dependencies, or change interfaces without task justification.
 - Avoid speculative abstractions, redundant wrappers, duplicate business logic, excessive nesting, and dead code. Prefer clear control flow and meaningful names over clever or compressed expressions.
 - Do not use `any`, double type assertions, type-check suppression, or swallowed exceptions to hide a correctness problem. Validate external inputs, narrow types, and handle or propagate errors explicitly. Preserve error information required by transaction retries.
 - Release sessions and other resources on every exit path. Await work whose completion affects correctness; detached work must have explicit error handling and a justified lifecycle.
+- Avoid timers by default when writing or reviewing code. This applies to one-shot delays, periodic polling, and scheduled jobs regardless of the API or library. Prefer reacting to a state change or awaiting an operation's completion. When a requirement depends on time, explain why a timer is needed and account for relevant risks such as late, missed, or overlapping runs.
 - The architecture and maintainability rules above are defaults, not an extra approval gate. A small, necessary exception within the authorized task is allowed after explaining the concrete reason, scope, and tradeoff to the user. Keep it local and mention it in the completion summary. This does not waive the required commit-message format or authorize unrelated work.
 
 ## Verification

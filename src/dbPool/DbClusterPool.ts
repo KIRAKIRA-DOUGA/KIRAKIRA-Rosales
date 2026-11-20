@@ -3,6 +3,7 @@ import mongoose, { AnyKeys, ClientSession, FilterQuery, InferSchemaType, Model, 
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
+import { VideoCommentVoteSchema } from './schema/VideoCommentSchema.js'
 import { logging } from '../service/loggingService.js'
 
 /**
@@ -126,6 +127,8 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
 			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
 			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
+			// 新数据库也必须在接受首次并发点赞前建好唯一索引。
+			await mongoose.model(VideoCommentVoteSchema.collectionName, VideoCommentVoteSchema.schemaInstance).init()
 
 			console.info('MongoDB Cluster Connect successfully!\n')
 		} catch (error) {
@@ -416,10 +419,10 @@ export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: 
  * @param schema MongoDB Schema 对象
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
  * @param options 设置项
- * @param upsert 如果没有找到，是否创建（默认会创建）
+ * @param upsert 如果没有找到，是否创建（默认会创建）。options.returnDocument 为 before 时，首次插入成功但没有旧记录。
  * @returns 更新后的数据
  */
-export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P>, upsert: boolean = true): Promise< DbPoolResultType<T> > => {
+export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P> & { returnDocument?: 'before' | 'after' }, upsert: boolean = true): Promise< DbPoolResultType<T> > => {
 	try {
 		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
 		if (options?.session) {
@@ -434,10 +437,12 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 			mongoModel = mongoose.model<T>(collectionName, schema)
 		}
 		try {
-			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: true, upsert, ...getMongoDBQueryOptions(options) }))?.toObject() as T
+			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: options?.returnDocument !== 'before', upsert, ...getMongoDBQueryOptions(options) }))?.toObject() as T
 
 			if (updateResult) {
 				return { success: true, message: '数据更新成功', result: updateResult }
+			} else if (upsert && options?.returnDocument === 'before') {
+				return { success: true, message: '数据已插入，没有更新前的记录' }
 			} else {
 				logging('ERROR', '数据更新失败，没有找到返回结果', undefined, { where, update }, { recordingLogs: false })
 				return { success: false, message: '数据更新失败，没有找到返回结果' }
@@ -474,8 +479,8 @@ export const findOneAndUpdateWithOperators4MongoDB = async <T, P = DbPoolOptions
 	}
 }
 
-/** 统计符合条件的文档数；支持与其他读写操作使用同一个事务。 */
-export const countDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: FilterQuery<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P>): Promise<DbPoolResultType<number>> => {
+/** 统计符合条件的文档数。可用 limit 限制扫描数量，也可传入同一事务的 session。 */
+export const countDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: FilterQuery<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P> & { limit?: number }): Promise<DbPoolResultType<number>> => {
 	try {
 		const mongoModel: Model<T> = mongoose.models[collectionName] ?? mongoose.model<T>(collectionName, schema)
 		const count = await mongoModel.countDocuments(where, getMongoDBQueryOptions(options))
