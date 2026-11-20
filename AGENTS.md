@@ -9,6 +9,7 @@ Correctness is a prerequisite. When writing new code, modifying existing code, o
 ## Project Documentation
 
 - Read the relevant sections of [docs/README.md](docs/README.md) before proposing or implementing changes. Use its development guide as the reference for the project structure and request/data-access flow.
+- For data migrations and release PRs, read the [data migration guide](docs/data-migrations.md). Add new migrations there and update the affected entry when its script, deployment steps, or recovery instructions change.
 - For setup and configuration, consult its installation section together with `.env.template` and the current `package.json` scripts. For API work, consult its routing and request/response sections together with `src/route/router.ts` and the relevant controller DTOs.
 - For persistence or search work, consult its MongoDB and Elasticsearch sections and the corresponding shared helpers. For build changes, consult its build/deployment section and the current build configuration.
 - Documentation examples are illustrative and may contain outdated names, formatting, or incomplete snippets. Verify them against current code. Follow the explicit rules in this file for formatting, helper reuse, and push approval; do not reproduce an example's mistakes or execute deployment/push commands merely because they appear in the documentation.
