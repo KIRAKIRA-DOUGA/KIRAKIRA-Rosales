@@ -22,6 +22,7 @@ function loadPool(mongoose, env = {}, logging = () => {}) {
 		mongodb: { ReadPreferenceMode },
 		mongoose,
 		'./schema/SequenceSchema.js': { SequenceValueSchema: {} },
+		'./schema/VideoCommentSchema.js': { VideoCommentVoteSchema: { collectionName: 'votes', schemaInstance: {} } },
 		'./schema/UserSchema.js': {
 			UserInfoSchema: { collectionName: 'users', schemaInstance: {} },
 			UserTotpAuthenticatorSchema: { collectionName: 'totp', schemaInstance: {} },
@@ -115,7 +116,7 @@ async function captureMongoConnection(extraEnv = {}) {
 	let connection;
 	const { connectMongoDBCluster } = loadPool({
 		set() {},
-		model() {},
+		model() { return { async init() {} }; },
 		async connect(uri, options) { connection = { uri, options }; },
 	}, {
 		MONGODB_PROTOCOL: 'mongodb+srv',

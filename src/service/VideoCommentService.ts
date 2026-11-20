@@ -3,7 +3,7 @@ import { GetUserInfoByUidRequestDto } from '../controller/UserControllerDto.js'
 import { AdminDeleteVideoCommentRequestDto, AdminDeleteVideoCommentResponseDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentDownvoteResponseDto, CancelVideoCommentUpvoteRequestDto, CancelVideoCommentUpvoteResponseDto, DeleteSelfVideoCommentRequestDto, DeleteSelfVideoCommentResponseDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentDownvoteResponseDto, EmitVideoCommentRequestDto, EmitVideoCommentResponseDto, EmitVideoCommentUpvoteRequestDto, EmitVideoCommentUpvoteResponseDto, GetVideoCommentByKvidRequestDto, GetVideoCommentByKvidResponseDto, VideoCommentResult } from '../controller/VideoCommentControllerDto.js'
 import { insertData2MongoDB, selectDataFromMongoDB, deleteOneDataFromMongoDB, selectDataByAggregateFromMongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
-import { RemovedVideoCommentSchema, VideoCommentSchema } from '../dbPool/schema/VideoCommentSchema.js'
+import { RemovedVideoCommentSchema, VideoCommentSchema, VideoCommentVoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { checkUserTokenByUuidService, checkUserTokenService, getUserInfoByUidService, getUserUid, getUserUuid } from './UserService.js'
 import { buildBlockListMongooseFilter } from './BlockService.js'
@@ -250,56 +250,26 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			// 4. 分页查询
 			{ $skip: skip }, // 跳过指定数量的文档
 			...(pageSize ? [{ $limit: pageSize }] : []), // 限制返回的文档数量
-			// 5. 关联目标用户的点赞数据
-			{
+			// 游客只读评论上的缓存计数。登录用户用已校验的 UUID 查询一条个人记录。
+			...(uuid && token ? [{
 				$lookup: {
-					from: 'video-comment-upvotes', // 用户视频评论点赞表名 // WARN: 别忘了变复数
-					let: { commentId: { $toString: '$_id' } }, // 当前评论的 _id
-					pipeline: [
-						{
-							$match: {
-								$expr: {
-									$and: [
-										{ $eq: ['$commentId', '$$commentId'] }, // 匹配评论 ID
-										{ $eq: ['$UUID', uuid] }, // 匹配用户 UUID
-										{ $eq: ['$invalidFlag', false] }, // 只统计有效点赞
-									],
-								},
-							},
-						},
-					],
-					as: 'userUpvote',
-				},
-			},
-			// 6. 只关联该用户的点踩数据
-			{
-				$lookup: {
-					from: 'video-comment-downvotes', // 用户视频评论点踩表名 // WARN: 别忘了变复数
+					from: VideoCommentVoteSchema.collectionName,
 					let: { commentId: { $toString: '$_id' } },
 					pipeline: [
-						{
-							$match: {
-								$expr: {
-									$and: [
-										{ $eq: ['$commentId', '$$commentId'] },
-										{ $eq: ['$UUID', uuid] }, // 匹配用户 UUID
-										{ $eq: ['$invalidFlag', false] }, // 只统计有效点踩
-									],
-								},
-							},
-						},
+						{ $match: { UUID: uuid, $expr: { $eq: ['$commentId', '$$commentId'] } } },
+						{ $project: { _id: 0, direction: 1 } },
+						{ $limit: 1 },
 					],
-					as: 'userDownvote',
+					as: 'viewerVote',
 				},
-			},
-			// 7. 判断用户是否点赞或点踩
+			}] : []),
 			{
-				$addFields: {
-					isUpvote: { $gt: [{ $size: '$userUpvote' }, 0] }, // 是否点赞
-					isDownvote: { $gt: [{ $size: '$userDownvote' }, 0] }, // 是否点踩
+				$set: {
+					isUpvote: { $in: ['upvote', { $ifNull: ['$viewerVote.direction', []] }] },
+					isDownvote: { $in: ['downvote', { $ifNull: ['$viewerVote.direction', []] }] },
 				},
 			},
-			// 8. 清理不必要字段，返回所需数据
+			// 返回评论及作者的信息。
 			{
 				$project: {
 					_id: 1, // 评论的 ID
@@ -310,8 +280,8 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 					uid: 1, // 评论发送者的 UID
 					emitTime: 1, // 发送评论的时间
 					text: 1, // 评论正文
-					upvoteCount: 1, // 评论点赞数
-					downvoteCount: 1, // 评论点踩数
+					upvoteCount: { $max: [0, '$upvoteCount'] },
+					downvoteCount: { $max: [0, '$downvoteCount'] },
 					commentIndex: 1, // 评论楼层数
 					subCommentsCount: 1, // 该评论的下一级子评论数量
 					editDateTime: 1, // 最后编辑时间
@@ -351,132 +321,64 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 }
 
 
-// /**
-//  * 获取某个用户对某个视频的评论的点赞情况
-//  * @param getVideoCommentUpvoteProps 获取某个用户对某个视频的评论的点赞情况的参数
-//  * @returns 某个用户对某个视频的评论的点赞情况
-//  */
-// const getVideoCommentUpvoteByUid = async (getVideoCommentUpvoteProps: GetVideoCommentUpvotePropsDto): Promise<GetVideoCommentUpvoteResultDto> => {
-// 	try {
-// 		if (checkGetVideoCommentUpvoteProps(getVideoCommentUpvoteProps)) {
-// 			const { collectionName, schemaInstance } = VideoCommentUpvoteSchema
-// 			type VideoCommentUpvote = InferSchemaType<typeof schemaInstance>
-// 			const where: QueryType<VideoCommentUpvote> = {
-// 				videoId: getVideoCommentUpvoteProps.videoId,
-// 				uid: getVideoCommentUpvoteProps.uid,
-// 				invalidFlag: false,
-// 			}
-
-// 			const select: SelectType<VideoCommentUpvote> = {
-// 				videoId: 1,
-// 				commentId: 1,
-// 				uid: 1,
-// 				editDateTime: 1,
-// 			}
-
-// 			try {
-// 				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
-// 				const videoCommentUpvoteList = result.result
-// 				if (result.success) {
-// 					if (videoCommentUpvoteList && videoCommentUpvoteList.length > 0) {
-// 						return { success: true, message: '获取用户点赞情况成功', videoCommentUpvoteResult: videoCommentUpvoteList }
-// 					} else {
-// 						return { success: true, message: '用户点赞情况为空', videoCommentUpvoteResult: [] }
-// 					}
-// 				} else {
-// 					logging('ERROR', '获取用户点赞情况失败，查询失败或结果为空：', undefined, { getVideoCommentUpvoteProps })
-// 					return { success: false, message: '获取用户点赞情况失败，查询失败', videoCommentUpvoteResult: [] }
-// 				}
-// 			} catch (error) {
-// 				logging('ERROR', '获取用户点赞情况失败，查询失败：', error, { getVideoCommentUpvoteProps })
-// 				return { success: false, message: '获取用户点赞情况失败，查询失败', videoCommentUpvoteResult: [] }
-// 			}
-// 		} else {
-// 			logging('ERROR', '获取用户点赞情况失败，查询参数未通过校验', undefined, { getVideoCommentUpvoteProps })
-// 			return { success: false, message: '获取用户点赞情况失败，必要参数为空', videoCommentUpvoteResult: [] }
-// 		}
-// 	} catch (error) {
-// 		logging('ERROR', '获取用户点赞情况失败，错误信息：', error, { getVideoCommentUpvoteProps })
-// 		return { success: false, message: '获取用户点赞情况失败，未知错误', videoCommentUpvoteResult: [] }
-// 	}
-// }
-
-// /**
-//  * 获取某个用户对某个视频的评论的点踩情况
-//  * @param getVideoCommentDownvoteProps 获取某个用户对某个视频的评论的点踩情况的参数
-//  * @returns 某个用户对某个视频的评论的点踩情况
-//  */
-// const getVideoCommentDownvoteByUid = async (getVideoCommentDownvoteProps: GetVideoCommentDownvotePropsDto): Promise<GetVideoCommentDownvoteResultDto> => {
-// 	try {
-// 		if (checkGetVideoCommentDownvoteProps(getVideoCommentDownvoteProps)) {
-// 			const { collectionName, schemaInstance } = VideoCommentDownvoteSchema
-// 			type VideoCommentDownvote = InferSchemaType<typeof schemaInstance>
-// 			const where: QueryType<VideoCommentDownvote> = {
-// 				videoId: getVideoCommentDownvoteProps.videoId,
-// 				uid: getVideoCommentDownvoteProps.uid,
-// 				invalidFlag: false,
-// 			}
-
-// 			const select: SelectType<VideoCommentDownvote> = {
-// 				videoId: 1,
-// 				commentId: 1,
-// 				uid: 1,
-// 				editDateTime: 1,
-// 			}
-
-// 			try {
-// 				const result = await selectDataFromMongoDB(where, select, schemaInstance, collectionName)
-// 				const videoCommentDownvoteList = result.result
-// 				if (result.success) {
-// 					if (videoCommentDownvoteList && videoCommentDownvoteList.length > 0) {
-// 						return { success: true, message: '获取用户点踩情况成功', videoCommentDownvoteResult: videoCommentDownvoteList }
-// 					} else {
-// 						return { success: true, message: '用户点踩情况为空', videoCommentDownvoteResult: [] }
-// 					}
-// 				} else {
-// 					logging('ERROR', '获取用户点踩情况失败，查询失败或结果为空：', undefined, { getVideoCommentDownvoteProps })
-// 					return { success: false, message: '获取用户点踩情况失败，查询失败', videoCommentDownvoteResult: [] }
-// 				}
-// 			} catch (error) {
-// 				logging('ERROR', '获取用户点踩情况失败，查询失败：', error, { getVideoCommentDownvoteProps })
-// 				return { success: false, message: '获取用户点踩情况失败，查询失败', videoCommentDownvoteResult: [] }
-// 			}
-// 		} else {
-// 			logging('ERROR', '获取用户点踩情况失败，查询参数未通过校验', undefined, { getVideoCommentDownvoteProps })
-// 			return { success: false, message: '获取用户点踩情况失败，必要参数为空', videoCommentDownvoteResult: [] }
-// 		}
-// 	} catch (error) {
-// 		logging('ERROR', '获取用户点踩情况失败，错误信息：', error, { getVideoCommentDownvoteProps })
-// 		return { success: false, message: '获取用户点踩情况失败，未知错误', videoCommentDownvoteResult: [] }
-// 	}
-// }
-
-/** Apply all four comment-vote actions through the same transaction boundary. */
+/** 四个接口共用鉴权和目标状态的处理。 */
 const changeCommentVoteService = async (request: { videoId: number; id: string }, uid: number, token: string, direction: 'upvote' | 'downvote', active: boolean) => {
 	try {
 		if (!request || !Number.isSafeInteger(request.videoId) || request.videoId < 1 || typeof request.id !== 'string' || !/^[a-f\d]{24}$/i.test(request.id)) {
-			return { success: false, message: '评论投票失败，参数异常' }
+			return { success: false, message: '评论点赞或点踩失败，参数异常' }
 		}
-		if (!(await checkUserTokenService(uid, token)).success) { return { success: false, message: '评论投票失败，用户校验未通过' } }
+		if (!(await checkUserTokenService(uid, token)).success) {
+			return { success: false, message: '用户校验未通过' }
+		}
 		const UUID = await getUserUuid(uid)
-		if (!UUID) { return { success: false, message: '评论投票失败，UUID 不存在' } }
+		if (!UUID) {
+			return { success: false, message: '找不到用户 UUID' }
+		}
 		const changed = await mutateCommentVote(request.videoId, request.id, uid, UUID, direction, active)
-		return { success: changed, message: changed ? '评论投票更新成功' : '评论投票状态未改变' }
+		return { success: true, message: changed ? '评论点赞或点踩状态已更新' : '评论点赞或点踩已是所选状态' }
 	} catch (error) {
-		logging('ERROR', '评论投票失败，事务未完成', error, { request, uid })
-		return { success: false, message: '评论投票失败，请重试' }
+		logging('ERROR', '更新评论点赞或点踩状态失败', error, { request, uid })
+		return { success: false, message: '更新评论点赞或点踩状态失败，请重试' }
 	}
 }
 
+/**
+ * 为视频评论点赞。
+ * @param request 视频和评论 ID
+ * @param uid 当前用户 UID
+ * @param token 登录凭据
+ * @returns 是否已达到请求的点赞或点踩状态
+ */
 export const emitVideoCommentUpvoteService = async (request: EmitVideoCommentUpvoteRequestDto, uid: number, token: string): Promise<EmitVideoCommentUpvoteResponseDto> =>
 	changeCommentVoteService(request, uid, token, 'upvote', true)
 
+/**
+ * 取消视频评论的点赞。
+ * @param request 视频和评论 ID
+ * @param uid 当前用户 UID
+ * @param token 登录凭据
+ * @returns 是否已达到请求的点赞或点踩状态
+ */
 export const cancelVideoCommentUpvoteService = async (request: CancelVideoCommentUpvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentUpvoteResponseDto> =>
 	changeCommentVoteService(request, uid, token, 'upvote', false)
 
+/**
+ * 为视频评论点踩。
+ * @param request 视频和评论 ID
+ * @param uid 当前用户 UID
+ * @param token 登录凭据
+ * @returns 是否已达到请求的点赞或点踩状态
+ */
 export const emitVideoCommentDownvoteService = async (request: EmitVideoCommentDownvoteRequestDto, uid: number, token: string): Promise<EmitVideoCommentDownvoteResponseDto> =>
 	changeCommentVoteService(request, uid, token, 'downvote', true)
 
+/**
+ * 取消视频评论的点踩。
+ * @param request 视频和评论 ID
+ * @param uid 当前用户 UID
+ * @param token 登录凭据
+ * @returns 是否已达到请求的点赞或点踩状态
+ */
 export const cancelVideoCommentDownvoteService = async (request: CancelVideoCommentDownvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentDownvoteResponseDto> =>
 	changeCommentVoteService(request, uid, token, 'downvote', false)
 
