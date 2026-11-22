@@ -202,6 +202,9 @@ export const deleteRbacApiPathService = async (deleteRbacApiPathRequest: DeleteR
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '删除 RBAC API 路径失败，请稍后再试', isAssigned: false }
+		}
 
 		const chackApiPathUnassignedResult = await selectDataFromMongoDB<RbacRole>(chackApiPathUnassignedWhere, chackApiPathUnassignedSelect, _rbacRoleSchemaInstance, rbacRoleCollectionName, { session })
 
@@ -561,6 +564,9 @@ export const updateApiPathPermissionsForRoleService = async (updateApiPathPermis
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '更新角色权限失败，请稍后再试' }
+		}
 
 		const checkApiPathPermissionsCountResult = await selectDataFromMongoDB<RbacApiList>(checkApiPathPermissionsCountWhere, checkApiPathPermissionsCountSelect, rbacApiSchemaInstance, rbacApiCollectionName, { session })
 
@@ -649,6 +655,9 @@ export const adminUpdateUserRoleService = async (adminUpdateUserRoleRequest: Adm
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '更新用户角色失败，请稍后再试' }
+		}
 
 		const checkNewRoelsCountResult = await selectDataFromMongoDB<RbacRole>(checkNewRoelsCountWhere, checkNewRoelsCountSelect, _rbacRoleSchemaInstance, rbacRoleCollectionName, { session })
 

@@ -119,6 +119,9 @@ export const userRegistrationService = async (userRegistrationRequest: UserRegis
 		}
 
 		const session = await createAndStartSession() // 启动事务
+		if (!session) {
+			return { success: false, message: '用户注册失败，请稍后再试' }
+		}
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
@@ -444,6 +447,9 @@ export const updateUserEmailService = async (updateUserEmailRequest: UpdateUserE
 
 		// 启动事务
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '更新用户邮箱失败，请稍后再试' }
+		}
 
 		const { collectionName, schemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof schemaInstance>
@@ -933,6 +939,9 @@ export const getUserInfoByUidService = async (getUserInfoByUidRequest: GetUserIn
 
 		try {
 			const session = await createAndStartSession()
+			if (!session) {
+				return { success: false, message: '获取用户信息失败，请稍后再试', isBlockedByOther, isBlocked: false, isHidden }
+			}
 			const userAuthPromise = selectDataFromMongoDB<UserAuth>(userAuthWhere, userAuthSelect, userAuthSchemaInstance, userAuthCollectionName)
 			const userInfoPromise = selectDataFromMongoDB<UserInfo>(getUserInfoWhere, getUserInfoSelect, userInfoSchemaInstance, userInfoCollectionName)
 			const [userAuthResult, userInfoResult] = await Promise.all([userAuthPromise, userInfoPromise])
@@ -1226,6 +1235,9 @@ export const sendGeneral2FAEmailVerificationCodeService = async (sendGeneral2FAE
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '发送通用 2FA 邮箱验证码失败，请稍后再试', isUsingOtherVerificationMethodOtherThanEmail: false, isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+		}
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
@@ -1500,8 +1512,11 @@ export class General2FAEmailVerifier {
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
-			this.#session = await createAndStartSession()
-			const session = this.#session
+			const session = await createAndStartSession()
+			if (!session) {
+				return { success: false, message: '验证通用 2FA 邮箱验证码失败，请稍后再试', isTimeout: false, isMaxVerifierTimesToday: false }
+			}
+			this.#session = session
 
 			const verifyUpdate: UpdateType<General2FAEmailVerificationCode> = {
 				used: true,
@@ -1604,6 +1619,9 @@ export const sendGeneralEmailVerificationCodeService = async (sendGeneralEmailVe
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '发送通用邮箱验证码失败，请稍后再试', isCoolingDown: false, isMaxDailyCreateAttempts: false, isMaxDailyVerifierAttempts: false }
+		}
 
 		const { email, clientLanguage, mailTemplate, exclusiveBusinessName } = sendGeneralEmailVerificationCodeRequest
 		const emailLowerCase = email.toLowerCase()
@@ -1850,8 +1868,11 @@ export class GeneralEmailVerifier {
 				return { success: false, isTimeout: false, isMaxVerifierTimesToday: false, message: errorMessage }
 			}
 
-			this.#session = await createAndStartSession()
-			const session = this.#session
+			const session = await createAndStartSession()
+			if (!session) {
+				return { success: false, message: '验证通用邮箱验证码失败，请稍后再试', isTimeout: false, isMaxVerifierTimesToday: false }
+			}
+			this.#session = session
 
 			const verifyUpdate: UpdateType<GeneralEmailVerificationCode> = {
 				used: true,
@@ -2053,8 +2074,11 @@ export class General2FATotpVerifier {
 				return { success: false, message: '验证 TOTP 2FA 失败，已达最大尝试次数，请稍后再试', isMaxAttemptsReachedWithinTime: true, isNotAllowBackupCode: !isAllowBackupCode, isNotAllowRecoveryCodeAndDeleteTotp: !isAllowRecoveryCodeAndDeleteTotp }
 			}
 
-			this.#session = await createAndStartSession()
-			const session = this.#session
+			const session = await createAndStartSession()
+			if (!session) {
+				return { success: false, message: '验证 TOTP 验证码失败，请稍后再试', isMaxAttemptsReachedWithinTime: false, isNotAllowBackupCode: false, isNotAllowRecoveryCodeAndDeleteTotp: false }
+			}
+			this.#session = session
 
 			if (this.#clientOtp.length > 6) { // 大于六位时，视为使用 TOTP 恢复码进行验证（成功后会删除 TOTP 2FA）
 				if (!isAllowRecoveryCodeAndDeleteTotp) {
@@ -2241,8 +2265,6 @@ export class General2FAVerifier {
 	#token: string
 	/** 验证码 */
 	#verificationCode: string
-	/** Mongoose 事务 session */
-	#session?: mongoose.ClientSession
 
 
 	/**
@@ -2268,8 +2290,10 @@ export class General2FAVerifier {
 			let { isStrictMode } = options
 			if (isStrictMode !== false) { isStrictMode = true } // 只要不是显式的 false 都视为 true
 
-			this.#session = await createAndStartSession()
-			const session = this.#session
+			const session = await createAndStartSession()
+			if (!session) {
+				return { success: false, message: '通用 2FA 验证失败，请稍后再试', verificationType: 'unknown', isMaxAttemptsTime: false }
+			}
 
 			if (!await checkUserTokenByUUID(this.#uuid, this.#token)) {
 				const errorMessage = '通用 2FA 验证码验证失败，用户校验未通过'
@@ -2692,6 +2716,9 @@ export const changePasswordService = async (updateUserPasswordRequest: UpdateUse
 
 		// 启动事务
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '修改密码失败，请稍后再试' }
+		}
 
 		// 验证 2FA 验证码
 		const general2FAVerifier = new General2FAVerifier(cookieUuid, verificationCode, cookieToken)
@@ -3712,6 +3739,9 @@ export const deleteTotpAuthenticatorByTotpVerificationCodeService = async (delet
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '删除 TOTP 身份验证器失败，请稍后再试' }
+		}
 
 		// 调用删除函数
 		const deleteResult = await deleteOneDataFromMongoDB(deleteTotpAuthenticatorByTotpVerificationCodeWhere, userTotpAuthenticatorSchemaInstance, userTotpAuthenticatorCollectionName, { session })
@@ -3894,6 +3924,9 @@ export const confirmUserTotpAuthenticatorService = async (confirmUserTotpAuthent
 		const { clientOtp, otpAuth } = confirmUserTotpAuthenticatorRequest
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '确认绑定 TOTP 设备失败，请稍后再试' }
+		}
 
 		const TotpVerifier = new General2FATotpVerifier(uuid, clientOtp, token)
 		const totpVerificationResult = await TotpVerifier.verify({ isResetAttemptsImmediately: true, isAllowBackupCode: false, isAllowRecoveryCodeAndDeleteTotp: false, totpEnableStatus: false })
@@ -3968,6 +4001,9 @@ export const createUserEmailAuthenticatorService = async (uuid: string, token: s
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '创建 Email 身份验证器失败，请稍后再试', isExists: false }
+		}
 
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>

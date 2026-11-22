@@ -149,6 +149,16 @@ for (const [name, collection, identifier] of [
 		assert.equal(record.used, true);
 		assert.equal(record.totalVerifierTimesToday, 0);
 	});
+	test(`${name}：启动事务失败时仍计入一次验证尝试，验证码保持未使用`, async () => {
+		const f = fixture();
+		const record = addCode(f);
+		f.dependencies['../common/MongoDBSessionTool.js'].createAndStartSession = async () => false;
+		const result = await new f.service[name]('fixture@example.invalid', '123456').verify({ isResetAttemptsImmediately: true });
+		assert.equal(result.success, false);
+		assert.equal(record.used, false);
+		assert.equal(record.totalVerifierTimesToday, 1);
+		assert.equal(f.updates.length, 0);
+	});
 }
 
 test('resending an email code preserves the current day attempt count', async () => {

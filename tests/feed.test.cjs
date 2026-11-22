@@ -7,7 +7,7 @@ function fixture() {
 		groups: [{ feedGroupUuid: 'group', feedGroupCreatorUuid: 'owner', uuidList: ['member-1'] }],
 		following: ['member-1'], videos: [], inserts: [], queries: [], updates: [],
 		commits: 0, aborts: 0, ends: 0, authCalls: [], missingUsers: new Set(), failUpdate: false,
-		failCommit: false, failAbort: false, failEnd: false,
+		failCommit: false, failAbort: false, failEnd: false, sessionError: undefined,
 	};
 	const schema = collectionName => ({ schemaInstance: {}, collectionName });
 	const db = {
@@ -53,10 +53,12 @@ function fixture() {
 			checkUserExistsByUuidService: async ({ uuid }) => ({ success: true, exists: !state.missingUsers.has(uuid) }),
 		},
 		'../dbPool/DbClusterPool.js': db,
-		'../common/MongoDBSessionTool.js': {
-			createAndStartSession: async () => {
-				let active = true;
+		'../common/MongoDBSessionTool.js': loadService('src/common/MongoDBSessionTool.ts', {
+			mongoose: { startSession: async () => {
+				if (state.sessionError) throw state.sessionError;
+				let active = false;
 				return {
+					startTransaction() { active = true; },
 					inTransaction: () => active,
 					async commitTransaction() {
 						// The MongoDB driver transitions out of the transaction even if commit fails.
@@ -76,10 +78,9 @@ function fixture() {
 						if (state.failEnd) throw new Error('simulated end session failure');
 					},
 				};
-			},
-			abortAndEndSession: async () => { state.aborts++; },
-			commitAndEndSession: async session => { state.commits++; if (session.pending) state.groups = [session.pending]; },
-		},
+			} },
+			'../service/loggingService.js': { logging() {} },
+		}),
 		uuid: { v4: () => 'new-group' }, '../common/RandomTool.js': {}, '../cloudflare/index.js': {},
 		'../dbPool/schema/VideoSchema.js': { VideoSchema: schema('videos') }, './loggingService.js': { logging() {} },
 	});
@@ -109,6 +110,27 @@ test('adding and removing members commits successful object-shaped database resu
 	assert.equal(state.commits, 2);
 	assert.equal(state.aborts, 0);
 	assert.equal(state.ends, 2);
+});
+
+test('创建会话失败时停止修改分组，数据库恢复后下一次请求能成功', async () => {
+	const { state, service } = fixture();
+	const request = { feedGroupUuid: 'group', uidList: [2] };
+	state.sessionError = new Error('无法取得会话');
+	const failed = await service.addNewUid2FeedGroupService(request, 'owner', 'valid-token');
+	assert.equal(failed.success, false);
+	assert.equal(failed.tooManyUidInOnce, false);
+	assert.equal(failed.isOverload, false);
+	assert.equal(state.queries.length, 0);
+	assert.equal(state.updates.length, 0);
+	assert.equal(state.commits, 0);
+	assert.equal(state.aborts, 0);
+	assert.equal(state.ends, 0);
+
+	state.sessionError = undefined;
+	const next = await service.addNewUid2FeedGroupService(request, 'owner', 'valid-token');
+	assert.equal(next.success, true);
+	assert.equal(state.commits, 1);
+	assert.deepEqual([...state.groups[0].uuidList].sort(), ['member-1', 'member-2']);
 });
 
 test('missing groups and write failures abort membership transactions', async () => {

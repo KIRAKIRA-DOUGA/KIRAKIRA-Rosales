@@ -431,6 +431,9 @@ export const unBlockUserService = async (unblockUserByUidRequest: UnblockUserByU
 
 		// 启动事务
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '取消屏蔽用户失败，请稍后再试' }
+		}
 
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, { session })
 		if (!selectResult.success) {
@@ -525,6 +528,9 @@ export const showUserService = async (showUserByUidRequest: ShowUserByUidRequest
 
 		// 启动事务
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '显示用户失败，请稍后再试' }
+		}
 
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, { session })
 		if (!selectResult.success) {
@@ -610,6 +616,9 @@ export const unBlockTagService = async (unblockTagRequest: UnblockTagRequestDto,
 
 		// 启动事务
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '取消屏蔽标签失败，请稍后再试' }
+		}
 
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, { session })
 		if (!selectResult.success) {
@@ -695,6 +704,9 @@ export const unBlockKeywordService = async (unblockKeywordRequest: UnblockKeywor
 
 		// 启动事务
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '取消屏蔽关键词失败，请稍后再试' }
+		}
 
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, { session })
 		if (!selectResult.success) {
@@ -780,6 +792,9 @@ export const removeRegexService = async (removeRegexRequest: RemoveRegexRequestD
 
 		// 启动事务
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '删除正则表达式失败，请稍后再试' }
+		}
 
 		const selectResult = await selectDataFromMongoDB<BlockListSchemaType>(blockListWhere, blockListSelect, blockListSchemaInstance, blockListCollectionName, { session })
 		if (!selectResult.success) {

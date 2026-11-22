@@ -63,6 +63,9 @@ export const followingUploaderService = async (followingUploaderRequest: Followi
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '关注用户失败，请稍后再试' }
+		}
 
 		const getFollowingData = await selectDataFromMongoDB<Following>(getFollowingDataWhere, getFollowingDataSelect, followingSchemaInstance, followingCollectionName, { session })
 		const getFollowingDataResult = getFollowingData.result
@@ -152,6 +155,9 @@ export const unfollowingUploaderService = async (unfollowingUploaderRequest: Unf
 		}
 
 		const session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '取消关注用户失败，请稍后再试' }
+		}
 
 		const selectUnfollowingDataResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName, { session })
 		const selectUnfollowingData = selectUnfollowingDataResult.result?.[0]
@@ -280,7 +286,7 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
  * @returns 向一个动态分组中添加新的 UID 的请求响应
  */
 export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: AddNewUid2FeedGroupRequestDto, uuid: string, token: string): Promise<AddNewUid2FeedGroupResponseDto> => {
-	let session: ClientSession | undefined
+	let session: ClientSession | false = false
 	try {
 		if (!checkAddNewUser2FeedGroupRequest(addNewUser2FeedGroupRequest)) {
 			logging('ERROR', '向一个动态分组中添加新的 UID 失败，参数不合法。')
@@ -334,6 +340,9 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 		}
 
 		session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '添加动态分组成员失败，请稍后再试', tooManyUidInOnce: false, isOverload: false }
+		}
 
 		const getFeedGroupDataResult = await selectDataFromMongoDB<FeedGroup>(feedGroupWhere, getFeedGroupSelect, feedGroupSchemaInstance, feedGroupCollectionName, { session })
 		const getFeedGroupData = getFeedGroupDataResult.result?.[0]
@@ -364,23 +373,16 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 			return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 失败，更新失败' }
 		}
 
-		await session.commitTransaction()
+		const sessionToCommit = session
+		session = false // 提交函数负责在成功或失败后关闭会话。
+		await commitAndEndSession(sessionToCommit)
 		return { success: true, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 成功', feedGroupResult: findOneAndUpdateFeedGroupData }
 	} catch (error) {
 		logging('ERROR', '向一个动态分组中添加新的 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 时出错：未知原因。' }
 	} finally {
 		if (session) {
-			try {
-				if (session.inTransaction()) { await session.abortTransaction() }
-			} catch (error) {
-				logging('ERROR', '添加动态分组成员后回滚事务失败', error)
-			}
-			try {
-				await session.endSession()
-			} catch (error) {
-				logging('ERROR', '添加动态分组成员后结束事务会话失败', error)
-			}
+			await abortAndEndSession(session).catch(error => logging('ERROR', '添加动态分组成员后回滚事务失败', error))
 		}
 	}
 }
@@ -393,7 +395,7 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
  * @returns 从一个动态分组中移除 UID 的请求响应
  */
 export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupRequest: RemoveUidFromFeedGroupRequestDto, uuid: string, token: string): Promise<RemoveUidFromFeedGroupResponseDto> => {
-	let session: ClientSession | undefined
+	let session: ClientSession | false = false
 	try {
 		if (!checkRemoveUidFromFeedGroupRequest(removeUidFromFeedGroupRequest)) {
 			logging('ERROR', '从一个动态分组中移除 UID 失败，参数不合法。')
@@ -447,6 +449,9 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 		}
 
 		session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '移除动态分组成员失败，请稍后再试', tooManyUidInOnce: false }
+		}
 
 		const getFeedGroupDataResult = await selectDataFromMongoDB<FeedGroup>(feedGroupWhere, getFeedGroupSelect, feedGroupSchemaInstance, feedGroupCollectionName, { session })
 		const getFeedGroupData = getFeedGroupDataResult.result?.[0]
@@ -473,23 +478,16 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 			return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 失败，更新失败' }
 		}
 
-		await session.commitTransaction()
+		const sessionToCommit = session
+		session = false // 提交函数负责在成功或失败后关闭会话。
+		await commitAndEndSession(sessionToCommit)
 		return { success: true, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 成功', feedGroupResult: findOneAndUpdateFeedGroupData }
 	} catch (error) {
 		logging('ERROR', '从一个动态分组中移除 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 时出错：未知原因。' }
 	} finally {
 		if (session) {
-			try {
-				if (session.inTransaction()) { await session.abortTransaction() }
-			} catch (error) {
-				logging('ERROR', '移除动态分组成员后回滚事务失败', error)
-			}
-			try {
-				await session.endSession()
-			} catch (error) {
-				logging('ERROR', '移除动态分组成员后结束事务会话失败', error)
-			}
+			await abortAndEndSession(session).catch(error => logging('ERROR', '移除动态分组成员后回滚事务失败', error))
 		}
 	}
 }

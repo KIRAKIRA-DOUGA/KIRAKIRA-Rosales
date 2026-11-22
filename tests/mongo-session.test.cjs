@@ -32,7 +32,12 @@ function fixture() {
 		},
 	};
 	const tools = loadService('src/common/MongoDBSessionTool.ts', {
-		mongoose: { startSession: async () => session },
+		mongoose: {
+			async startSession() {
+				if (errors.create) throw errors.create;
+				return session;
+			},
+		},
 		'../service/loggingService.js': { logging: (...args) => logs.push(args) },
 	});
 	return { session, tools, events, errors, logs };
@@ -45,13 +50,34 @@ test('共通会话无参启动，成功只提交和关闭各一次', async () =>
 	assert.deepEqual(f.events, [['start'], ['commit'], ['end']]);
 });
 
-test('启动出错仍关闭会话，保留原始异常', async () => {
+test('创建会话失败时返回 false，记录原因，不启动事务或关闭会话', async () => {
+	const f = fixture();
+	f.errors.create = new Error('无法取得会话');
+	assert.equal(await f.tools.createAndStartSession(), false);
+	assert.deepEqual(f.events, []);
+	assert.deepEqual(f.logs.map(log => log[2]), [f.errors.create]);
+	assert.equal(f.logs[0][4].recordingLogs, false);
+});
+
+test('调用方忽略创建失败的结果，下一次仍能正常启动和提交事务', async () => {
+	const f = fixture();
+	const createError = new Error('暂时无法取得会话');
+	f.errors.create = createError;
+	void f.tools.createAndStartSession();
+	delete f.errors.create;
+	const session = await f.tools.createAndStartSession();
+	assert.equal(await f.tools.commitAndEndSession(session), true);
+	assert.deepEqual(f.logs.map(log => log[2]), [createError]);
+	assert.deepEqual(f.events, [['start'], ['commit'], ['end']]);
+});
+
+test('启动事务失败时返回 false，即使关闭会话也失败仍能查到两个原因', async () => {
 	const f = fixture();
 	f.errors.start = new Error('启动失败');
 	f.errors.end = new Error('关闭失败');
-	await assert.rejects(f.tools.createAndStartSession(), e => e === f.errors.start);
+	assert.equal(await f.tools.createAndStartSession(), false);
 	assert.deepEqual(f.events, [['start'], ['end']]);
-	assert.equal(f.logs[0][2], f.errors.end);
+	assert.deepEqual(f.logs.map(log => log[2]), [f.errors.start, f.errors.end]);
 });
 
 test('仍活动的事务提交出错时回滚并关闭，清理错误不会覆盖提交错误', async () => {
