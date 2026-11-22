@@ -12,7 +12,7 @@ test('视频赞踩迁移与并发切换在 MongoDB 中保持唯一', { skip: !ur
 	t.after(async () => {
 		try { await db.dropDatabase(); } finally { await mongoose.disconnect(); }
 	});
-	const { migrateVideoVotes } = await import('../scripts/migrate-video-votes.mjs');
+	const { migrateVideoVotes } = await import('../migrations/pr-119.mjs');
 	const schema = await import('../dist/dbPool/schema/VideoVoteSchema.js');
 	const pool = await import('../dist/dbPool/DbClusterPool.js');
 	const records = db.collection(schema.VideoVoteSchema.collectionName);
