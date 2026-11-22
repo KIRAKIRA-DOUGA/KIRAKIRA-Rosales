@@ -3,7 +3,7 @@ import mongoose, { AnyKeys, ClientSession, FilterQuery, InferSchemaType, Model, 
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
-import { RemovedVideoSchema } from './schema/VideoSchema.js'
+import { RemovedVideoSchema, VideoSchema } from './schema/VideoSchema.js'
 import { VideoVoteSchema } from './schema/VideoVoteSchema.js'
 import { VideoCommentVoteSchema } from './schema/VideoCommentSchema.js'
 import { logging } from '../service/loggingService.js'
@@ -123,7 +123,8 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			// 等待 (commentId, uid) 唯一索引建好再接收请求，否则同一用户同时点赞两次可能插入两条记录。
 			await mongoose.model(VideoCommentVoteSchema.collectionName, VideoCommentVoteSchema.schemaInstance).init()
 			await mongoose.model(VideoVoteSchema.collectionName, VideoVoteSchema.schemaInstance).init()
-			// 首次删除视频时，事务必须能看到已经建好的归档集合及索引。
+			// 首次归档需要同时写原表和归档表，等两边的索引建完再接收请求。
+			await mongoose.model(VideoSchema.collectionName, VideoSchema.schemaInstance).init()
 			await mongoose.model(RemovedVideoSchema.collectionName, RemovedVideoSchema.schemaInstance).init()
 
 			console.info('MongoDB Cluster Connect successfully!\n')

@@ -22,7 +22,10 @@ function loadPool(mongoose, env = {}, logging = () => {}) {
 		mongodb: { ReadPreferenceMode },
 		mongoose,
 		'./schema/SequenceSchema.js': { SequenceValueSchema: {} },
-		'./schema/VideoSchema.js': { RemovedVideoSchema: { collectionName: 'removed-video', schemaInstance: {} } },
+		'./schema/VideoSchema.js': {
+			VideoSchema: { collectionName: 'video', schemaInstance: {} },
+			RemovedVideoSchema: { collectionName: 'removed-video', schemaInstance: {} },
+		},
 		'./schema/VideoVoteSchema.js': { VideoVoteSchema: { collectionName: 'video-votes', schemaInstance: {} } },
 		'./schema/VideoCommentSchema.js': { VideoCommentVoteSchema: { collectionName: 'votes', schemaInstance: {} } },
 		'./schema/UserSchema.js': {

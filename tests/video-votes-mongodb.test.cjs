@@ -69,6 +69,10 @@ test('视频赞踩迁移与并发切换在 MongoDB 中保持唯一', { skip: !ur
 		exit() { throw new Error('测试库模型初始化失败'); },
 	} });
 	await startup.connectMongoDBCluster();
+	for (const name of ['videos', 'removed-videos']) {
+		const indexes = await db.collection(name).indexes();
+		assert.ok(indexes.some(index => index.key.videoId === 1 && index.unique), name);
+	}
 	const serviceErrors = [];
 	const videoService = loadService('src/service/VideoService.ts', {
 		mongoose, '../cloudflare/index.js': {}, '../common/RandomTool.js': {}, '../common/MongoDBSessionTool.js': await import('../dist/common/MongoDBSessionTool.js'),
