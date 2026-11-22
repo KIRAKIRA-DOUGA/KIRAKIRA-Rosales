@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const { loadService } = require('./helpers/load-service.cjs');
 
 const commentId = '0123456789abcdef01234567';
+const updated = '评论点赞或点踩状态已更新';
+const unchanged = '评论点赞或点踩已是所选状态';
 const schemas = {
 	VideoCommentSchema: { collectionName: 'comments', schemaInstance: {} },
 	VideoCommentVoteSchema: { collectionName: 'votes', schemaInstance: {} },
@@ -48,26 +50,31 @@ function fixture() {
 			return { result: count };
 		},
 	};
-	const { mutateCommentVote } = loadService('src/service/CommentVoteMutation.ts', {
-		'../dbPool/DbClusterPool.js': db,
-		'../dbPool/schema/VideoCommentSchema.js': schemas,
+	const service = loadService('src/service/VideoCommentService.ts', {
+		mongoose: {}, '../dbPool/DbClusterPool.js': db, '../dbPool/schema/VideoCommentSchema.js': schemas,
+		'./SequenceValueService.js': {}, './BlockService.js': {}, './VideoService.js': {},
+		'./UserService.js': { checkUserTokenService: async () => ({ success: true }), getUserUuid: async uid => 'uuid-' + uid },
 		'./loggingService.js': { logging: (...args) => controls.logs.push(args) },
 	});
-	const vote = (uid, direction, active = true, id = commentId, videoId = 1) => mutateCommentVote(videoId, id, uid, 'uuid-' + uid, direction, active);
+	const vote = (uid, direction, active = true, id = commentId, videoId = 1) => {
+		const action = active ? 'emit' : 'cancel';
+		const side = direction === 'upvote' ? 'Upvote' : 'Downvote';
+		return service[action + 'VideoComment' + side + 'Service']({ videoId, id }, uid, 'token');
+	};
 	return { vote, records, comment, controls };
 }
 
 test('重复设置幂等，过期的取消点赞不能删除后来设置的点踩', async () => {
 	const f = fixture();
-	assert.equal(await f.vote(1, 'upvote', true, commentId.toUpperCase()), true);
-	assert.equal(await f.vote(1, 'upvote'), false);
-	assert.equal(await f.vote(1, 'downvote'), true);
-	assert.equal(await f.vote(1, 'upvote', false), false);
+	assert.equal((await f.vote(1, 'upvote', true, commentId.toUpperCase())).message, updated);
+	assert.equal((await f.vote(1, 'upvote')).message, unchanged);
+	assert.equal((await f.vote(1, 'downvote')).message, updated);
+	assert.equal((await f.vote(1, 'upvote', false)).message, unchanged);
 	assert.deepEqual([...f.records.values()], ['downvote']);
 	assert.equal(f.comment.upvoteCount, 0);
 	assert.equal(f.comment.downvoteCount, 1);
-	assert.equal(await f.vote(1, 'downvote', false), true);
-	assert.equal(await f.vote(1, 'downvote', false), false);
+	assert.equal((await f.vote(1, 'downvote', false)).message, updated);
+	assert.equal((await f.vote(1, 'downvote', false)).message, unchanged);
 	assert.equal(f.records.size, 0);
 	assert.equal(f.controls.writes, 3);
 });
@@ -75,7 +82,7 @@ test('重复设置幂等，过期的取消点赞不能删除后来设置的点�
 test('并发请求保留每个人的状态，并把同一评论的多个增减合并写入', async () => {
 	const f = fixture();
 	const results = await Promise.all(Array.from({ length: 48 }, (_, uid) => f.vote(uid, uid % 2 ? 'downvote' : 'upvote')));
-	assert.ok(results.every(Boolean));
+	assert.ok(results.every(result => result.success && result.message === updated));
 	assert.equal(f.records.size, 48);
 	assert.equal(f.comment.upvoteCount, 24);
 	assert.equal(f.comment.downvoteCount, 24);
@@ -124,7 +131,7 @@ test('重复点赞在阈值上也保持幂等', async () => {
 	const f = fixture();
 	f.records.set(1, 'upvote');
 	f.comment.upvoteCount = 1;
-	assert.equal(await f.vote(1, 'upvote'), false);
+	assert.equal((await f.vote(1, 'upvote')).message, unchanged);
 	assert.deepEqual(f.controls.counts, []);
 	assert.equal(f.comment.upvoteCount, 1);
 	assert.equal(f.controls.writes, 0);
@@ -167,19 +174,20 @@ test('校准期间其他实例更改了计数，即使数字回到原值，旧�
 
 test('错误的视频、评论 ID 或记录写入失败不会改动计数，计数写入失败保留已保存的状态', async () => {
 	const f = fixture();
-	await assert.rejects(f.vote(1, 'upvote', true, commentId, 2));
-	await assert.rejects(f.vote(1, 'upvote', true, 'bad'));
+	assert.equal((await f.vote(1, 'upvote', true, commentId, 2)).success, false);
+	assert.equal((await f.vote(1, 'upvote', true, 'bad')).success, false);
 	f.controls.recordError = new Error('记录写入失败');
-	await assert.rejects(f.vote(1, 'upvote'), e => e === f.controls.recordError);
+	assert.equal((await f.vote(1, 'upvote')).success, false);
+	assert.equal(f.controls.logs.at(-1)[2], f.controls.recordError);
 	assert.equal(f.controls.writes, 0);
 	f.controls.recordError = undefined;
 	f.controls.incrementError = new Error('计数写入失败');
-	assert.equal(await f.vote(1, 'upvote'), true);
+	assert.equal((await f.vote(1, 'upvote')).message, updated);
 	assert.equal(f.records.get(1), 'upvote');
-	assert.equal(f.controls.logs.length, 1);
+	assert.equal(f.controls.logs.at(-1)[2], f.controls.incrementError);
 	assert.equal(f.comment.upvoteCount, 1);
 	f.controls.incrementError = undefined;
-	assert.equal(await f.vote(1, 'upvote'), false);
+	assert.equal((await f.vote(1, 'upvote')).message, unchanged);
 	assert.equal(f.comment.upvoteCount, 1);
 	await f.vote(2, 'upvote');
 	assert.equal(f.comment.upvoteCount, 2);
@@ -188,27 +196,23 @@ test('错误的视频、评论 ID 或记录写入失败不会改动计数，计�
 test('增量已写入但响应丢失时只核对明细，保存的赞仍是一个', async () => {
 	const f = fixture();
 	f.controls.replyLost = new Error('响应丢失');
-	assert.equal(await f.vote(1, 'upvote'), true);
+	assert.equal((await f.vote(1, 'upvote')).message, updated);
 	assert.equal(f.comment.upvoteCount, 1);
 	assert.equal(f.controls.writes, 1);
 	assert.deepEqual(f.controls.counts, ['upvote']);
 });
 
-test('四个公开接口都将重复操作视为成功，无效参数或异常仍是失败', async () => {
-	const calls = [];
-	const service = loadService('src/service/VideoCommentService.ts', {
-		mongoose: {}, '../dbPool/DbClusterPool.js': {}, '../dbPool/schema/VideoCommentSchema.js': schemas,
-		'./SequenceValueService.js': {}, './BlockService.js': {}, './VideoService.js': {},
-		'./UserService.js': { checkUserTokenService: async () => ({ success: true }), getUserUuid: async () => 'uuid' },
-		'./loggingService.js': { logging() {} },
-		'./CommentVoteMutation.js': { mutateCommentVote: async (...args) => { calls.push(args.slice(-2)); return false; } },
-	});
-	for (const direction of ['Up', 'Down']) {
-		for (const action of ['emit', 'cancel']) {
-			assert.equal((await service[action + 'VideoComment' + direction + 'voteService']({ videoId: 1, id: commentId }, 1, 'token')).success, true);
+test('四个公开接口都将重复操作视为成功，非法参数在业务写入前被拒绝', async () => {
+	const f = fixture();
+	for (const direction of ['upvote', 'downvote']) {
+		for (const active of [true, false]) {
+			assert.equal((await f.vote(1, direction, active)).message, updated);
+			const duplicate = await f.vote(1, direction, active);
+			assert.equal(duplicate.success, true);
+			assert.equal(duplicate.message, unchanged);
+			assert.equal(f.records.get(1), active ? direction : undefined);
 		}
 	}
-	assert.deepEqual(calls, [['upvote', true], ['upvote', false], ['downvote', true], ['downvote', false]]);
-	assert.equal((await service.emitVideoCommentUpvoteService({ videoId: 1, id: {} }, 1, 'token')).success, false);
-	assert.equal(calls.length, 4);
+	assert.equal((await f.vote(1, 'upvote', true, {})).success, false);
+	assert.equal(f.controls.writes, 4);
 });

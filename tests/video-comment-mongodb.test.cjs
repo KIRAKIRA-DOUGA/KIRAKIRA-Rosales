@@ -22,8 +22,24 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 	});
 	const schema = await import('../dist/dbPool/schema/VideoCommentSchema.js');
 	const pool = await import('../dist/dbPool/DbClusterPool.js');
-	const workers = await Promise.all([0, 1].map(i => import('../dist/service/CommentVoteMutation.js?worker=' + i)));
-	const vote = (worker, id, uid, direction, active = true) => workers[worker].mutateCommentVote(1, id.toString(), uid, 'uuid-' + uid, direction, active);
+	const dependencies = {
+		mongoose, '../dbPool/DbClusterPool.js': pool, '../dbPool/schema/VideoCommentSchema.js': schema,
+		'./SequenceValueService.js': {}, './VideoService.js': {},
+		'./BlockService.js': { buildBlockListMongooseFilter: async () => ({ filter: [], additionalFields: {} }) },
+		'./UserService.js': {
+			checkUserTokenService: async () => ({ success: true }), getUserUuid: async uid => 'uuid-' + uid,
+			checkUserTokenByUuidService: async () => ({ success: true }),
+		},
+		'./loggingService.js': { logging() {} },
+	};
+	const workers = [0, 1].map(() => loadService('src/service/VideoCommentService.ts', dependencies));
+	const vote = async (worker, id, uid, direction, active = true) => {
+		const action = active ? 'emit' : 'cancel';
+		const side = direction === 'upvote' ? 'Upvote' : 'Downvote';
+		const result = await workers[worker][action + 'VideoComment' + side + 'Service']({ videoId: 1, id: id.toString() }, uid, 'token');
+		assert.equal(result.success, true, result.message);
+		return result.message;
+	};
 	const newComment = () => {
 		const _id = new ObjectId();
 		return { _id, videoId: 1, commentRoute: '1.' + _id, upvoteCount: 0, downvoteCount: 0, commentIndex: 1 };
@@ -132,7 +148,7 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 				const comment = newComment();
 				await comments.insertOne(comment);
 				const results = await Promise.all(Array.from({ length: 16 }, (_, uid) => vote(uid % 2, comment._id, uid, uid % 4 < 2 ? 'downvote' : 'upvote')));
-				assert.ok(results.every(Boolean));
+				assert.ok(results.every(message => message === '评论点赞或点踩状态已更新'));
 				assert.equal(await records.countDocuments({ commentId: comment._id.toString() }), 16);
 				assert.deepEqual(await counts(comment._id), [8, 8]);
 			}
@@ -168,7 +184,7 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 			assert.deepEqual(await counts(comment._id), [301, 232]);
 			await vote(0, comment._id, 1001, 'downvote');
 			assert.deepEqual(await counts(comment._id), [301, 233]);
-			assert.equal(await vote(1, comment._id, 1001, 'downvote'), false);
+			assert.equal(await vote(1, comment._id, 1001, 'downvote'), '评论点赞或点踩已是所选状态');
 			assert.deepEqual(queries.map(p => p[0].$match.direction), ['upvote', 'downvote', 'downvote']);
 			assert.ok(queries.every(p => p.every(stage => stage.$limit === undefined)));
 		} finally {
@@ -184,8 +200,8 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 		assert.equal(await records.countDocuments(where), 1);
 		const { direction } = await records.findOne(where);
 		const other = direction === 'upvote' ? 'downvote' : 'upvote';
-		assert.equal(await vote(1, comment._id, 7, other, false), false);
-		assert.equal(await vote(0, comment._id, 7, direction), false);
+		assert.equal(await vote(1, comment._id, 7, other, false), '评论点赞或点踩已是所选状态');
+		assert.equal(await vote(0, comment._id, 7, direction), '评论点赞或点踩已是所选状态');
 		assert.deepEqual(await counts(comment._id), direction === 'upvote' ? [1, 0] : [0, 1]);
 		for (let cycle = 0; cycle < 20; cycle++) {
 			await vote(0, comment._id, 7, 'upvote');
@@ -199,14 +215,9 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 		const comment = newComment();
 		comment.videoId = 2;
 		await comments.insertOne(comment);
-		await workers[0].mutateCommentVote(2, comment._id.toString(), 7, 'uuid-7', 'downvote', true);
-		const service = loadService('src/service/VideoCommentService.ts', {
-			mongoose, '../dbPool/DbClusterPool.js': pool, '../dbPool/schema/VideoCommentSchema.js': schema,
-			'./SequenceValueService.js': {}, './VideoService.js': {}, './CommentVoteMutation.js': workers[0],
-			'./BlockService.js': { buildBlockListMongooseFilter: async () => ({ filter: [], additionalFields: {} }) },
-			'./UserService.js': { checkUserTokenByUuidService: async () => ({ success: true }) },
-			'./loggingService.js': { logging() {} },
-		});
+		const service = workers[0];
+		const result = await service.emitVideoCommentDownvoteService({ videoId: 2, id: comment._id.toString() }, 7, 'token');
+		assert.equal(result.success, true);
 		for (const [uuid, token, expected] of [['uuid-7', 'token', true], ['uuid-8', 'token', false], [undefined, undefined, false]]) {
 			const res = await service.getVideoCommentListByKvidService({ videoId: 2, pagination: { page: 1, pageSize: 10 } }, 7, uuid, token);
 			assert.equal(res.success, true);

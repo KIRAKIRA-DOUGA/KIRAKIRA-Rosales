@@ -1,7 +1,7 @@
 import { standardizeClientLanguageFlag } from '../common/i18n.js'
 import { getCorrectCookieDomain } from '../common/UrlTool.js'
 import { limitPageSize, parseInteger } from '../common/ValidTool.js'
-import { isPassRbacCheck } from '../service/RbacService.js'
+import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
 import {
 	adminClearUserInfoService,
 	adminGetUserInfoService,

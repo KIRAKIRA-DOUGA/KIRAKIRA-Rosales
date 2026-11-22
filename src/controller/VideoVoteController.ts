@@ -1,4 +1,4 @@
-import { isPassRbacCheck } from '../service/RbacService.js'
+import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
 import { emitVideoUpvoteService, emitVideoDownvoteService, cancelVideoUpvoteService, cancelVideoDownvoteService } from '../service/VideoVoteService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { VideoVoteRequestDto } from './VideoVoteControllerDto.js'

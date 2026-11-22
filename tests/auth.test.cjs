@@ -2,6 +2,44 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadService } = require('./helpers/load-service.cjs');
 
+test('请求鉴权保留拒绝状态和消息，只有允许的请求会调用业务服务', async () => {
+	let permission;
+	const guard = loadService('src/common/RbacRequestGuard.ts', {
+		'../service/RbacService.js': { checkUserByRbac: async ({ uuid, apiPath }) => {
+			assert.equal(uuid, 'user');
+			assert.equal(apiPath, '/video/upvote');
+			if (permission instanceof Error) throw permission;
+			return permission;
+		} },
+		'../service/loggingService.js': { logging() {} },
+	});
+	let votes = 0;
+	let continued = 0;
+	const controller = loadService('src/controller/VideoVoteController.ts', {
+		'../common/RbacRequestGuard.js': guard, '../common/ValidTool.js': { parseInteger: Number },
+		'../service/VideoVoteService.js': { emitVideoUpvoteService: async () => { votes++; return { success: true }; } },
+	});
+	const send = async () => {
+		const ctx = { path: '/video/upvote', cookies: { get: key => key === 'uuid' ? 'user' : 'token' }, request: { body: { videoId: 1 } } };
+		await controller.emitVideoUpvoteController(ctx, async () => { continued++; });
+		return ctx;
+	};
+	permission = { status: 403, message: '权限不足' };
+	const denied = await send();
+	assert.equal(denied.status, 403);
+	assert.equal(denied.body, '权限不足');
+	permission = new Error('鉴权服务失败');
+	const failed = await send();
+	assert.equal(failed.status, 500);
+	assert.equal(failed.body, '在 Controller 层执行 RBAC 鉴权时出现错误，未知错误');
+	assert.equal(votes, 0);
+	assert.equal(continued, 0);
+	permission = { status: 200, message: '通过' };
+	assert.equal((await send()).body.success, true);
+	assert.equal(votes, 1);
+	assert.equal(continued, 1);
+});
+
 // Evaluate the Mongo expressions sent by the real atomic-attempt helper. No database is contacted.
 function expression(value, document) {
 	if (typeof value === 'string' && value.startsWith('$')) return document[value.slice(1)];
@@ -66,9 +104,7 @@ function fixture() {
 			return { success: true, result: { ...document } };
 		},
 	};
-	const attempts = loadService('src/service/UserVerificationAttempts.ts', { '../dbPool/DbClusterPool.js': database }, { Date: Clock });
 	const dependencies = {
-		'./UserVerificationAttempts.js': attempts,
 		mongoose,
 		'../cloudflare/index.js': {},
 		'../common/EmailTool.js': { isInvalidEmail: () => false, sendMail: async () => ({ success: true }) },
@@ -236,7 +272,7 @@ test('logout controller keeps cookies available when revocation fails, then clea
 		'../common/i18n.js': {},
 		'../common/UrlTool.js': { getCorrectCookieDomain: () => 'example.invalid' },
 		'../common/ValidTool.js': {},
-		'../service/RbacService.js': {},
+		'../common/RbacRequestGuard.js': {},
 		'../service/UserService.js': { userLogoutService: async () => ({ success: succeeds, message: succeeds ? '登出成功' : '请重试' }) },
 	});
 	const cleared = [];

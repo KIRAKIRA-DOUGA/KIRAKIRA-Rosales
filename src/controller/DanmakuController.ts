@@ -1,6 +1,6 @@
 import { emitDanmakuService, getDanmakuListByKvidService } from '../service/DanmakuService.js'
 import { parseInteger } from '../common/ValidTool.js'
-import { isPassRbacCheck } from '../service/RbacService.js'
+import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { EmitDanmakuRequestDto, GetDanmakuByKvidRequestDto } from './DanmakuControllerDto.js'
 

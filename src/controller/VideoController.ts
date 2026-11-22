@@ -1,4 +1,4 @@
-import { isPassRbacCheck } from '../service/RbacService.js'
+import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
 import { approvePendingReviewVideoService, checkVideoExistByKvidService, deleteVideoByKvidService, getPendingReviewVideoService, getThumbVideoService, getVideoByKvidService, getVideoByUidRequestService, getVideoCoverUploadSignedUrlService, getVideoFileTusEndpointService, searchVideoByKeywordService, searchVideoByVideoTagIdService, updateVideoService } from '../service/VideoService.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'

@@ -238,7 +238,7 @@ test('feed controller uses the requested group and defaults to the following fee
 	const controller = loadService('src/controller/FeedController.ts', {
 		'../common/ValidTool.js': { limitPageSize: () => 10, parseInteger: Number },
 		'../service/FeedService.js': { getFeedContentService: async value => { request = value; return { success: true }; } },
-		'../service/RbacService.js': {},
+		'../common/RbacRequestGuard.js': {},
 	});
 	for (const group of ['selected-group', undefined]) {
 		await controller.getFeedContentController({ cookies: { get: name => name === 'uuid' ? 'owner' : 'valid-token' }, query: { feedGroupUuid: group } }, async () => {});
