@@ -88,10 +88,10 @@ test('并发请求保留每个人的状态，并把同一评论的多个增减�
 	assert.deepEqual(f.controls.counts.sort(), ['downvote', 'upvote']);
 });
 
-test('赞数和踩数分别在双向斐波那契阈值校准，升至 200 或更高不触发', async () => {
+test('低计数在增加和减少时均可校准，超过 200 的方向跳过', async () => {
 	for (const direction of ['upvote', 'downvote']) {
 		const field = direction === 'upvote' ? 'upvoteCount' : 'downvoteCount';
-		for (const total of [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 145, 199, 200, 201, 233]) {
+		for (const total of [0, 1, 4, 6, 144, 145, 199, 200, 201, 233]) {
 			for (const delta of [-1, 1]) {
 				if (total - delta < 0) continue;
 				const f = fixture();
@@ -99,7 +99,7 @@ test('赞数和踩数分别在双向斐波那契阈值校准，升至 200 或更
 				f.comment[field] = before;
 				for (let uid = 0; uid < before; uid++) f.records.set(uid, direction);
 				await f.vote(delta > 0 ? before : 0, direction, delta > 0);
-				const trigger = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144].includes(total);
+				const trigger = total <= 200;
 				assert.deepEqual(f.controls.counts, trigger ? [direction] : [], direction + ' ' + before + ' → ' + total);
 				assert.equal(f.comment[field], total);
 			}

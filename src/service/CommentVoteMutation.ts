@@ -14,18 +14,6 @@ const votes = VideoCommentVoteSchema
 const activityByComment = new Map<string, CommentVoteActivity>()
 const maxRecount = 200
 const recountInterval = 30_000
-const checkpoints = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
-
-function crossedCheckpoint(total: number, delta: number) {
-	if (total > maxRecount || delta === 0) {
-		return false
-	}
-	if (total < 0) {
-		return true
-	}
-	const before = total - delta
-	return checkpoints.some(point => delta > 0 ? before < point && point <= total : total <= point && point < before)
-}
 
 async function recountWhenIdle(commentId: string, activity: CommentVoteActivity) {
 	if (activity.writingVotes || activity.batch) {
@@ -99,11 +87,11 @@ function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvo
 			if (updated.result) {
 				const comment = updated.result
 				activity.comment = comment
-				activity.recountUpvotes = comment.upvoteCount <= maxRecount && (activity.recountUpvotes || crossedCheckpoint(comment.upvoteCount, up))
-				activity.recountDownvotes = comment.downvoteCount <= maxRecount && (activity.recountDownvotes || crossedCheckpoint(comment.downvoteCount, down))
+				activity.recountUpvotes = comment.upvoteCount <= maxRecount && (activity.recountUpvotes || up !== 0)
+				activity.recountDownvotes = comment.downvoteCount <= maxRecount && (activity.recountDownvotes || down !== 0)
 			}
 		} catch (error) {
-			// 用户的记录已保存。重复应用增减量可能多算，留到下次触及阈值时按记录校准。
+			// 用户的记录已保存。重复应用增减量可能多算，后续操作可在限频间隔后按记录校准。
 			logging('ERROR', '更新评论赞踩计数失败', error, { commentId })
 		} finally {
 			if (activity.batch === batch) {
@@ -157,9 +145,9 @@ export const mutateCommentVote = async (videoId: number, commentId: string, uid:
 		}
 		const after = active ? direction : undefined
 		if (before === after) {
-			// 上次可能只写成功了个人记录。重复请求可在当前阈值校准，仍受同一频率上限约束。
-			activity.recountUpvotes ||= direction === 'upvote' && checkpoints.includes(activity.comment.upvoteCount)
-			activity.recountDownvotes ||= direction === 'downvote' && checkpoints.includes(activity.comment.downvoteCount)
+			// 上次可能只写成功了个人记录。重复请求也可校准低计数，仍使用同一频率上限。
+			activity.recountUpvotes ||= direction === 'upvote' && activity.comment.upvoteCount <= maxRecount
+			activity.recountDownvotes ||= direction === 'downvote' && activity.comment.downvoteCount <= maxRecount
 			return false
 		}
 		updatedCounts = queueCountUpdate(commentId, activity,

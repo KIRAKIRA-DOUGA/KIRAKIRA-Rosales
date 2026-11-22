@@ -69,7 +69,7 @@ class VideoCommentSchemaFactory {
 		upvoteCount: { type: Number, default: 0, required: true },
 		/** 评论点踩数 - 非空 */ /** 默认：0 —— 没有反对票！ */
 		downvoteCount: { type: Number, default: 0, required: true },
-		/** 计数每次增减时递增，防止重新统计覆盖较新的增减。 */
+		/** 赞踩计数的版本号。每写入一批增减量就加 1。重新统计后，只有版本号仍和统计前相同才能写回结果。 */
 		voteRevision: { type: Number },
 		/** 这条评论上次开始校准计数的时间，用于跨实例限频。 */
 		voteRecountAt: { type: Number },

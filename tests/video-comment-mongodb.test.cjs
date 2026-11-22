@@ -106,7 +106,8 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 
 	await t.test('主库按方向校准，两个实例共享 30 秒上限，查询最多读取 201 条', async () => {
 		const comment = newComment();
-		comment.upvoteCount = 4;
+		// 从 5 增至 6 也要校准，触发条件只取决于时间和数量上限。
+		comment.upvoteCount = 5;
 		comment.downvoteCount = 250;
 		await comments.insertOne(comment);
 		const queries = [];
