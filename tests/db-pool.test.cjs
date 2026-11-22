@@ -19,7 +19,7 @@ function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0 }
 		static async createIndexes() {}
 		async save(options) {
 			record('save', [this.data], options);
-			return { _id: 'document-1', ...this.data };
+			return { _id: { toString: () => 'document-1' }, toObject: () => ({ ...this.data }) };
 		}
 		static find(filter, projection, options) {
 			const query = {
@@ -53,6 +53,8 @@ function fixture({ failure, updated = { owner: 'user-1', count: 2 }, count = 0 }
 		mongodb: { ReadPreferenceMode },
 		mongoose: { models: { [collection]: Model } },
 		'./schema/SequenceSchema.js': { SequenceValueSchema: {} },
+		'./schema/VideoSchema.js': { RemovedVideoSchema: { collectionName: 'removed-video', schemaInstance: {} } },
+		'./schema/VideoVoteSchema.js': { VideoVoteSchema: {} },
 		'./schema/VideoCommentSchema.js': { VideoCommentVoteSchema: {} },
 		'./schema/UserSchema.js': { UserInfoSchema: {}, UserTotpAuthenticatorSchema: {} },
 		'../service/loggingService.js': { logging() {} },
@@ -98,7 +100,7 @@ test('existing flat update helpers retain their $set and upsert behavior', async
 	await pool.findOneAndUpdateData4MongoDB(where, flatUpdate, schema, collection);
 	assert.equal(calls[0].args[1].$set, flatUpdate);
 	assert.equal(calls[0].options.upsert, true);
-	assert.equal(calls[0].options.new, true);
+	assert.equal(calls[0].options.returnDocument, 'after');
 	await pool.findOneAndUpdateData4MongoDB(where, flatUpdate, schema, collection, undefined, false);
 	assert.equal(calls[1].args[1].$set, flatUpdate);
 	assert.equal(calls[1].options.upsert, false);
@@ -121,7 +123,7 @@ test('原子设置可取旧记录，首次插入没有旧记录也成功', async
 		const result = await pool.findOneAndUpdateData4MongoDB(where, { direction: 'upvote' }, schema, collection, { returnDocument: 'before' });
 		assert.equal(result.success, true);
 		assert.deepEqual(result.result, old ?? undefined);
-		assert.equal(calls[0].options.new, false);
+		assert.equal(calls[0].options.returnDocument, 'before');
 		assert.equal(calls[0].options.upsert, true);
 	}
 });
@@ -143,55 +145,32 @@ test('document counts return zero as a successful result', async () => {
 	}
 });
 
+test('插入结果返回保存后的字段和字符串 ID', async () => {
+	const { pool } = fixture();
+	const result = await pool.insertData2MongoDB({ owner: '一号用户' }, schema, collection);
+	assert.equal(result.result[0]._id, 'document-1');
+	assert.equal(result.result[0].owner, '一号用户');
+});
+
 for (const { name, invoke, legacy } of operations) {
-	test(`${name}: transaction options force primary and exclude preserveError`, async () => {
-		for (const preserveError of [true, false]) {
-			const { pool, calls } = fixture();
-			const session = {};
-			const result = await invoke(pool, { session, readPreference: 'secondary', preserveError });
-			assert.equal(result.success, true);
-			assert.equal(calls.length, 1);
-			assert.equal(calls[0].options.session, session);
-			assert.equal(calls[0].options.readPreference, 'primary');
-			assert.equal(Object.hasOwn(calls[0].options, 'preserveError'), false);
-		}
-	});
-
-	test(`${name}: non-transaction reads retain the selected read preference`, async () => {
+	test(name + ' 在事务内读取主节点，普通查询沿用指定的读偏好', async () => {
 		const { pool, calls } = fixture();
-		await invoke(pool, { readPreference: 'secondaryPreferred', preserveError: true });
-		assert.equal(calls[0].options.readPreference, 'secondaryPreferred');
-		assert.equal(Object.hasOwn(calls[0].options, 'preserveError'), false);
+		const session = {};
+		await invoke(pool, { session, readPreference: 'secondary' });
+		assert.equal(calls[0].options.session, session);
+		assert.equal(calls[0].options.readPreference, 'primary');
+		await invoke(pool, { readPreference: 'secondaryPreferred' });
+		assert.equal(calls[1].options.readPreference, 'secondaryPreferred');
 	});
 
-	test(`${name}: preserveError keeps the original MongoDB error and retry labels`, async () => {
-		const failure = new MongoServerError({ message: 'simulated write conflict', code: 112 });
-		failure.addErrorLabel('TransientTransactionError');
+	test(name + ' 保留既有的失败返回结构和原始错误信息', async () => {
+		const failure = new MongoServerError({ message: '模拟数据库异常', code: 112 });
 		const { pool } = fixture({ failure });
-		await assert.rejects(invoke(pool, { preserveError: true }), error => {
-			assert.equal(error, failure);
-			assert.equal(error.code, 112);
-			assert.equal(error.hasErrorLabel('TransientTransactionError'), true);
+		await assert.rejects(invoke(pool), error => {
+			assert.equal(error.success, false);
+			assert.equal(typeof error.message, 'string');
+			assert.equal(legacy ? error.error.error : error.error, failure);
 			return true;
 		});
-	});
-
-	test(`${name}: callers without preserveError retain wrapped failure results`, async () => {
-		for (const options of [undefined, { preserveError: false }]) {
-			const failure = new MongoServerError({ message: 'simulated database error', code: 112 });
-			const { pool } = fixture({ failure });
-			await assert.rejects(invoke(pool, options), error => {
-				assert.notEqual(error, failure);
-				assert.equal(error.success, false);
-				assert.equal(typeof error.message, 'string');
-				if (legacy) {
-					assert.equal(error.error.success, false);
-					assert.equal(error.error.error, failure);
-				} else {
-					assert.equal(error.error, failure);
-				}
-				return true;
-			});
-		}
 	});
 }

@@ -3,6 +3,8 @@ import mongoose, { AnyKeys, ClientSession, FilterQuery, InferSchemaType, Model, 
 import { DbPoolResultsType, DbPoolResultType, OrderByType, QueryType, SelectType, UpdateResultType, UpdateType } from './DbClusterPoolTypes.js'
 import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
+import { RemovedVideoSchema } from './schema/VideoSchema.js'
+import { VideoVoteSchema } from './schema/VideoVoteSchema.js'
 import { VideoCommentVoteSchema } from './schema/VideoCommentSchema.js'
 import { logging } from '../service/loggingService.js'
 
@@ -59,18 +61,9 @@ export type DbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> =
 			populate?: MongoDBVirtualSettingType<T, P>['name'];
 		}
 
-/** 支持事务重试的读写选项；仅提供给实现了原始异常透传的共通函数。 */
-export type RetryableDbPoolOptions<T = unknown, P = DbPoolOptionsMarkerType> = DbPoolOptions<T, P> & {
-	/** 保留原始数据库异常，供事务重试识别错误标签；不传给数据库驱动。 */
-	preserveError?: boolean;
-}
-
-/** 移除共通层专用选项，并确保事务始终从主节点读取。 */
-const getMongoDBQueryOptions = <T, P>(options?: RetryableDbPoolOptions<T, P>) => {
-	if (!options) { return undefined }
-	const { preserveError: _preserveError, ...queryOptions } = options
-	return options.session ? { ...queryOptions, readPreference: 'primary' as const } : queryOptions
-}
+// MongoDB 事务只能从主节点读取，普通调用沿用传入的读偏好。
+const getMongoDBQueryOptions = (options?: BaseDbPoolOptions) =>
+	options?.session ? { ...options, readPreference: ReadPreferenceMode.primary } : options
 
 /**
  * 连接 MongoDB 复制集，这个方法应当在系统初始化时调用
@@ -127,8 +120,11 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
 			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
 			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
-			// 新数据库也必须在接受首次并发点赞前建好唯一索引。
+			// 等待 (commentId, uid) 唯一索引建好再接收请求，否则同一用户同时点赞两次可能插入两条记录。
 			await mongoose.model(VideoCommentVoteSchema.collectionName, VideoCommentVoteSchema.schemaInstance).init()
+			await mongoose.model(VideoVoteSchema.collectionName, VideoVoteSchema.schemaInstance).init()
+			// 首次删除视频时，事务必须能看到已经建好的归档集合及索引。
+			await mongoose.model(RemovedVideoSchema.collectionName, RemovedVideoSchema.schemaInstance).init()
 
 			console.info('MongoDB Cluster Connect successfully!\n')
 		} catch (error) {
@@ -149,13 +145,8 @@ export const connectMongoDBCluster = async (): Promise<void> => {
  * @param options 设置项
  * @returns 插入数据的状态和结果
  */
-export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P>): Promise< DbPoolResultsType<T & { _id: string }> > => {
+export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise< DbPoolResultsType<T & { _id: string }> > => {
 	try {
-		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
-		if (options?.session) {
-			options.readPreference = 'primary'
-		}
-
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
 		if (mongoose.models[collectionName]) {
@@ -168,17 +159,14 @@ export const insertData2MongoDB = async <T, P = DbPoolOptionsMarkerType>(data: T
 		})
 		const model = new mongoModel(data)
 		try {
-			// 兼容旧共通接口的字符串 _id 声明；实际返回 Mongoose 文档，需单独迁移接口类型。
-			// eslint-disable-next-line no-restricted-syntax
-			const result = await model.save(getMongoDBQueryOptions(options)) as unknown as T & { _id: string }
+			const saved = await model.save(getMongoDBQueryOptions(options))
+			const result = { ...saved.toObject<T>(), _id: String(saved._id) }
 			return { success: true, message: '数据插入成功', result: [result] }
 		} catch (error) {
-			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据插入失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据插入失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) { throw error }
 		logging('ERROR', 'insertData2MongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据插入失败，insertData2MongoDB 中发生错误：', error }
 	}
@@ -283,13 +271,8 @@ type Pagination = {
 	/** 一页显示多少条 */
 	pageSize: number;
 }
-export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P>, sort?: OrderByType<T>, pagination?: Pagination): Promise< DbPoolResultsType<T> > => {
+export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, select: SelectType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>, sort?: OrderByType<T>, pagination?: Pagination): Promise< DbPoolResultsType<T> > => {
 	try {
-		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
-		if (options?.session) {
-			options.readPreference = 'primary'
-		}
-
 		if (options && 'virtual' in options && options.virtual) {
 			if (mongoose.models[options.virtual.options.ref]) {
 				schema.virtual(options.virtual.name, options.virtual.options)
@@ -320,12 +303,10 @@ export const selectDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(wher
 			}
 			return { success: true, message: '数据查询成功', result }
 		} catch (error) {
-			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据查询失败：', error, undefined, { recordingLogs: false })
 			throw { success: false, message: '数据查询失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) { throw error }
 		logging('ERROR', 'selectDataFromMongoDB 发生错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据查询失败，selectDataFromMongoDB 中发生错误：', error }
 	}
@@ -370,13 +351,8 @@ export const selectDataByAggregateFromMongoDB = async <T>(schema: Schema<T>, col
  * @param options 设置项
  * @returns 更新数据的结果
  */
-export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P>): Promise<UpdateResultType> => {
+export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise<UpdateResultType> => {
 	try {
-		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
-		if (options?.session) {
-			options.readPreference = 'primary'
-		}
-
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
 		if (mongoose.models[collectionName]) {
@@ -401,34 +377,34 @@ export const updateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: 
 				return { success: false, message: '尝试更新数据，但更新失败，可能是未匹配到数据', result: { acknowledged, matchedCount, modifiedCount } }
 			}
 		} catch (error) {
-			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据更新失败：', error, { where, update }, { recordingLogs: false })
 			throw { success: false, message: '数据更新失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) { throw error }
 		logging('ERROR', '数据更新失败，未知错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据更新失败，updateData4MongoDB 中发生错误：', error }
 	}
 }
 
 /**
- * 从数据库中寻找一条匹配的数据并更新，然后返回更新后的结果 // WARN 请在业务中避免查询条件匹配到多条数据，如果匹配到多条数据，则只会更新第一条，造成数据不匹配！
- * @param where 查询条件 // WARN 请在业务中避免查询条件匹配到多条数据，如果匹配到多条数据，则只会更新第一条，造成数据不匹配！
+ * 更新一条匹配的记录。
+ * @param where 查询条件，应能唯一定位要更新的记录
  * @param update 需要更新的数据
  * @param schema MongoDB Schema 对象
  * @param collectionName 查询数据时使用的 MongoDB 集合的名字（输入单数名词会自动创建该名词的复数形式的集合名）
- * @param options 设置项
- * @param upsert 如果没有找到，是否创建（默认会创建）。options.returnDocument 为 before 时，首次插入成功但没有旧记录。
- * @returns 更新后的数据
+ * @param options 查询选项。returnDocument 默认为 after，返回写入后的记录。设为 before 则返回这次写入前的记录。
+ * @param upsert 找不到匹配记录时是否插入，默认为 true
+ * @returns 写入结果。若本次插入新记录且选择 before，success 为 true，result 为空。
  */
-export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: QueryType<T>, update: UpdateType<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P> & { returnDocument?: 'before' | 'after' }, upsert: boolean = true): Promise< DbPoolResultType<T> > => {
+export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerType>(
+	where: QueryType<T>,
+	update: UpdateType<T>,
+	schema: Schema<T>,
+	collectionName: string,
+	options?: DbPoolOptions<T, P> & { returnDocument?: 'before' | 'after' },
+	upsert: boolean = true,
+): Promise<DbPoolResultType<T>> => {
 	try {
-		// 检查是否存在事务 session，如果存在，则设置 readPreference 为'primary'
-		if (options?.session) {
-			options.readPreference = 'primary'
-		}
-
 		let mongoModel: Model<T>
 		// 检查模型是否已存在
 		if (mongoose.models[collectionName]) {
@@ -437,7 +413,11 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 			mongoModel = mongoose.model<T>(collectionName, schema)
 		}
 		try {
-			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, { new: options?.returnDocument !== 'before', upsert, ...getMongoDBQueryOptions(options) }))?.toObject() as T
+			const updateResult = (await mongoModel.findOneAndUpdate(where, { $set: update }, {
+				upsert,
+				...getMongoDBQueryOptions(options),
+				returnDocument: options?.returnDocument ?? 'after',
+			}))?.toObject() as T
 
 			if (updateResult) {
 				return { success: true, message: '数据更新成功', result: updateResult }
@@ -448,23 +428,25 @@ export const findOneAndUpdateData4MongoDB = async <T, P = DbPoolOptionsMarkerTyp
 				return { success: false, message: '数据更新失败，没有找到返回结果' }
 			}
 		} catch (error) {
-			if (options?.preserveError) { throw error }
 			logging('ERROR', '数据更新失败：', error, { where, update }, { recordingLogs: false })
 			throw { success: false, message: '数据更新失败', error }
 		}
 	} catch (error) {
-		if (options?.preserveError) { throw error }
 		logging('ERROR', '数据更新失败，未知错误', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据更新失败，findOneAndUpdateData4MongoDB 中发生错误：', error }
 	}
 }
 
 /**
- * 使用更新操作符或更新管线原子更新一条现有记录，并返回更新后的数据。
- * 与普通更新函数不同，这里不会再包装 $set，也不会在未匹配时插入记录。
- * 事务调用应指定 preserveError，以便驱动识别原始错误并重试。
+ * 对一条已有记录执行原子更新，例如带次数上限的验证码校验或同时增减两个计数。
+ * @param where 定位记录及写入时必须满足的条件
+ * @param update 原样交给 MongoDB 的更新操作符或聚合管道
+ * @param schema 记录的 MongoDB Schema
+ * @param collectionName 集合名
+ * @param options 读偏好或本次事务的会话
+ * @returns 更新后的记录，条件未匹配时返回失败且不插入记录
  */
-export const findOneAndUpdateWithOperators4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: FilterQuery<T>, update: UpdateQuery<T> | UpdateWithAggregationPipeline, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P>): Promise<DbPoolResultType<T>> => {
+export const findOneAndUpdateWithOperators4MongoDB = async <T, P = DbPoolOptionsMarkerType>(where: FilterQuery<T>, update: UpdateQuery<T> | UpdateWithAggregationPipeline, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P>): Promise<DbPoolResultType<T>> => {
 	try {
 		const mongoModel: Model<T> = mongoose.models[collectionName] ?? mongoose.model<T>(collectionName, schema)
 		const updated = await mongoModel.findOneAndUpdate(where, update, {
@@ -473,20 +455,25 @@ export const findOneAndUpdateWithOperators4MongoDB = async <T, P = DbPoolOptions
 		if (!updated) { return { success: false, message: '未匹配到可更新的记录' } }
 		return { success: true, message: '数据原子更新成功', result: updated.toObject() as T }
 	} catch (error) {
-		if (options?.preserveError) { throw error }
 		logging('ERROR', '原子更新数据失败', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据原子更新失败', error }
 	}
 }
 
-/** 统计符合条件的文档数。可用 limit 限制扫描数量，也可传入同一事务的 session。 */
-export const countDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: FilterQuery<T>, schema: Schema<T>, collectionName: string, options?: RetryableDbPoolOptions<T, P> & { limit?: number }): Promise<DbPoolResultType<number>> => {
+/**
+ * 统计符合条件的记录。
+ * @param where 统计条件
+ * @param schema 记录的 MongoDB Schema
+ * @param collectionName 集合名
+ * @param options 读偏好、会话或统计数量上限
+ * @returns 匹配的数量，设置上限时最多返回该值
+ */
+export const countDataFromMongoDB = async <T, P = DbPoolOptionsMarkerType>(where: FilterQuery<T>, schema: Schema<T>, collectionName: string, options?: DbPoolOptions<T, P> & { limit?: number }): Promise<DbPoolResultType<number>> => {
 	try {
 		const mongoModel: Model<T> = mongoose.models[collectionName] ?? mongoose.model<T>(collectionName, schema)
 		const count = await mongoModel.countDocuments(where, getMongoDBQueryOptions(options))
 		return { success: true, message: '数据计数成功', result: count }
 	} catch (error) {
-		if (options?.preserveError) { throw error }
 		logging('ERROR', '统计数据失败', error, undefined, { recordingLogs: false })
 		throw { success: false, message: '数据计数失败', error }
 	}

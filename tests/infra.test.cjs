@@ -22,6 +22,8 @@ function loadPool(mongoose, env = {}, logging = () => {}) {
 		mongodb: { ReadPreferenceMode },
 		mongoose,
 		'./schema/SequenceSchema.js': { SequenceValueSchema: {} },
+		'./schema/VideoSchema.js': { RemovedVideoSchema: { collectionName: 'removed-video', schemaInstance: {} } },
+		'./schema/VideoVoteSchema.js': { VideoVoteSchema: { collectionName: 'video-votes', schemaInstance: {} } },
 		'./schema/VideoCommentSchema.js': { VideoCommentVoteSchema: { collectionName: 'votes', schemaInstance: {} } },
 		'./schema/UserSchema.js': {
 			UserInfoSchema: { collectionName: 'users', schemaInstance: {} },
@@ -65,7 +67,7 @@ test('index creation failures are handled without recursively persisting another
 	const indexErrors = [];
 	class Model {
 		static async createIndexes() { throw failure; }
-		async save() { saves++; }
+		async save() { saves++; return { _id: 'log', toObject: () => ({}) }; }
 	}
 	const pool = loadPool({ models: { logs: Model } }, {}, (...args) => indexErrors.push(args));
 	const { logging, errors } = loadLogging(pool.insertData2MongoDB);
@@ -85,7 +87,7 @@ test('background index creation does not block an existing transaction document 
 	let savedWithSession;
 	class Model {
 		static createIndexes() { return indexes; }
-		async save(options) { savedWithSession = options.session; return {}; }
+		async save(options) { savedWithSession = options.session; return { _id: 'log', toObject: () => ({}) }; }
 	}
 	const pool = loadPool({ models: { logs: Model } });
 	const insert = pool.insertData2MongoDB({}, {}, 'logs', { session });

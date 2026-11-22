@@ -2,6 +2,7 @@ import { Client } from '@elastic/elasticsearch'
 import mongoose, { InferSchemaType, PipelineStage } from 'mongoose'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { isEmptyObject } from '../common/ObjectTool.js'
+import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js'
 import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
 import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
@@ -9,7 +10,7 @@ import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, 
 import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
-import { deleteDataFromElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
+import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
@@ -18,7 +19,7 @@ import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { logging } from './loggingService.js'
 import { VideoWatchRecordSchema } from '../dbPool/schema/VideoWatchRecordSchema.js'
-import { checkUserHasDownvoted, checkUserHasUpvoted, getVideoDownvoteCount, getVideoUpvoteCount } from './VideoVoteService.js'
+import { VideoVoteSchema } from '../dbPool/schema/VideoVoteSchema.js'
 import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
 
 /**
@@ -486,17 +487,29 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 
 				// 9. 查询视频点赞/点踩信息
-				const videoUpvoteCountPromise = getVideoUpvoteCount(videoId)
-				const videoDownvoteCountPromise = getVideoDownvoteCount(videoId)
-				const userHasUpvotedPromise = checkUserHasUpvoted(videoId, selectorUuid)
-				const userHasDownvotedPromise = checkUserHasDownvoted(videoId, selectorUuid)
-
-				const [videoUpvoteCount, videoDownvoteCount, userHasUpvoted, userHasDownvoted] = await Promise.all([videoUpvoteCountPromise, videoDownvoteCountPromise, userHasUpvotedPromise, userHasDownvotedPromise])
-
-				video.videoUpvoteCount = videoUpvoteCount
-				video.videoDownvoteCount = videoDownvoteCount
-				video.userHasUpvoted = userHasUpvoted
-				video.userHasDownvoted = userHasDownvoted
+				try {
+					const votes = VideoVoteSchema
+					type Totals = { upvotes: number; downvotes: number }
+					const [totals, personal] = await Promise.all([
+						selectDataByAggregateFromMongoDB<Totals>(votes.schemaInstance, votes.collectionName, [
+							{ $match: { videoId } },
+							{ $group: {
+								_id: null,
+								upvotes: { $sum: { $cond: [{ $eq: ['$direction', 'upvote'] }, 1, 0] } },
+								downvotes: { $sum: { $cond: [{ $eq: ['$direction', 'downvote'] }, 1, 0] } },
+							} },
+						]),
+						selectDataFromMongoDB({ videoId, UUID: selectorUuid }, { direction: 1 }, votes.schemaInstance, votes.collectionName),
+					])
+					const direction = personal.result?.[0]?.direction
+					video.userHasUpvoted = direction === 'upvote'
+					video.userHasDownvoted = direction === 'downvote'
+					video.videoUpvoteCount = totals.result?.[0]?.upvotes ?? 0
+					video.videoDownvoteCount = totals.result?.[0]?.downvotes ?? 0
+				} catch (error) {
+					// 赞踩是详情中的可选信息，查询失败时仍返回已查到的视频。
+					logging('ERROR', '获取视频赞踩信息失败', error, { videoId })
+				}
 			}
 
 			return {
@@ -610,72 +623,42 @@ export const getVideoByUidRequestService = async (getVideoByUidRequest: GetVideo
  * @returns 搜索视频的请求结果
  */
 export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: SearchVideoByKeywordRequestDto, client: Client | undefined): Promise<SearchVideoByKeywordResponseDto> => {
+	const empty = { videosCount: 0, videos: [] }
 	try {
-		if (checkSearchVideoByKeywordRequest(searchVideoByKeywordRequest) && client && !isEmptyObject(client)) {
-			const { indexName: esIndexName, schema: videoEsSchema } = VideoDocument
-			const esQuery = {
-				query_string: {
-					query: searchVideoByKeywordRequest.keyword,
-				},
-			}
-
-			try {
-				const esSearchResult = await searchDataFromElasticsearchCluster(client, esIndexName, videoEsSchema, esQuery)
-				if (esSearchResult.success) {
-					const videoResult = [...new Map((esSearchResult.result ?? []).map(video => [video.kvid, video])).values()]
-					if (videoResult && videoResult?.length > 0) {
-						try {
-							const candidates = await Promise.all(videoResult.map(async video => {
-								const esVideoId = video.kvid
-								const uploadVideoRequest: GetVideoByKvidRequestDto = {
-									videoId: esVideoId,
-								}
-								const result = await getVideoByKvidService(uploadVideoRequest)
-								const videoResult = result?.video
-								if (result.success && videoResult && !isEmptyObject(videoResult)) {
-									return {
-										videoId: videoResult.videoId,
-										title: videoResult.title,
-										image: videoResult.image,
-										uploadDate: videoResult.uploadDate,
-										watchedCount: videoResult.watchedCount,
-										uploader: videoResult.uploaderInfo?.username,
-										uploaderId: videoResult.uploaderId,
-										duration: videoResult.duration,
-										description: videoResult.description,
-									}
-								}
-								return undefined
-							}))
-							const videos: SearchVideoByKeywordResponseDto['videos'] = candidates.filter(video => video !== undefined)
-							const videosCount = videos.length
-							if (videos && videosCount !== undefined && videosCount !== null && videosCount > 0) {
-								return { success: true, message: '使用关键字搜索视频成功', videosCount, videos }
-							} else {
-								return { success: true, message: '使用关键字搜索视频成功，但没有已公开的视频', videosCount: 0, videos: [] }
-							}
-						} catch (_error) {
-							logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索成功，但在 MongoDB 中搜索出现异常')
-							return { success: false, message: '使用关键字搜索视频失败，搜索到视频了，但是视频数据获取异常', videosCount: 0, videos: [] }
-						}
-					} else {
-						return { success: true, message: '使用关键字搜索视频成功，但搜索结果为空', videosCount: 0, videos: [] }
-					}
-				} else {
-					logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索失败')
-					return { success: false, message: '使用关键字搜索视频失败，搜索失败', videosCount: 0, videos: [] }
-				}
-			} catch (error) {
-				logging('ERROR', '使用关键字搜索视频失败，在 Es 中搜索数据出现异常', error)
-				return { success: false, message: '使用关键字搜索视频失败，搜索数据时出现异常', videosCount: 0, videos: [] }
-			}
-		} else {
-			logging('ERROR', '使用关键字搜索视频失败，检索关键字或 Es 连接客户端为空')
-			return { success: false, message: '使用关键字搜索视频失败，必要参数为空', videosCount: 0, videos: [] }
+		if (!checkSearchVideoByKeywordRequest(searchVideoByKeywordRequest) || !client || isEmptyObject(client)) {
+			return { success: false, message: '搜索视频失败，必要参数为空', ...empty }
 		}
+		const { indexName, schema } = VideoDocument
+		const query = { query_string: { query: searchVideoByKeywordRequest.keyword } }
+		const hits = await searchDataFromElasticsearchCluster(client, indexName, schema, query)
+		if (!hits.success) {
+			return { success: false, message: '搜索索引查询失败', ...empty }
+		}
+		const ids = [...new Set((hits.result ?? []).map(hit => hit.kvid))]
+		if (!ids.length) {
+			return { success: true, message: '搜索成功，结果为空', ...empty }
+		}
+
+		// 索引只提供顺序。公开状态、展示字段及作者以数据库为准。
+		type SearchVideo = SearchVideoByKeywordResponseDto['videos'][number]
+		const rows = await selectDataByAggregateFromMongoDB<SearchVideo>(VideoSchema.schemaInstance, VideoSchema.collectionName, [
+			{ $match: { videoId: { $in: ids }, pendingReview: false } },
+			{ $lookup: { from: 'user-infos', localField: 'uploaderUUID', foreignField: 'UUID', as: 'author' } },
+			{ $unwind: '$author' },
+			{ $project: {
+				_id: 0, videoId: 1, title: 1, image: 1, uploadDate: 1, watchedCount: 1,
+				uploader: '$author.username', uploaderId: 1, duration: 1, description: 1,
+			} },
+		])
+		if (!rows.success || !rows.result) {
+			return { success: false, message: '读取搜索结果中的视频失败', ...empty }
+		}
+		const byId = new Map(rows.result.map(video => [video.videoId, video]))
+		const videos = ids.map(id => byId.get(id)).filter(video => video !== undefined)
+		return { success: true, message: '搜索视频成功', videosCount: videos.length, videos }
 	} catch (error) {
-		logging('ERROR', '使用关键字搜索视频失败，未知原因：', error)
-		return { success: false, message: '使用关键字搜索视频失败，未知原因', videosCount: 0, videos: [] }
+		logging('ERROR', '搜索视频失败', error)
+		return { success: false, message: '搜索视频失败，请稍后再试', ...empty }
 	}
 }
 
@@ -871,104 +854,57 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
  * @returns 删除一个视频的请求响应
  */
 export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, adminUid: number, adminToken: string, esClient: Client): Promise<DeleteVideoResponseDto> => {
+	let session: mongoose.ClientSession | false = false
 	try {
-		if (checkDeleteVideoRequest(deleteVideoRequest) && esClient && !isEmptyObject(esClient)) {
-			if ((await checkUserTokenService(adminUid, adminToken)).success) {
-				const adminUUID = await getUserUuid(adminUid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
-				if (!adminUUID) {
-					logging('ERROR', '删除一个视频失败，adminUUID 不存在', undefined, { adminUid })
-					return { success: false, message: '删除一个视频失败，adminUUID 不存在' }
-				}
-
-				const videoId = deleteVideoRequest.videoId
-				const nowDate = new Date().getTime()
-
-				const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
-				type Video = InferSchemaType<typeof videoSchemaInstance>
-				const deleteWhere: QueryType<Video> = {
-					videoId,
-				}
-
-				const { indexName: esIndexName } = VideoDocument
-				const conditions = {
-					kvid: videoId,
-				}
-
-				const { collectionName: removedVideoCollectionName, schemaInstance: removedVideoSchemaInstance } = RemovedVideoSchema
-				type RemovedVideo = InferSchemaType<typeof removedVideoSchemaInstance>
-
-				// 启动事务
-				const session = await mongoose.startSession()
-				session.startTransaction()
-
-				const option = { session }
-				try {
-					const getVideoByKvidRequest: GetVideoByKvidRequestDto = {
-						videoId,
-					}
-					const videoResult = await getVideoByKvidService(getVideoByKvidRequest)
-					const videoData = videoResult.video
-					if (videoResult.success && videoData) {
-						const removedVideoData: RemovedVideo = {
-							// 保留旧删除流程的 DTO 到模型转换；字段完整性需在独立的删除流程修复中处理。
-							// eslint-disable-next-line no-restricted-syntax
-							...videoData as unknown as Video,
-							pendingReview: false, // 已删除的视频就不需要审核了...
-							_operatorUUID_: adminUUID,
-							_operatorUid_: adminUid,
-							editDateTime: nowDate,
-						}
-						const saveRemovedVideo = await insertData2MongoDB<RemovedVideo>(removedVideoData, removedVideoSchemaInstance, removedVideoCollectionName, option)
-						if (saveRemovedVideo.success) {
-							const deleteResult = await deleteOneDataFromMongoDB<Video>(deleteWhere, videoSchemaInstance, videoCollectionName, option)
-							const deleteFromElasticsearchResult = await deleteDataFromElasticsearchCluster(esClient, esIndexName, conditions)
-							if (deleteResult.success && deleteFromElasticsearchResult) {
-								await session.commitTransaction()
-								session.endSession()
-								return { success: true, message: '删除视频成功' }
-							} else {
-								if (session.inTransaction()) {
-									await session.abortTransaction()
-								}
-								session.endSession()
-								logging('ERROR', '删除一个视频失败，删除视频失败')
-								return { success: false, message: '删除一个视频失败，删除视频失败' }
-							}
-						} else {
-							if (session.inTransaction()) {
-								await session.abortTransaction()
-							}
-							session.endSession()
-							logging('ERROR', '删除一个视频失败，保存副本失败')
-							return { success: false, message: '删除一个视频失败，保存副本失败' }
-						}
-					} else {
-						if (session.inTransaction()) {
-							await session.abortTransaction()
-						}
-						session.endSession()
-						logging('ERROR', '删除一个视频失败，查询视频数据失败')
-						return { success: false, message: '删除一个视频失败，查询视频数据失败' }
-					}
-				} catch (_error) {
-					if (session.inTransaction()) {
-						await session.abortTransaction()
-					}
-					session.endSession()
-					logging('ERROR', '删除一个视频时出错，获取视频失败！')
-					return { success: false, message: '删除一个视频时出错，获取视频失败' }
-				}
-			} else {
-				logging('ERROR', '删除一个视频失败，非法用户！')
-				return { success: false, message: '删除一个视频失败，非法用户！' }
-			}
-		} else {
-			logging('ERROR', '删除一个视频失败，参数不合法')
-			return { success: false, message: '删除一个视频失败，参数不合法' }
+		if (!checkDeleteVideoRequest(deleteVideoRequest) || !esClient || isEmptyObject(esClient)) {
+			return { success: false, message: '删除视频失败，参数不合法' }
 		}
+		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+			return { success: false, message: '删除视频失败，用户校验未通过' }
+		}
+		const adminUUID = await getUserUuid(adminUid)
+		if (!adminUUID) {
+			return { success: false, message: '删除视频失败，未找到管理员 UUID' }
+		}
+		session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '删除视频失败，无法启动事务' }
+		}
+
+		const videoId = deleteVideoRequest.videoId
+		const where = { videoId, pendingReview: false }
+		const options = { session }
+		type Video = InferSchemaType<typeof VideoSchema.schemaInstance>
+		const selected = await selectDataFromMongoDB<Video>(where, { _id: 0 }, VideoSchema.schemaInstance, VideoSchema.collectionName, options)
+		const original = selected.result?.[0]
+		if (!selected.success || !original) {
+			return { success: false, message: '删除视频失败，未找到视频' }
+		}
+		// 归档读取原始记录，保留详情接口未返回的字段及分 P 数据。
+		const archive = { ...original, _operatorUUID_: adminUUID, _operatorUid_: adminUid, editDateTime: Date.now() }
+		const saved = await insertData2MongoDB(archive, RemovedVideoSchema.schemaInstance, RemovedVideoSchema.collectionName, options)
+		if (!saved.success) {
+			return { success: false, message: '删除视频失败，保存副本失败' }
+		}
+		const deleted = await deleteOneDataFromMongoDB(where, VideoSchema.schemaInstance, VideoSchema.collectionName, options)
+		if (!deleted.success || deleted.result?.deletedCount !== 1) {
+			return { success: false, message: '删除视频失败' }
+		}
+		const removedFromIndex = await deleteDataFromElasticsearchCluster(esClient, VideoDocument.indexName, { kvid: videoId })
+		if (!removedFromIndex) {
+			return { success: false, message: '删除视频搜索索引失败' }
+		}
+		const sessionToCommit = session
+		session = false // 提交函数负责在成功或失败后关闭会话。
+		await commitAndEndSession(sessionToCommit)
+		return { success: true, message: '删除视频成功' }
 	} catch (error) {
-		logging('ERROR', '删除一个视频时出错，未知错误：', error)
-		return { success: false, message: '删除一个视频时出错，未知错误' }
+		logging('ERROR', '删除视频失败', error)
+		return { success: false, message: '删除视频失败' }
+	} finally {
+		if (session) {
+			await abortAndEndSession(session).catch(error => logging('ERROR', '删除视频后回滚事务失败', error))
+		}
 	}
 }
 
@@ -1063,6 +999,7 @@ export const getPendingReviewVideoService = async (adminUid: number, adminToken:
  * @param approvePendingReviewVideoRequest 通过一个待审核视频的请求载荷
  * @param adminUid 管理员 UID
  * @param adminToken 管理员 token
+ * @param esClient 搜索服务客户端
  * @returns 通过一个待审核视频的请求响应
  */
 export const approvePendingReviewVideoService = async (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto, adminUid: number, adminToken: string, esClient?: Client): Promise<ApprovePendingReviewVideoResponseDto> => {
@@ -1097,7 +1034,10 @@ export const approvePendingReviewVideoService = async (approvePendingReviewVideo
 				title: video.title, description: video.description, kvid: video.videoId,
 				videoCategory: video.videoCategory, videoTagList: video.videoTagList,
 			}
-			await esClient.index({ index: indexName, id: String(videoId), document, refresh: true })
+			const indexed = await insertData2ElasticsearchCluster(esClient, indexName, VideoDocument.schema, document, true, String(videoId))
+			if (!indexed.success) {
+				return { success: false, message: '通过待审核视频失败，写入搜索索引失败' }
+			}
 			const updatePendingReviewVideoData: UpdateType<Video> = { pendingReview: false }
 			const updatePendingReviewVideoResult = await findOneAndUpdateData4MongoDB<Video>(updatePendingReviewVideoWhere, updatePendingReviewVideoData, videoSchemaInstance, videoCollectionName, undefined, false)
 

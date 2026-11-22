@@ -49,7 +49,7 @@ export const VideoDocument = {
 		/** 视频分区 - 非空 */
 		videoCategory: { type: String, required: true as const },
 		/** 视频 TAG - 非空 */
-		videoTagList: { type: [VideoTagDocument], required: true as const },
+		videoTagList: { type: [VideoTagDocument.schema], required: true as const },
 	},
 	/** Elasticsearch 索引名 */
 	indexName: 'search-kirakira-video-elasticsearch',
