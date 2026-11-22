@@ -30,7 +30,7 @@ async function rebuildCounts(db, ids) {
 	await db.collection('video-comments').bulkWrite(ids.map(_id => ({
 		updateOne: {
 			filter: { _id },
-			update: { $set: counts.get(_id.toHexString()), $unset: { voteRecountAt: '' } },
+			update: { $set: counts.get(_id.toHexString()) },
 		},
 	})))
 }

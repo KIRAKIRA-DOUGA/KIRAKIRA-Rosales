@@ -12,8 +12,27 @@ type CommentVoteActivity = { writingVotes: number; batch?: CountBatch; comment: 
 const comments = VideoCommentSchema
 const votes = VideoCommentVoteSchema
 const activityByComment = new Map<string, CommentVoteActivity>()
-const maxRecount = 200
-const recountInterval = 30_000
+
+function crossedFibonacciThreshold(total: number, delta: number) {
+	if (delta === 0) {
+		return false
+	}
+	if (total <= 0) {
+		return true
+	}
+	// 只看本次经过的数，排除起点。从 4 到 6、从 6 到 4 都要核对经过的 5。
+	const before = total - delta
+	const lowest = delta > 0 ? before + 1 : total
+	const highest = delta > 0 ? total : before - 1
+	let current = 1
+	let next = 2
+	while (current < lowest) {
+		const following = current + next
+		current = next
+		next = following
+	}
+	return current <= highest
+}
 
 async function recountWhenIdle(commentId: string, activity: CommentVoteActivity) {
 	if (activity.writingVotes || activity.batch) {
@@ -21,45 +40,30 @@ async function recountWhenIdle(commentId: string, activity: CommentVoteActivity)
 	}
 	activityByComment.delete(commentId)
 	const { comment, recountUpvotes, recountDownvotes } = activity
-	const now = Date.now()
-	if ((!recountUpvotes && !recountDownvotes) || now - (comment.voteRecountAt ?? 0) < recountInterval) {
+	if (!recountUpvotes && !recountDownvotes) {
 		return
 	}
 	try {
-		await reconcileCounts(commentId, comment, recountUpvotes, recountDownvotes)
+		const correction: Partial<Counts> = {}
+		for (const direction of ['upvote', 'downvote'] as const) {
+			if (direction === 'upvote' ? !recountUpvotes : !recountDownvotes) {
+				continue
+			}
+			const count = await countDataFromMongoDB({ commentId, direction }, votes.schemaInstance, votes.collectionName, { readPreference: 'primary' })
+			const field = direction === 'upvote' ? 'upvoteCount' : 'downvoteCount'
+			if (count.result !== undefined && count.result !== comment[field]) {
+				correction[field] = count.result
+			}
+		}
+		// 只修正统计前的版本，防止旧结果覆盖其他实例刚写入的增减或校准。
+		if (Object.keys(correction).length && !activityByComment.has(commentId)) {
+			await findOneAndUpdateWithOperators4MongoDB(
+				{ _id: commentId, voteRevision: comment.voteRevision ?? null }, { $set: correction, $inc: { voteRevision: 1 } },
+				comments.schemaInstance, comments.collectionName,
+			)
+		}
 	} catch (error) {
 		logging('ERROR', '校准评论赞踩计数失败', error, { commentId })
-	}
-}
-
-async function reconcileCounts(commentId: string, comment: Comment, recountUpvotes: boolean, recountDownvotes: boolean) {
-	// 数据库时钟决定校准间隔，各实例的时钟偏差不会导致重复统计。
-	const revision = comment.voteRevision ?? null
-	const serverTime = { $toLong: '$$NOW' }
-	const claim = await findOneAndUpdateWithOperators4MongoDB(
-		{ _id: commentId, voteRevision: revision, $expr: { $lte: [{ $ifNull: ['$voteRecountAt', 0] }, { $subtract: [serverTime, recountInterval] }] } },
-		[{ $set: { voteRecountAt: serverTime } }], comments.schemaInstance, comments.collectionName,
-	)
-	if (!claim.result) {
-		return
-	}
-
-	const correction: Partial<Counts> = {}
-	for (const direction of ['upvote', 'downvote'] as const) {
-		if (direction === 'upvote' ? !recountUpvotes : !recountDownvotes) {
-			continue
-		}
-		const count = await countDataFromMongoDB({ commentId, direction }, votes.schemaInstance, votes.collectionName, { readPreference: 'primary', limit: maxRecount + 1 })
-		const field = direction === 'upvote' ? 'upvoteCount' : 'downvoteCount'
-		if (count.result !== undefined && count.result !== comment[field]) {
-			correction[field] = count.result
-		}
-	}
-	// 统计期间发生的增减优先。版本也能识别数字先升后降、碰巧回到原值的情况。
-	if (Object.keys(correction).length && !activityByComment.has(commentId)) {
-		await findOneAndUpdateWithOperators4MongoDB(
-			{ _id: commentId, voteRevision: revision, voteRecountAt: claim.result.voteRecountAt }, { $set: correction }, comments.schemaInstance, comments.collectionName,
-		)
 	}
 }
 
@@ -76,8 +80,8 @@ function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvo
 	activity.batch = batch
 	batch.done = (previous?.done ?? Promise.resolve()).then(async () => {
 		batch.started = true
+		const { upvoteDelta: up, downvoteDelta: down } = batch
 		try {
-			const { upvoteDelta: up, downvoteDelta: down } = batch
 			if (up === 0 && down === 0) {
 				return
 			}
@@ -87,12 +91,14 @@ function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvo
 			if (updated.result) {
 				const comment = updated.result
 				activity.comment = comment
-				activity.recountUpvotes = comment.upvoteCount <= maxRecount && (activity.recountUpvotes || up !== 0)
-				activity.recountDownvotes = comment.downvoteCount <= maxRecount && (activity.recountDownvotes || down !== 0)
+				activity.recountUpvotes ||= crossedFibonacciThreshold(comment.upvoteCount, up)
+				activity.recountDownvotes ||= crossedFibonacciThreshold(comment.downvoteCount, down)
 			}
 		} catch (error) {
-			// 用户的记录已保存。重复应用增减量可能多算，后续操作可在限频间隔后按记录校准。
+			// 用户记录已经保存，回复丢失时增减也可能已写入。按明细核对可避免重复加减。
 			logging('ERROR', '更新评论赞踩计数失败', error, { commentId })
+			activity.recountUpvotes ||= up !== 0
+			activity.recountDownvotes ||= down !== 0
 		} finally {
 			if (activity.batch === batch) {
 				activity.batch = undefined
@@ -119,7 +125,7 @@ export const mutateCommentVote = async (videoId: number, commentId: string, uid:
 	}
 	commentId = commentId.toLowerCase()
 	const selected = await selectDataFromMongoDB(
-		{ _id: commentId, videoId }, { upvoteCount: 1, downvoteCount: 1, voteRevision: 1, voteRecountAt: 1 },
+		{ _id: commentId, videoId }, { upvoteCount: 1, downvoteCount: 1, voteRevision: 1 },
 		comments.schemaInstance, comments.collectionName, { readPreference: 'primary' },
 	)
 	const comment = selected.result?.[0]
@@ -145,9 +151,6 @@ export const mutateCommentVote = async (videoId: number, commentId: string, uid:
 		}
 		const after = active ? direction : undefined
 		if (before === after) {
-			// 上次可能只写成功了个人记录。重复请求也可校准低计数，仍使用同一频率上限。
-			activity.recountUpvotes ||= direction === 'upvote' && activity.comment.upvoteCount <= maxRecount
-			activity.recountDownvotes ||= direction === 'downvote' && activity.comment.downvoteCount <= maxRecount
 			return false
 		}
 		updatedCounts = queueCountUpdate(commentId, activity,

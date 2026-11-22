@@ -11,7 +11,7 @@ const schemas = {
 function fixture() {
 	const records = new Map();
 	const comment = { upvoteCount: 0, downvoteCount: 0, voteRevision: 0 };
-	const controls = { now: 100_000, counts: [], writes: 0, logs: [] };
+	const controls = { counts: [], writes: 0, logs: [] };
 	const db = {
 		async selectDataFromMongoDB(where) {
 			return { result: where._id === commentId && where.videoId === 1 ? [{ _id: commentId, ...comment }] : [] };
@@ -30,34 +30,29 @@ function fixture() {
 		},
 		async findOneAndUpdateWithOperators4MongoDB(where, update) {
 			if (where.voteRevision !== undefined && where.voteRevision !== comment.voteRevision) return { success: false };
-			if (Array.isArray(update)) {
-				if (comment.voteRecountAt > controls.now - 30_000) return { success: false };
-				comment.voteRecountAt = controls.now;
-				return { success: true, result: { ...comment } };
-			}
-			if (where.voteRecountAt !== undefined && where.voteRecountAt !== comment.voteRecountAt) return { success: false };
-			if (update.$inc) {
+			if (update.$inc.upvoteCount !== undefined) {
 				controls.writes++;
 				if (controls.incrementError) throw controls.incrementError;
-				for (const [field, delta] of Object.entries(update.$inc)) comment[field] += delta;
 			}
+			for (const [field, delta] of Object.entries(update.$inc)) comment[field] += delta;
+			if (controls.replyLost && !update.$set) throw controls.replyLost;
 			Object.assign(comment, update.$set);
 			return { success: true, result: { ...comment } };
 		},
 		async countDataFromMongoDB({ direction }, _schema, _name, options) {
 			assert.equal(options.readPreference, 'primary');
-			assert.equal(options.limit, 201);
+			assert.equal(options.limit, undefined);
 			controls.counts.push(direction);
 			const count = [...records.values()].filter(value => value === direction).length;
 			if (controls.afterCount) await controls.afterCount();
-			return { result: Math.min(count, options.limit) };
+			return { result: count };
 		},
 	};
 	const { mutateCommentVote } = loadService('src/service/CommentVoteMutation.ts', {
 		'../dbPool/DbClusterPool.js': db,
 		'../dbPool/schema/VideoCommentSchema.js': schemas,
 		'./loggingService.js': { logging: (...args) => controls.logs.push(args) },
-	}, { Date: { now: () => controls.now } });
+	});
 	const vote = (uid, direction, active = true, id = commentId, videoId = 1) => mutateCommentVote(videoId, id, uid, 'uuid-' + uid, direction, active);
 	return { vote, records, comment, controls };
 }
@@ -88,54 +83,77 @@ test('并发请求保留每个人的状态，并把同一评论的多个增减�
 	assert.deepEqual(f.controls.counts.sort(), ['downvote', 'upvote']);
 });
 
-test('低计数在增加和减少时均可校准，超过 200 的方向跳过', async () => {
+test('赞数和踩数升降到任一斐波那契数都会按明细核对', async () => {
+	const checkpoints = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 121393, 12_586_269_025];
 	for (const direction of ['upvote', 'downvote']) {
 		const field = direction === 'upvote' ? 'upvoteCount' : 'downvoteCount';
-		for (const total of [0, 1, 4, 6, 144, 145, 199, 200, 201, 233]) {
+		for (const total of [...checkpoints, 4, 6, 145, 199, 200, 201, 232, 234, 12_586_269_026]) {
 			for (const delta of [-1, 1]) {
 				if (total - delta < 0) continue;
 				const f = fixture();
 				const before = total - delta;
 				f.comment[field] = before;
-				for (let uid = 0; uid < before; uid++) f.records.set(uid, direction);
-				await f.vote(delta > 0 ? before : 0, direction, delta > 0);
-				const trigger = total <= 200;
+				if (delta < 0) f.records.set(1, direction);
+				await f.vote(1, direction, delta > 0);
+				const trigger = checkpoints.includes(total);
 				assert.deepEqual(f.controls.counts, trigger ? [direction] : [], direction + ' ' + before + ' → ' + total);
-				assert.equal(f.comment[field], total);
+				assert.equal(f.comment[field], trigger ? f.records.size : total);
 			}
 		}
 	}
 });
 
-test('同一评论来回点击最多每 30 秒校准一轮，低赞数误差可以向上或向下修正', async () => {
+test('合并增减只在达到或跨过阈值时按方向校准一次', async () => {
+	for (const direction of ['upvote', 'downvote']) {
+		const field = direction === 'upvote' ? 'upvoteCount' : 'downvoteCount';
+		for (const [before, after, recount] of [[4, 6, true], [6, 4, true], [5, 7, false], [8, 6, false], [232, 234, true], [378, 376, true]]) {
+			const f = fixture();
+			f.comment[field] = before;
+			for (let uid = 0; uid < before; uid++) f.records.set(uid, direction);
+			const adding = after > before;
+			await Promise.all(Array.from({ length: Math.abs(after - before) }, (_, i) =>
+				f.vote(adding ? before + i : i, direction, adding)));
+			assert.equal(f.controls.writes, 1);
+			assert.equal(f.comment[field], after);
+			assert.deepEqual(f.controls.counts, recount ? [direction] : []);
+		}
+	}
+});
+
+test('重复点赞在阈值上也保持幂等', async () => {
+	const f = fixture();
+	f.records.set(1, 'upvote');
+	f.comment.upvoteCount = 1;
+	assert.equal(await f.vote(1, 'upvote'), false);
+	assert.deepEqual(f.controls.counts, []);
+	assert.equal(f.comment.upvoteCount, 1);
+	assert.equal(f.controls.writes, 0);
+});
+
+test('连续达到阈值每次都能核对，低赞数误差可以向上或向下修正', async () => {
 	const f = fixture();
 	f.comment.upvoteCount = 4;
 	await f.vote(1, 'upvote');
 	assert.equal(f.comment.upvoteCount, 1);
-	await f.vote(1, 'upvote', false);
-	await f.vote(1, 'upvote');
-	f.controls.now += 29_999;
-	await f.vote(1, 'upvote', false);
-	assert.equal(f.controls.counts.length, 1);
-	f.controls.now++;
 	f.records.set(2, 'upvote');
 	f.records.set(3, 'upvote');
+	await f.vote(1, 'upvote', false);
+	assert.equal(f.comment.upvoteCount, 2);
 	await f.vote(1, 'upvote');
 	assert.equal(f.comment.upvoteCount, 3);
-	assert.equal(f.controls.counts.length, 2);
+	assert.deepEqual(f.controls.counts, ['upvote', 'upvote', 'upvote']);
 });
 
-test('一边超过 200 时另一边仍能独立校准，低估的实际数量最多查 201 条', async () => {
+test('赞和踩独立判断，跨过 233 时统计该方向的全部明细', async () => {
 	const f = fixture();
-	f.comment.downvoteCount = 350;
-	for (let uid = 1; uid <= 350; uid++) f.records.set(uid, 'downvote');
+	f.comment.upvoteCount = 232;
+	f.comment.downvoteCount = 400;
+	for (let uid = 1; uid <= 400; uid++) f.records.set(uid, 'downvote');
+	for (let uid = 401; uid <= 1000; uid++) f.records.set(uid, 'upvote');
 	await f.vote(1, 'upvote');
 	assert.deepEqual(f.controls.counts, ['upvote']);
-	assert.equal(f.comment.downvoteCount, 349);
-	f.controls.now += 30_000;
-	for (let uid = 351; uid < 700; uid++) f.records.set(uid, 'upvote');
-	await f.vote(700, 'upvote');
-	assert.equal(f.comment.upvoteCount, 201);
+	assert.equal(f.comment.upvoteCount, 601);
+	assert.equal(f.comment.downvoteCount, 399);
 });
 
 test('校准期间其他实例更改了计数，即使数字回到原值，旧统计也不能覆盖新版本', async () => {
@@ -159,11 +177,21 @@ test('错误的视频、评论 ID 或记录写入失败不会改动计数，计�
 	assert.equal(await f.vote(1, 'upvote'), true);
 	assert.equal(f.records.get(1), 'upvote');
 	assert.equal(f.controls.logs.length, 1);
+	assert.equal(f.comment.upvoteCount, 1);
 	f.controls.incrementError = undefined;
 	assert.equal(await f.vote(1, 'upvote'), false);
 	assert.equal(f.comment.upvoteCount, 1);
 	await f.vote(2, 'upvote');
 	assert.equal(f.comment.upvoteCount, 2);
+});
+
+test('增量已写入但响应丢失时只核对明细，保存的赞仍是一个', async () => {
+	const f = fixture();
+	f.controls.replyLost = new Error('响应丢失');
+	assert.equal(await f.vote(1, 'upvote'), true);
+	assert.equal(f.comment.upvoteCount, 1);
+	assert.equal(f.controls.writes, 1);
+	assert.deepEqual(f.controls.counts, ['upvote']);
 });
 
 test('四个公开接口都将重复操作视为成功，无效参数或异常仍是失败', async () => {

@@ -104,12 +104,16 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 		}
 	});
 
-	await t.test('主库按方向校准，两个实例共享 30 秒上限，查询最多读取 201 条', async () => {
+	await t.test('两个实例连续升降到 233 时各自按该方向的全部明细校准', async () => {
 		const comment = newComment();
-		// 从 5 增至 6 也要校准，触发条件只取决于时间和数量上限。
-		comment.upvoteCount = 5;
-		comment.downvoteCount = 250;
+		comment.upvoteCount = 232;
+		comment.downvoteCount = 234;
 		await comments.insertOne(comment);
+		const existing = (uid, direction) => ({ commentId: comment._id.toString(), uid, UUID: 'uuid-' + uid, direction });
+		await records.insertMany([
+			...Array.from({ length: 300 }, (_, uid) => existing(uid + 1, 'upvote')),
+			...Array.from({ length: 233 }, (_, uid) => existing(uid + 1001, 'downvote')),
+		]);
 		const queries = [];
 		const client = mongoose.connection.getClient();
 		const watch = ({ command }) => {
@@ -117,19 +121,15 @@ test('MongoDB 实测：部署迁移、并发状态和评论列表', { skip: !uri
 		};
 		client.on('commandStarted', watch);
 		try {
-			await vote(0, comment._id, 11, 'upvote');
-			assert.deepEqual(await counts(comment._id), [1, 250]);
-			const firstCheck = (await comments.findOne({ _id: comment._id })).voteRecountAt;
-			assert.ok(firstCheck > 0);
-			await vote(1, comment._id, 11, 'upvote', false);
-			await vote(1, comment._id, 12, 'upvote');
-			assert.equal(queries.length, 1);
-			assert.equal((await comments.findOne({ _id: comment._id })).voteRecountAt, firstCheck);
-			await comments.updateOne({ _id: comment._id }, { $set: { voteRecountAt: 0, upvoteCount: 6 } });
-			await vote(0, comment._id, 12, 'upvote', false);
-			assert.deepEqual(await counts(comment._id), [0, 250]);
-			assert.equal(queries.length, 2);
-			assert.ok(queries.every(p => p.some(stage => stage.$limit === 201) && p[0].$match.direction === 'upvote'));
+			await vote(0, comment._id, 2000, 'upvote');
+			assert.deepEqual(await counts(comment._id), [301, 234]);
+			await vote(1, comment._id, 1001, 'downvote', false);
+			assert.deepEqual(await counts(comment._id), [301, 232]);
+			await vote(0, comment._id, 1001, 'downvote');
+			assert.deepEqual(await counts(comment._id), [301, 233]);
+			assert.equal(await vote(1, comment._id, 1001, 'downvote'), false);
+			assert.deepEqual(queries.map(p => p[0].$match.direction), ['upvote', 'downvote', 'downvote']);
+			assert.ok(queries.every(p => p.every(stage => stage.$limit === undefined)));
 		} finally {
 			client.off('commandStarted', watch);
 		}
