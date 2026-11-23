@@ -1,4 +1,4 @@
-import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
+import { isPassRbacCheck } from '../service/RbacService.js'
 import { parseInteger } from '../common/ValidTool.js'
 import { createVideoTagService, getVideoTagByTagIdService, searchVideoTagService } from '../service/VideoTagService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'

@@ -1,4 +1,4 @@
-import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
+import { isPassRbacCheck } from '../service/RbacService.js'
 import { adminDeleteVideoCommentService, cancelVideoCommentDownvoteService, cancelVideoCommentUpvoteService, deleteSelfVideoCommentService, emitVideoCommentDownvoteService, emitVideoCommentService, emitVideoCommentUpvoteService, getVideoCommentListByKvidService } from '../service/VideoCommentService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminDeleteVideoCommentRequestDto, CancelVideoCommentDownvoteRequestDto, CancelVideoCommentUpvoteRequestDto, DeleteSelfVideoCommentRequestDto, EmitVideoCommentDownvoteRequestDto, EmitVideoCommentRequestDto, EmitVideoCommentUpvoteRequestDto, GetVideoCommentByKvidRequestDto } from './VideoCommentControllerDto.js'

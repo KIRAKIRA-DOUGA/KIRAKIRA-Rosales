@@ -7,6 +7,7 @@ import { RbacApiSchema, RbacRoleSchema } from '../dbPool/schema/RbacSchema.js'
 import { v4 as uuidV4 } from 'uuid'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { abortAndEndSession, commitAndEndSession, createAndStartSession } from '../common/MongoDBSessionTool.js'
+import { koaCtx } from '../type/koaTypes.js'
 import { clearUndefinedItemInObject, isEmptyObject } from '../common/ObjectTool.js'
 import { logging } from './loggingService.js'
 
@@ -71,6 +72,33 @@ export const checkUserByRbac = async (params: CheckUserRbacParams): Promise<Chec
 	} catch (error) {
 		logging('ERROR', '用户执行 RBAC 鉴权时出现错误，未知错误：', error)
 		return { status: 500, message: '用户执行 RBAC 鉴权时出现错误，未知错误' }
+	}
+}
+
+/**
+ * 在 Controller 层通过 RBAC 检查用户的权限
+ * 该函数是 checkUserByRbac 的二次封装，包含校验失败时 ctx 中状态码和错误信息的补全功能，并返回简单的 boolean 类型结果，该结果用于在 Controller 中判断后续代码是否需要继续执行
+ * @param params 通过 RBAC 检查用户的权限的参数
+ * @param ctx koa context
+ * @returns boolean 类型的权限检查结果，通过返回 true，不通过返回 false
+ */
+export const isPassRbacCheck = async (params: CheckUserRbacParams, ctx: koaCtx): Promise<boolean> => {
+	try {
+		const rbacCheckResult = await checkUserByRbac(params)
+		const { status: rbacStatus, message: rbacMessage } = rbacCheckResult
+		if (rbacStatus !== 200) {
+			ctx.status = rbacStatus
+			ctx.body = rbacMessage
+			logging('WARN', `RBAC - ${rbacStatus} - ${rbacMessage}`)
+			return false
+		}
+
+		return true
+	} catch (error) {
+		logging('ERROR', '在 Controller 层执行 RBAC 鉴权时出现错误，未知错误：', error)
+		ctx.status = 500
+		ctx.body = '在 Controller 层执行 RBAC 鉴权时出现错误，未知错误'
+		return false
 	}
 }
 

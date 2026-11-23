@@ -1,5 +1,5 @@
 import { getStgEnvBackEndSecretService } from '../service/ConsoleSecretService.js'
-import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
+import { isPassRbacCheck } from '../service/RbacService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 
 /**

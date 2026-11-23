@@ -1,6 +1,5 @@
 import { limitPageSize, parseInteger } from '../common/ValidTool.js'
-import { isPassRbacCheck } from '../common/RbacRequestGuard.js'
-import { createRbacApiPathService, createRbacRoleService, updateApiPathPermissionsForRoleService, getRbacApiPathService, deleteRbacApiPathService, deleteRbacRoleService, getRbacRoleService, adminGetUserRolesByUidService, adminUpdateUserRoleService } from '../service/RbacService.js'
+import { isPassRbacCheck, createRbacApiPathService, createRbacRoleService, updateApiPathPermissionsForRoleService, getRbacApiPathService, deleteRbacApiPathService, deleteRbacRoleService, getRbacRoleService, adminGetUserRolesByUidService, adminUpdateUserRoleService } from '../service/RbacService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { AdminGetUserRolesByUidRequestDto, AdminUpdateUserRoleRequestDto, CreateRbacApiPathRequestDto, CreateRbacRoleRequestDto, DeleteRbacApiPathRequestDto, DeleteRbacRoleRequestDto, GetRbacApiPathRequestDto, GetRbacRoleRequestDto, UpdateApiPathPermissionsForRoleRequestDto } from './RbacControllerDto.js'
 
