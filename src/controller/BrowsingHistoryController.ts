@@ -1,6 +1,5 @@
 import { createOrUpdateBrowsingHistoryService, getUserBrowsingHistoryWithFilterService } from '../service/BrowsingHistoryService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { parseInteger } from '../common/ValidTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto, GetUserBrowsingHistoryWithFilterRequestDto } from './BrowsingHistoryControllerDto.js'
 
 /**
@@ -14,7 +13,6 @@ export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, n
 	const token = ctx.cookies.get('token')
 	const createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto = {
 		/** 用户的 UUID - 非空 */
-		uuid: data.uuid,
 		/** 浏览的内容的类型，比如说 video, photo 等 - 非空 */
 		category: data.category,
 		/** 浏览的内容的唯一 ID - 非空 */
@@ -34,13 +32,13 @@ export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, n
  */
 export const getUserBrowsingHistoryWithFilterController = async (ctx: koaCtx, next: koaNext) => {
 	const videoTitle = ctx.query.videoTitle as string
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const getUserBrowsingHistoryWithFilterRequest: GetUserBrowsingHistoryWithFilterRequestDto = {
 		/** 过滤条件 - 视频标题 */
 		videoTitle,
 	}
-	const getUserBrowsingHistoryWithFilterResponse = await getUserBrowsingHistoryWithFilterService(getUserBrowsingHistoryWithFilterRequest, uid, token)
+	const getUserBrowsingHistoryWithFilterResponse = await getUserBrowsingHistoryWithFilterService(getUserBrowsingHistoryWithFilterRequest, uuid, token)
 	ctx.body = getUserBrowsingHistoryWithFilterResponse
 	await next()
 }

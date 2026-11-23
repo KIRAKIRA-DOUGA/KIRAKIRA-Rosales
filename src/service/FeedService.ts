@@ -1,7 +1,7 @@
 import { ClientSession, InferSchemaType, PipelineStage } from 'mongoose'
 import { AddNewUid2FeedGroupRequestDto, AddNewUid2FeedGroupResponseDto, AdministratorApproveFeedGroupInfoChangeRequestDto, AdministratorApproveFeedGroupInfoChangeResponseDto, AdministratorDeleteFeedGroupRequestDto, AdministratorDeleteFeedGroupResponseDto, CreateFeedGroupRequestDto, CreateFeedGroupResponseDto, CreateOrEditFeedGroupInfoRequestDto, CreateOrEditFeedGroupInfoResponseDto, DeleteFeedGroupRequestDto, DeleteFeedGroupResponseDto, FOLLOWING_TYPE, FollowingUploaderRequestDto, FollowingUploaderResponseDto, GetFeedContentRequestDto, GetFeedContentResponseDto, GetFeedGroupCoverUploadSignedUrlResponseDto, GetFeedGroupListResponseDto, GetFollowListRequestDto, GetFollowListResponseDto, GetFollowStatsRequestDto, GetFollowStatsResponseDto, RemoveUidFromFeedGroupRequestDto, RemoveUidFromFeedGroupResponseDto, UnfollowingUploaderRequestDto, UnfollowingUploaderResponseDto } from '../controller/FeedControllerDto.js'
 import { FeedGroupSchema, FollowingSchema, UnfollowingSchema } from '../dbPool/schema/FeedSchema.js'
-import { UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
+import { UserAuthSchema, UserSettingsSchema } from '../dbPool/schema/UserSchema.js'
 import { checkUserExistsByUuidService, checkUserTokenByUuidService, getUserUuid } from './UserService.js'
 import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPool.js'
@@ -12,6 +12,33 @@ import { generateSecureRandomString } from '../common/RandomTool.js'
 import { createCloudflareImageUploadSignedUrl } from '../cloudflare/index.js'
 import { VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { logging } from './loggingService.js'
+
+// 旧版封面文件名含有创建者的用户 UUID，改用默认封面，用户可重新上传。
+const legacyGroupCover = /feed-group-cover-(?:[a-z0-9]{24}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})-/i
+
+// 分组在库内使用 UUID 关联账号，返回给客户端时一次查询所有成员的公开 UID。
+async function publicFeedGroups(groups: InferSchemaType<typeof FeedGroupSchema.schemaInstance>[]): Promise<GetFeedGroupListResponseDto['result']> {
+	const members = [...new Set(groups.flatMap(group => group.uuidList ?? []))]
+	const uidByUuid = new Map<string, number>()
+	if (members.length) {
+		const { collectionName, schemaInstance } = UserAuthSchema
+		const accounts = await selectDataFromMongoDB({ UUID: { $in: members } }, { UUID: 1, uid: 1 }, schemaInstance, collectionName)
+		if (!accounts.success) {
+			throw new Error('获取分组成员的公开 UID 失败')
+		}
+		for (const account of accounts.result) {
+			uidByUuid.set(account.UUID, account.uid)
+		}
+	}
+	return groups.map(group => ({
+		feedGroupUuid: group.feedGroupUuid,
+		feedGroupName: group.feedGroupName,
+		uidList: (group.uuidList ?? []).map(uuid => uidByUuid.get(uuid)).filter(uid => uid !== undefined),
+		customCover: legacyGroupCover.test(group.customCover ?? '') ? undefined : group.customCover,
+		editDateTime: group.editDateTime,
+		createDateTime: group.createDateTime,
+	}))
+}
 
 /**
  * 用户关注一个创作者
@@ -376,7 +403,7 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 		const sessionToCommit = session
 		session = false // 提交函数负责在成功或失败后关闭会话。
 		await commitAndEndSession(sessionToCommit)
-		return { success: true, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 成功', feedGroupResult: findOneAndUpdateFeedGroupData }
+		return { success: true, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 成功', feedGroupResult: (await publicFeedGroups([findOneAndUpdateFeedGroupData]))[0] }
 	} catch (error) {
 		logging('ERROR', '向一个动态分组中添加新的 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 时出错：未知原因。' }
@@ -481,7 +508,7 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 		const sessionToCommit = session
 		session = false // 提交函数负责在成功或失败后关闭会话。
 		await commitAndEndSession(sessionToCommit)
-		return { success: true, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 成功', feedGroupResult: findOneAndUpdateFeedGroupData }
+		return { success: true, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 成功', feedGroupResult: (await publicFeedGroups([findOneAndUpdateFeedGroupData]))[0] }
 	} catch (error) {
 		logging('ERROR', '从一个动态分组中移除 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 时出错：未知原因。' }
@@ -547,7 +574,7 @@ export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, toke
 			return { success: false, message: '获取用于上传动态分组封面图的预签名 URL 失败，用户校验未通过' }
 		}
 		const now = new Date().getTime()
-		const fileName = `feed-group-cover-${uuid}-${generateSecureRandomString(32)}-${now}`
+		const fileName = `feed-group-cover-${generateSecureRandomString(32)}-${now}`
 		try {
 			const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
 			if (signedUrl) {
@@ -608,7 +635,7 @@ export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfo
 			return { success: false, message: '创建或更新动态分组信息失败，更新失败' }
 		}
 
-		return { success: true, message: '创建或更新动态分组信息成功', feedGroupResult: findOneAndUpdateFeedGroupDataResult.result }
+		return { success: true, message: '创建或更新动态分组信息成功', feedGroupResult: (await publicFeedGroups([findOneAndUpdateFeedGroupDataResult.result]))[0] }
 	} catch (error) {
 		logging('ERROR', '创建或更新动态分组信息时出错：未知原因', error)
 		return { success: false, message: '创建或更新动态分组信息时出错：未知原因' }
@@ -742,7 +769,7 @@ export const getFeedGroupListService = async (uuid: string, token: string): Prom
 			return { success: false, message: '获取动态分组失败，查询失败' }
 		}
 
-		return { success: true, message: '获取动态分组成功', result: getFeedGroupResult.result }
+		return { success: true, message: '获取动态分组成功', result: await publicFeedGroups(getFeedGroupResult.result) }
 	} catch (error) {
 		logging('ERROR', '获取动态分组时出错：', error)
 		return { success: false, message: '获取动态分组时出错，未知原因' }
@@ -996,7 +1023,7 @@ export const getFollowStatsService = async (getFollowStatsRequest: GetFollowStat
  * @param token 查看者的 token（可选）
  * @returns 获取用户关注列表的请求响应
  */
-export const getFollowingListService = async (getFollowingListRequest: GetFollowListRequestDto, uuid: string | undefined, _token: string | undefined): Promise<GetFollowListResponseDto> => {
+export const getFollowingListService = async (getFollowingListRequest: GetFollowListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowListResponseDto> => {
 	try {
 		if (!checkGetFollowListRequest(getFollowingListRequest)) {
 			logging('ERROR', '获取关注列表失败：参数不合法')
@@ -1016,7 +1043,7 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 			return { success: false, message: '获取关注列表失败：目标用户不存在' }
 		}
 
-		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, 'privacy.follow')
+		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, token, 'privacy.follow')
 		if (!canView) {
 			logging('ERROR', '获取关注列表失败：没有权限查看')
 			return { success: false, message: '获取关注列表失败：没有权限查看该用户的关注列表' }
@@ -1098,7 +1125,7 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
  * @param token 查看者的 token（可选）
  * @returns 获取用户粉丝列表的请求响应
  */
-export const getFollowerListService = async (getFollowerListRequest: GetFollowListRequestDto, uuid: string | undefined, _token: string | undefined): Promise<GetFollowListResponseDto> => {
+export const getFollowerListService = async (getFollowerListRequest: GetFollowListRequestDto, uuid: string | undefined, token: string | undefined): Promise<GetFollowListResponseDto> => {
 	try {
 		if (!checkGetFollowListRequest(getFollowerListRequest)) {
 			logging('ERROR', '获取粉丝列表失败：参数不合法')
@@ -1118,7 +1145,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollowLi
 			return { success: false, message: '获取关注列表失败：目标用户不存在' }
 		}
 
-		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, 'privacy.fans')
+		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, token, 'privacy.fans')
 		if (!canView) {
 			logging('ERROR', '获取粉丝列表失败：没有权限查看')
 			return { success: false, message: '获取粉丝列表失败：没有权限查看该用户的粉丝列表' }
@@ -1331,13 +1358,15 @@ const checkGetFollowListRequest = (getFollowListRequest: GetFollowListRequestDto
 /**
  * 检查用户隐私权限
  * @param targetUuid 目标用户的 UUID
- * @param viewerUuid 查看者的 UUID（可选，如果未登录则为 undefined）
+ * @param uuid 查看者的 UUID（可选）
+ * @param token 查看者的登录凭据（可选）
  * @param privacyId 隐私数据项 ID（如 'privacy.follow' 或 'privacy.fans'）
  * @returns 可以查看返回 true，否则返回 false
  */
-const checkFeedPrivacyPermission = async (targetUuid: string, viewerUuid: string | undefined, privacyId: 'privacy.follow' | 'privacy.fans'): Promise<boolean> => {
+const checkFeedPrivacyPermission = async (targetUuid: string, uuid: string | undefined, token: string | undefined, privacyId: 'privacy.follow' | 'privacy.fans'): Promise<boolean> => {
 	try {
-		// 如果是自己查看，总是允许
+		const viewerUuid = uuid && token && (await checkUserTokenByUuidService(uuid, token)).success ? uuid : undefined
+		// 只有验证过的查看者才能使用本人或关注者可见的权限。
 		if (viewerUuid && viewerUuid === targetUuid) {
 			return true
 		}
@@ -1353,7 +1382,10 @@ const checkFeedPrivacyPermission = async (targetUuid: string, viewerUuid: string
 		}
 		const result = await selectDataFromMongoDB<UserSettings>(where, select, schemaInstance, collectionName)
 
-		if (!result.success || !result.result || result.result.length === 0) {
+		if (!result.success || !result.result) {
+			return false
+		}
+		if (result.result.length === 0) {
 			// 如果没有设置，默认公开
 			return true
 		}

@@ -3,19 +3,20 @@
  *
  * develop 和 production 分别执行一次。
  * 1. 准备本版本的镜像。从源码运行时，在项目根目录依次执行 npm ci 和 npm run build。
- * 2. 暂停评论发布、删除、赞踩和视频赞踩，等旧实例处理完正在执行的请求，备份目标业务库。
+ * 2. 暂停资料编辑与审核、评论发布与删除以及评论和视频赞踩，等旧实例处理完正在执行的请求，备份目标业务库。
  * 3. 通过部署密钥设置 COMMENT_VOTE_MIGRATION_URI（含认证和 TLS 选项）和 MONGODB_NAME（业务库名），
  *    在项目根目录运行 node migrations/pr-119.mjs。
- * 4. 核对输出的数据库名及两项迁移的完成状态。新版后端启动时会建立赞踩表、评论和视频原表及
+ * 4. 核对输出的数据库名及各项迁移的完成状态。新版后端启动时会建立赞踩表、评论和视频原表及
  *    归档表的索引。若唯一索引报告重复键，先核对重复记录。前后端均已就绪后恢复写入。
  *    四个评论赞踩接口都接收 { videoId, commentRoute }，例如 { videoId: 13, commentRoute: '13.2' }。
  *
- * 两项分别记录完成状态。中断时保持暂停，重跑同一条命令即可继续。视频仍按最后一次有效操作
+ * 各项分别记录完成状态。中断时保持暂停，重跑同一条命令即可继续。视频仍按最后一次有效操作
  * 合并到 video-votes，保留旧集合。已迁移的视频明细只移除多余的 uid 字段。
  * 首次迁移评论时，从旧点赞表和点踩表取每人最后一条有效记录，时间相同取较大的原记录 ID。
  * 已完成旧版评论单表迁移时，只读 video-comment-votes 的当前状态，避免重新导入已经取消的赞踩。
  * 用原评论的 _id 找到 commentRoute，跳过已删除的评论和旧双表中视频错配的记录。新版使用
  * video-comment-reactions，以 (commentRoute, UUID) 唯一标识赞踩。已迁移到 video-comment-route-votes 的环境直接读取该表。原集合保留用于回退。迁移后按路由重建所有评论的赞数和踩数，包括零。
+ * 旧版本将私人 UUID 用作用户名时，替换成不含身份信息的随机用户名。旧版分组封面地址仍存档，新页面显示默认封面，重新上传后可恢复自定义封面。
  * 恢复写入后如需回退，先将新状态迁回旧表，或恢复至经确认的备份。
  *
  * 新版评论列表直接读取缓存总数，登录用户另查自己的状态。增减达到或跨过斐波那契数时，按该方向的
@@ -23,6 +24,7 @@
  * 用户状态和缓存分两次写入。更新计数报错时按明细核对，旧统计通过版本检查后才能写回。
  * 进程中断留下的误差可能保留到下次成功核对，计数长期停在两个阈值之间时也可能长期有偏差。
  */
+import { randomBytes } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import mongoose from 'mongoose'
 import { VideoCommentVoteSchema } from '../dist/dbPool/schema/VideoCommentSchema.js'
@@ -83,7 +85,12 @@ export async function migrateCommentVotes(db) {
 	const singleTableMigration = await migrations.findOne({ _id: 'single-comment-vote-v1' })
 	let source = 'video-comment-route-votes'
 	const readVotes = []
-	if (!routeMigration) {
+	if (routeMigration) {
+		readVotes.push(
+			{ $lookup: { from: 'video-comments', localField: 'commentRoute', foreignField: 'commentRoute', as: 'comment', pipeline: [{ $project: { _id: 1 } }] } },
+			{ $match: { 'comment.0': { $exists: true } } },
+		)
+	} else {
 		source = singleTableMigration ? 'video-comment-votes' : 'video-comment-upvotes'
 		if (!singleTableMigration) {
 			readVotes.push(...legacyCommentVotes('upvote'),
@@ -177,6 +184,37 @@ export async function migrateVideoVotes(db) {
 	return true
 }
 
+/**
+ * 替换旧版本清空用户资料时用用户 UUID 生成的公开用户名。
+ * @param db 目标业务数据库
+ * @returns 此次替换的用户名数量
+ */
+export async function migratePrivateUsernames(db) {
+	const migrations = db.collection('schema-migrations')
+	const marker = 'private-usernames-pr119'
+	if (await migrations.findOne({ _id: marker })) {
+		return 0
+	}
+	const profiles = db.collection('user-infos')
+	const oldName = /^(?:[a-z0-9]{24}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?:_[a-z0-9]{6})?$/i
+	const candidates = profiles.find({ username: oldName }, { projection: { username: 1, UUID: 1 } })
+	let changed = 0
+	for await (const profile of candidates) {
+		if (profile.username.split('_')[0].toLowerCase() !== profile.UUID?.toLowerCase()) {
+			continue
+		}
+		// 条件包含原名，恢复中断的迁移时可保留已完成的更名。
+		const username = `user_${randomBytes(6).toString('hex')}`
+		if (await profiles.findOne({ username }, { collation: { locale: 'en', strength: 2 }, projection: { _id: 1 } })) {
+			throw new Error('生成的替代用户名已存在，请重跑迁移')
+		}
+		const result = await profiles.updateOne({ _id: profile._id, username: profile.username }, { $set: { username } })
+		changed += result.modifiedCount
+	}
+	await migrations.insertOne({ _id: marker, completedAt: new Date() })
+	return changed
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 	const uri = process.env.COMMENT_VOTE_MIGRATION_URI
 	const database = process.env.MONGODB_NAME
@@ -191,6 +229,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 		console.info(database, commentsChanged ? '评论赞踩记录迁移完成' : '评论赞踩记录已迁移')
 		const videosChanged = await migrateVideoVotes(db)
 		console.info(database, videosChanged ? '视频赞踩记录迁移完成' : '视频赞踩记录已迁移')
+		// 初始化标识用于读取展示偏好，部署时为已有账号显式建立查询索引。
+		await db.collection('user-auths').createIndex({ userDataBootstrapHint: 1 }, { sparse: true })
+		console.info(database, '本次替换旧用户名数量', await migratePrivateUsernames(db))
 	} finally {
 		await client.close()
 	}

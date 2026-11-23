@@ -42,7 +42,7 @@ class UserAuthSchemaFactory {
 	/** MongoDB 集合名 */
 	collectionName = 'user-auth'
 	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
+	schemaInstance = new Schema(this.schema).index({ userDataBootstrapHint: 1 }, { sparse: true })
 }
 export const UserAuthSchema = new UserAuthSchemaFactory()
 

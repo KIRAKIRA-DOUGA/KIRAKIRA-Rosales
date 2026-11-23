@@ -7,14 +7,14 @@ import { generateSecureRandomString } from '../common/RandomTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto } from '../controller/BrowsingHistoryControllerDto.js'
 import { ApprovePendingReviewVideoRequestDto, ApprovePendingReviewVideoResponseDto, CheckVideoBlockedByKvidResponseDto, CheckVideoExistRequestDto, CheckVideoExistResponseDto, DeleteVideoRequestDto, DeleteVideoResponseDto, GetVideoByKvidRequestDto, GetVideoByKvidResponseDto, GetVideoByUidRequestDto, GetVideoByUidResponseDto, GetVideoCoverUploadSignedUrlResponseDto, GetVideoFileTusEndpointRequestDto, PendingReviewVideoResponseDto, SearchVideoByKeywordRequestDto, SearchVideoByKeywordResponseDto, SearchVideoByVideoTagIdRequestDto, SearchVideoByVideoTagIdResponseDto, ThumbVideoResponseDto, UploadVideoRequestDto, UploadVideoResponseDto, VideoPartDto } from '../controller/VideoControllerDto.js'
 import { DbPoolOptions, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB, insertData2MongoDB, selectDataByAggregateFromMongoDB, selectDataFromMongoDB, findOneAndPlusByMongodbId, insertIfNotExist, isQueryResultsEmpty } from '../dbPool/DbClusterPool.js'
-import { OrderByType, QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
+import { QueryType, SelectType, UpdateType } from '../dbPool/DbClusterPoolTypes.js'
 import { UserInfoSchema } from '../dbPool/schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from '../dbPool/schema/VideoSchema.js'
 import { deleteDataFromElasticsearchCluster, insertData2ElasticsearchCluster, searchDataFromElasticsearchCluster } from '../elasticsearchPool/ElasticsearchClusterPool.js'
 import { VideoDocument } from '../elasticsearchPool/template/VideoDocument.js'
 import { createOrUpdateBrowsingHistoryService } from './BrowsingHistoryService.js'
 import { getNextSequenceValueEjectService } from './SequenceValueService.js'
-import { checkUserTokenByUuidService, checkUserTokenService, getUserUid, getUserUuid } from './UserService.js'
+import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
 import { FollowingSchema } from '../dbPool/schema/FeedSchema.js'
 import { buildBlockListMongooseFilter, checkBlockUserService, checkIsBlockedByOtherUserService } from './BlockService.js'
 import { logging } from './loggingService.js'
@@ -28,23 +28,17 @@ import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
  * @param esClient Elasticsearch 客户端连接
  * @returns 上传视频的结果
  */
-export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uid: number, token: string, _esClient?: Client): Promise<UploadVideoResponseDto> => {
+export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uuid: string, token: string, _esClient?: Client): Promise<UploadVideoResponseDto> => {
 	try {
 		if (checkUploadVideoRequest(uploadVideoRequest)) {
-			if (!(await checkUserTokenService(uid, token)).success) {
+			if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 				logging('ERROR', '上传视频失败，用户校验未通过')
 				return { success: false, message: '上传视频失败，用户校验未通过' }
 			}
 
-			if (uploadVideoRequest.uploaderId !== uid) {
-				logging('ERROR', '上传视频失败, UID 与 cookie 不相符')
-				return { success: false, message: '上传视频失败, 账户未对齐' }
-			}
-
-			const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
-			if (!UUID) {
-				logging('ERROR', '上传视频失败，UUID 不存在', undefined, { uid })
-				return { success: false, message: '上传视频失败，UUID 不存在' }
+			const uploaderId = await getUserUid(uuid)
+			if (!uploaderId) {
+				return { success: false, message: '上传视频失败，找不到上传者账号' }
 			}
 
 			// 启动事务
@@ -74,8 +68,8 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 					image: uploadVideoRequest.image,
 					uploadDate: nowDate,
 					watchedCount: 0,
-					uploaderUUID: UUID,
-					uploaderId: uploadVideoRequest.uploaderId,
+					uploaderUUID: uuid,
+					uploaderId,
 					duration: uploadVideoRequest.duration,
 					description,
 					videoCategory,
@@ -121,7 +115,7 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '视频上传失败，获取视频 ID 失败' }
 			}
 		} else {
-			logging('ERROR', `上传视频时的字段校验未通过或 Es 客户端未连接，用户ID：${uploadVideoRequest.uploaderId}`)
+			logging('ERROR', '上传视频时的字段校验未通过或 Es 客户端未连接')
 			return { success: false, message: '上传时携带的参数不正确或搜索引擎客户端未连接' }
 		}
 	} catch (error) {
@@ -132,9 +126,12 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 
 /**
  * 获取主页视频 // TODO 应该使用推荐算法，而不是获取最后上传的 100 个视频
+ * @param uuid 当前用户的 UUID，游客可省略
+ * @param token 登录凭据
+ * @param userDataBootstrapHint 服务端渲染时读取展示偏好的标识
  * @returns 获取主页视频的请求响应
  */
-export const getThumbVideoService = async (uid?: number, uuid?: string, userDataBootstrapHint?: string): Promise<ThumbVideoResponseDto> => {
+export const getThumbVideoService = async (uuid?: string, token?: string, userDataBootstrapHint?: string): Promise<ThumbVideoResponseDto> => {
 	try {
 		const blockListFilter = await buildBlockListMongooseFilter(
 			[
@@ -159,7 +156,7 @@ export const getThumbVideoService = async (uid?: number, uuid?: string, userData
 					category: 'regex',
 				},
 			],
-			{ uid, uuid, userDataBootstrapHint },
+			uuid && token ? { uuid, token } : { userDataBootstrapHint },
 		)
 
 		const getThumbVideoPipeline: PipelineStage[] = [
@@ -415,12 +412,13 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 		try {
 			// 使用 Pipeline 查询视频及上传者数据
 			const result = await selectDataByAggregateFromMongoDB(videoSchemaInstance, videoCollectionName, getThumbVideoPipeline)
-			const video = result.result?.[0] as GetVideoByKvidResponseDto['video']
-			if (!result.success || !video) {
+			const row = result.result?.[0] as GetVideoByKvidResponseDto['video'] & { uploaderUUID: string }
+			if (!result.success || !row) {
 				logging('ERROR', '视频页 - 获取到的视频结果或视频数组为空')
 				return { success: false, message: '视频页 - 未获取到视频', isBlocked: false, isBlockedByOther, isHidden }
 			}
 
+			const { uploaderUUID, ...video } = row
 			video.uploaderInfo.isFollowing = false // 默认没有关注上传者
 			video.uploaderInfo.isSelf = false // 默认上传者不是自己
 
@@ -457,7 +455,6 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 
 				// 6. 存储浏览历史记录
 				const createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto = {
-					uuid: selectorUuid,
 					category: 'video',
 					id: String(video.videoId),
 				}
@@ -468,7 +465,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				type Following = InferSchemaType<typeof followingSchemaInstance>
 				const followingWhere: QueryType<Following> = {
 					followerUuid: selectorUuid,
-					followingUuid: video.uploaderUUID,
+					followingUuid: uploaderUUID,
 				}
 				const followingSelect: SelectType<Following> = {
 					followerUuid: 1,
@@ -482,7 +479,7 @@ export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvi
 				}
 
 				// 8. 如果上传者 uuid 和当前登录用户 uuid 相同，则是自己查看自己的视频
-				if (video.uploaderUUID === selectorUuid) {
+				if (uploaderUUID === selectorUuid) {
 					video.uploaderInfo.isSelf = true
 				}
 
@@ -664,14 +661,14 @@ export const searchVideoByKeywordService = async (searchVideoByKeywordRequest: S
 
 /**
  * 获取视频文件 TUS 上传端点
- * @param uid 用户 UID
+ * @param uuid 当前用户 UUID
  * @param token 用户 token
  * @param getVideoFileTusEndpointRequest 获取视频文件 TUS 上传端点的请求载荷
  * @returns 获取视频文件 TUS 上传端点地址
  */
-export const getVideoFileTusEndpointService = async (uid: number, token: string, getVideoFileTusEndpointRequest: GetVideoFileTusEndpointRequestDto): Promise<string | undefined> => {
+export const getVideoFileTusEndpointService = async (uuid: string, token: string, getVideoFileTusEndpointRequest: GetVideoFileTusEndpointRequestDto): Promise<string | undefined> => {
 	try {
-		if ((await checkUserTokenService(uid, token)).success) {
+		if ((await checkUserTokenByUuidService(uuid, token)).success) {
 			const streamTusEndpointUrl = process.env.CF_STREAM_TUS_ENDPOINT_URL
 			const streamToken = process.env.CF_STREAM_TOKEN
 
@@ -712,7 +709,7 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 				return undefined
 			}
 		} else {
-			logging('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 用户校验未通过', undefined, { uid })
+			logging('ERROR', '无法创建 Cloudflare Stream TUS Endpoint, 用户校验未通过')
 			return undefined
 		}
 	} catch (error) {
@@ -723,15 +720,15 @@ export const getVideoFileTusEndpointService = async (uid: number, token: string,
 
 /**
  * 获取用于上传视频封面图的预签名 URL
- * @param uid 用户 UID
+ * @param uuid 当前用户 UUID
  * @param token 用户 token
  * @returns GetVideoCoverUploadSignedUrlResponseDto 获取用于上传视频封面图的预签名 URL 响应结果
  */
-export const getVideoCoverUploadSignedUrlService = async (uid: number, token: string): Promise<GetVideoCoverUploadSignedUrlResponseDto> => {
+export const getVideoCoverUploadSignedUrlService = async (uuid: string, token: string): Promise<GetVideoCoverUploadSignedUrlResponseDto> => {
 	try {
-		if ((await checkUserTokenService(uid, token)).success) {
+		if ((await checkUserTokenByUuidService(uuid, token)).success) {
 			const now = new Date().getTime()
-			const fileName = `video-cover-${uid}-${generateSecureRandomString(32)}-${now}`
+			const fileName = `video-cover-${generateSecureRandomString(32)}-${now}`
 			try {
 				const signedUrl = await createCloudflareImageUploadSignedUrl(fileName, 660)
 				if (signedUrl) {
@@ -848,23 +845,23 @@ export const searchVideoByVideoTagIdService = async (searchVideoByVideoTagIdRequ
 /**
  * 删除一个视频
  * @param deleteVideoRequest 删除一个视频的请求载荷
- * @param adminUid 管理员 UID
+ * @param adminUuid 管理员 UUID
  * @param adminToken 管理员 token
  * @param esClient Elasticsearch 客户端连接
  * @returns 删除一个视频的请求响应
  */
-export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, adminUid: number, adminToken: string, esClient: Client): Promise<DeleteVideoResponseDto> => {
+export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRequestDto, adminUuid: string, adminToken: string, esClient: Client): Promise<DeleteVideoResponseDto> => {
 	let session: mongoose.ClientSession | false = false
 	try {
 		if (!checkDeleteVideoRequest(deleteVideoRequest) || !esClient || isEmptyObject(esClient)) {
 			return { success: false, message: '删除视频失败，参数不合法' }
 		}
-		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+		if (!(await checkUserTokenByUuidService(adminUuid, adminToken)).success) {
 			return { success: false, message: '删除视频失败，用户校验未通过' }
 		}
-		const adminUUID = await getUserUuid(adminUid)
-		if (!adminUUID) {
-			return { success: false, message: '删除视频失败，未找到管理员 UUID' }
+		const adminUid = await getUserUid(adminUuid)
+		if (!adminUid) {
+			return { success: false, message: '删除视频失败，未找到管理员 UID' }
 		}
 		session = await createAndStartSession()
 		if (!session) {
@@ -881,7 +878,7 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 			return { success: false, message: '删除视频失败，未找到视频' }
 		}
 		// 归档读取原始记录，保留详情接口未返回的字段及分 P 数据。
-		const archive = { ...original, _operatorUUID_: adminUUID, _operatorUid_: adminUid, editDateTime: Date.now() }
+		const archive = { ...original, _operatorUUID_: adminUuid, _operatorUid_: adminUid, editDateTime: Date.now() }
 		const saved = await insertData2MongoDB(archive, RemovedVideoSchema.schemaInstance, RemovedVideoSchema.collectionName, options)
 		if (!saved.success) {
 			return { success: false, message: '删除视频失败，保存副本失败' }
@@ -911,83 +908,40 @@ export const deleteVideoByKvidService = async (deleteVideoRequest: DeleteVideoRe
 
 /**
  * 获取待审核视频列表
- * @param adminUid 管理员 UID
+ * @param adminUuid 管理员 UUID
  * @param adminToken 管理员 token
  * @returns 获取待审核视频列表的请求响应
  */
-export const getPendingReviewVideoService = async (adminUid: number, adminToken: string): Promise<PendingReviewVideoResponseDto> => {
+export const getPendingReviewVideoService = async (adminUuid: string, adminToken: string): Promise<PendingReviewVideoResponseDto> => {
 	try {
-		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+		if (!(await checkUserTokenByUuidService(adminUuid, adminToken)).success) {
 			logging('ERROR', '获取待审核视频列表失败，用户校验失败！')
 			return { success: false, message: '获取待审核视频列表失败，用户校验失败！', videosCount: 0, videos: [] }
 		}
 
-		const { collectionName: videoCollectionName, schemaInstance: videoSchemaInstance } = VideoSchema
-		const { collectionName: userInfoCollectionName, schemaInstance: _userInfoSchemaInstancee } = UserInfoSchema
-		type Video = InferSchemaType<typeof videoSchemaInstance>
-		type UserInfo = InferSchemaType<typeof _userInfoSchemaInstancee>
-		const where: QueryType<Video> = { pendingReview: true }
-		const select: SelectType<Video> = {
-			videoId: 1,
-			videoPart: 1,
-			title: 1,
-			image: 1,
-			uploadDate: 1,
-			watchedCount: 1,
-			uploaderId: 1,
-			duration: 1,
-			description: 1,
-			editDateTime: 1,
+		const { schemaInstance, collectionName } = VideoSchema
+		const pipeline: PipelineStage[] = [
+			{ $match: { pendingReview: true } },
+			{ $sort: { editDateTime: -1 } },
+			{ $lookup: {
+				from: 'user-infos',
+				localField: 'uploaderId',
+				foreignField: 'uid',
+				as: 'author',
+				pipeline: [{ $project: { userNickname: 1, username: 1 } }],
+			} },
+			{ $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
+			{ $project: {
+				videoId: 1, videoPart: 1, title: 1, image: 1, uploadDate: 1, watchedCount: 1,
+				uploaderId: 1, duration: 1, description: 1, editDateTime: 1,
+				uploader: { $ifNull: ['$author.userNickname', '$author.username'] },
+			} },
+		]
+		const result = await selectDataByAggregateFromMongoDB<PendingReviewVideoResponseDto['videos'][number]>(schemaInstance, collectionName, pipeline)
+		if (!result.success || !result.result?.length) {
+			return { success: false, message: '未获取到待审核视频', videosCount: 0, videos: [] }
 		}
-		const orderBy: OrderByType<Video> = {
-			editDateTime: -1,
-		}
-		const uploaderInfoKey = 'uploaderInfo'
-		const option: DbPoolOptions<Video, UserInfo> = {
-			virtual: {
-				name: uploaderInfoKey, // 虚拟属性名
-				options: {
-					ref: userInfoCollectionName, // 关联的子模型
-					localField: 'uploaderId', // 父模型中用于关联的字段
-					foreignField: 'uid', // 子模型中用于关联的字段
-					justOne: true, // 如果为 true 则只一条数据关联一个文档（即使有很多符合条件的）
-				},
-			},
-			populate: uploaderInfoKey,
-		}
-		try {
-			const result = await selectDataFromMongoDB<Video, UserInfo>(where, select, videoSchemaInstance, videoCollectionName, option, orderBy)
-			const videoResult = result.result
-			if (result.success && videoResult) {
-				const videosCount = videoResult?.length
-				if (videosCount && videosCount > 0) {
-					return {
-						success: true,
-						message: '获取待审核视频成功',
-						videosCount,
-						videos: videoResult.map(video => {
-							if (video) {
-								const uploaderInfo = uploaderInfoKey in video && video?.[uploaderInfoKey] as UserInfo
-								if (uploaderInfo) {
-									const uploader = uploaderInfo.userNickname ?? uploaderInfo.username
-									return { ...video, uploader }
-								}
-							}
-							return { ...video, uploader: undefined }
-						}),
-					}
-				} else {
-					logging('ERROR', '获取待审核视频列表失败，获取到的视频数组长度小于等于 0')
-					return { success: false, message: '获取待审核视频列表失败，视频数量为 0', videosCount: 0, videos: [] }
-				}
-			} else {
-				logging('ERROR', '获取待审核视频列表失败，获取到的视频结果或视频数组为空')
-				return { success: false, message: '获取待审核视频列表失败，未获取到视频', videosCount: 0, videos: [] }
-			}
-		} catch (error) {
-			logging('ERROR', '获取待审核视频列表时出错，获取视频时出现异常，查询失败：', error)
-			return { success: false, message: '获取待审核视频列表时出错，查询失败', videosCount: 0, videos: [] }
-		}
+		return { success: true, message: '获取待审核视频成功', videosCount: result.result.length, videos: result.result }
 	} catch (error) {
 		logging('ERROR', '获取待审核视频列表时出错，获取视频出错：', error)
 		return { success: false, message: '获取待审核视频列表时出错，获取视频出错', videosCount: 0, videos: [] }
@@ -997,19 +951,19 @@ export const getPendingReviewVideoService = async (adminUid: number, adminToken:
 /**
  * 通过一个待审核视频
  * @param approvePendingReviewVideoRequest 通过一个待审核视频的请求载荷
- * @param adminUid 管理员 UID
+ * @param adminUuid 管理员 UUID
  * @param adminToken 管理员 token
  * @param esClient 搜索服务客户端
  * @returns 通过一个待审核视频的请求响应
  */
-export const approvePendingReviewVideoService = async (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto, adminUid: number, adminToken: string, esClient?: Client): Promise<ApprovePendingReviewVideoResponseDto> => {
+export const approvePendingReviewVideoService = async (approvePendingReviewVideoRequest: ApprovePendingReviewVideoRequestDto, adminUuid: string, adminToken: string, esClient?: Client): Promise<ApprovePendingReviewVideoResponseDto> => {
 	try {
 		if (!checkApprovePendingReviewVideoRequest(approvePendingReviewVideoRequest)) {
 			logging('ERROR', '通过一个待审核视频失败，参数校验失败')
 			return { success: false, message: '通过一个待审核视频失败，参数校验失败' }
 		}
 
-		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+		if (!(await checkUserTokenByUuidService(adminUuid, adminToken)).success) {
 			logging('ERROR', '通过一个待审核视频失败，用户校验失败！')
 			return { success: false, message: '通过一个待审核视频失败，用户校验失败！' }
 		}
@@ -1164,7 +1118,6 @@ const checkUploadVideoRequest = (uploadVideoRequest: UploadVideoRequestDto) => {
 		uploadVideoRequest.videoPart && uploadVideoRequest.videoPart?.length > 0 && uploadVideoRequest.videoPart.every(checkVideoPartData)
 		&& uploadVideoRequest.title
 		&& uploadVideoRequest.image
-		&& uploadVideoRequest.uploaderId !== null && uploadVideoRequest.uploaderId !== undefined
 		&& uploadVideoRequest.duration
 		&& VIDEO_CATEGORY.includes(uploadVideoRequest.videoCategory)
 		&& uploadVideoRequest.copyright

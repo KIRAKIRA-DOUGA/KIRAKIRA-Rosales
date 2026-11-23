@@ -20,23 +20,23 @@ import { logging } from './loggingService.js'
 export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideoCommentRequestDto, uuid: string, token: string): Promise<EmitVideoCommentResponseDto> => {
 	try {
 		if (!checkEmitVideoCommentRequest(emitVideoCommentRequest)) {
-			logging('ERROR', '视频评论发送失败，弹幕数据校验未通过：', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '视频评论发送失败，弹幕数据校验未通过：', undefined, { videoId: emitVideoCommentRequest.videoId })
 			return { success: false, message: '视频评论发送失败，视频评论数据错误' }
 		}
 
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '视频评论发送失败，用户校验未通过', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '视频评论发送失败，用户校验未通过', undefined, { videoId: emitVideoCommentRequest.videoId })
 			return { success: false, message: '视频评论发送失败，用户校验未通过' }
 		}
 
 		if (!uuid) {
-			logging('ERROR', '评论发送失败，UUID 不存在', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '评论发送失败，UUID 不存在', undefined, { videoId: emitVideoCommentRequest.videoId })
 			return { success: false, message: '评论发送失败，UUID 不存在' }
 		}
 
 		const uid = await getUserUid(uuid)
 		if (uid === undefined || uid === null || uid < 1) {
-			logging('ERROR', '评论发送失败，获取发送者 UID 失败。', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '评论发送失败，获取发送者 UID 失败。', undefined, { videoId: emitVideoCommentRequest.videoId })
 			return { success: false, message: '评论发送失败，获取发送者 UID 失败。' }
 		}
 
@@ -47,16 +47,16 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 
 		const checkVideoBlockedResult = await checkVideoBlockedByKvidService(videoId, selectorUuid, selectorToken)
 		if (!checkVideoBlockedResult.success) {
-			logging('ERROR', '评论发送失败，检查视频是否被屏蔽失败', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '评论发送失败，检查视频是否被屏蔽失败', undefined, { videoId: emitVideoCommentRequest.videoId })
 			return { success: false, message: '评论发送失败，检查视频是否被屏蔽失败' }
 		}
 
 		if (checkVideoBlockedResult.isBlockedByOther) {
-			logging('ERROR', '评论发送失败，用户被其他用户屏蔽', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '评论发送失败，用户被其他用户屏蔽', undefined, { videoId: emitVideoCommentRequest.videoId })
 			return { success: false, message: '评论发送失败，用户被其他用户屏蔽' }
 		}
 		if (checkVideoBlockedResult.isBlocked) {
-			logging('ERROR', '评论发送失败，用户已屏蔽上传者', undefined, { videoId: emitVideoCommentRequest.videoId, uuid })
+			logging('ERROR', '评论发送失败，用户已屏蔽上传者', undefined, { videoId: emitVideoCommentRequest.videoId })
 			return { success: false, message: '评论发送失败，用户已屏蔽上传者' }
 		}
 
@@ -162,7 +162,7 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 			return { success: false, message: '视频评论发送失败，存储视频评论数据失败' }
 		}
 	} catch (error) {
-		logging('ERROR', '视频评论发送失败，错误信息：', error, { videoId: emitVideoCommentRequest.videoId, uuid })
+		logging('ERROR', '视频评论发送失败，错误信息：', error, { videoId: emitVideoCommentRequest.videoId })
 		return { success: false, message: '视频评论发送失败，未知错误' }
 	}
 }
