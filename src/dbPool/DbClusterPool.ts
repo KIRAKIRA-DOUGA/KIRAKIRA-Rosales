@@ -5,7 +5,7 @@ import { SequenceValueSchema } from './schema/SequenceSchema.js'
 import { UserInfoSchema, UserTotpAuthenticatorSchema } from './schema/UserSchema.js'
 import { RemovedVideoSchema, VideoSchema } from './schema/VideoSchema.js'
 import { VideoVoteSchema } from './schema/VideoVoteSchema.js'
-import { VideoCommentVoteSchema } from './schema/VideoCommentSchema.js'
+import { RemovedVideoCommentSchema, VideoCommentSchema, VideoCommentVoteSchema } from './schema/VideoCommentSchema.js'
 import { logging } from '../service/loggingService.js'
 
 /**
@@ -120,12 +120,14 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
 			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
 			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
-			// 等待 (commentRoute, uid) 唯一索引建好再接收请求，否则同一用户同时点赞两次可能插入两条记录。
-			await mongoose.model(VideoCommentVoteSchema.collectionName, VideoCommentVoteSchema.schemaInstance).init()
-			await mongoose.model(VideoVoteSchema.collectionName, VideoVoteSchema.schemaInstance).init()
-			// 首次归档需要同时写原表和归档表，等两边的索引建完再接收请求。
-			await mongoose.model(VideoSchema.collectionName, VideoSchema.schemaInstance).init()
-			await mongoose.model(RemovedVideoSchema.collectionName, RemovedVideoSchema.schemaInstance).init()
+			// 默认优先读副本，Mongoose 会跳过自动建索引。接收赞踩请求前要显式建好每人每条目标的唯一索引。
+			await mongoose.model(VideoCommentVoteSchema.collectionName, VideoCommentVoteSchema.schemaInstance).createIndexes()
+			await mongoose.model(VideoVoteSchema.collectionName, VideoVoteSchema.schemaInstance).createIndexes()
+			// 删除事务同时写原表和归档表，预先建好两边的索引，避免首次归档遇到建索引的写冲突。
+			await mongoose.model(VideoCommentSchema.collectionName, VideoCommentSchema.schemaInstance).createIndexes()
+			await mongoose.model(RemovedVideoCommentSchema.collectionName, RemovedVideoCommentSchema.schemaInstance).createIndexes()
+			await mongoose.model(VideoSchema.collectionName, VideoSchema.schemaInstance).createIndexes()
+			await mongoose.model(RemovedVideoSchema.collectionName, RemovedVideoSchema.schemaInstance).createIndexes()
 
 			console.info('MongoDB Cluster Connect successfully!\n')
 		} catch (error) {
