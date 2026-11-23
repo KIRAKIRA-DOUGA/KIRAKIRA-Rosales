@@ -4,6 +4,7 @@ import { Schema } from 'mongoose'
  * 自增序列
  */
 export class SequenceValueSchemaFactory {
+	/** MongoDB Schema */
 	schema = {
 		/** 自增的项，比如：videoId */
 		_id: { type: String, unique: true, required: true },

@@ -28,9 +28,8 @@ export class VideoWatchRecordSchemaFactory {
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema)
 
-	// 构造器
+	/** 按用户 UUID、视频 ID 和日期键 `watchDate` 声明联合唯一索引。 */
 	constructor() {
-		// 添加用户UUID、视频ID和观看日期的组合唯一索引，防止重复记录
 		this.schemaInstance.index({ UUID: 1, videoId: 1, watchDate: 1 }, { unique: true })
 	}
 }

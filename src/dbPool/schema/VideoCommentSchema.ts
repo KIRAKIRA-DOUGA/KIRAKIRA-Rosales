@@ -53,7 +53,7 @@ const VideoSubCommentIdSchema = {
 class VideoCommentSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
-		/** 评论的路由 - 非空 - 唯一 */ /** 如：1.2.3（第一号视频的第二个评论的第三个子回复） */
+		/** 评论的业务唯一标识，例如 `1.2.3` 表示 1 号视频第 2 条评论的第 3 条回复 - 非空 */
 		commentRoute: { type: String, required: true, unique: true },
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true },
@@ -88,7 +88,7 @@ class VideoCommentSchemaFactory {
 export const VideoCommentSchema = new VideoCommentSchemaFactory()
 
 /**
- * 已删除的视频评论数据
+ * 已删除的视频评论，保留原评论的 `commentRoute` 并记录删除操作人。
  */
 class RemovedVideoCommentSchemaFactory {
 	/** MongoDB Schema */
