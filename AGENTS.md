@@ -6,6 +6,11 @@ These instructions apply to the entire repository unless a more specific `AGENTS
 
 Correctness is a prerequisite. When writing new code, modifying existing code, or reviewing code written by humans or AI agents, your top priority must be to minimize the cognitive load on human reviewers.
 
+## User Identity and Privacy
+
+- Authenticate actions on the caller's own account with the private user UUID and a verified session or token. Read the caller's identity from that session. A public UID or a user identifier in the request body cannot establish who is calling.
+- Use the public UID to look up, display, or interact with another user. Only the authenticated owner may receive their own user UUID. This also applies to administrators, nested response data, error messages, public URLs, and filenames. Keep user UUIDs used for database joins on the server. UUIDs belonging to resources such as roles and groups are separate identifiers.
+
 ## Project Documentation
 
 - Read the relevant sections of [docs/README.md](docs/README.md) before proposing or implementing changes. Use its development guide as the reference for the project structure and request/data-access flow.

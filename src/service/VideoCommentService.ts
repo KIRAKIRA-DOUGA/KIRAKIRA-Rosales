@@ -5,17 +5,17 @@ import { insertData2MongoDB, selectDataFromMongoDB, deleteOneDataFromMongoDB, se
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { RemovedVideoCommentSchema, VideoCommentSchema, VideoCommentVoteSchema } from '../dbPool/schema/VideoCommentSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-import { checkUserTokenByUuidService, checkUserTokenService, getUserInfoByUidService, getUserUid, getUserUuid } from './UserService.js'
+import { checkUserTokenByUuidService, getUserInfoByUidService, getUserUid } from './UserService.js'
 import { buildBlockListMongooseFilter } from './BlockService.js'
 import { checkVideoBlockedByKvidService } from './VideoService.js'
 import { logging } from './loggingService.js'
 
 /**
  * 用户发送视频评论
- * @param emitVideoCommentRequest 用户发送的弹幕数据
- * @param uid cookie 中的用户 ID
+ * @param emitVideoCommentRequest 用户发送的评论数据
+ * @param uuid 当前用户的 UUID
  * @param token cookie 中的用户 token
- * @returns 用户发送弹幕的结果
+ * @returns 用户发送评论的结果
  */
 export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideoCommentRequestDto, uuid: string, token: string): Promise<EmitVideoCommentResponseDto> => {
 	try {
@@ -79,7 +79,8 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 		type VideoComment = InferSchemaType<typeof schemaInstance>
 		const nowDate = new Date().getTime()
 		const videoComment: VideoComment = {
-			...emitVideoCommentRequest,
+			videoId: emitVideoCommentRequest.videoId,
+			text: emitVideoCommentRequest.text,
 			UUID: uuid,
 			uid,
 			commentRoute: `${emitVideoCommentRequest.videoId}.${commentIndex}`,
@@ -118,7 +119,18 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 
 				const videoCommentResult: VideoCommentResult = {
 					_id: insertData2MongoDBResult.result?.[0]?._id?.toString(),
-					...videoComment,
+					videoId,
+					commentRoute: videoComment.commentRoute,
+					uid,
+					text: videoComment.text,
+					emitTime: nowDate,
+					commentIndex,
+					editDateTime: nowDate,
+					upvoteCount: 0,
+					downvoteCount: 0,
+					subComments: [],
+					subCommentsCount: 0,
+					isSelf: true,
 					userInfo: {
 						userNickname: videoCommentSenderUserInfoResult.userNickname,
 						username: videoCommentSenderUserInfoResult.username,
@@ -158,9 +170,11 @@ export const emitVideoCommentService = async (emitVideoCommentRequest: EmitVideo
 /**
  * 根据 KVID 获取视频评论列表，并检查当前用户是否对获取到的评论有点赞/点踩，如果有，相应的值会变为 true
  * @param getVideoCommentByKvidRequest 请求视频评论列表的查询参数
+ * @param uuid 登录用户的 UUID，游客可省略
+ * @param token 登录凭据
  * @returns 视频的视频评论列表
  */
-export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequest: GetVideoCommentByKvidRequestDto, uid: number, uuid: string, token: string): Promise<GetVideoCommentByKvidResponseDto> => {
+export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequest: GetVideoCommentByKvidRequestDto, uuid: string, token: string): Promise<GetVideoCommentByKvidResponseDto> => {
 	// WARN // TODO 应当添加更多安全验证，防刷！
 	try {
 		if (!checkGetVideoCommentByKvidRequest(getVideoCommentByKvidRequest)) {
@@ -202,7 +216,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 					category: 'regex',
 				},
 			],
-			{ uid, uuid, token },
+			{ uuid, token },
 		)
 
 		// 获取视频的评论总数的 pipeline
@@ -276,7 +290,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 					content: 1, // 评论内容
 					commentRoute: 1, // 评论的路由
 					videoId: 1,
-					UUID: 1, // 评论发送者的 UUID
+					isSelf: uuid && token ? { $eq: ['$UUID', { $literal: uuid }] } : { $literal: false },
 					uid: 1, // 评论发送者的 UID
 					emitTime: 1, // 发送评论的时间
 					text: 1, // 评论正文
@@ -431,13 +445,12 @@ function queueCountUpdate(commentRoute: string, activity: CommentVoteActivity, u
  * 原子设置一个用户对一条评论的点赞或点踩状态，并更新评论上缓存的数量。
  * @param videoId 视频 ID
  * @param commentRoute 评论的业务唯一标识
- * @param uid 用户 UID
- * @param UUID 用户 UUID
+ * @param uuid 当前用户的 UUID
  * @param direction 点赞或点踩
  * @param active 是否设置该状态，取消只移除指定方向
  * @returns 用户的状态是否发生了变化
  */
-const mutateCommentVote = async (videoId: number, commentRoute: string, uid: number, UUID: string, direction: CommentVoteDirection, active: boolean): Promise<boolean> => {
+const mutateCommentVote = async (videoId: number, commentRoute: string, uuid: string, direction: CommentVoteDirection, active: boolean): Promise<boolean> => {
 	const selected = await selectDataFromMongoDB(
 		{ commentRoute, videoId }, { upvoteCount: 1, downvoteCount: 1, voteRevision: 1 },
 		comments.schemaInstance, comments.collectionName, { readPreference: 'primary' },
@@ -456,11 +469,11 @@ const mutateCommentVote = async (videoId: number, commentRoute: string, uid: num
 		if (active) {
 			// 用唯一键定位记录，同时取得修改前的方向。并发切换时，每次只计算自己实际造成的变化。
 			const previous = await findOneAndUpdateData4MongoDB(
-				{ commentRoute, uid }, { direction, UUID }, votes.schemaInstance, votes.collectionName, { returnDocument: 'before' },
+				{ commentRoute, UUID: uuid }, { direction }, votes.schemaInstance, votes.collectionName, { returnDocument: 'before' },
 			)
 			before = previous.result?.direction
 		} else {
-			const deleted = await deleteOneDataFromMongoDB({ commentRoute, uid, direction }, votes.schemaInstance, votes.collectionName)
+			const deleted = await deleteOneDataFromMongoDB({ commentRoute, UUID: uuid, direction }, votes.schemaInstance, votes.collectionName)
 			before = deleted.result?.deletedCount ? direction : undefined
 		}
 		const after = active ? direction : undefined
@@ -479,22 +492,18 @@ const mutateCommentVote = async (videoId: number, commentRoute: string, uid: num
 }
 
 /** 四个接口共用鉴权和目标状态的处理。 */
-const changeCommentVoteService = async (request: { videoId: number; commentRoute: string }, uid: number, token: string, direction: CommentVoteDirection, active: boolean) => {
+const changeCommentVoteService = async (request: { videoId: number; commentRoute: string }, uuid: string, token: string, direction: CommentVoteDirection, active: boolean) => {
 	try {
 		if (!request || !Number.isSafeInteger(request.videoId) || request.videoId < 1 || typeof request.commentRoute !== 'string' || !request.commentRoute.trim()) {
 			return { success: false, message: '评论点赞或点踩失败，参数异常' }
 		}
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			return { success: false, message: '用户校验未通过' }
 		}
-		const UUID = await getUserUuid(uid)
-		if (!UUID) {
-			return { success: false, message: '找不到用户 UUID' }
-		}
-		const changed = await mutateCommentVote(request.videoId, request.commentRoute, uid, UUID, direction, active)
+		const changed = await mutateCommentVote(request.videoId, request.commentRoute, uuid, direction, active)
 		return { success: true, message: changed ? '评论点赞或点踩状态已更新' : '评论点赞或点踩已是所选状态' }
 	} catch (error) {
-		logging('ERROR', '更新评论点赞或点踩状态失败', error, { request, uid })
+		logging('ERROR', '更新评论点赞或点踩状态失败', error, { videoId: request?.videoId, commentRoute: request?.commentRoute })
 		return { success: false, message: '更新评论点赞或点踩状态失败，请重试' }
 	}
 }
@@ -502,67 +511,62 @@ const changeCommentVoteService = async (request: { videoId: number; commentRoute
 /**
  * 为视频评论点赞。
  * @param request 视频和评论 ID
- * @param uid 当前用户 UID
+ * @param uuid 当前用户的 UUID
  * @param token 登录凭据
  * @returns 是否已达到请求的点赞或点踩状态
  */
-export const emitVideoCommentUpvoteService = async (request: EmitVideoCommentUpvoteRequestDto, uid: number, token: string): Promise<EmitVideoCommentUpvoteResponseDto> =>
-	changeCommentVoteService(request, uid, token, 'upvote', true)
+export const emitVideoCommentUpvoteService = async (request: EmitVideoCommentUpvoteRequestDto, uuid: string, token: string): Promise<EmitVideoCommentUpvoteResponseDto> =>
+	changeCommentVoteService(request, uuid, token, 'upvote', true)
 
 /**
  * 取消视频评论的点赞。
  * @param request 视频和评论 ID
- * @param uid 当前用户 UID
+ * @param uuid 当前用户的 UUID
  * @param token 登录凭据
  * @returns 是否已达到请求的点赞或点踩状态
  */
-export const cancelVideoCommentUpvoteService = async (request: CancelVideoCommentUpvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentUpvoteResponseDto> =>
-	changeCommentVoteService(request, uid, token, 'upvote', false)
+export const cancelVideoCommentUpvoteService = async (request: CancelVideoCommentUpvoteRequestDto, uuid: string, token: string): Promise<CancelVideoCommentUpvoteResponseDto> =>
+	changeCommentVoteService(request, uuid, token, 'upvote', false)
 
 /**
  * 为视频评论点踩。
  * @param request 视频和评论 ID
- * @param uid 当前用户 UID
+ * @param uuid 当前用户的 UUID
  * @param token 登录凭据
  * @returns 是否已达到请求的点赞或点踩状态
  */
-export const emitVideoCommentDownvoteService = async (request: EmitVideoCommentDownvoteRequestDto, uid: number, token: string): Promise<EmitVideoCommentDownvoteResponseDto> =>
-	changeCommentVoteService(request, uid, token, 'downvote', true)
+export const emitVideoCommentDownvoteService = async (request: EmitVideoCommentDownvoteRequestDto, uuid: string, token: string): Promise<EmitVideoCommentDownvoteResponseDto> =>
+	changeCommentVoteService(request, uuid, token, 'downvote', true)
 
 /**
  * 取消视频评论的点踩。
  * @param request 视频和评论 ID
- * @param uid 当前用户 UID
+ * @param uuid 当前用户的 UUID
  * @param token 登录凭据
  * @returns 是否已达到请求的点赞或点踩状态
  */
-export const cancelVideoCommentDownvoteService = async (request: CancelVideoCommentDownvoteRequestDto, uid: number, token: string): Promise<CancelVideoCommentDownvoteResponseDto> =>
-	changeCommentVoteService(request, uid, token, 'downvote', false)
+export const cancelVideoCommentDownvoteService = async (request: CancelVideoCommentDownvoteRequestDto, uuid: string, token: string): Promise<CancelVideoCommentDownvoteResponseDto> =>
+	changeCommentVoteService(request, uuid, token, 'downvote', false)
 
 /**
  * 删除一条自己发布的视频评论
  * @param deleteSelfVideoCommentRequest 删除一条自己发布的视频评论请求载荷
- * @param uid 用户 UID
- * @param token 用户 UID 对应的 token
+ * @param uuid 用户 UUID
+ * @param token 登录凭据
  * @returns 删除一条自己发布的视频评论请求响应
  */
-export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentRequest: DeleteSelfVideoCommentRequestDto, uid: number, token: string): Promise<DeleteSelfVideoCommentResponseDto> => {
+export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentRequest: DeleteSelfVideoCommentRequestDto, uuid: string, token: string): Promise<DeleteSelfVideoCommentResponseDto> => {
 	try {
 		if (!checkDeleteSelfVideoCommentRequest(deleteSelfVideoCommentRequest)) {
 			logging('ERROR', '删除视频评论失败，参数不合法')
 			return { success: false, message: '删除视频评论失败，参数不合法' }
 		}
 
-		if (!(await checkUserTokenService(uid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '删除视频评论失败，用户校验未通过')
 			return { success: false, message: '删除视频评论失败，用户校验未通过' }
 		}
 
-		const UUID = await getUserUuid(uid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
-		if (!UUID) {
-			logging('ERROR', '删除一条自己发布的视频评论失败，UUID 不存在', undefined, { uid })
-			return { success: false, message: '删除一条自己发布的视频评论失败，UUID 不存在' }
-		}
 
 		const { commentRoute, videoId } = deleteSelfVideoCommentRequest
 		const now = new Date().getTime()
@@ -601,7 +605,7 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 
 			const videoData = deleteSelfVideoCommentSelectResult.result[0]
 
-			if (videoData.uid !== uid) {
+			if (videoData.UUID !== uuid) {
 				logging('ERROR', '删除视频评论失败，只能删除自己的评论')
 				return { success: false, message: '删除视频评论失败，只能删除自己的评论' }
 			}
@@ -612,8 +616,8 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 
 			const removedVideoCommentData: RemovedVideoComment = {
 				...deleteSelfVideoCommentSelectResult.result[0],
-				_operatorUUID_: UUID,
-				_operatorUid_: uid,
+				_operatorUUID_: uuid,
+				_operatorUid_: videoData.uid,
 				editDateTime: now,
 			}
 
@@ -664,26 +668,26 @@ export const deleteSelfVideoCommentService = async (deleteSelfVideoCommentReques
 /**
  * 管理员删除一条视频评论
  * @param adminDeleteVideoCommentRequest 管理员删除一个视频评论的请求载荷
- * @param adminUid 管理员 UID
+ * @param adminUuid 管理员 UUID
  * @param adminToken 管理员 token
  * @returns 管理员删除一个视频评论的请求响应
  */
-export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequest: AdminDeleteVideoCommentRequestDto, adminUid: number, adminToken: string): Promise<AdminDeleteVideoCommentResponseDto> => {
+export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequest: AdminDeleteVideoCommentRequestDto, adminUuid: string, adminToken: string): Promise<AdminDeleteVideoCommentResponseDto> => {
 	try {
 		if (!checkAdminDeleteVideoCommentRequest(adminDeleteVideoCommentRequest)) {
 			logging('ERROR', '管理员删除视频评论失败，参数不合法')
 			return { success: false, message: '管理员删除视频评论失败，参数不合法' }
 		}
 
-		if (!(await checkUserTokenService(adminUid, adminToken)).success) {
+		if (!(await checkUserTokenByUuidService(adminUuid, adminToken)).success) {
 			logging('ERROR', '管理员删除视频评论失败，用户校验未通过')
 			return { success: false, message: '管理员删除视频评论失败，用户校验未通过' }
 		}
 
-		const adminUUID = await getUserUuid(adminUid) // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
-		if (!adminUUID) {
-			logging('ERROR', '管理员删除一条视频评论失败，adminUUID 不存在', undefined, { adminUid })
-			return { success: false, message: '管理员删除一条视频评论失败，adminUUID 不存在' }
+		const adminUid = await getUserUid(adminUuid)
+		if (!adminUid) {
+			logging('ERROR', '管理员删除一条视频评论失败，获取管理员公开 UID 失败', undefined, { adminUid })
+			return { success: false, message: '管理员删除一条视频评论失败，获取管理员公开 UID 失败' }
 		}
 
 		const { commentRoute, videoId } = adminDeleteVideoCommentRequest
@@ -727,7 +731,7 @@ export const adminDeleteVideoCommentService = async (adminDeleteVideoCommentRequ
 
 			const adminRemovedVideoCommentData: RemovedVideoComment = {
 				...deleteSelfVideoCommentSelectResult.result[0],
-				_operatorUUID_: adminUUID,
+				_operatorUUID_: adminUuid,
 				_operatorUid_: adminUid,
 				editDateTime: now,
 			}

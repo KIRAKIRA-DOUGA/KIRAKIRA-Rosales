@@ -10,8 +10,6 @@ class VideoVoteSchemaFactory {
 		videoId: { type: Number, required: true },
 		/** 点赞或点踩用户的 UUID，与 `videoId` 共同唯一标识这条记录 - 非空 */
 		UUID: { type: String, required: true },
-		/** 点赞或点踩用户的 UID - 非空 */
-		uid: { type: Number, required: true },
 		/** 当前状态，`upvote` 表示点赞，`downvote` 表示点踩 - 非空 */
 		direction: { type: String, enum: ['upvote', 'downvote'], required: true },
 		/** 最近一次写入这条赞踩记录的时间戳（毫秒） - 非空 */

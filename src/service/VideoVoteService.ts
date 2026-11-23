@@ -2,7 +2,7 @@ import type { VideoVoteRequestDto, VideoUpvoteResponseDto, VideoDownvoteResponse
 import { countDataFromMongoDB, deleteOneDataFromMongoDB, findOneAndUpdateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { VideoVoteSchema } from '../dbPool/schema/VideoVoteSchema.js'
 import { logging } from './loggingService.js'
-import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
+import { checkUserTokenByUuidService } from './UserService.js'
 
 type Direction = 'upvote' | 'downvote'
 const { schemaInstance, collectionName } = VideoVoteSchema
@@ -17,15 +17,11 @@ async function setVideoVote(request: VideoVoteRequestDto, uuid: string, token: s
 		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			return { success: false, message: `视频${action}失败，用户校验未通过` }
 		}
-		const uid = await getUserUid(uuid)
-		if (!Number.isSafeInteger(uid) || uid < 1) {
-			return { success: false, message: '未获取到用户 UID' }
-		}
 
 		const { videoId } = request
 		const where = { videoId, UUID: uuid }
 		if (active) {
-			const saved = await findOneAndUpdateData4MongoDB(where, { uid, direction, editDateTime: Date.now() }, schemaInstance, collectionName, { returnDocument: 'before' })
+			const saved = await findOneAndUpdateData4MongoDB(where, { direction, editDateTime: Date.now() }, schemaInstance, collectionName, { returnDocument: 'before' })
 			if (!saved.success) {
 				return { success: false, message: `视频${action}失败` }
 			}

@@ -11,11 +11,11 @@
  *    四个评论赞踩接口都接收 { videoId, commentRoute }，例如 { videoId: 13, commentRoute: '13.2' }。
  *
  * 两项分别记录完成状态。中断时保持暂停，重跑同一条命令即可继续。视频仍按最后一次有效操作
- * 合并到 video-votes，保留旧集合。已有视频迁移完成标记的环境会跳过这一步。
+ * 合并到 video-votes，保留旧集合。已迁移的视频明细只移除多余的 uid 字段。
  * 首次迁移评论时，从旧点赞表和点踩表取每人最后一条有效记录，时间相同取较大的原记录 ID。
  * 已完成旧版评论单表迁移时，只读 video-comment-votes 的当前状态，避免重新导入已经取消的赞踩。
  * 用原评论的 _id 找到 commentRoute，跳过已删除的评论和旧双表中视频错配的记录。新版使用
- * video-comment-route-votes，原集合保留用于回退。迁移后按路由重建所有评论的赞数和踩数，包括零。
+ * video-comment-reactions，以 (commentRoute, UUID) 唯一标识赞踩。已迁移到 video-comment-route-votes 的环境直接读取该表。原集合保留用于回退。迁移后按路由重建所有评论的赞数和踩数，包括零。
  * 恢复写入后如需回退，先将新状态迁回旧表，或恢复至经确认的备份。
  *
  * 新版评论列表直接读取缓存总数，登录用户另查自己的状态。增减达到或跨过斐波那契数时，按该方向的
@@ -60,7 +60,7 @@ async function rebuildCommentCounts(db, routes) {
  */
 export async function migrateCommentVotes(db) {
 	const migrations = db.collection('schema-migrations')
-	const migrationId = 'comment-route-vote-v2'
+	const migrationId = 'comment-route-uuid-v3'
 	if (await migrations.findOne({ _id: migrationId })) {
 		return false
 	}
@@ -79,25 +79,45 @@ export async function migrateCommentVotes(db) {
 	}
 
 	// 旧版单表可能已经收到新的赞踩和取消操作。完成标记决定哪一份数据是当前状态。
-	const previouslyMerged = await migrations.findOne({ _id: 'single-comment-vote-v1' })
-	const source = db.collection(previouslyMerged ? 'video-comment-votes' : 'video-comment-upvotes')
-	const resolveRoute = [
-		{ $set: { commentObjectId: { $convert: { input: '$commentId', to: 'objectId', onError: null, onNull: null } } } },
-		{ $lookup: { from: 'video-comments', localField: 'commentObjectId', foreignField: '_id', as: 'comment', pipeline: [{ $project: { commentRoute: 1, videoId: 1 } }] } },
-		{ $unwind: '$comment' },
+	const routeMigration = await migrations.findOne({ _id: 'comment-route-vote-v2' })
+	const singleTableMigration = await migrations.findOne({ _id: 'single-comment-vote-v1' })
+	let source = 'video-comment-route-votes'
+	const readVotes = []
+	if (!routeMigration) {
+		source = singleTableMigration ? 'video-comment-votes' : 'video-comment-upvotes'
+		if (!singleTableMigration) {
+			readVotes.push(...legacyCommentVotes('upvote'),
+				{ $unionWith: { coll: 'video-comment-downvotes', pipeline: legacyCommentVotes('downvote') } })
+		}
+		readVotes.push(
+			{ $set: { commentObjectId: { $convert: { input: '$commentId', to: 'objectId', onError: null, onNull: null } } } },
+			{ $lookup: { from: 'video-comments', localField: 'commentObjectId', foreignField: '_id', as: 'comment', pipeline: [{ $project: { commentRoute: 1, videoId: 1 } }] } },
+			{ $unwind: '$comment' },
+			{ $set: { commentRoute: '$comment.commentRoute' } },
+		)
+		if (!singleTableMigration) {
+			readVotes.push({ $match: { $expr: { $eq: ['$videoId', '$comment.videoId'] } } })
+		}
+	}
+	// 极早期只有 UID 的明细需要通过账号表补齐身份。找不到账号时保留原表并中止，避免误合并。
+	const missingUuid = { UUID: { $not: /\S/ } }
+	const identity = [
+		{ $lookup: { from: 'user-auths', localField: 'uid', foreignField: 'uid', as: 'account', pipeline: [{ $project: { UUID: 1 } }, { $limit: 1 }] } },
+		{ $set: { UUID: { $first: '$account.UUID' } } },
 	]
-	const readVotes = previouslyMerged ? resolveRoute : [
-		...legacyCommentVotes('upvote'),
-		{ $unionWith: { coll: 'video-comment-downvotes', pipeline: legacyCommentVotes('downvote') } },
-		...resolveRoute,
-		{ $match: { $expr: { $eq: ['$videoId', '$comment.videoId'] } } },
+	const votes = db.collection(source)
+	const [unresolved] = await votes.aggregate([...readVotes, { $match: missingUuid }, ...identity,
+		{ $match: missingUuid }, { $limit: 1 }, { $project: { _id: 1 } }]).toArray()
+	if (unresolved) {
+		throw new Error('评论赞踩明细缺少有效账号，请核对原表和 user-auths 后重跑迁移')
+	}
+	// 大多数记录已有 UUID，只对缺少 UUID 的记录查询账号。
+	await votes.aggregate([
+		...readVotes, { $match: { UUID: /\S/ } },
+		{ $unionWith: { coll: source, pipeline: [...readVotes, { $match: missingUuid }, ...identity] } },
 		{ $sort: { editDateTime: -1, _id: -1, direction: 1 } },
-		{ $group: { _id: { commentRoute: '$comment.commentRoute', uid: '$uid' }, vote: { $first: '$$ROOT' } } },
-		{ $replaceWith: '$vote' },
-	]
-	await source.aggregate([
-		...readVotes,
-		{ $project: { _id: 0, commentRoute: '$comment.commentRoute', uid: 1, UUID: 1, direction: 1 } },
+		{ $group: { _id: { commentRoute: '$commentRoute', UUID: '$UUID' }, direction: { $first: '$direction' } } },
+		{ $project: { _id: 0, commentRoute: '$_id.commentRoute', UUID: '$_id.UUID', direction: 1 } },
 		{ $out: collectionName },
 	], { allowDiskUse: true }).toArray()
 
@@ -121,7 +141,7 @@ export async function migrateCommentVotes(db) {
 function legacyVideoVotes(direction, timeField) {
 	return [
 		{ $match: { invalidFlag: false } },
-		{ $project: { videoId: 1, UUID: 1, uid: 1, direction: { $literal: direction }, editDateTime: { $ifNull: ['$editDateTime', timeField] } } },
+		{ $project: { videoId: 1, UUID: 1, direction: { $literal: direction }, editDateTime: { $ifNull: ['$editDateTime', timeField] } } },
 	]
 }
 
@@ -132,7 +152,7 @@ function legacyVideoVotes(direction, timeField) {
  */
 export async function migrateVideoVotes(db) {
 	const migrations = db.collection('schema-migrations')
-	const migrationId = 'single-video-vote-v1'
+	const migrationId = 'video-vote-uuid-v2'
 	if (await migrations.findOne({ _id: migrationId })) {
 		return false
 	}
@@ -140,15 +160,19 @@ export async function migrateVideoVotes(db) {
 	for (const [keys, options] of schemaInstance.indexes()) {
 		await db.collection(collectionName).createIndex(keys, options)
 	}
-	await db.collection('video-upvotes').aggregate([
-		...legacyVideoVotes('upvote', '$upvoteTime'),
-		{ $unionWith: { coll: 'video-downvotes', pipeline: legacyVideoVotes('downvote', '$downvoteTime') } },
-		{ $sort: { editDateTime: -1, _id: -1, direction: 1 } },
-		{ $group: { _id: { videoId: '$videoId', UUID: '$UUID' }, vote: { $first: '$$ROOT' } } },
-		{ $replaceWith: '$vote' },
-		{ $unset: '_id' },
-		{ $merge: { into: collectionName, on: ['videoId', 'UUID'], whenMatched: 'replace', whenNotMatched: 'insert' } },
-	], { allowDiskUse: true }).toArray()
+	if (await migrations.findOne({ _id: 'single-video-vote-v1' })) {
+		await db.collection(collectionName).updateMany({ uid: { $exists: true } }, { $unset: { uid: '' } })
+	} else {
+		await db.collection('video-upvotes').aggregate([
+			...legacyVideoVotes('upvote', '$upvoteTime'),
+			{ $unionWith: { coll: 'video-downvotes', pipeline: legacyVideoVotes('downvote', '$downvoteTime') } },
+			{ $sort: { editDateTime: -1, _id: -1, direction: 1 } },
+			{ $group: { _id: { videoId: '$videoId', UUID: '$UUID' }, vote: { $first: '$$ROOT' } } },
+			{ $replaceWith: '$vote' },
+			{ $unset: '_id' },
+			{ $merge: { into: collectionName, on: ['videoId', 'UUID'], whenMatched: 'replace', whenNotMatched: 'insert' } },
+		], { allowDiskUse: true }).toArray()
+	}
 	await migrations.insertOne({ _id: migrationId, completedAt: new Date() })
 	return true
 }

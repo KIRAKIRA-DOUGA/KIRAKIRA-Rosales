@@ -115,19 +115,16 @@ class VideoCommentVoteSchemaFactory {
 	schema = {
 		/** 被点赞或点踩的评论的业务唯一标识，例如 `13.2` - 非空 */
 		commentRoute: { type: String, required: true },
-		/** 点赞或点踩用户的 UID，与 `commentRoute` 共同唯一标识这条记录 - 非空 */
-		uid: { type: Number, required: true },
-		/** 点赞或点踩用户的 UUID，供评论列表查询该用户的赞踩状态 - 非空 */
+		/** 点赞或点踩用户的 UUID，与 commentRoute 共同唯一标识这条记录 - 非空 */
 		UUID: { type: String, required: true },
 		/** 当前状态，`upvote` 表示点赞，`downvote` 表示点踩 - 非空 */
 		direction: { type: String, enum: ['upvote', 'downvote'], required: true },
 	}
 	/** MongoDB 集合名 */
-	collectionName = 'video-comment-route-votes'
+	collectionName = 'video-comment-reactions'
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema, { collection: this.collectionName })
-		.index({ commentRoute: 1, uid: 1 }, { unique: true })
+		.index({ commentRoute: 1, UUID: 1 }, { unique: true })
 		.index({ commentRoute: 1, direction: 1 })
-		.index({ UUID: 1, commentRoute: 1 })
 }
 export const VideoCommentVoteSchema = new VideoCommentVoteSchemaFactory()
