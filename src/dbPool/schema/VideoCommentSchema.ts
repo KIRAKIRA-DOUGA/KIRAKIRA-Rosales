@@ -107,15 +107,24 @@ class RemovedVideoCommentSchemaFactory {
 }
 export const RemovedVideoCommentSchema = new RemovedVideoCommentSchemaFactory()
 
-/** 每个用户在一条评论上的当前点赞或点踩状态。取消后删除记录。 */
+/**
+ * 用户对视频评论的点赞或点踩记录，取消当前状态时删除。
+ */
 class VideoCommentVoteSchemaFactory {
+	/** MongoDB Schema */
 	schema = {
+		/** 评论 ID，对应评论文档 `_id` 的字符串形式 - 非空 */
 		commentId: { type: String, required: true },
+		/** 点赞或点踩用户的 UID，与 `commentId` 共同唯一标识这条记录 - 非空 */
 		uid: { type: Number, required: true },
+		/** 点赞或点踩用户的 UUID，供评论列表查询该用户的赞踩状态 - 非空 */
 		UUID: { type: String, required: true },
+		/** 当前状态，`upvote` 表示点赞，`downvote` 表示点踩 - 非空 */
 		direction: { type: String, enum: ['upvote', 'downvote'], required: true },
 	}
+	/** MongoDB 集合名 */
 	collectionName = 'video-comment-votes'
+	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema, { collection: this.collectionName })
 		.index({ commentId: 1, uid: 1 }, { unique: true })
 		.index({ commentId: 1, direction: 1 })
