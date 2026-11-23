@@ -1,12 +1,12 @@
 import { Schema } from 'mongoose'
 
 /**
- * 在父评论或子评论中存储的子评论 ID
+ * 父评论中保存的子评论路由、点赞数和楼层
  */
 const VideoSubCommentIdSchema = {
 	/** 评论的路由 - 非空 */ /** 如：1.2.3（第一号视频的第二个评论的第三个子回复） */
 	commentRoute: { type: String, required: true },
-	/** 评论 ID - 非空 */
+	/** 子评论点赞数 - 非空 */
 	upvoteCount: { type: String, default: 0, required: true },
 	/** 评论楼层数 - 非空 */
 	commentIndex: { type: Number, required: true },
@@ -113,9 +113,9 @@ export const RemovedVideoCommentSchema = new RemovedVideoCommentSchemaFactory()
 class VideoCommentVoteSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
-		/** 评论 ID，对应评论文档 `_id` 的字符串形式 - 非空 */
-		commentId: { type: String, required: true },
-		/** 点赞或点踩用户的 UID，与 `commentId` 共同唯一标识这条记录 - 非空 */
+		/** 被点赞或点踩的评论的业务唯一标识，例如 `13.2` - 非空 */
+		commentRoute: { type: String, required: true },
+		/** 点赞或点踩用户的 UID，与 `commentRoute` 共同唯一标识这条记录 - 非空 */
 		uid: { type: Number, required: true },
 		/** 点赞或点踩用户的 UUID，供评论列表查询该用户的赞踩状态 - 非空 */
 		UUID: { type: String, required: true },
@@ -123,11 +123,11 @@ class VideoCommentVoteSchemaFactory {
 		direction: { type: String, enum: ['upvote', 'downvote'], required: true },
 	}
 	/** MongoDB 集合名 */
-	collectionName = 'video-comment-votes'
+	collectionName = 'video-comment-route-votes'
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema, { collection: this.collectionName })
-		.index({ commentId: 1, uid: 1 }, { unique: true })
-		.index({ commentId: 1, direction: 1 })
-		.index({ UUID: 1, commentId: 1 })
+		.index({ commentRoute: 1, uid: 1 }, { unique: true })
+		.index({ commentRoute: 1, direction: 1 })
+		.index({ UUID: 1, commentRoute: 1 })
 }
 export const VideoCommentVoteSchema = new VideoCommentVoteSchemaFactory()

@@ -536,7 +536,7 @@ router.post('/video/comment/upvote', emitVideoCommentUpvoteController) // 用户
 // cookie: uid, token
 // {
 // 	"videoId": 13,
-// 	"id": "65859fbfae7bd341a408fe42"
+// 	"commentRoute": "13.2"
 // }
 
 router.post('/video/comment/downvote', emitVideoCommentDownvoteController) // 用户为视频评论点踩
@@ -544,7 +544,7 @@ router.post('/video/comment/downvote', emitVideoCommentDownvoteController) // �
 // cookie: uid, token
 // {
 // 	"videoId": 13,
-// 	"id": "65859fbfae7bd341a408fe42"
+// 	"commentRoute": "13.2"
 // }
 
 router.delete('/video/comment/upvote/cancel', cancelVideoCommentUpvoteController) // 用户取消一个视频评论的点赞
@@ -552,7 +552,7 @@ router.delete('/video/comment/upvote/cancel', cancelVideoCommentUpvoteController
 // cookie: uid, token
 // {
 // 	"videoId": 13,
-// 	"id": "65859fbfae7bd341a408fe42"
+// 	"commentRoute": "13.2"
 // }
 
 router.delete('/video/comment/downvote/cancel', cancelVideoCommentDownvoteController) // 用户取消一个视频评论的点踩
@@ -560,7 +560,7 @@ router.delete('/video/comment/downvote/cancel', cancelVideoCommentDownvoteContro
 // cookie: uid, token
 // {
 // 	"videoId": 13,
-// 	"id": "65859fbfae7bd341a408fe42"
+// 	"commentRoute": "13.2"
 // }
 
 router.delete('/video/comment/deleteSelfComment', deleteSelfVideoCommentController) // 删除一条自己发布的视频评论

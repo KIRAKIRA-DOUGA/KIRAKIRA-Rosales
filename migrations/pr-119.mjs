@@ -6,11 +6,15 @@
  * 2. 暂停评论发布、删除、赞踩和视频赞踩，等旧实例处理完正在执行的请求，备份目标业务库。
  * 3. 通过部署密钥设置 COMMENT_VOTE_MIGRATION_URI（含认证和 TLS 选项）和 MONGODB_NAME（业务库名），
  *    在项目根目录运行 node migrations/pr-119.mjs。
- * 4. 核对输出的数据库名，以及评论和视频两项迁移的完成状态，再启动新版并恢复写入。
+ * 4. 核对输出的数据库名及两项迁移的完成状态。配套发布前后端后恢复写入：四个评论赞踩接口
+ *    都接收 { videoId, commentRoute }，例如 { videoId: 13, commentRoute: '13.2' }。
  *
- * 两项迁移分别记录完成状态。中断时保持暂停，重跑同一条命令即可继续。旧脚本留下的完成标记也有效。
- * 两项都保留原集合，按用户和目标合并最后一条有效记录，时间相同取较大的原记录 ID。
- * 评论迁移只接收指向现存评论且视频匹配的记录，并重建所有评论的赞数和踩数，包括应当归零的评论。
+ * 两项分别记录完成状态。中断时保持暂停，重跑同一条命令即可继续。视频仍按最后一次有效操作
+ * 合并到 video-votes，保留旧集合。已有视频迁移完成标记的环境会跳过这一步。
+ * 首次迁移评论时，从旧点赞表和点踩表取每人最后一条有效记录，时间相同取较大的原记录 ID。
+ * 已完成旧版评论单表迁移时，只读 video-comment-votes 的当前状态，避免重新导入已经取消的赞踩。
+ * 用原评论的 _id 找到 commentRoute，跳过已删除的评论和旧双表中视频错配的记录。新版使用
+ * video-comment-route-votes，原集合保留用于回退。迁移后按路由重建所有评论的赞数和踩数，包括零。
  * 恢复写入后如需回退，先将新状态迁回旧表，或恢复至经确认的备份。
  *
  * 新版评论列表直接读取缓存总数，登录用户另查自己的状态。增减达到或跨过斐波那契数时，按该方向的
@@ -23,32 +27,27 @@ import mongoose from 'mongoose'
 import { VideoCommentVoteSchema } from '../dist/dbPool/schema/VideoCommentSchema.js'
 import { VideoVoteSchema } from '../dist/dbPool/schema/VideoVoteSchema.js'
 
-// 通过评论 ID 和视频 ID 排除已删除评论及错挂到其他视频的旧记录。
 function legacyCommentVotes(direction) {
 	return [
 		{ $match: { invalidFlag: false, deleteFlag: false } },
-		{ $set: { direction, commentObjectId: { $convert: { input: '$commentId', to: 'objectId', onError: null, onNull: null } } } },
-		{ $lookup: { from: 'video-comments', localField: 'commentObjectId', foreignField: '_id', as: 'comment', pipeline: [{ $project: { videoId: 1 } }] } },
-		{ $unwind: '$comment' },
-		{ $match: { $expr: { $eq: ['$videoId', '$comment.videoId'] } } },
-		{ $project: { uid: 1, UUID: 1, direction: 1, editDateTime: 1, commentId: { $toString: '$commentObjectId' } } },
+		{ $set: { direction } },
 	]
 }
 
-async function rebuildCommentCounts(db, ids) {
-	const counts = new Map(ids.map(id => [id.toHexString(), { upvoteCount: 0, downvoteCount: 0 }]))
+async function rebuildCommentCounts(db, routes) {
+	const counts = new Map(routes.map(route => [route, { upvoteCount: 0, downvoteCount: 0 }]))
 	const groups = db.collection(VideoCommentVoteSchema.collectionName).aggregate([
-		{ $match: { commentId: { $in: [...counts.keys()] } } },
-		{ $group: { _id: { commentId: '$commentId', direction: '$direction' }, n: { $sum: 1 } } },
+		{ $match: { commentRoute: { $in: routes } } },
+		{ $group: { _id: { commentRoute: '$commentRoute', direction: '$direction' }, n: { $sum: 1 } } },
 	])
 	for await (const { _id, n } of groups) {
 		const field = _id.direction === 'upvote' ? 'upvoteCount' : 'downvoteCount'
-		counts.get(_id.commentId)[field] = n
+		counts.get(_id.commentRoute)[field] = n
 	}
-	await db.collection('video-comments').bulkWrite(ids.map(_id => ({
+	await db.collection('video-comments').bulkWrite(routes.map(commentRoute => ({
 		updateOne: {
-			filter: { _id },
-			update: { $set: counts.get(_id.toHexString()) },
+			filter: { commentRoute },
+			update: { $set: counts.get(commentRoute) },
 		},
 	})))
 }
@@ -60,38 +59,59 @@ async function rebuildCommentCounts(db, ids) {
  */
 export async function migrateCommentVotes(db) {
 	const migrations = db.collection('schema-migrations')
-	const migrationId = 'single-comment-vote-v1'
+	const migrationId = 'comment-route-vote-v2'
 	if (await migrations.findOne({ _id: migrationId })) {
 		return false
 	}
 	const { collectionName, schemaInstance } = VideoCommentVoteSchema
-	const votes = db.collection(collectionName)
-	for (const [keys, options] of schemaInstance.indexes()) {
-		await votes.createIndex(keys, options)
+	const comments = db.collection('video-comments')
+	const invalidRoute = await comments.findOne({ $or: [
+		{ $expr: { $ne: [{ $type: '$commentRoute' }, 'string'] } },
+		{ commentRoute: { $not: /\S/ } },
+	] }, { projection: { _id: 1 } })
+	if (invalidRoute) {
+		throw new Error(`评论 ${invalidRoute._id} 缺少有效的 commentRoute，请核对原评论路由后重跑迁移`)
 	}
-	const upvotes = db.collection('video-comment-upvotes')
-	await upvotes.aggregate([
+	await comments.createIndex({ commentRoute: 1 }, { unique: true })
+	for (const [keys, options] of schemaInstance.indexes()) {
+		await db.collection(collectionName).createIndex(keys, options)
+	}
+
+	// 旧版单表可能已经收到新的赞踩和取消操作。完成标记决定哪一份数据是当前状态。
+	const previouslyMerged = await migrations.findOne({ _id: 'single-comment-vote-v1' })
+	const source = db.collection(previouslyMerged ? 'video-comment-votes' : 'video-comment-upvotes')
+	const resolveRoute = [
+		{ $set: { commentObjectId: { $convert: { input: '$commentId', to: 'objectId', onError: null, onNull: null } } } },
+		{ $lookup: { from: 'video-comments', localField: 'commentObjectId', foreignField: '_id', as: 'comment', pipeline: [{ $project: { commentRoute: 1, videoId: 1 } }] } },
+		{ $unwind: '$comment' },
+	]
+	const readVotes = previouslyMerged ? resolveRoute : [
 		...legacyCommentVotes('upvote'),
 		{ $unionWith: { coll: 'video-comment-downvotes', pipeline: legacyCommentVotes('downvote') } },
+		...resolveRoute,
+		{ $match: { $expr: { $eq: ['$videoId', '$comment.videoId'] } } },
 		{ $sort: { editDateTime: -1, _id: -1, direction: 1 } },
-		{ $group: { _id: { commentId: '$commentId', uid: '$uid' }, vote: { $first: '$$ROOT' } } },
+		{ $group: { _id: { commentRoute: '$comment.commentRoute', uid: '$uid' }, vote: { $first: '$$ROOT' } } },
 		{ $replaceWith: '$vote' },
-		{ $unset: ['_id', 'editDateTime'] },
-		{ $merge: { into: collectionName, on: ['commentId', 'uid'], whenMatched: 'replace', whenNotMatched: 'insert' } },
+	]
+	await source.aggregate([
+		...readVotes,
+		{ $project: { _id: 0, commentRoute: '$comment.commentRoute', uid: 1, UUID: 1, direction: 1 } },
+		{ $out: collectionName },
 	], { allowDiskUse: true }).toArray()
 
-	// 按不变的主键遍历，包含没有任何记录的评论。中断后可在恢复写入前重新执行。
-	const comments = db.collection('video-comments').find({}, { projection: { _id: 1 } }).sort({ _id: 1 })
-	let ids = []
-	for await (const { _id } of comments) {
-		ids.push(_id)
-		if (ids.length === 500) {
-			await rebuildCommentCounts(db, ids)
-			ids = []
+	// 从评论表遍历，以便把没有任何赞踩的评论也归零。
+	const cursor = comments.find({}, { projection: { _id: 0, commentRoute: 1 } }).sort({ commentRoute: 1 })
+	let routes = []
+	for await (const { commentRoute } of cursor) {
+		routes.push(commentRoute)
+		if (routes.length === 500) {
+			await rebuildCommentCounts(db, routes)
+			routes = []
 		}
 	}
-	if (ids.length) {
-		await rebuildCommentCounts(db, ids)
+	if (routes.length) {
+		await rebuildCommentCounts(db, routes)
 	}
 	await migrations.insertOne({ _id: migrationId, completedAt: new Date() })
 	return true

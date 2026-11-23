@@ -168,7 +168,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			return { success: false, message: '获取视频评论列表失败，数据校验失败', videoCommentCount: 0, videoCommentList: [] }
 		}
 
-		if (uuid !== undefined && uuid !== null && token) { // 校验用户，如果校验通过，则获取当前用户对某一视频的点赞/点踩的评论的评论 ID 列表
+		if (uuid !== undefined && uuid !== null && token) { // 校验登录用户，随后按评论路由关联该用户的赞踩状态。
 			if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 				logging('ERROR', '获取视频评论列表失败，用户校验未通过', undefined, { getVideoCommentByKvidRequest })
 				return { success: false, message: '获取视频评论列表失败，用户校验未通过', videoCommentCount: 0, videoCommentList: [] }
@@ -253,9 +253,10 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			...(uuid && token ? [{
 				$lookup: {
 					from: VideoCommentVoteSchema.collectionName,
-					let: { commentId: { $toString: '$_id' } },
+					localField: 'commentRoute',
+					foreignField: 'commentRoute',
 					pipeline: [
-						{ $match: { UUID: uuid, $expr: { $eq: ['$commentId', '$$commentId'] } } },
+						{ $match: { UUID: uuid } },
 						{ $project: { _id: 0, direction: 1 } },
 						{ $limit: 1 },
 					],
@@ -271,7 +272,7 @@ export const getVideoCommentListByKvidService = async (getVideoCommentByKvidRequ
 			// 返回评论及作者的信息。
 			{
 				$project: {
-					_id: 1, // 评论的 ID
+					_id: 1, // 保留列表原有的 MongoDB 文档 ID
 					content: 1, // 评论内容
 					commentRoute: 1, // 评论的路由
 					videoId: 1,
@@ -351,11 +352,11 @@ function crossedFibonacciThreshold(total: number, delta: number) {
 	return current <= highest
 }
 
-async function recountWhenIdle(commentId: string, activity: CommentVoteActivity) {
+async function recountWhenIdle(commentRoute: string, activity: CommentVoteActivity) {
 	if (activity.writingVotes || activity.batch) {
 		return
 	}
-	activityByComment.delete(commentId)
+	activityByComment.delete(commentRoute)
 	const { comment, recountUpvotes, recountDownvotes } = activity
 	if (!recountUpvotes && !recountDownvotes) {
 		return
@@ -366,25 +367,25 @@ async function recountWhenIdle(commentId: string, activity: CommentVoteActivity)
 			if (direction === 'upvote' ? !recountUpvotes : !recountDownvotes) {
 				continue
 			}
-			const count = await countDataFromMongoDB({ commentId, direction }, votes.schemaInstance, votes.collectionName, { readPreference: 'primary' })
+			const count = await countDataFromMongoDB({ commentRoute, direction }, votes.schemaInstance, votes.collectionName, { readPreference: 'primary' })
 			const field = direction === 'upvote' ? 'upvoteCount' : 'downvoteCount'
 			if (count.result !== undefined && count.result !== comment[field]) {
 				correction[field] = count.result
 			}
 		}
 		// 只修正统计前的版本，防止旧结果覆盖其他实例刚写入的增减或校准。
-		if (Object.keys(correction).length && !activityByComment.has(commentId)) {
+		if (Object.keys(correction).length && !activityByComment.has(commentRoute)) {
 			await findOneAndUpdateWithOperators4MongoDB(
-				{ _id: commentId, voteRevision: comment.voteRevision ?? null }, { $set: correction, $inc: { voteRevision: 1 } },
+				{ commentRoute, voteRevision: comment.voteRevision ?? null }, { $set: correction, $inc: { voteRevision: 1 } },
 				comments.schemaInstance, comments.collectionName,
 			)
 		}
 	} catch (error) {
-		logging('ERROR', '校准评论赞踩计数失败', error, { commentId })
+		logging('ERROR', '校准评论赞踩计数失败', error, { commentRoute })
 	}
 }
 
-function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvoteDelta: number, downvoteDelta: number) {
+function queueCountUpdate(commentRoute: string, activity: CommentVoteActivity, upvoteDelta: number, downvoteDelta: number) {
 	const previous = activity.batch
 	if (previous && !previous.started) {
 		previous.upvoteDelta += upvoteDelta
@@ -403,7 +404,7 @@ function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvo
 				return
 			}
 			const updated = await findOneAndUpdateWithOperators4MongoDB(
-				{ _id: commentId }, { $inc: { upvoteCount: up, downvoteCount: down, voteRevision: 1 } }, comments.schemaInstance, comments.collectionName,
+				{ commentRoute }, { $inc: { upvoteCount: up, downvoteCount: down, voteRevision: 1 } }, comments.schemaInstance, comments.collectionName,
 			)
 			if (updated.result) {
 				const comment = updated.result
@@ -413,13 +414,13 @@ function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvo
 			}
 		} catch (error) {
 			// 用户记录已经保存，回复丢失时增减也可能已写入。按明细核对可避免重复加减。
-			logging('ERROR', '更新评论赞踩计数失败', error, { commentId })
+			logging('ERROR', '更新评论赞踩计数失败', error, { commentRoute })
 			activity.recountUpvotes ||= up !== 0
 			activity.recountDownvotes ||= down !== 0
 		} finally {
 			if (activity.batch === batch) {
 				activity.batch = undefined
-				await recountWhenIdle(commentId, activity)
+				await recountWhenIdle(commentRoute, activity)
 			}
 		}
 	})
@@ -429,16 +430,16 @@ function queueCountUpdate(commentId: string, activity: CommentVoteActivity, upvo
 /**
  * 原子设置一个用户对一条评论的点赞或点踩状态，并更新评论上缓存的数量。
  * @param videoId 视频 ID
- * @param commentId 评论 ID
+ * @param commentRoute 评论的业务唯一标识
  * @param uid 用户 UID
  * @param UUID 用户 UUID
  * @param direction 点赞或点踩
  * @param active 是否设置该状态，取消只移除指定方向
  * @returns 用户的状态是否发生了变化
  */
-const mutateCommentVote = async (videoId: number, commentId: string, uid: number, UUID: string, direction: CommentVoteDirection, active: boolean): Promise<boolean> => {
+const mutateCommentVote = async (videoId: number, commentRoute: string, uid: number, UUID: string, direction: CommentVoteDirection, active: boolean): Promise<boolean> => {
 	const selected = await selectDataFromMongoDB(
-		{ _id: commentId, videoId }, { upvoteCount: 1, downvoteCount: 1, voteRevision: 1 },
+		{ commentRoute, videoId }, { upvoteCount: 1, downvoteCount: 1, voteRevision: 1 },
 		comments.schemaInstance, comments.collectionName, { readPreference: 'primary' },
 	)
 	const comment = selected.result?.[0]
@@ -446,8 +447,8 @@ const mutateCommentVote = async (videoId: number, commentId: string, uid: number
 		throw new Error('视频评论不存在')
 	}
 
-	const activity: CommentVoteActivity = activityByComment.get(commentId) ?? { writingVotes: 0, recountUpvotes: false, recountDownvotes: false, comment }
-	activityByComment.set(commentId, activity)
+	const activity: CommentVoteActivity = activityByComment.get(commentRoute) ?? { writingVotes: 0, recountUpvotes: false, recountDownvotes: false, comment }
+	activityByComment.set(commentRoute, activity)
 	activity.writingVotes++
 	let updatedCounts: Promise<void>
 	try {
@@ -455,32 +456,32 @@ const mutateCommentVote = async (videoId: number, commentId: string, uid: number
 		if (active) {
 			// 用唯一键定位记录，同时取得修改前的方向。并发切换时，每次只计算自己实际造成的变化。
 			const previous = await findOneAndUpdateData4MongoDB(
-				{ commentId, uid }, { direction, UUID }, votes.schemaInstance, votes.collectionName, { returnDocument: 'before' },
+				{ commentRoute, uid }, { direction, UUID }, votes.schemaInstance, votes.collectionName, { returnDocument: 'before' },
 			)
 			before = previous.result?.direction
 		} else {
-			const deleted = await deleteOneDataFromMongoDB({ commentId, uid, direction }, votes.schemaInstance, votes.collectionName)
+			const deleted = await deleteOneDataFromMongoDB({ commentRoute, uid, direction }, votes.schemaInstance, votes.collectionName)
 			before = deleted.result?.deletedCount ? direction : undefined
 		}
 		const after = active ? direction : undefined
 		if (before === after) {
 			return false
 		}
-		updatedCounts = queueCountUpdate(commentId, activity,
+		updatedCounts = queueCountUpdate(commentRoute, activity,
 			Number(after === 'upvote') - Number(before === 'upvote'),
 			Number(after === 'downvote') - Number(before === 'downvote'))
 	} finally {
 		activity.writingVotes--
-		await recountWhenIdle(commentId, activity)
+		await recountWhenIdle(commentRoute, activity)
 	}
 	await updatedCounts
 	return true
 }
 
 /** 四个接口共用鉴权和目标状态的处理。 */
-const changeCommentVoteService = async (request: { videoId: number; id: string }, uid: number, token: string, direction: CommentVoteDirection, active: boolean) => {
+const changeCommentVoteService = async (request: { videoId: number; commentRoute: string }, uid: number, token: string, direction: CommentVoteDirection, active: boolean) => {
 	try {
-		if (!request || !Number.isSafeInteger(request.videoId) || request.videoId < 1 || typeof request.id !== 'string' || !/^[a-f\d]{24}$/i.test(request.id)) {
+		if (!request || !Number.isSafeInteger(request.videoId) || request.videoId < 1 || typeof request.commentRoute !== 'string' || !request.commentRoute.trim()) {
 			return { success: false, message: '评论点赞或点踩失败，参数异常' }
 		}
 		if (!(await checkUserTokenService(uid, token)).success) {
@@ -490,7 +491,7 @@ const changeCommentVoteService = async (request: { videoId: number; id: string }
 		if (!UUID) {
 			return { success: false, message: '找不到用户 UUID' }
 		}
-		const changed = await mutateCommentVote(request.videoId, request.id.toLowerCase(), uid, UUID, direction, active)
+		const changed = await mutateCommentVote(request.videoId, request.commentRoute, uid, UUID, direction, active)
 		return { success: true, message: changed ? '评论点赞或点踩状态已更新' : '评论点赞或点踩已是所选状态' }
 	} catch (error) {
 		logging('ERROR', '更新评论点赞或点踩状态失败', error, { request, uid })

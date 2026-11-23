@@ -120,7 +120,7 @@ export const connectMongoDBCluster = async (): Promise<void> => {
 			mongoose.model(UserInfoSchema.collectionName, UserInfoSchema.schemaInstance)
 			// 用户 TOTP 认证集合需要提前注册，否则执行事务时会出错。
 			mongoose.model(UserTotpAuthenticatorSchema.collectionName, UserTotpAuthenticatorSchema.schemaInstance)
-			// 等待 (commentId, uid) 唯一索引建好再接收请求，否则同一用户同时点赞两次可能插入两条记录。
+			// 等待 (commentRoute, uid) 唯一索引建好再接收请求，否则同一用户同时点赞两次可能插入两条记录。
 			await mongoose.model(VideoCommentVoteSchema.collectionName, VideoCommentVoteSchema.schemaInstance).init()
 			await mongoose.model(VideoVoteSchema.collectionName, VideoVoteSchema.schemaInstance).init()
 			// 首次归档需要同时写原表和归档表，等两边的索引建完再接收请求。

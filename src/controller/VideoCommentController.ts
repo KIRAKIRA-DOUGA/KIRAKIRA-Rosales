@@ -60,14 +60,14 @@ export const getVideoCommentListByKvidController = async (ctx: koaCtx, next: koa
  * @param next context
  */
 export const emitVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<EmitVideoCommentUpvoteRequestDto>
+	const data = (ctx.request.body ?? {}) as Partial<EmitVideoCommentUpvoteRequestDto>
 	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const emitVideoCommentUpvoteRequest: EmitVideoCommentUpvoteRequestDto = {
 		/** KVID 视频 ID */
 		videoId: data.videoId,
-		/** 评论 ID */
-		id: data.id,
+		/** 评论的业务唯一标识 */
+		commentRoute: data.commentRoute,
 	}
 	const emitVideoCommentUpvoteResponse = await emitVideoCommentUpvoteService(emitVideoCommentUpvoteRequest, uid, token)
 	ctx.body = emitVideoCommentUpvoteResponse
@@ -80,16 +80,16 @@ export const emitVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNex
  * @param next context
  */
 export const emitVideoCommentDownvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<EmitVideoCommentDownvoteRequestDto>
+	const data = (ctx.request.body ?? {}) as Partial<EmitVideoCommentDownvoteRequestDto>
 	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
-	const emitVideoCommentUpvoteRequest: EmitVideoCommentDownvoteRequestDto = {
+	const emitVideoCommentDownvoteRequest: EmitVideoCommentDownvoteRequestDto = {
 		/** KVID 视频 ID */
 		videoId: data.videoId,
-		/** 评论 ID */
-		id: data.id,
+		/** 评论的业务唯一标识 */
+		commentRoute: data.commentRoute,
 	}
-	const emitVideoCommentDownvoteResponse = await emitVideoCommentDownvoteService(emitVideoCommentUpvoteRequest, uid, token)
+	const emitVideoCommentDownvoteResponse = await emitVideoCommentDownvoteService(emitVideoCommentDownvoteRequest, uid, token)
 	ctx.body = emitVideoCommentDownvoteResponse
 	await next()
 }
@@ -100,14 +100,14 @@ export const emitVideoCommentDownvoteController = async (ctx: koaCtx, next: koaN
  * @param next context
  */
 export const cancelVideoCommentUpvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<CancelVideoCommentUpvoteRequestDto>
+	const data = (ctx.request.body ?? {}) as Partial<CancelVideoCommentUpvoteRequestDto>
 	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const cancelVideoCommentUpvoteRequest: CancelVideoCommentUpvoteRequestDto = {
 		/** KVID 视频 ID */
 		videoId: data.videoId,
-		/** 评论 ID */
-		id: data.id,
+		/** 评论的业务唯一标识 */
+		commentRoute: data.commentRoute,
 	}
 	const emitVideoCommentResponse = await cancelVideoCommentUpvoteService(cancelVideoCommentUpvoteRequest, uid, token)
 	ctx.body = emitVideoCommentResponse
@@ -120,14 +120,14 @@ export const cancelVideoCommentUpvoteController = async (ctx: koaCtx, next: koaN
  * @param next context
  */
 export const cancelVideoCommentDownvoteController = async (ctx: koaCtx, next: koaNext) => {
-	const data = ctx.request.body as Partial<CancelVideoCommentDownvoteRequestDto>
+	const data = (ctx.request.body ?? {}) as Partial<CancelVideoCommentDownvoteRequestDto>
 	const uid = parseInteger(ctx.cookies.get('uid'))
 	const token = ctx.cookies.get('token')
 	const cancelVideoCommentDownvoteRequest: CancelVideoCommentDownvoteRequestDto = {
 		/** KVID 视频 ID */
 		videoId: data.videoId,
-		/** 评论 ID */
-		id: data.id,
+		/** 评论的业务唯一标识 */
+		commentRoute: data.commentRoute,
 	}
 	const emitVideoCommentResponse = await cancelVideoCommentDownvoteService(cancelVideoCommentDownvoteRequest, uid, token)
 	ctx.body = emitVideoCommentResponse
