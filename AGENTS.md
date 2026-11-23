@@ -104,6 +104,7 @@ export const getVideoUpvoteCountService = async (videoId: number): Promise<Video
 
 ## Verification
 
+- Keep tests local by default. Put test cases, fixtures, test helpers, and test reports in the ignored `tests/` directory at the repository root. Commit them only when the user explicitly asks to include them in the repository.
 - Run `npm run lint` for TypeScript source conventions and `npm run typecheck` for type correctness. Chinese JSDoc quality, meaningful naming, architectural boundaries, and resource lifecycles also require manual review; ESLint does not fully enforce them. Do not bulk-fix historical lint violations as part of an unrelated change.
 - Run checks relevant to the change and report what was actually verified. Do not claim mocked tests demonstrate real database behavior.
 - For database or concurrency changes, use the documented `local/dev-infra` environment when available, isolate test records, and clean them up afterward. Never expose credentials or modify unrelated data.

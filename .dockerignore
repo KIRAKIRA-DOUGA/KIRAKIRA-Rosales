@@ -18,6 +18,7 @@ node_modules
 npm-debug.log
 pr_body.txt
 README.md
+tests
 
 *.log
 *.out
