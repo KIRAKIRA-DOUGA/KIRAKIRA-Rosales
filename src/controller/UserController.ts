@@ -386,9 +386,9 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 
 /**
  * 根据页面初始化标识获取用户展示数据
- * @param ctx context
- * @param next context
- * @return GetSelfUserInfoResponseDto 用户初始化数据，如果获取成功则 success: true，不成功则 success: false
+ * @param ctx 请求上下文
+ * @param next 下一个中间件
+ * @returns 写入页面初始化响应后继续执行中间件
  */
 export const getUserBootstrapDataByHintController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<GetUserBootstrapDataByHintRequestDto>
@@ -398,8 +398,7 @@ export const getUserBootstrapDataByHintController = async (ctx: koaCtx, next: ko
 	const getUserBootstrapDataByHintRequest: GetUserBootstrapDataByHintRequestDto = {
 		userDataBootstrapHint,
 	}
-	const selfUserInfo = await getUserBootstrapDataByHintService(getUserBootstrapDataByHintRequest)
-	ctx.body = selfUserInfo
+	ctx.body = await getUserBootstrapDataByHintService(getUserBootstrapDataByHintRequest)
 	await next()
 }
 
@@ -602,9 +601,10 @@ export const createInvitationCodeController = async (ctx: koaCtx, next: koaNext)
 }
 
 /**
- * 获取某位用户的所有的邀请码
- * @param ctx context
- * @param next context
+ * 获取当前登录用户的邀请码列表
+ * @param ctx 请求上下文
+ * @param next 下一个中间件
+ * @returns 写入邀请码列表响应后继续执行中间件
  */
 export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')

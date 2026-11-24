@@ -6,9 +6,9 @@ import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteV
 
 /**
  * 上传视频
- * @param ctx context
- * @param next context
- * @returns 上传视频的结果
+ * @param ctx 包含视频数据和登录凭据的请求上下文
+ * @param next 后续中间件
+ * @returns 完成权限检查并将上传结果写入响应
  */
 export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 	const uuid = ctx.cookies.get('uuid')
@@ -34,8 +34,7 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		ensureOriginal: data.ensureOriginal,
 		videoTagList: data.videoTagList || [],
 	}
-	const esClient = ctx.elasticsearchClient
-	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, uuid, token, esClient)
+	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, uuid, token)
 	ctx.body = uploadVideoResponse
 	await next()
 }

@@ -768,7 +768,7 @@ export const getUserBootstrapDataByHintService = async (getUserBootstrapDataByHi
 		const { collectionName: userAuthCollectionName, schemaInstance: userAuthSchemaInstance } = UserAuthSchema
 		type UserAuth = InferSchemaType<typeof userAuthSchemaInstance>
 
-		const selfUserInfoPipeline: PipelineStage[] = [
+		const bootstrapDataPipeline: PipelineStage[] = [
 			{
 				$match: {
 					UUID: uuid,
@@ -837,7 +837,7 @@ export const getUserBootstrapDataByHintService = async (getUserBootstrapDataByHi
 		]
 
 		try {
-			const userBootstrapDataResult = await selectDataByAggregateFromMongoDB<UserAuth>(userAuthSchemaInstance, userAuthCollectionName, selfUserInfoPipeline)
+			const userBootstrapDataResult = await selectDataByAggregateFromMongoDB<UserAuth>(userAuthSchemaInstance, userAuthCollectionName, bootstrapDataPipeline)
 			if (
 				!userBootstrapDataResult
 				|| !userBootstrapDataResult.success
@@ -1030,9 +1030,45 @@ export const getUserAvatarUploadSignedUrlService = async (uuid: string, token: s
 	}
 }
 
+function toUserSettingsResponse(settings: InferSchemaType<typeof UserSettingsSchema.schemaInstance>): GetUserSettingsResponseDto['userSettings'] {
+	type UserSettings = NonNullable<GetUserSettingsResponseDto['userSettings']>
+	return {
+		uid: settings.uid,
+		editDateTime: settings.editDateTime,
+		enableCookie: settings.enableCookie,
+		themeType: settings.themeType as UserSettings['themeType'],
+		themeColor: settings.themeColor,
+		themeColorCustom: settings.themeColorCustom,
+		wallpaper: settings.wallpaper,
+		coloredSideBar: settings.coloredSideBar,
+		dataSaverMode: settings.dataSaverMode as UserSettings['dataSaverMode'],
+		noSearchRecommendations: settings.noSearchRecommendations,
+		noRelatedVideos: settings.noRelatedVideos,
+		noRecentSearch: settings.noRecentSearch,
+		noViewHistory: settings.noViewHistory,
+		openInNewWindow: settings.openInNewWindow,
+		currentLocale: settings.currentLocale,
+		timezone: settings.timezone,
+		unitSystemType: settings.unitSystemType,
+		devMode: settings.devMode,
+		showCssDoodle: settings.showCssDoodle,
+		sharpAppearanceMode: settings.sharpAppearanceMode,
+		flatAppearanceMode: settings.flatAppearanceMode,
+		userWebsitePrivacySetting: settings.userWebsitePrivacySetting as UserSettings['userWebsitePrivacySetting'],
+		userPrivaryVisibilitiesSetting: settings.userPrivaryVisibilitiesSetting?.map(({ privaryId, visibilitiesType }) => ({
+			privaryId,
+			visibilitiesType: visibilitiesType as UserSettings['userWebsitePrivacySetting'],
+		})),
+		userLinkedAccountsVisibilitiesSetting: settings.userLinkedAccountsVisibilitiesSetting?.map(({ platformId, visibilitiesType }) => ({
+			platformId,
+			visibilitiesType: visibilitiesType as UserSettings['userWebsitePrivacySetting'],
+		})),
+	}
+}
+
 /**
  * 获取用户个性设置数据
- * @param uid 用户 ID
+ * @param uuid 当前用户的 UUID
  * @param token 用户 token
  * @returns 用户个性设置数据
  */
@@ -1049,34 +1085,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 		const getUserSettingsWhere: QueryType<UserSettings> = {
 			UUID: uuid,
 		}
-		const getUserSettingsSelect: SelectType<UserSettings> = {
-			uid: 1,
-			enableCookie: 1,
-			themeType: 1,
-			themeColor: 1,
-			themeColorCustom: 1,
-			wallpaper: 1, // TODO
-			coloredSideBar: 1,
-			dataSaverMode: 1,
-			noSearchRecommendations: 1,
-			noRelatedVideos: 1,
-			noRecentSearch: 1,
-			noViewHistory: 1,
-			openInNewWindow: 1,
-			currentLocale: 1,
-			timezone: 1,
-			unitSystemType: 1,
-			devMode: 1,
-			showCssDoodle: 1,
-			sharpAppearanceMode: 1,
-			flatAppearanceMode: 1,
-			userPrivaryVisibilitiesSetting: 1,
-			userLinkedAccountsVisibilitiesSetting: 1,
-			userWebsitePrivacySetting: 1,
-			editDateTime: 1,
-		}
-
-		const userSettingsResult = await selectDataFromMongoDB<UserSettings>(getUserSettingsWhere, getUserSettingsSelect, schemaInstance, collectionName)
+		const userSettingsResult = await selectDataFromMongoDB<UserSettings>(getUserSettingsWhere, {}, schemaInstance, collectionName)
 
 		if (!userSettingsResult.success || !userSettingsResult.result || userSettingsResult.result.length !== 1) {
 			const errorMessage = '获取用户个性设置失败，查询未成功'
@@ -1088,14 +1097,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 		return {
 			success: true,
 			message: '获取用户设置成功！',
-			userSettings: {
-				...userSettings,
-				themeType: userSettings.themeType as 'light' | 'dark' | 'system',
-				dataSaverMode: userSettings.dataSaverMode as 'limit' | 'standard' | 'preview',
-				userWebsitePrivacySetting: userSettings.userWebsitePrivacySetting as 'public' | 'private' | 'following',
-				userPrivaryVisibilitiesSetting: userSettings.userPrivaryVisibilitiesSetting as GetUserSettingsResponseDto['userSettings']['userPrivaryVisibilitiesSetting'],
-				userLinkedAccountsVisibilitiesSetting: userSettings.userLinkedAccountsVisibilitiesSetting as GetUserSettingsResponseDto['userSettings']['userLinkedAccountsVisibilitiesSetting'],
-			},
+			userSettings: toUserSettingsResponse(userSettings),
 		}
 	} catch (error) {
 		const errorMessage = '获取用户个性设置失败，未知异常！'
@@ -1105,7 +1107,7 @@ export const getUserSettingsService = async (uuid: string, token: string): Promi
 }
 
 /**
- * 根据 UID 更新或创建用户设置
+ * 更新或创建当前登录用户的设置
  * @param updateOrCreateUserSettingsRequest 更新或创建用户设置时的请求参数
  * @param uuid 当前用户的 UUID
  * @param token 用户 token
@@ -1136,9 +1138,8 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 					editDateTime: now,
 				}
 				const updateResult = await findOneAndUpdateData4MongoDB(updateOrCreateUserSettingsWhere, updateOrCreateUserSettingsUpdate, schemaInstance, collectionName)
-				const userSettings = updateResult?.result?.[0]
-				if (updateResult?.success) {
-					return { success: true, message: '更新或创建用户设置成功', userSettings: userSettings || updateOrCreateUserSettingsUpdate }
+				if (updateResult.success && updateResult.result) {
+					return { success: true, message: '更新或创建用户设置成功', userSettings: toUserSettingsResponse(updateResult.result) }
 				} else {
 					logging('ERROR', '更新或创建用户设置失败，没有返回用户设置数据')
 					return { success: false, message: '更新或创建用户设置失败，没有返回用户设置数据' }
@@ -1160,7 +1161,7 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 /**
  * 通过 UUID 校验用户
  * @param UUID 用户 UUID
- * @param token 用户 ID 对应的 token，为空时会导致校验失败
+ * @param token 当前用户的登录凭据
  * @returns 校验结果
  */
 export const checkUserTokenByUuidService = async (UUID: string, token: string): Promise<CheckUserTokenResponseDto> => {
@@ -2404,7 +2405,6 @@ export class General2FAVerifier {
 
 /**
  * 生成邀请码
- * // FIXME: 这是一个临时解决方法，应该使用 cookie 中的 uuid
  * @param uuid 当前用户的 UUID
  * @param token 申请生成邀请码的用户 token
  * @returns 生成的邀请码
@@ -2414,7 +2414,7 @@ export const createInvitationCodeService = async (uuid: string, token: string): 
 		if (await checkUserTokenByUUID(uuid, token)) {
 			const uid = await getUserUid(uuid)
 			if (!uid) {
-				logging('ERROR', '生成邀请码失败，找不到账号', undefined, { uid })
+				logging('ERROR', '生成邀请码失败，找不到账号')
 				return { success: false, isCoolingDown: false, message: '生成邀请码失败，找不到账号' }
 			}
 
@@ -2527,7 +2527,6 @@ export const createInvitationCodeService = async (uuid: string, token: string): 
 
 /**
  * 获取自己的邀请码列表
- * // FIXME: 应该使用 UUID
  * @param uuid 当前用户的 UUID
  * @param token 用户 token
  * @returns 获取自己的邀请码列表的请求结果
@@ -2720,8 +2719,8 @@ export const adminGetUserByInvitationCodeService = async (invitationCode: string
 /**
  * 更新密码
  * @param updateUserPasswordRequest 更新密码的请求载荷
- * @param uid 用户 UID
- * @param token 用户 token
+ * @param cookieUuid 当前用户的 UUID
+ * @param cookieToken 当前用户的登录凭据
  * @returns 更新密码的请求响应
  */
 export const changePasswordService = async (updateUserPasswordRequest: UpdateUserPasswordRequestDto, cookieUuid: string, cookieToken: string): Promise<UpdateUserPasswordResponseDto> => {
@@ -2998,7 +2997,7 @@ export const checkUserExistsByUuidService = async (checkUserExistsByUuidRequest:
 
 /**
  * 获取所有被封禁用户的信息
- * @param adminUid 管理员的 UID
+ * @param adminUUID 管理员的 UUID
  * @param adminToken 管理员的 Token
  * @param GetBlockedUserRequest 获取被封禁用户的请求载荷
  * @returns 获取所有被封禁用户的信息的请求响应
@@ -3111,7 +3110,7 @@ export const getBlockedUserService = async (adminUUID: string, adminToken: strin
 
 /**
  * 管理员获取用户信息
- * @param adminGetUserInfoServiceRequest 管理员获取用户信息的请求载荷
+ * @param adminGetUserInfoRequest 管理员获取用户信息的请求载荷
  * @param adminUUID 管理员的 UUID
  * @param adminToken 管理员的 Token
  * @returns 管理员获取用户信息的请求响应
@@ -3307,7 +3306,7 @@ export const approveUserInfoService = async (approveUserInfoRequest: ApproveUser
 
 /**
  * 管理员清空某个用户的信息
- * @param approveUserInfoRequest 管理员清空某个用户的信息的请求载荷
+ * @param adminClearUserInfoRequest 指定目标用户公开 UID 的请求载荷
  * @param adminUUID 管理员的 UUID
  * @param adminToken 管理员的 Token
  * @returns 管理员清空某个用户的信息请求响应
@@ -3327,8 +3326,8 @@ export const adminClearUserInfoService = async (adminClearUserInfoRequest: Admin
 		const uid = adminClearUserInfoRequest.uid
 		const UUID = await getUserUuid(uid)
 		if (!UUID) {
-			logging('ERROR', '管理员清空某个用户的信息失败，UUID 不存在', undefined, { uid })
-			return { success: false, message: '管理员清空某个用户的信息失败，UUID 不存在' }
+			logging('ERROR', '管理员清空用户信息失败，未能找到目标账号', undefined, { uid })
+			return { success: false, message: '管理员清空用户信息失败，未能找到目标账号' }
 		}
 		const username = `user_${generateSecureRandomString(12)}`
 		const check = await checkUsernameService({ username })
@@ -3551,7 +3550,7 @@ const checkUserTokenByUUID = async (UUID: string, token: string): Promise<boolea
 }
 
 /**
- * 根据页面初始化标识读取展示偏好所属的账号，仅供服务端过滤列表。
+ * 根据页面初始化标识查找账号，供服务端读取展示数据和列表过滤偏好。
  * @param userDataBootstrapHint 页面初始化标识
  * @returns 与标识对应的用户 UUID，未匹配到唯一账号时返回 undefined
  */

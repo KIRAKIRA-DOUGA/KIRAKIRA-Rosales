@@ -4,20 +4,17 @@ import { CreateOrUpdateBrowsingHistoryRequestDto, GetUserBrowsingHistoryWithFilt
 
 /**
  * 更新或创建用户浏览历史
- * @param ctx context
- * @param next context
+ * @param ctx Koa 请求上下文
+ * @param next 后续中间件
+ * @returns 写入响应并等待后续中间件完成
  */
 export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CreateOrUpdateBrowsingHistoryRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto = {
-		/** 用户的 UUID - 非空 */
-		/** 浏览的内容的类型，比如说 video, photo 等 - 非空 */
 		category: data.category,
-		/** 浏览的内容的唯一 ID - 非空 */
 		id: data.id,
-		/** 浏览的定位锚点，如果是视频就是播放时间，如果是相册可能是上次浏览到相册第n张图片，为了兼容性使用 String */
 		anchor: data.anchor ?? null,
 	}
 	const createBrowsingHistoryResponse = await createOrUpdateBrowsingHistoryService(createOrUpdateBrowsingHistoryRequest, uuid, token)
@@ -27,15 +24,15 @@ export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, n
 
 /**
  * 获取全部或过滤后的用户浏览历史，按对某一内容的最后访问时间降序排序
- * @param ctx context
- * @param next context
+ * @param ctx Koa 请求上下文
+ * @param next 后续中间件
+ * @returns 写入响应并等待后续中间件完成
  */
 export const getUserBrowsingHistoryWithFilterController = async (ctx: koaCtx, next: koaNext) => {
 	const videoTitle = ctx.query.videoTitle as string
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const getUserBrowsingHistoryWithFilterRequest: GetUserBrowsingHistoryWithFilterRequestDto = {
-		/** 过滤条件 - 视频标题 */
 		videoTitle,
 	}
 	const getUserBrowsingHistoryWithFilterResponse = await getUserBrowsingHistoryWithFilterService(getUserBrowsingHistoryWithFilterRequest, uuid, token)

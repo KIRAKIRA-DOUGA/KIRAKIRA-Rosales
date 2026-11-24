@@ -24,11 +24,12 @@ import { getTodayBeginTimestampAndEndTimestamp } from '../common/DateTool.js'
 
 /**
  * 上传视频
- * @param uploadVideoRequest 上传视频请求携带的请求载荷
- * @param esClient Elasticsearch 客户端连接
+ * @param uploadVideoRequest 待审核的视频资料
+ * @param uuid 当前登录用户的 UUID
+ * @param token 登录凭据
  * @returns 上传视频的结果
  */
-export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uuid: string, token: string, _esClient?: Client): Promise<UploadVideoResponseDto> => {
+export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestDto, uuid: string, token: string): Promise<UploadVideoResponseDto> => {
 	try {
 		if (checkUploadVideoRequest(uploadVideoRequest)) {
 			if (!(await checkUserTokenByUuidService(uuid, token)).success) {
@@ -95,8 +96,8 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 							await session.abortTransaction()
 						}
 						session.endSession()
-						logging('ERROR', '视频上传失败，数据无法导入数据库或搜索引擎')
-						return { success: false, message: '视频上传失败，数据无法导入数据库或搜索引擎' }
+						logging('ERROR', '视频上传失败，无法保存视频信息')
+						return { success: false, message: '视频上传失败，无法保存视频信息' }
 					}
 				} catch (error) {
 					if (session.inTransaction()) {
@@ -115,8 +116,8 @@ export const updateVideoService = async (uploadVideoRequest: UploadVideoRequestD
 				return { success: false, message: '视频上传失败，获取视频 ID 失败' }
 			}
 		} else {
-			logging('ERROR', '上传视频时的字段校验未通过或 Es 客户端未连接')
-			return { success: false, message: '上传时携带的参数不正确或搜索引擎客户端未连接' }
+			logging('ERROR', '视频上传失败，请求参数不正确')
+			return { success: false, message: '视频上传失败，请求参数不正确' }
 		}
 	} catch (error) {
 		logging('ERROR', '视频上传失败：', error)
@@ -340,7 +341,9 @@ export const checkVideoBlockedByKvidService = async (videoId: number, selectorUu
 
 /**
  * 根据 kvid 获取视频详细信息（用户打开某个视频页面）
- * @param uploadVideoRequest 根据 kvid 获取视频的请求携带的请求载荷
+ * @param getVideoByKvidRequest 包含视频 KVID 的查询参数
+ * @param selectorUuid 当前观看者的 UUID，游客可省略
+ * @param selectorToken 当前观看者的登录凭据
  * @returns 视频数据
  */
 export const getVideoByKvidService = async (getVideoByKvidRequest: GetVideoByKvidRequestDto, selectorUuid?: string, selectorToken?: string): Promise<GetVideoByKvidResponseDto> => {

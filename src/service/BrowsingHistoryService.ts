@@ -8,7 +8,7 @@ import { logging } from './loggingService.js'
 
 /**
  * 更新或创建用户浏览历史
- * @param createBrowsingHistoryRequest 更新或创建用户浏览历史请求载荷
+ * @param createOrUpdateBrowsingHistoryRequest 更新或创建用户浏览历史请求载荷
  * @param uuid 当前用户的 UUID
  * @param token 用户安全令牌
  * @returns 更新或创建用户浏览历史响应结果
@@ -56,10 +56,14 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 		}
 
 		try {
-			const insert2MongoDResult = await findOneAndUpdateData4MongoDB(BrowsingHistoryWhere, BrowsingHistoryData, schemaInstance, collectionName)
-			const result = insert2MongoDResult.result
-			if (insert2MongoDResult.success && result) {
-				return { success: true, message: '更新或创建用户浏览历史成功', result: result as CreateOrUpdateBrowsingHistoryResponseDto['result'] }
+			const saved = await findOneAndUpdateData4MongoDB(BrowsingHistoryWhere, BrowsingHistoryData, schemaInstance, collectionName)
+			if (!saved.success || !saved.result) {
+				return { success: false, message: '更新或创建用户浏览历史时出错，未取得保存结果' }
+			}
+			return {
+				success: true,
+				message: '更新或创建用户浏览历史成功',
+				result: { category, id: saved.result.id, anchor: saved.result.anchor },
 			}
 		} catch (_error) {
 			logging('ERROR', '更新或创建用户浏览历史时出错，插入数据时出错')
@@ -131,9 +135,9 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 					},
 					{
 						$project: {
-							uid: 1,
+							_id: 0,
 							category: 1,
-							id: '$id_number',
+							id: 1,
 							anchor: 1,
 							videoId: '$video_info.videoId',
 							title: '$video_info.title',
@@ -182,7 +186,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 
 /**
  * 校验创建用户浏览历史的请求参数
- * @param createBrowsingHistoryRequest 创建用户浏览历史的请求参数
+ * @param createOrUpdateBrowsingHistoryRequest 创建用户浏览历史的请求参数
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkCreateOrUpdateBrowsingHistoryRequest = (createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto): boolean => {

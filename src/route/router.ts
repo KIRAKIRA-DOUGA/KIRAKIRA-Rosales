@@ -280,11 +280,11 @@ router.get('/user/blocked/info', getBlockedUserController) // 获取所有被封
 
 router.get('/user/adminGetUserInfo', adminGetUserInfoController) // 管理员获取用户信息 // WARN: 仅限管理员
 // https://localhost:30000/user/adminGetUserInfo?isOnlyShowUserInfoUpdatedAfterReview=true&page=1&pageSize=20
-// cookie: UUID, token
+// cookie: uuid, token
 
 router.post('/user/adminEditUserInfo', adminEditUserInfoController) // 管理员强制更新用户信息 // WARN: 仅限管理员
 // https://localhost:30000/user/adminEditUserInfo
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 // 	"uid": 123,
 // 	"userInfo" :{
@@ -296,14 +296,14 @@ router.post('/user/adminEditUserInfo', adminEditUserInfoController) // 管理员
 
 router.post('/user/approveUserInfo', approveUserInfoController) // 管理员通过用户信息审核 // WARN: 仅限管理员
 // https://localhost:30000/user/approveUserInfo
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 // 	"uid": 123
 // }
 
 router.post('/user/adminClearUserInfo', adminClearUserInfoController) // 管理员清空某个用户的信息 // WARN: 仅限管理员
 // https://localhost:30000/user/adminClearUserInfo
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 // 	"uid": XXXX
 // }
@@ -311,7 +311,7 @@ router.post('/user/adminClearUserInfo', adminClearUserInfoController) // 管理�
 // DANGER: 请勿调用，除非你知道你自己在做什么！
 router.post('/user/adminRotationAllUserDataBootstrapHintController', adminRotationAllUserDataBootstrapHintController) // 管理员重置所有用户的 userDataBootstrapHint // WARN: 仅限管理员 // DANGER: 请勿调用，除非你知道你自己在做什么！
 // https://localhost:30000/user/adminRotationAllUserDataBootstrapHintController
-// cookie: UUID, token
+// cookie: uuid, token
 
 
 
@@ -320,76 +320,77 @@ router.post('/user/adminRotationAllUserDataBootstrapHintController', adminRotati
 
 router.post('/block/user', blockUserByUidController) // 用户屏蔽用户
 // https://localhost:30000/block/user
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 // 	"blockUid": XXXX
 // }
 
 router.post('/block/hideuser', hideUserByUidController) // 用户隐藏用户
 // https://localhost:30000/block/hideuser
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 //	"hideUid": XXXX
 // }
 
 router.post('/block/tag', blockTagController) // 用户屏蔽标签
 // https://localhost:30000/block/tag
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 //	"tagId": XXXX
 // }
 
 router.post('/block/keyword', blockKeywordController) // 用户屏蔽关键词
 // https://localhost:30000/block/keyword
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 // 	"blockKeyword": "XXXXXX"
 // }
 
 router.post('/block/regex', addRegexController) // 用户添加正则表达式
 // https://localhost:30000/block/regex
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 //	"blockRegex": "XXXXXX"
 // }
 
 router.delete('/block/delete/user', unblockUserByUidController) // 用户解封用户
 // https://localhost:30000/block/delete/user
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 //	"blockUid": XXXX
 // }
 
 router.delete('/block/delete/hideuser', showUserByUidController) // 用户取消隐藏用户
 // https://localhost:30000/block/delete/hideuser
+// cookie: uuid, token
 // {
 //	"hideUid": XXXX
 // }
 
 router.delete('/block/delete/tag', unblockTagController) // 用户解封标签
 // https://localhost:30000/block/delete/tag
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 //	"blockTag": XXXX
 // }
 
 router.delete('/block/delete/keyword', unblockKeywordController) // 用户解封关键词
 // https://localhost:30000/block/delete/keyword
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 //	"blockKeyword": "XXXXXX"
 // }
 
 router.delete('/block/delete/regex', removeRegexController) // 用户解封正则表达式
 // https://localhost:30000/block/delete/regex
-// cookie: UUID, token
+// cookie: uuid, token
 // {
 //	"blockRegex": "XXXXXX"
 // }
 
 router.get('/block/list', getBlockListController) // 获取用户的黑名单列表
 // https://localhost:30000/block/list?type=block&page=0&pageSize=10
-// cookie: UUID, token
+// cookie: uuid, token
 
 
 
@@ -402,19 +403,23 @@ router.get('/block/list', getBlockListController) // 获取用户的黑名单列
 
 router.post('/video/upload', updateVideoController) // 上传视频
 // https://localhost:30000/video/upload
+// cookie: uuid, token
 // {
 // 	"videoPart": [
 // 		{
-// 			"id": "0",
+// 			"id": 0,
 // 			"videoPartTitle": "2953-day1",
 // 			"link": "https://xxx.xxx.xxx/xxx.mp4"
 // 		}
 // 	],
 // 	"title": "[博物馆奇妙夜] 2953 公民控 VRC 虚拟观赏会（第一天）",
 // 	"image": "https://xxx.xxx.xxx/xxx.png",
-// 	"uploader": "cfdxkk@kirakira.moe",
-// 	"uploaderId": "123",
-// 	"duration": "19573",
+// 	"duration": 19573,
+// 	"videoCategory": "game",
+// 	"copyright": "original",
+// 	"pushToFeed": true,
+// 	"ensureOriginal": true,
+// 	"videoTagList": [],
 // 	"description": "和群里的朋友一起熬夜从凌晨两点看到早上八点。不得不说今年的公民控是真的很精彩。"
 // }
 
