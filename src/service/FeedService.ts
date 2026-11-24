@@ -1390,13 +1390,15 @@ const checkFeedPrivacyPermission = async (targetUuid: string, uuid: string | und
 		const rules = result.result[0]?.userPrivaryVisibilitiesSetting?.filter(setting =>
 			setting.privaryId === `privary.${list}` || setting.privaryId === `privacy.${list}`,
 		) ?? []
+		// private 只允许本人查看。遇到未知的可见性也拒绝其他人访问。
 		if (rules.some(rule => rule.visibilitiesType !== 'public' && rule.visibilitiesType !== 'following')) {
 			return false
 		}
-		// 未设置时默认公开。只有设置为关注者可见时才查关注关系。
+		// public 表示所有人都能看。未设置时默认公开。
 		if (!rules.some(rule => rule.visibilitiesType === 'following')) {
 			return true
 		}
+		// following 仅关注者可见，需要检查查看者是否关注了目标用户。
 		if (!viewerUuid) {
 			return false
 		}

@@ -1039,7 +1039,7 @@ function toUserSettingsResponse(settings: InferSchemaType<typeof UserSettingsSch
 		themeType: settings.themeType as UserSettings['themeType'],
 		themeColor: settings.themeColor,
 		themeColorCustom: settings.themeColorCustom,
-		wallpaper: settings.wallpaper,
+		wallpaper: settings.wallpaper, // TODO
 		coloredSideBar: settings.coloredSideBar,
 		dataSaverMode: settings.dataSaverMode as UserSettings['dataSaverMode'],
 		noSearchRecommendations: settings.noSearchRecommendations,
@@ -1161,7 +1161,7 @@ export const updateOrCreateUserSettingsService = async (updateOrCreateUserSettin
 /**
  * 通过 UUID 校验用户
  * @param UUID 用户 UUID
- * @param token 当前用户的登录凭据
+ * @param token 当前用户的登录凭据，为空时会导致校验失败
  * @returns 校验结果
  */
 export const checkUserTokenByUuidService = async (UUID: string, token: string): Promise<CheckUserTokenResponseDto> => {
