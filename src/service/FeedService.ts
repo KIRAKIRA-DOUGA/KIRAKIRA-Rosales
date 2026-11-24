@@ -1043,7 +1043,7 @@ export const getFollowingListService = async (getFollowingListRequest: GetFollow
 			return { success: false, message: '获取关注列表失败：目标用户不存在' }
 		}
 
-		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, token, 'privacy.follow')
+		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, token, 'follow')
 		if (!canView) {
 			logging('ERROR', '获取关注列表失败：没有权限查看')
 			return { success: false, message: '获取关注列表失败：没有权限查看该用户的关注列表' }
@@ -1145,7 +1145,7 @@ export const getFollowerListService = async (getFollowerListRequest: GetFollowLi
 			return { success: false, message: '获取关注列表失败：目标用户不存在' }
 		}
 
-		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, token, 'privacy.fans')
+		const canView = await checkFeedPrivacyPermission(targetUuid, uuid, token, 'fans')
 		if (!canView) {
 			logging('ERROR', '获取粉丝列表失败：没有权限查看')
 			return { success: false, message: '获取粉丝列表失败：没有权限查看该用户的粉丝列表' }
@@ -1360,10 +1360,10 @@ const checkGetFollowListRequest = (getFollowListRequest: GetFollowListRequestDto
  * @param targetUuid 目标用户的 UUID
  * @param uuid 查看者的 UUID（可选）
  * @param token 查看者的登录凭据（可选）
- * @param privacyId 隐私数据项 ID（如 'privacy.follow' 或 'privacy.fans'）
+ * @param list 关注列表（follow）或粉丝列表（fans）
  * @returns 可以查看返回 true，否则返回 false
  */
-const checkFeedPrivacyPermission = async (targetUuid: string, uuid: string | undefined, token: string | undefined, privacyId: 'privacy.follow' | 'privacy.fans'): Promise<boolean> => {
+const checkFeedPrivacyPermission = async (targetUuid: string, uuid: string | undefined, token: string | undefined, list: 'follow' | 'fans'): Promise<boolean> => {
 	try {
 		const viewerUuid = uuid && token && (await checkUserTokenByUuidService(uuid, token)).success ? uuid : undefined
 		// 只有验证过的查看者才能使用本人或关注者可见的权限。
@@ -1380,56 +1380,32 @@ const checkFeedPrivacyPermission = async (targetUuid: string, uuid: string | und
 		const select: SelectType<UserSettings> = {
 			userPrivaryVisibilitiesSetting: 1,
 		}
-		const result = await selectDataFromMongoDB<UserSettings>(where, select, schemaInstance, collectionName)
+		// 权限读取主节点，避免在修改隐私设置或取消关注后继续按旧权限放行。
+		const result = await selectDataFromMongoDB<UserSettings>(where, select, schemaInstance, collectionName, { readPreference: 'primary' })
 
 		if (!result.success || !result.result) {
 			return false
 		}
-		if (result.result.length === 0) {
-			// 如果没有设置，默认公开
+		// 设置页写入 privary.*，旧记录也可能使用 privacy.*。两者同时存在时须满足每一条限制。
+		const rules = result.result[0]?.userPrivaryVisibilitiesSetting?.filter(setting =>
+			setting.privaryId === `privary.${list}` || setting.privaryId === `privacy.${list}`,
+		) ?? []
+		if (rules.some(rule => rule.visibilitiesType !== 'public' && rule.visibilitiesType !== 'following')) {
+			return false
+		}
+		// 未设置时默认公开。只有设置为关注者可见时才查关注关系。
+		if (!rules.some(rule => rule.visibilitiesType === 'following')) {
 			return true
 		}
-
-		const settings = result.result[0]
-		const privacySetting = settings.userPrivaryVisibilitiesSetting?.find(s => s.privaryId === privacyId)
-
-		// 如果没有设置，默认公开
-		if (!privacySetting) {
-			return true
-		}
-
-		const visibilityType = privacySetting.visibilitiesType
-
-		// public: 所有人能看
-		if (visibilityType === 'public') {
-			return true
-		}
-
-		// private: 隐藏，只有自己能看
-		if (visibilityType === 'private') {
+		if (!viewerUuid) {
 			return false
 		}
 
-		// following: 仅关注能看，需要检查查看者是否关注了目标用户
-		if (visibilityType === 'following') {
-			if (!viewerUuid) {
-				return false
-			}
-			const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
-			type Following = InferSchemaType<typeof followingSchemaInstance>
-			const followingWhere: QueryType<Following> = {
-				followerUuid: viewerUuid,
-				followingUuid: targetUuid,
-			}
-			const followingSelect: SelectType<Following> = {
-				_id: 1,
-			}
-			const followingResult = await selectDataFromMongoDB<Following>(followingWhere, followingSelect, followingSchemaInstance, followingCollectionName)
-			return followingResult.success && followingResult.result && followingResult.result.length > 0
-		}
-
-		// 默认不允许
-		return false
+		const { collectionName: followingCollectionName, schemaInstance: followingSchemaInstance } = FollowingSchema
+		type Following = InferSchemaType<typeof followingSchemaInstance>
+		const followingWhere: QueryType<Following> = { followerUuid: viewerUuid, followingUuid: targetUuid }
+		const followingResult = await selectDataFromMongoDB<Following>(followingWhere, { _id: 1 }, followingSchemaInstance, followingCollectionName, { readPreference: 'primary' })
+		return followingResult.success && followingResult.result?.length > 0
 	} catch (error) {
 		logging('ERROR', '检查隐私权限失败：', error)
 		return false
