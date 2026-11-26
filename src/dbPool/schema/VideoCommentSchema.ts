@@ -71,6 +71,10 @@ class VideoCommentSchemaFactory {
 		downvoteCount: { type: Number, default: 0, required: true },
 		/** 增减或修正赞踩计数时加 1，防止旧统计覆盖已更新的数量。 */
 		voteRevision: { type: Number },
+		/** 按明细写回缓存的版本，用于识别校准前开始的赞踩操作。 */
+		voteRecountRevision: { type: Number },
+		/** 有增量可能已计入缓存，下一批更新需要核对赞数和踩数。 */
+		voteRecountPending: { type: Boolean },
 		/** 评论楼层数 - 非空 */
 		commentIndex: { type: Number, required: true },
 		/** 子评论 */

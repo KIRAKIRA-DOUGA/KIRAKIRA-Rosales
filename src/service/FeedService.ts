@@ -17,12 +17,12 @@ import { logging } from './loggingService.js'
 const legacyGroupCover = /feed-group-cover-(?:[a-z0-9]{24}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})-/i
 
 // 分组在库内使用 UUID 关联账号，返回给客户端时一次查询所有成员的公开 UID。
-async function publicFeedGroups(groups: InferSchemaType<typeof FeedGroupSchema.schemaInstance>[]): Promise<GetFeedGroupListResponseDto['result']> {
+async function publicFeedGroups(groups: InferSchemaType<typeof FeedGroupSchema.schemaInstance>[], session?: ClientSession): Promise<GetFeedGroupListResponseDto['result']> {
 	const members = [...new Set(groups.flatMap(group => group.uuidList ?? []))]
 	const uidByUuid = new Map<string, number>()
 	if (members.length) {
 		const { collectionName, schemaInstance } = UserAuthSchema
-		const accounts = await selectDataFromMongoDB({ UUID: { $in: members } }, { UUID: 1, uid: 1 }, schemaInstance, collectionName)
+		const accounts = await selectDataFromMongoDB({ UUID: { $in: members } }, { UUID: 1, uid: 1 }, schemaInstance, collectionName, { session })
 		if (!accounts.success) {
 			throw new Error('获取分组成员的公开 UID 失败')
 		}
@@ -310,7 +310,7 @@ export const createFeedGroupService = async (createFeedGroupRequest: CreateFeedG
  * @param addNewUser2FeedGroupRequest 向一个动态分组中添加新的 UID 的请求载荷
  * @param uuid 用户的 UUID
  * @param token 用户的 token
- * @returns 向一个动态分组中添加新的 UID 的请求响应
+ * @returns 成功时返回已提交的分组及成员公开 UID；读取成员失败时回滚并返回失败。
  */
 export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: AddNewUid2FeedGroupRequestDto, uuid: string, token: string): Promise<AddNewUid2FeedGroupResponseDto> => {
 	let session: ClientSession | false = false
@@ -400,10 +400,11 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
 			return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 失败，更新失败' }
 		}
 
+		const [feedGroupResult] = await publicFeedGroups([findOneAndUpdateFeedGroupData], session)
 		const sessionToCommit = session
 		session = false // 提交函数负责在成功或失败后关闭会话。
 		await commitAndEndSession(sessionToCommit)
-		return { success: true, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 成功', feedGroupResult: (await publicFeedGroups([findOneAndUpdateFeedGroupData]))[0] }
+		return { success: true, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 成功', feedGroupResult }
 	} catch (error) {
 		logging('ERROR', '向一个动态分组中添加新的 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, isOverload: false, message: '向一个动态分组中添加新的 UID 时出错：未知原因。' }
@@ -419,7 +420,7 @@ export const addNewUid2FeedGroupService = async (addNewUser2FeedGroupRequest: Ad
  * @param removeUidFromFeedGroupRequest 从一个动态分组中移除 UID 的请求载荷
  * @param uuid 用户的 UUID
  * @param token 用户的 token
- * @returns 从一个动态分组中移除 UID 的请求响应
+ * @returns 成功时返回已提交的分组及成员公开 UID；读取成员失败时回滚并返回失败。
  */
 export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupRequest: RemoveUidFromFeedGroupRequestDto, uuid: string, token: string): Promise<RemoveUidFromFeedGroupResponseDto> => {
 	let session: ClientSession | false = false
@@ -505,10 +506,11 @@ export const removeUidFromFeedGroupService = async (removeUidFromFeedGroupReques
 			return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 失败，更新失败' }
 		}
 
+		const [feedGroupResult] = await publicFeedGroups([findOneAndUpdateFeedGroupData], session)
 		const sessionToCommit = session
 		session = false // 提交函数负责在成功或失败后关闭会话。
 		await commitAndEndSession(sessionToCommit)
-		return { success: true, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 成功', feedGroupResult: (await publicFeedGroups([findOneAndUpdateFeedGroupData]))[0] }
+		return { success: true, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 成功', feedGroupResult }
 	} catch (error) {
 		logging('ERROR', '从一个动态分组中移除 UID 时出错：未知原因。', error)
 		return { success: false, tooManyUidInOnce: false, message: '从一个动态分组中移除 UID 时出错：未知原因。' }
@@ -597,9 +599,10 @@ export const getFeedGroupCoverUploadSignedUrlService = async (uuid: string, toke
  * @param createOrEditFeedGroupInfoRequest 创建或更新动态分组信息的请求载荷
  * @param uuid 用户的 UUID
  * @param token 用户的 token
- * @returns 创建或更新动态分组信息的请求响应
+ * @returns 成功时返回已提交的分组及成员公开 UID；读取成员失败时回滚并返回失败。
  */
 export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfoRequest: CreateOrEditFeedGroupInfoRequestDto, uuid: string, token: string): Promise<CreateOrEditFeedGroupInfoResponseDto> => {
+	let session: ClientSession | false = false
 	try {
 		if (!checkCreateOrEditFeedGroupInfoRequest(createOrEditFeedGroupInfoRequest)) {
 			logging('ERROR', '创建或更新动态分组信息失败，参数不合法')
@@ -628,17 +631,29 @@ export const createOrEditFeedGroupInfoService = async (createOrEditFeedGroupInfo
 			editDateTime: now,
 		}
 
-		const findOneAndUpdateFeedGroupDataResult = await findOneAndUpdateData4MongoDB<FeedGroup>(updateFeedGroupWhere, updateFeedGroupData, feedGroupSchemaInstance, feedGroupCollectionName)
+		session = await createAndStartSession()
+		if (!session) {
+			return { success: false, message: '创建或更新动态分组信息失败，请稍后再试' }
+		}
+		const findOneAndUpdateFeedGroupDataResult = await findOneAndUpdateData4MongoDB<FeedGroup>(updateFeedGroupWhere, updateFeedGroupData, feedGroupSchemaInstance, feedGroupCollectionName, { session })
 
 		if (!findOneAndUpdateFeedGroupDataResult.success || !findOneAndUpdateFeedGroupDataResult.result) {
 			logging('ERROR', '创建或更新动态分组信息失败，更新失败')
 			return { success: false, message: '创建或更新动态分组信息失败，更新失败' }
 		}
 
-		return { success: true, message: '创建或更新动态分组信息成功', feedGroupResult: (await publicFeedGroups([findOneAndUpdateFeedGroupDataResult.result]))[0] }
+		const [feedGroupResult] = await publicFeedGroups([findOneAndUpdateFeedGroupDataResult.result], session)
+		const sessionToCommit = session
+		session = false
+		await commitAndEndSession(sessionToCommit)
+		return { success: true, message: '创建或更新动态分组信息成功', feedGroupResult }
 	} catch (error) {
 		logging('ERROR', '创建或更新动态分组信息时出错：未知原因', error)
 		return { success: false, message: '创建或更新动态分组信息时出错：未知原因' }
+	} finally {
+		if (session) {
+			await abortAndEndSession(session).catch(error => logging('ERROR', '创建或更新动态分组后回滚事务失败', error))
+		}
 	}
 }
 
