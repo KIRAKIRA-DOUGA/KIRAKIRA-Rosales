@@ -4,20 +4,24 @@ import { insertData2MongoDB, selectDataFromMongoDB } from '../dbPool/DbClusterPo
 import { QueryType, SelectType } from '../dbPool/DbClusterPoolTypes.js'
 import { FavoritesSchema } from '../dbPool/schema/FavoritesSchema.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
-import { checkUserTokenService } from './UserService.js'
+import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
 import { logging } from './loggingService.js'
 
 /**
  * 创建收藏夹
  * @param createFavoritesRequest 创建收藏夹的请求载荷
- * @param uid 用户 ID
+ * @param uuid 当前用户的 UUID
  * @param token 用户安全令牌
  * @returns 创建收藏夹的请求响应
  */
-export const createFavoritesService = async (createFavoritesRequest: CreateFavoritesRequestDto, uid: number, token: string): Promise<CreateFavoritesResponseDto> => {
+export const createFavoritesService = async (createFavoritesRequest: CreateFavoritesRequestDto, uuid: string, token: string): Promise<CreateFavoritesResponseDto> => {
 	try {
 		if (checkCreateFavoritesRequest(createFavoritesRequest)) {
-			if ((await checkUserTokenService(uid, token)).success) {
+			if ((await checkUserTokenByUuidService(uuid, token)).success) {
+				const uid = await getUserUid(uuid)
+				if (!uid) {
+					return { success: false, message: '找不到收藏夹所属账号' }
+				}
 				const { favoritesTitle, favoritesBio, favoritesCover, favoritesVisibility } = createFavoritesRequest
 				const { collectionName, schemaInstance } = FavoritesSchema
 				const now = new Date().getTime()
@@ -81,13 +85,17 @@ export const createFavoritesService = async (createFavoritesRequest: CreateFavor
 
 /**
  * 获取当前登录用户的收藏夹列表
- * @param uid 用户 ID
+ * @param uuid 当前用户的 UUID
  * @param token 用户安全令牌
  * @returns 获取当前登录用户的收藏夹列表的请求响应
  */
-export const getFavoritesService = async (uid: number, token: string): Promise<GetFavoritesResponseDto> => {
+export const getFavoritesService = async (uuid: string, token: string): Promise<GetFavoritesResponseDto> => {
 	try {
-		if ((await checkUserTokenService(uid, token)).success) {
+		if ((await checkUserTokenByUuidService(uuid, token)).success) {
+			const uid = await getUserUid(uuid)
+			if (!uid) {
+				return { success: false, message: '找不到收藏夹所属账号' }
+			}
 			const { collectionName, schemaInstance } = FavoritesSchema
 
 			type FavoritesType = InferSchemaType<typeof schemaInstance>

@@ -1,20 +1,18 @@
 import { createOrUpdateBrowsingHistoryService, getUserBrowsingHistoryWithFilterService } from '../service/BrowsingHistoryService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
-import { parseInteger } from '../common/ValidTool.js'
 import { CreateOrUpdateBrowsingHistoryRequestDto, GetUserBrowsingHistoryWithFilterRequestDto } from './BrowsingHistoryControllerDto.js'
 
 /**
  * 更新或创建用户浏览历史
- * @param ctx context
- * @param next context
+ * @param ctx Koa 请求上下文
+ * @param next 后续中间件
+ * @returns 写入响应并等待后续中间件完成
  */
 export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CreateOrUpdateBrowsingHistoryRequestDto>
 	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto = {
-		/** 用户的 UUID - 非空 */
-		uuid: data.uuid,
 		/** 浏览的内容的类型，比如说 video, photo 等 - 非空 */
 		category: data.category,
 		/** 浏览的内容的唯一 ID - 非空 */
@@ -29,18 +27,19 @@ export const createOrUpdateUserBrowsingHistoryController = async (ctx: koaCtx, n
 
 /**
  * 获取全部或过滤后的用户浏览历史，按对某一内容的最后访问时间降序排序
- * @param ctx context
- * @param next context
+ * @param ctx Koa 请求上下文
+ * @param next 后续中间件
+ * @returns 写入响应并等待后续中间件完成
  */
 export const getUserBrowsingHistoryWithFilterController = async (ctx: koaCtx, next: koaNext) => {
 	const videoTitle = ctx.query.videoTitle as string
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 	const getUserBrowsingHistoryWithFilterRequest: GetUserBrowsingHistoryWithFilterRequestDto = {
 		/** 过滤条件 - 视频标题 */
 		videoTitle,
 	}
-	const getUserBrowsingHistoryWithFilterResponse = await getUserBrowsingHistoryWithFilterService(getUserBrowsingHistoryWithFilterRequest, uid, token)
+	const getUserBrowsingHistoryWithFilterResponse = await getUserBrowsingHistoryWithFilterService(getUserBrowsingHistoryWithFilterRequest, uuid, token)
 	ctx.body = getUserBrowsingHistoryWithFilterResponse
 	await next()
 }

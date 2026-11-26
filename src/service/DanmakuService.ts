@@ -17,19 +17,20 @@ import { logging } from './loggingService.js'
 export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestDto, uuid: string, token: string): Promise<EmitDanmakuResponseDto> => {
 	try {
 		if (!checkEmitDanmakuRequest(emitDanmakuRequest)) {
-			logging('ERROR', '弹幕发送失败，弹幕数据校验未通过：', undefined, { emitDanmakuRequest, uuid })
+			logging('ERROR', '弹幕发送失败，弹幕数据校验未通过：', undefined, { videoId: emitDanmakuRequest?.videoId })
 			return { success: false, message: '弹幕发送失败，弹幕数据错误' }
 		}
 
 		const { videoId } = emitDanmakuRequest
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
+			logging('ERROR', '弹幕发送失败，用户校验未通过', undefined, { videoId: emitDanmakuRequest?.videoId })
+			return { success: false, message: '弹幕发送失败，用户校验未通过' }
+		}
+
 		const uid = await getUserUid(uuid)
 		if (!uid) {
-			logging('ERROR', '弹幕发送失败，用户ID不存在', undefined, { emitDanmakuRequest, uuid })
+			logging('ERROR', '弹幕发送失败，用户ID不存在', undefined, { videoId: emitDanmakuRequest?.videoId })
 			return { success: false, message: '弹幕发送失败，用户ID不存在' }
-		}
-		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
-			logging('ERROR', '弹幕发送失败，用户校验未通过', undefined, { emitDanmakuRequest, uuid })
-			return { success: false, message: '弹幕发送失败，用户校验未通过' }
 		}
 
 		// 检查视频是否被屏蔽
@@ -54,9 +55,9 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 		type Danmaku = InferSchemaType<typeof schemaInstance>
 		const nowDate = new Date().getTime()
 		const danmaku: Danmaku = {
+			...emitDanmakuRequest,
 			UUID: uuid,
 			uid,
-			...emitDanmakuRequest,
 			editDateTime: nowDate,
 		}
 		try {
@@ -65,11 +66,11 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 				return { success: true, message: '弹幕发送成功！', danmaku: emitDanmakuRequest }
 			}
 		} catch (error) {
-			logging('ERROR', '弹幕发送失败，无法存储到 MongoDB', error, { emitDanmakuRequest, uuid })
+			logging('ERROR', '弹幕发送失败，无法存储到 MongoDB', error, { videoId: emitDanmakuRequest?.videoId })
 			return { success: false, message: '弹幕发送失败，存储弹幕数据失败' }
 		}
 	} catch (error) {
-		logging('ERROR', '弹幕发送失败，错误信息：', error, { emitDanmakuRequest, uuid })
+		logging('ERROR', '弹幕发送失败，错误信息：', error, { videoId: emitDanmakuRequest?.videoId })
 		return { success: false, message: '弹幕发送失败，未知原因' }
 	}
 }
@@ -77,9 +78,12 @@ export const emitDanmakuService = async (emitDanmakuRequest: EmitDanmakuRequestD
 /**
  * 根据 kvid 获取视频弹幕列表
  * @param getDanmakuByKvidRequest 请求弹幕列表的查询参数
+ * @param uuid 当前用户的 UUID，游客可省略
+ * @param token 登录凭据
+ * @param userDataBootstrapHint 服务端渲染时读取展示偏好的标识
  * @returns 视频的弹幕列表
  */
-export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto, uid?: number, uuid?: string, userDataBootstrapHint?: string): Promise<GetDanmakuByKvidResponseDto> => {
+export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDanmakuByKvidRequestDto, uuid?: string, token?: string, userDataBootstrapHint?: string): Promise<GetDanmakuByKvidResponseDto> => {
 	try {
 		if (!checkGetDanmakuByKvidRequest(getDanmakuByKvidRequest)) {
 			logging('ERROR', '获取弹幕列表失败，数据校验失败', undefined, getDanmakuByKvidRequest)
@@ -110,7 +114,7 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 						category: 'regex',
 					},
 				],
-				{ uid, uuid, userDataBootstrapHint },
+				uuid && token ? { uuid, token } : { userDataBootstrapHint },
 			)
 
 			const getDanmakuPipeline: PipelineStage[] = [
@@ -128,7 +132,6 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 				{
 					$project: {
 						videoId: 1,
-						UUID: 1,
 						uid: 1,
 						time: 1,
 						text: 1,
@@ -151,7 +154,7 @@ export const getDanmakuListByKvidService = async (getDanmakuByKvidRequest: GetDa
 
 			const danmakuList = danmakuResult.result?.map(danmaku => {
 				const fontSize = ['small', 'medium', 'large'].includes(danmaku.fontSize) ? danmaku.fontSize : 'medium'
-				return { ...danmaku, uuid: danmaku.UUID, fontSize } as GetDanmakuByKvidDto
+				return { ...danmaku, fontSize } as GetDanmakuByKvidDto
 			})
 
 			if (danmakuList && danmakuList.length > 0) {

@@ -122,34 +122,22 @@ export const deleteDataFromElasticsearchCluster = async (client: Client, indexNa
  * @param indexName 索引的名字，该字段应当与 schema 存放于同一个对象中（这样 schema 和 indexName 构成了绑定关系）
  * @param schema 要插入的索引的 schema （在 Elasticsearch 中应该叫做：索引模板），主要功能是只是提供了泛型 T 并限定了 data 的类型，该字段应当与 indexName 存放于同一个对象中（这样 schema 和 indexName 构成了绑定关系）
  * @param data 要插入的数据，类型是根据 schema 的类型泛型推算而来
- * @param refreshFlag 在插入数据后是否立即刷新搜索（在高并发场景下不建议立即刷新搜索）
+ * @param refreshFlag 是否立即刷新搜索索引
+ * @param id 指定文档 ID 时，重复索引同一对象会覆盖原文档
  * @returns 插入数据的结果，如果成功则返回 {success: true}，否则 {success: false}
  */
-export const insertData2ElasticsearchCluster = async <T>(client: Client, indexName: string, schema: T, data: EsSchema2TsType<T>, refreshFlag: boolean = false): Promise<EsResultType<string>> => {
+export const insertData2ElasticsearchCluster = async <T>(client: Client, indexName: string, schema: T, data: EsSchema2TsType<T>, refreshFlag: boolean = false, id?: string): Promise<EsResultType<string>> => {
 	try {
 		if (!isEmptyObject(schema as object) && !isEmptyObject(data) && indexName && client && !isEmptyObject(client)) {
 			try {
-				const indexResult = await client.index< EsSchema2TsType<T> >({
+				const indexResult = await client.index<EsSchema2TsType<T>>({
 					index: indexName,
+					id,
 					document: data,
+					refresh: refreshFlag,
 				})
-				if (indexResult && indexResult.result) {
-					if (refreshFlag) {
-						// 在索引（v.）数据之后可以手动执行 refresh 才能显示在搜索结果里，如果不手动执行，集群会每隔一段时间自动执行一次
-						try {
-							const refreshResult = await client.indices.refresh({ index: indexName })
-							if (refreshResult) {
-								return { success: true, message: '向 Elasticsearch 插入数据成功，手动刷新搜索成功', result: [indexResult.result] }
-							} else {
-								return { success: true, message: '向 Elasticsearch 插入数据成功，但刷新搜索的结果为空', result: [indexResult.result] }
-							}
-						} catch (error) {
-							logging('WARN', '向 Elasticsearch 插入数据成功，但刷新搜索时出错', error, undefined, { recordingLogs: false })
-							return { success: true, message: '向 Elasticsearch 插入数据成功，但刷新搜索时出错', result: [indexResult.result] }
-						}
-					} else {
-						return { success: true, message: '向 Elasticsearch 插入数据成功，请等待自动刷新', result: [indexResult.result] }
-					}
+				if (indexResult.result) {
+					return { success: true, message: '向 Elasticsearch 写入数据成功', result: [indexResult.result] }
 				} else {
 					logging('ERROR', '向 Elasticsearch 插入数据时出错，索引（v.）数据的返回结果异常', undefined, undefined, { recordingLogs: false })
 					return { success: false, message: '向 Elasticsearch 插入数据时出错，索引（v.）数据的返回结果异常' }

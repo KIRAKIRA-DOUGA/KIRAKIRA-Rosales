@@ -16,13 +16,8 @@ export const followingUploaderController = async (ctx: koaCtx, next: koaNext) =>
 	const data = ctx.request.body as Partial<FollowingUploaderRequestDto>
 	const { followingUid } = data
 
-	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
-		return
-	}
-
-	// RBAC 权限验证，对于关注目标用户
-	if (!await isPassRbacCheck({ uid: followingUid, apiPath: ctx.path }, ctx)) {
+	// 关注者与被关注者都须具备此权限，目标账号通过公开 UID 指定。
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path, targetUid: followingUid }, ctx)) {
 		return
 	}
 

@@ -4,6 +4,7 @@ import { Schema } from 'mongoose'
  * 日志数据
  */
 class LogSchemaFactory {
+	/** MongoDB Schema */
 	schema = {
 		/** 日志等级 - 非空 */
 		logLevel: { type: String, required: true, index: true },

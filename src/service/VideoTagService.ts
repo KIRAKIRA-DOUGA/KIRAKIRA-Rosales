@@ -1,5 +1,5 @@
 import { CreateVideoTagRequestDto, CreateVideoTagResponseDto, GetVideoTagByTagIdRequestDto, GetVideoTagByTagIdResponseDto, SearchVideoTagRequestDto, SearchVideoTagResponseDto } from '../controller/VideoTagControllerDto.js'
-import { checkUserTokenService } from './UserService.js'
+import { checkUserTokenByUuidService } from './UserService.js'
 import { getNextSequenceValueService } from './SequenceValueService.js'
 import { VideoTagSchema } from '../dbPool/schema/VideoTagSchema.js'
 import { InferSchemaType } from 'mongoose'
@@ -10,14 +10,14 @@ import { logging } from './loggingService.js'
 /**
  * 创建视频 TAG
  * @param createVideoTagRequest 创建视频 TAG 的请求载荷，即 TAG 数据
- * @param uid 用户 ID
+ * @param uuid 当前用户的 UUID
  * @param token 用户安全令牌
  * @returns 创建视频 TAG 的响应结果
  */
-export const createVideoTagService = async (createVideoTagRequest: CreateVideoTagRequestDto, uid: number, token: string): Promise<CreateVideoTagResponseDto> => {
+export const createVideoTagService = async (createVideoTagRequest: CreateVideoTagRequestDto, uuid: string, token: string): Promise<CreateVideoTagResponseDto> => {
 	try {
 		if (checkCreateVideoTagRequest(createVideoTagRequest)) {
-			if ((await checkUserTokenService(uid, token)).success) {
+			if ((await checkUserTokenByUuidService(uuid, token)).success) {
 				try {
 					const { collectionName, schemaInstance } = VideoTagSchema
 					type videoTagListType = InferSchemaType<typeof schemaInstance>

@@ -14,12 +14,15 @@ const VideoPartSchema = {
 	editDateTime: { type: Number, required: true },
 }
 
+/**
+ * 视频标签在当前语言下的一个名称及其默认名、原名标记。
+ */
 const VideoTagNameSchema = {
 	/** TAG 名称 - 非空 */
 	name: { type: String, required: true },
 	/** 是否为该语言默认名 - 非空 */
 	isDefault: { type: Boolean, required: true },
-	/** 是否为 TAG 原名 - 非空 */
+	/** 是否为标签原名，可省略 */
 	isOriginalTagName: { type: Boolean, required: false },
 }
 

@@ -6,16 +6,16 @@ import { ApprovePendingReviewVideoRequestDto, CheckVideoExistRequestDto, DeleteV
 
 /**
  * 上传视频
- * @param ctx context
- * @param next context
- * @returns 上传视频的结果
+ * @param ctx 包含视频数据和登录凭据的请求上下文
+ * @param next 后续中间件
+ * @returns 完成权限检查并将上传结果写入响应
  */
 export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
@@ -24,7 +24,6 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		title: data.title || '',
 		videoPart: data.videoPart || [],
 		image: data.image || '',
-		uploaderId: data.uploaderId ?? -1,
 		duration: data.duration ?? -1,
 		description: data.description || '',
 		videoCategory: data.videoCategory || '',
@@ -35,8 +34,7 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
 		ensureOriginal: data.ensureOriginal,
 		videoTagList: data.videoTagList || [],
 	}
-	const esClient = ctx.elasticsearchClient
-	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, uid, token, esClient)
+	const uploadVideoResponse = await updateVideoService(uploadVideoRequest, uuid, token)
 	ctx.body = uploadVideoResponse
 	await next()
 }
@@ -49,10 +47,10 @@ export const updateVideoController = async (ctx: koaCtx, next: koaNext) => {
  * @returns 获取首页要显示的视频
  */
 export const getThumbVideoController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'), -1)
+	const token = ctx.cookies.get('token')
 	const uuid = ctx.cookies.get('uuid')
 	const userDataBootstrapHint = ctx.cookies.get('user-data-bootstrap-hint')
-	const getThumbVideoResponse = await getThumbVideoService(uid, uuid, userDataBootstrapHint)
+	const getThumbVideoResponse = await getThumbVideoService(uuid, token, userDataBootstrapHint)
 	ctx.body = getThumbVideoResponse
 	await next()
 }
@@ -133,11 +131,11 @@ export const searchVideoByKeywordController = async (ctx: koaCtx, next: koaNext)
  * @returns 获取到的视频信息
  */
 export const getVideoFileTusEndpointController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
@@ -146,7 +144,7 @@ export const getVideoFileTusEndpointController = async (ctx: koaCtx, next: koaNe
 		uploadMetadata: ctx.get('Upload-Metadata') || '',
 	}
 
-	const destination = await getVideoFileTusEndpointService(uid, token, getVideoFileTusEndpointRequest)
+	const destination = await getVideoFileTusEndpointService(uuid, token, getVideoFileTusEndpointRequest)
 	ctx.set({
 		'Access-Control-Expose-Headers': 'Location',
 		'Access-Control-Allow-Headers': '*',
@@ -165,9 +163,9 @@ export const getVideoFileTusEndpointController = async (ctx: koaCtx, next: koaNe
  * @returns 用于上传视频封面图的预签名 URL 请求响应
  */
 export const getVideoCoverUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await getVideoCoverUploadSignedUrlService(uid, token)
+	ctx.body = await getVideoCoverUploadSignedUrlService(uuid, token)
 	await next()
 }
 
@@ -195,11 +193,11 @@ export const searchVideoByVideoTagIdController = async (ctx: koaCtx, next: koaNe
  * @returns 根据视频 ID 删除视频的请求响应
  */
 export const deleteVideoByKvidController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
@@ -209,7 +207,7 @@ export const deleteVideoByKvidController = async (ctx: koaCtx, next: koaNext) =>
 	}
 
 	const esClient = ctx.elasticsearchClient
-	ctx.body = await deleteVideoByKvidService(deleteVideoRequest, uid, token, esClient)
+	ctx.body = await deleteVideoByKvidService(deleteVideoRequest, uuid, token, esClient)
 	await next()
 }
 
@@ -220,15 +218,15 @@ export const deleteVideoByKvidController = async (ctx: koaCtx, next: koaNext) =>
  * @returns 获取待审核视频列表的请求响应
  */
 export const getPendingReviewVideoController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
-	ctx.body = await getPendingReviewVideoService(uid, token)
+	ctx.body = await getPendingReviewVideoService(uuid, token)
 	await next()
 }
 
@@ -239,11 +237,11 @@ export const getPendingReviewVideoController = async (ctx: koaCtx, next: koaNext
  * @returns 通过一个待审核视频的请求响应
  */
 export const approvePendingReviewVideoController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
@@ -252,7 +250,7 @@ export const approvePendingReviewVideoController = async (ctx: koaCtx, next: koa
 		videoId: data.videoId ?? -1,
 	}
 
-	ctx.body = await approvePendingReviewVideoService(approvePendingReviewVideoRequest, uid, token, ctx.elasticsearchClient)
+	ctx.body = await approvePendingReviewVideoService(approvePendingReviewVideoRequest, uuid, token, ctx.elasticsearchClient)
 	await next()
 }
 

@@ -42,7 +42,7 @@ class UserAuthSchemaFactory {
 	/** MongoDB 集合名 */
 	collectionName = 'user-auth'
 	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
+	schemaInstance = new Schema(this.schema).index({ userDataBootstrapHint: 1 }, { sparse: true })
 }
 export const UserAuthSchema = new UserAuthSchemaFactory()
 
@@ -262,7 +262,7 @@ class UserTotpAuthenticatorSchemaFactory {
 		recoveryCodeHash: { type: String },
 		/** 备份码 */
 		backupCodeHash: { type: [String] },
-		/** QRcode */
+		/** 用于生成验证器绑定二维码的 otpauth URI */
 		otpAuth: { type: String, unique: true },
 		/** 尝试次数 */
 		attempts: { type: Number },
@@ -278,9 +278,8 @@ class UserTotpAuthenticatorSchemaFactory {
 	/** Mongoose Schema 实例 */
 	schemaInstance = new Schema(this.schema)
 
-	// 构造器
+	/** 为用户 UUID 和验证器密钥声明联合唯一索引。 */
 	constructor() {
-		// 添加 UUID 和 secret 组合的唯一索引
 		this.schemaInstance.index({ UUID: 1, secret: 1 }, { unique: true })
 	}
 }
@@ -320,7 +319,7 @@ class General2FAEmailVerificationCodeSchemaFactory {
 	schema = {
 		/** 用户的 UUID - 非空 - 唯一 */
 		uuid: { type: String, required: true, unique: true },
-		/** 传入该验证码独占的业务名 - 非空 -（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
+		/** 验证码绑定的业务名，按业务校验时须与发送时的名称一致 - 非空 */
 		exclusive: { type: String, required: true },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
@@ -330,7 +329,7 @@ class General2FAEmailVerificationCodeSchemaFactory {
 		totalCreateTimesToday: { type: Number, required: true },
 		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
 		totalVerifierTimesToday: { type: Number, required: true },
-		/** Last verification attempt; optional for records created before attempt tracking. */
+		/** 最近一次校验尝试的时间戳（毫秒）。旧记录缺少此字段时，以验证码创建时间判断是否跨天。 */
 		lastVerifierAttemptDate: { type: Number },
 		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
 		used: { type: Boolean, required: true },
@@ -360,7 +359,7 @@ class GeneralEmailVerificationCodeSchemaFactory {
 		email: { type: String, required: true, unique: true },
 		/** 用户的全小写 email - 非空 - 唯一 */
 		emailLowerCase: { type: String, required: true, unique: true },
-		/** 传入该验证码独占的业务名 - 非空（即验证验证码时必须传入创建验证码时相同的 exclusive 字段，使该业务在这个验证码的生命周期内永远占用，一旦用户在中途使用其他业务发送了验证码，则会导致“独占”中断，无法完成验证），某些要求比较严格的业务可能需要 - 可选 */
+		/** 验证码绑定的业务名，按业务校验时须与发送时的名称一致 - 非空 */
 		exclusive: { type: String, required: true },
 		/** 用户的验证码 - 非空 */
 		verificationCode: { type: String, required: true },
@@ -370,7 +369,7 @@ class GeneralEmailVerificationCodeSchemaFactory {
 		totalCreateTimesToday: { type: Number, required: true },
 		/** 用户今日连续请求验证该验证码的次数，用于防止滥用 - 非空 */
 		totalVerifierTimesToday: { type: Number, required: true },
-		/** Last verification attempt; optional for records created before attempt tracking. */
+		/** 最近一次校验尝试的时间戳（毫秒）。旧记录缺少此字段时，以验证码创建时间判断是否跨天。 */
 		lastVerifierAttemptDate: { type: Number },
 		/** 该验证码是否已经用于一次验证，用于防止滥用 - 非空 */
 		used: { type: Boolean, required: true },

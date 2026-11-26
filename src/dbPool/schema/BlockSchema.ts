@@ -4,6 +4,7 @@ import { Schema } from 'mongoose'
  * 用户屏蔽数据
  */
 class BlockListSchemaFactory {
+	/** MongoDB Schema */
 	schema = {
 		/** 黑名单类型 - 非空 */
 		type: { type: String, required: true },
@@ -27,6 +28,7 @@ export const BlockListSchema = new BlockListSchemaFactory()
  * 用户取消屏蔽数据
  */
 class UnblockListSchemaFactory {
+	/** MongoDB Schema */
 	schema = {
 		/** 原来屏蔽的合集 */
 		...BlockListSchema.schema,

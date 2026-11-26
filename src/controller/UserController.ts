@@ -9,7 +9,7 @@ import {
 	changePasswordService,
 	checkInvitationCodeService,
 	checkUsernameService,
-	checkUserTokenService,
+	checkUserTokenByUuidService,
 	createInvitationCodeService,
 	getBlockedUserService,
 	getMyInvitationCodeService,
@@ -385,23 +385,20 @@ export const getSelfUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 
 
 /**
- * 根据 uid 和标识获取用户初始化数据
- * @param ctx context
- * @param next context
- * @return GetSelfUserInfoResponseDto 用户初始化数据，如果获取成功则 success: true，不成功则 success: false
+ * 根据页面初始化标识获取用户展示数据
+ * @param ctx 请求上下文
+ * @param next 下一个中间件
+ * @returns 写入页面初始化响应后继续执行中间件
  */
 export const getUserBootstrapDataByHintController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<GetUserBootstrapDataByHintRequestDto>
 
-	const uid = parseInteger(ctx.cookies.get('uid') || (data?.uid || '-1'))
 	const userDataBootstrapHint = ctx.cookies.get('user-data-bootstrap-hint') || data?.userDataBootstrapHint
 
 	const getUserBootstrapDataByHintRequest: GetUserBootstrapDataByHintRequestDto = {
-		uid,
 		userDataBootstrapHint,
 	}
-	const selfUserInfo = await getUserBootstrapDataByHintService(getUserBootstrapDataByHintRequest)
-	ctx.body = selfUserInfo
+	ctx.body = await getUserBootstrapDataByHintService(getUserBootstrapDataByHintRequest)
 	await next()
 }
 
@@ -444,14 +441,13 @@ export const userExistsCheckByUIDController = async (ctx: koaCtx, next: koaNext)
  * 校验用户 token
  * @param ctx context
  * @param next context
- * @return CheckUserTokenResponseDto 通过 token 中的 uid 和 token 校验用户，如果校验成功则 success 和 userTokenOk 的值都为 true，不成功则 success 或 userTokenOk 的值为 false
+ * @return CheckUserTokenResponseDto 通过 cookie 中的 UUID 和 token 校验用户，如果校验成功则 success 和 userTokenOk 的值都为 true，不成功则 success 或 userTokenOk 的值为 false
  */
 export const checkUserTokenController = async (ctx: koaCtx, next: koaNext) => {
-	const uidString = ctx.cookies.get('uid')
-	const uid = parseInteger(uidString)
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	const checkUserTokenResponse = await checkUserTokenService(uid, token)
+	const checkUserTokenResponse = await checkUserTokenByUuidService(uuid, token)
 
 	ctx.body = checkUserTokenResponse
 	await next()
@@ -488,9 +484,9 @@ export const userLogoutController = async (ctx: koaCtx, next: koaNext) => {
  * @param next context
  */
 export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
-	ctx.body = await getUserAvatarUploadSignedUrlService(uid, token)
+	ctx.body = await getUserAvatarUploadSignedUrlService(uuid, token)
 	await next()
 }
 
@@ -502,10 +498,10 @@ export const getUserAvatarUploadSignedUrlController = async (ctx: koaCtx, next: 
 export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<GetUserSettingsRequestDto>
 
-	const uid = ctx.cookies.get('uuid') || data?.uuid
+	const uuid = ctx.cookies.get('uuid') || data?.uuid
 	const token = ctx.cookies.get('token') || data?.token
 
-	ctx.body = await getUserSettingsService(uid, token)
+	ctx.body = await getUserSettingsService(uuid, token)
 	await next()
 }
 
@@ -518,14 +514,35 @@ export const getUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 export const updateOrCreateUserSettingsController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<UpdateOrCreateUserSettingsRequestDto>
 
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	const updateOrCreateUserSettingsRequest: UpdateOrCreateUserSettingsRequestDto = {
-		...data,
+		enableCookie: data?.enableCookie,
+		themeType: data?.themeType,
+		themeColor: data?.themeColor,
+		themeColorCustom: data?.themeColorCustom,
+		wallpaper: data?.wallpaper,
+		coloredSideBar: data?.coloredSideBar,
+		dataSaverMode: data?.dataSaverMode,
+		noSearchRecommendations: data?.noSearchRecommendations,
+		noRelatedVideos: data?.noRelatedVideos,
+		noRecentSearch: data?.noRecentSearch,
+		noViewHistory: data?.noViewHistory,
+		openInNewWindow: data?.openInNewWindow,
+		currentLocale: data?.currentLocale,
+		timezone: data?.timezone,
+		unitSystemType: data?.unitSystemType,
+		devMode: data?.devMode,
+		showCssDoodle: data?.showCssDoodle,
+		sharpAppearanceMode: data?.sharpAppearanceMode,
+		flatAppearanceMode: data?.flatAppearanceMode,
+		userWebsitePrivacySetting: data?.userWebsitePrivacySetting,
+		userPrivaryVisibilitiesSetting: data?.userPrivaryVisibilitiesSetting,
+		userLinkedAccountsVisibilitiesSetting: data?.userLinkedAccountsVisibilitiesSetting,
 	}
 
-	ctx.body = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uid, token)
+	ctx.body = await updateOrCreateUserSettingsService(updateOrCreateUserSettingsRequest, uuid, token)
 	await next()
 }
 
@@ -576,23 +593,24 @@ export const sendGeneralEmailVerificationCodeController = async (ctx: koaCtx, ne
  * @param next context
  */
 export const createInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	ctx.body = await createInvitationCodeService(uid, token)
+	ctx.body = await createInvitationCodeService(uuid, token)
 	await next()
 }
 
 /**
- * 获取某位用户的所有的邀请码
- * @param ctx context
- * @param next context
+ * 获取当前登录用户的邀请码列表
+ * @param ctx 请求上下文
+ * @param next 下一个中间件
+ * @returns 写入邀请码列表响应后继续执行中间件
  */
 export const getMyInvitationCodeController = async (ctx: koaCtx, next: koaNext) => {
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
-	ctx.body = await getMyInvitationCodeService(uid, token)
+	ctx.body = await getMyInvitationCodeService(uuid, token)
 	await next()
 }
 
@@ -780,7 +798,7 @@ export const approveUserInfoController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<ApproveUserInfoRequestDto>
 
 	const approveUserInfoRequest: ApproveUserInfoRequestDto = {
-		UUID: data.UUID ?? '',
+		uid: data?.uid,
 	}
 
 	const approveUserInfoResponse = await approveUserInfoService(approveUserInfoRequest, adminUUID, adminToken)

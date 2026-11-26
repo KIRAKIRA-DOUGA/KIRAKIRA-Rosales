@@ -1,12 +1,12 @@
 import { Schema } from 'mongoose'
 
 /**
- * 在父评论或子评论中存储的子评论 ID
+ * 父评论中保存的子评论路由、点赞数和楼层
  */
 const VideoSubCommentIdSchema = {
 	/** 评论的路由 - 非空 */ /** 如：1.2.3（第一号视频的第二个评论的第三个子回复） */
 	commentRoute: { type: String, required: true },
-	/** 评论 ID - 非空 */
+	/** 子评论点赞数 - 非空 */
 	upvoteCount: { type: String, default: 0, required: true },
 	/** 评论楼层数 - 非空 */
 	commentIndex: { type: Number, required: true },
@@ -53,7 +53,7 @@ const VideoSubCommentIdSchema = {
 class VideoCommentSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
-		/** 评论的路由 - 非空 - 唯一 */ /** 如：1.2.3（第一号视频的第二个评论的第三个子回复） */
+		/** 评论的业务唯一标识，例如 `1.2.3` 表示 1 号视频第 2 条评论的第 3 条回复 - 非空 */
 		commentRoute: { type: String, required: true, unique: true },
 		/** KVID 视频 ID - 非空 */
 		videoId: { type: Number, required: true },
@@ -69,8 +69,12 @@ class VideoCommentSchemaFactory {
 		upvoteCount: { type: Number, default: 0, required: true },
 		/** 评论点踩数 - 非空 */ /** 默认：0 —— 没有反对票！ */
 		downvoteCount: { type: Number, default: 0, required: true },
-		/** 投票事务的写入冲突点，旧文档通过 $inc 自动初始化。 */
+		/** 增减或修正赞踩计数时加 1，防止旧统计覆盖已更新的数量。 */
 		voteRevision: { type: Number },
+		/** 按明细写回缓存的版本，用于识别校准前开始的赞踩操作。 */
+		voteRecountRevision: { type: Number },
+		/** 有增量可能已计入缓存，下一批更新需要核对赞数和踩数。 */
+		voteRecountPending: { type: Boolean },
 		/** 评论楼层数 - 非空 */
 		commentIndex: { type: Number, required: true },
 		/** 子评论 */
@@ -88,7 +92,7 @@ class VideoCommentSchemaFactory {
 export const VideoCommentSchema = new VideoCommentSchemaFactory()
 
 /**
- * 已删除的视频评论数据
+ * 已删除的视频评论，保留原评论的 `commentRoute` 并记录删除操作人。
  */
 class RemovedVideoCommentSchemaFactory {
 	/** MongoDB Schema */
@@ -108,59 +112,23 @@ class RemovedVideoCommentSchemaFactory {
 export const RemovedVideoCommentSchema = new RemovedVideoCommentSchemaFactory()
 
 /**
- * 视频评论点赞
+ * 用户对视频评论的点赞或点踩记录，取消当前状态时删除。
  */
-class VideoCommentUpvoteSchemaFactory {
+class VideoCommentVoteSchemaFactory {
 	/** MongoDB Schema */
 	schema = {
-		/** KVID 视频 ID - 非空 */
-		videoId: { type: Number, required: true },
-		/** 评论的ID - 非空 */
-		commentId: { type: String, required: true },
-		/** 评论点赞者的 UUID - 非空 */
+		/** 被点赞或点踩的评论的业务唯一标识，例如 `13.2` - 非空 */
+		commentRoute: { type: String, required: true },
+		/** 点赞或点踩用户的 UUID，与 commentRoute 共同唯一标识这条记录 - 非空 */
 		UUID: { type: String, required: true },
-		/** 评论点赞者的 UID - 非空 */
-		uid: { type: Number, required: true },
-		/** 评论点赞无效化标识（用户取消点赞） */
-		invalidFlag: { type: Boolean, required: true },
-		/** 系统专用字段-删除标识 - 非空 */
-		deleteFlag: { type: Boolean, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
+		/** 当前状态，`upvote` 表示点赞，`downvote` 表示点踩 - 非空 */
+		direction: { type: String, enum: ['upvote', 'downvote'], required: true },
 	}
 	/** MongoDB 集合名 */
-	collectionName = 'video-comment-upvote'
+	collectionName = 'video-comment-reactions'
 	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
+	schemaInstance = new Schema(this.schema, { collection: this.collectionName })
+		.index({ commentRoute: 1, UUID: 1 }, { unique: true })
+		.index({ commentRoute: 1, direction: 1 })
 }
-export const VideoCommentUpvoteSchema = new VideoCommentUpvoteSchemaFactory()
-
-
-/**
- * 视频评论点踩
- */
-class VideoCommentDownvoteSchemaFactory {
-	/** MongoDB Schema */
-	schema = {
-		/** KVID 视频 ID - 非空 */
-		videoId: { type: Number, required: true },
-		/** 评论的ID - 非空 */
-		commentId: { type: String, required: true },
-		/** 评论点踩者的 UUID - 非空 */
-		UUID: { type: String, required: true },
-		/** 评论点踩者的用户的 UID - 非空 */
-		uid: { type: Number, required: true },
-		/** 评论点踩无效化标识（用户取消点踩） */
-		invalidFlag: { type: Boolean, required: true },
-		/** 系统专用字段-删除标识 - 非空 */
-		deleteFlag: { type: Boolean, required: true },
-		/** 系统专用字段-最后编辑时间 - 非空 */
-		editDateTime: { type: Number, required: true },
-	}
-	/** MongoDB 集合名 */
-	collectionName = 'video-comment-downvote'
-	/** Mongoose Schema 实例 */
-	schemaInstance = new Schema(this.schema)
-}
-
-export const VideoCommentDownvoteSchema = new VideoCommentDownvoteSchemaFactory()
+export const VideoCommentVoteSchema = new VideoCommentVoteSchemaFactory()

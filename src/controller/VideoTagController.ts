@@ -1,5 +1,4 @@
 import { isPassRbacCheck } from '../service/RbacService.js'
-import { parseInteger } from '../common/ValidTool.js'
 import { createVideoTagService, getVideoTagByTagIdService, searchVideoTagService } from '../service/VideoTagService.js'
 import { koaCtx, koaNext } from '../type/koaTypes.js'
 import { CreateVideoTagRequestDto, GetVideoTagByTagIdRequestDto, SearchVideoTagRequestDto } from './VideoTagControllerDto.js'
@@ -11,11 +10,11 @@ import { CreateVideoTagRequestDto, GetVideoTagByTagIdRequestDto, SearchVideoTagR
  */
 export const createVideoTagController = async (ctx: koaCtx, next: koaNext) => {
 	const data = ctx.request.body as Partial<CreateVideoTagRequestDto>
-	const uid = parseInteger(ctx.cookies.get('uid'))
+	const uuid = ctx.cookies.get('uuid')
 	const token = ctx.cookies.get('token')
 
 	// RBAC 权限验证
-	if (!await isPassRbacCheck({ uid, apiPath: ctx.path }, ctx)) {
+	if (!await isPassRbacCheck({ uuid, apiPath: ctx.path }, ctx)) {
 		return
 	}
 
@@ -23,7 +22,7 @@ export const createVideoTagController = async (ctx: koaCtx, next: koaNext) => {
 		/** 不同语言所对应的 TAG 名 */
 		tagNameList: data.tagNameList,
 	}
-	const createVideoTagResponse = await createVideoTagService(createVideoTagRequest, uid, token)
+	const createVideoTagResponse = await createVideoTagService(createVideoTagRequest, uuid, token)
 	ctx.body = createVideoTagResponse
 	await next()
 }

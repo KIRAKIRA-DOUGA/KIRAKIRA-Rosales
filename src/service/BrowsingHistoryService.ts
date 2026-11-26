@@ -3,19 +3,19 @@ import { CreateOrUpdateBrowsingHistoryRequestDto, CreateOrUpdateBrowsingHistoryR
 import { selectDataByAggregateFromMongoDB, findOneAndUpdateData4MongoDB } from '../dbPool/DbClusterPool.js'
 import { QueryType } from '../dbPool/DbClusterPoolTypes.js'
 import { BrowsingHistorySchema } from '../dbPool/schema/BrowsingHistorySchema.js'
-import { checkUserTokenByUuidService, checkUserTokenService, getUserUid } from './UserService.js'
+import { checkUserTokenByUuidService, getUserUid } from './UserService.js'
 import { logging } from './loggingService.js'
 
 /**
  * 更新或创建用户浏览历史
- * @param createBrowsingHistoryRequest 更新或创建用户浏览历史请求载荷
- * @param uid 用户 ID
+ * @param createOrUpdateBrowsingHistoryRequest 更新或创建用户浏览历史请求载荷
+ * @param uuid 当前用户的 UUID
  * @param token 用户安全令牌
  * @returns 更新或创建用户浏览历史响应结果
  */
-export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto, cookieUuid: string, token: string): Promise<CreateOrUpdateBrowsingHistoryResponseDto> => {
+export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto, uuid: string, token: string): Promise<CreateOrUpdateBrowsingHistoryResponseDto> => {
 	try {
-		const { uuid, category, id, anchor } = createOrUpdateBrowsingHistoryRequest
+		const { category, id, anchor } = createOrUpdateBrowsingHistoryRequest
 		const nowDate = new Date().getTime()
 
 		if (!checkCreateOrUpdateBrowsingHistoryRequest(createOrUpdateBrowsingHistoryRequest)) {
@@ -23,12 +23,7 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 			return { success: false, message: '更新或创建用户浏览历史时出错，参数不合法' }
 		}
 
-		if (uuid !== cookieUuid) {
-			logging('ERROR', '更新或创建用户浏览历史时出错，更新历史记录的目标用户与当前登录用户不一致，不允许更新其他用户的历史记录！')
-			return { success: false, message: '更新或创建用户浏览历史时出错，更新历史记录的目标用户与当前登录用户不一致，不允许更新其他用户的历史记录！' }
-		}
-
-		if (!(await checkUserTokenByUuidService(cookieUuid, token)).success) {
+		if (!(await checkUserTokenByUuidService(uuid, token)).success) {
 			logging('ERROR', '更新或创建用户浏览历史时出错，用户校验失败')
 			return { success: false, message: '更新或创建用户浏览历史时出错，用户校验失败' }
 		}
@@ -45,7 +40,6 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 		// 搜索数据
 		const BrowsingHistoryWhere: QueryType<BrowsingHistoryType> = {
 			UUID: uuid,
-			uid,
 			category,
 			id,
 		}
@@ -62,10 +56,14 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 		}
 
 		try {
-			const insert2MongoDResult = await findOneAndUpdateData4MongoDB(BrowsingHistoryWhere, BrowsingHistoryData, schemaInstance, collectionName)
-			const result = insert2MongoDResult.result
-			if (insert2MongoDResult.success && result) {
-				return { success: true, message: '更新或创建用户浏览历史成功', result: result as CreateOrUpdateBrowsingHistoryResponseDto['result'] }
+			const saved = await findOneAndUpdateData4MongoDB(BrowsingHistoryWhere, BrowsingHistoryData, schemaInstance, collectionName)
+			if (!saved.success || !saved.result) {
+				return { success: false, message: '更新或创建用户浏览历史时出错，未取得保存结果' }
+			}
+			return {
+				success: true,
+				message: '更新或创建用户浏览历史成功',
+				result: { category, id: saved.result.id, anchor: saved.result.anchor },
 			}
 		} catch (_error) {
 			logging('ERROR', '更新或创建用户浏览历史时出错，插入数据时出错')
@@ -80,14 +78,14 @@ export const createOrUpdateBrowsingHistoryService = async (createOrUpdateBrowsin
 /**
  * 获取全部或过滤后的用户浏览历史，按对某一内容的最后访问时间降序排序
  * @param getUserBrowsingHistoryWithFilterRequest 获取用户浏览历史的请求载荷
- * @param uid 用户 ID
+ * @param uuid 当前用户的 UUID
  * @param token 用户安全令牌
  * @returns 获取用户浏览历史的请求响应，全部或过滤后的用户浏览历史
  */
-export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHistoryWithFilterRequest: GetUserBrowsingHistoryWithFilterRequestDto, uid: number, token: string): Promise<GetUserBrowsingHistoryWithFilterResponseDto> => {
+export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHistoryWithFilterRequest: GetUserBrowsingHistoryWithFilterRequestDto, uuid: string, token: string): Promise<GetUserBrowsingHistoryWithFilterResponseDto> => {
 	try {
 		if (checkGetUserBrowsingHistoryWithFilterRequest(getUserBrowsingHistoryWithFilterRequest)) {
-			if ((await checkUserTokenService(uid, token)).success) {
+			if ((await checkUserTokenByUuidService(uuid, token)).success) {
 				const { collectionName, schemaInstance } = BrowsingHistorySchema
 
 				// TODO: 下方这个 Aggregate 只适用于视频历史记录的搜索，不支持其他内容的历史记录
@@ -95,7 +93,7 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 					{
 						$match: {
 							category: 'video',
-							uid,
+							UUID: uuid,
 						},
 					},
 					{
@@ -137,9 +135,9 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 					},
 					{
 						$project: {
-							uid: 1,
+							_id: 0,
 							category: 1,
-							id: '$id_number',
+							id: 1,
 							anchor: 1,
 							videoId: '$video_info.videoId',
 							title: '$video_info.title',
@@ -188,13 +186,12 @@ export const getUserBrowsingHistoryWithFilterService = async (getUserBrowsingHis
 
 /**
  * 校验创建用户浏览历史的请求参数
- * @param createBrowsingHistoryRequest 创建用户浏览历史的请求参数
+ * @param createOrUpdateBrowsingHistoryRequest 创建用户浏览历史的请求参数
  * @returns 合法返回 true, 不合法返回 false
  */
 const checkCreateOrUpdateBrowsingHistoryRequest = (createOrUpdateBrowsingHistoryRequest: CreateOrUpdateBrowsingHistoryRequestDto): boolean => {
 	return (
-		!!createOrUpdateBrowsingHistoryRequest.uuid
-		&& (createOrUpdateBrowsingHistoryRequest.category === 'video' || createOrUpdateBrowsingHistoryRequest.category === 'photo' || createOrUpdateBrowsingHistoryRequest.category === 'comment')
+		(createOrUpdateBrowsingHistoryRequest.category === 'video' || createOrUpdateBrowsingHistoryRequest.category === 'photo' || createOrUpdateBrowsingHistoryRequest.category === 'comment')
 		&& !!createOrUpdateBrowsingHistoryRequest.id
 	)
 }
